@@ -1,6 +1,7 @@
 # The dock (`malaysia-shell dock`)
 
 > Overview map: [`interface.md`](interface.md).
+> Target design: [`dock-mockup.html`](dock-mockup.html), a working mockup of the Dock and its Settings section.
 
 Native component (ADR 0023): a bottom dock that lists the open apps and activates them.
 

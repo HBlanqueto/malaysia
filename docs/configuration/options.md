@@ -400,6 +400,9 @@ desktop (`shown`, `shuffled_at`).
 | `dock.static-only` | bool | `false` | pending | shell |
 | `dock.minimize-to-application` | bool | `false` | pending | shell |
 | `dock.show-recents` | bool | `true` | pending | shell |
+| `dock.launchanim` | bool | `true` | pending | shell: the icon bounces while the app starts |
+| `dock.autohide-delay` | float (seconds) | `0.0` | pending | shell: wait before the hidden Dock shows |
+| `dock.autohide-time-modifier` | float | `1.0` | pending | shell: multiplies the show and hide animation; `0` removes it |
 
 `mineffect` uses macOS's names: "**Minimize windows using: Genie / Scale**".
 The hyphenated keys are **exactly** those of `defaults write com.apple.dock ...`.
@@ -627,6 +630,9 @@ show-process-indicators = true
 static-only = false
 minimize-to-application = false
 show-recents = true
+launchanim = true
+autohide-delay = 0.0
+autohide-time-modifier = 1.0
 ```
 
 ```toml

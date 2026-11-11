@@ -1,0 +1,1222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Malaysia Dock mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: page header, a live desktop stage (wallpaper + menu bar + Settings + sample window + Dock), then reference sections. */
+:root{
+  --page:#eef0f4; --ink:#16181d; --ink-2:#4a5060; --ink-3:#7a8191; --rule:#d8dce4; --card:#ffffff;
+  --accent:#0a84ff; --accent-ink:#ffffff; --new:#1f9d55; --pending:#b7791f; --active:#0a84ff;
+  --win:#f4f4f6; --win-side:#e9e9ee; --win-group:#ffffff; --win-line:#e3e3e8; --win-ink:#1d1d1f; --win-ink-2:#6e6e73;
+  --win-ctl:#e5e5ea; --win-shadow:0 22px 70px rgba(0,0,0,.28),0 0 0 .5px rgba(0,0,0,.18);
+  --dock-bg:rgba(255,255,255,.34); --dock-line:rgba(255,255,255,.55); --dock-dot:rgba(0,0,0,.62); --dock-sep:rgba(0,0,0,.22);
+  --tip-bg:rgba(236,236,240,.92); --tip-ink:#1d1d1f;
+  --menu-bg:rgba(246,246,248,.86); --menu-ink:#1d1d1f; --menu-ink-2:#8a8a8f; --menu-hi:#0a84ff;
+  --wall-a:#d98a93; --wall-b:#b85f73; --wall-c:#e9b3a6;
+  --f-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --page:#101216; --ink:#eceef2; --ink-2:#a9afbd; --ink-3:#7b8293; --rule:#262a33; --card:#171a20;
+  --accent:#3b9bff; --accent-ink:#ffffff; --new:#3fcf7d; --pending:#e0a84a; --active:#4ea5ff;
+  --win:#232326; --win-side:#1b1b1e; --win-group:#2c2c30; --win-line:#38383d; --win-ink:#f2f2f7; --win-ink-2:#98989f;
+  --win-ctl:#3a3a3f; --win-shadow:0 22px 70px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.14);
+  --dock-bg:rgba(40,28,32,.42); --dock-line:rgba(255,255,255,.16); --dock-dot:rgba(255,255,255,.72); --dock-sep:rgba(255,255,255,.22);
+  --tip-bg:rgba(36,30,32,.92); --tip-ink:#f2f2f7;
+  --menu-bg:rgba(40,38,42,.88); --menu-ink:#f2f2f7; --menu-ink-2:#8e8e93; --menu-hi:#0a84ff;
+  --wall-a:#a8606b; --wall-b:#6e3346; --wall-c:#c4877c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#101216; --ink:#eceef2; --ink-2:#a9afbd; --ink-3:#7b8293; --rule:#262a33; --card:#171a20;
+  --accent:#3b9bff; --accent-ink:#ffffff; --new:#3fcf7d; --pending:#e0a84a; --active:#4ea5ff;
+  --win:#232326; --win-side:#1b1b1e; --win-group:#2c2c30; --win-line:#38383d; --win-ink:#f2f2f7; --win-ink-2:#98989f;
+  --win-ctl:#3a3a3f; --win-shadow:0 22px 70px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.14);
+  --dock-bg:rgba(40,28,32,.42); --dock-line:rgba(255,255,255,.16); --dock-dot:rgba(255,255,255,.72); --dock-sep:rgba(255,255,255,.22);
+  --tip-bg:rgba(36,30,32,.92); --tip-ink:#f2f2f7;
+  --menu-bg:rgba(40,38,42,.88); --menu-ink:#f2f2f7; --menu-ink-2:#8e8e93; --menu-hi:#0a84ff;
+  --wall-a:#a8606b; --wall-b:#6e3346; --wall-c:#c4877c; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--page);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.5}
+.wrap{max-width:1480px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px}
+header.top{display:flex;flex-wrap:wrap;gap:12px 32px;align-items:end;justify-content:space-between;margin-bottom:18px}
+.eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+h1{font-size:30px;line-height:1.15;margin:4px 0 6px;letter-spacing:-.02em;text-wrap:balance}
+.lede{max-width:72ch;color:var(--ink-2);margin:0}
+.hints{display:flex;flex-wrap:wrap;gap:6px}
+.hint{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--rule);color:var(--ink-2);white-space:nowrap}
+.hint b{color:var(--ink);font-weight:600}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}
+.btn{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--rule);background:var(--card);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--ink-3)}
+.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.readout{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);margin-left:auto}
+
+/* ---------- Stage (the desktop) ---------- */
+.stage{position:relative;width:100%;height:clamp(560px,min(58vw,calc(100vh - 40px)),900px);border-radius:14px;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:pan-y;
+  background:
+    radial-gradient(120% 90% at 15% 10%,var(--wall-c) 0%,transparent 55%),
+    radial-gradient(90% 80% at 85% 90%,var(--wall-b) 0%,transparent 60%),
+    linear-gradient(160deg,var(--wall-a),var(--wall-b));
+  box-shadow:0 0 0 1px var(--rule)}
+.menubar{position:absolute;inset:0 0 auto 0;height:30px;display:flex;align-items:center;gap:18px;padding:0 14px;font-size:13px;color:#fff;z-index:40;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.menubar.wide{height:38px}
+.menubar.translucent{background:rgba(255,255,255,.18);backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6)}
+.menubar.solid{background:var(--win);color:var(--win-ink);text-shadow:none;box-shadow:0 1px 0 var(--win-line)}
+.menubar .app{font-weight:700}
+.menubar .right{margin-left:auto;display:flex;gap:16px;align-items:center;font-variant-numeric:tabular-nums}
+.menubar .logo{width:15px;height:15px;border-radius:50%;border:2px solid currentColor;position:relative}
+.menubar .logo::after{content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor}
+.desk-icon{position:absolute;right:22px;top:52px;width:76px;text-align:center;color:#fff;font-size:12px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.4);z-index:1}
+.desk-icon img{width:56px;height:56px;display:block;margin:0 auto 4px}
+
+/* ---------- Settings window ---------- */
+.win{position:absolute;border-radius:14px;box-shadow:var(--win-shadow);background:var(--win);color:var(--win-ink);overflow:hidden;display:flex;font-size:13px}
+.settings{width:760px;height:620px}
+.settings.compact{position:static;width:100%;height:auto;max-height:none;margin-top:16px;flex-direction:column}
+.settings.compact .side{display:none}
+.side{width:226px;flex:none;background:var(--win-side);padding:14px 10px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--win-line)}
+.lights{display:flex;gap:8px;padding:4px 6px 16px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+.search{background:var(--win-ctl);border-radius:8px;padding:5px 10px;color:var(--win-ink-2);margin-bottom:10px}
+.nav{display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:7px;color:var(--win-ink)}
+.nav.sel{background:rgba(127,127,140,.22);font-weight:600}
+.nav .ic{width:20px;height:20px;border-radius:5px;flex:none;display:grid;place-items:center}
+.nav .ic svg{width:13px;height:13px}
+.side .gap{height:10px}
+.pane{flex:1;min-width:0;display:flex;flex-direction:column}
+.pane-head{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--win-line);font-weight:700;font-size:14px}
+.pane-head .arrows{display:flex;gap:2px;color:var(--win-ink-2);background:var(--win-ctl);border-radius:8px;padding:3px 8px;font-weight:400}
+.pane-body{overflow:auto;padding:14px 18px 22px;display:flex;flex-direction:column;gap:10px}
+.sec-title{display:flex;align-items:center;gap:8px;font-weight:700;margin:8px 2px 0}
+.tag{font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:1px 6px}
+.tag.new{color:var(--new);background:color-mix(in srgb,var(--new) 15%,transparent)}
+.tag.have{color:var(--active);background:color-mix(in srgb,var(--active) 14%,transparent)}
+.tag.mal{color:var(--pending);background:color-mix(in srgb,var(--pending) 16%,transparent)}
+.group{background:var(--win-group);border-radius:10px;border:1px solid var(--win-line)}
+.row{display:flex;align-items:center;gap:12px;padding:9px 12px;min-height:40px}
+.row + .row{border-top:1px solid var(--win-line)}
+.row .lbl{flex:1;min-width:0}
+.row .help{display:block;color:var(--win-ink-2);font-size:11.5px;line-height:1.35;margin-top:2px}
+.row code,.help code{font-family:var(--f-mono);font-size:10.5px;color:var(--win-ink-2)}
+.sliders{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:12px 14px 10px}
+.sl label{display:flex;justify-content:space-between;font-weight:500;margin-bottom:6px}
+.sl label span{font-family:var(--f-mono);font-size:11px;color:var(--win-ink-2);font-weight:400}
+.ends{display:flex;justify-content:space-between;font-size:11px;color:var(--win-ink-2);margin-top:2px}
+.ends .off{margin-right:auto}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--fill,0%),var(--win-ctl) var(--fill,0%))}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--fill,0%),var(--win-ctl) var(--fill,0%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;margin-top:-8px;box-shadow:0 0 0 .5px rgba(0,0,0,.2),0 1px 3px rgba(0,0,0,.3)}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border:0;border-radius:50%;background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.2),0 1px 3px rgba(0,0,0,.3)}
+input[type=range].mag-off::-webkit-slider-thumb{background:#d9d9de}
+select.pop{font:inherit;font-size:13px;color:var(--win-ink);background:transparent;border:0;padding:3px 22px 3px 8px;border-radius:6px;cursor:pointer;-webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='14' viewBox='0 0 10 14'%3E%3Cpath d='M2 5l3-3 3 3M2 9l3 3 3-3' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 4px center;text-align:right}
+select.pop option{color:#1d1d1f;background:#fff}
+.sw{position:relative;width:38px;height:22px;flex:none}
+.sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.sw span{position:absolute;inset:0;border-radius:11px;background:var(--win-ctl);transition:background .18s;pointer-events:none}
+.sw span::after{content:"";position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .18s}
+.sw input:checked + span{background:var(--accent)}
+.sw input:checked + span::after{transform:translateX(16px)}
+.sw input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
+.cards{display:flex;gap:10px}
+.cards button{font:inherit;font-size:12px;color:var(--win-ink);background:none;border:0;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px}
+.cards .thumb{width:74px;height:46px;border-radius:7px;background:linear-gradient(160deg,var(--wall-a),var(--wall-b));position:relative;overflow:hidden;box-shadow:0 0 0 1px var(--win-line)}
+.cards .thumb i{position:absolute;inset:0 0 auto 0;height:8px}
+.cards [data-v=solid] .thumb i{background:var(--win)}
+.cards [data-v=translucent] .thumb i{background:rgba(255,255,255,.35)}
+.cards [data-v=floating] .thumb i{background:transparent;border-bottom:1px dashed rgba(255,255,255,.6)}
+.cards button[aria-pressed=true] .thumb{box-shadow:0 0 0 2px var(--accent)}
+.seg{display:inline-flex;background:var(--win-ctl);border-radius:7px;padding:2px}
+.seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--win-ink);padding:3px 12px;border-radius:5px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--win-group);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+details.adv summary{cursor:pointer;color:var(--win-ink-2);font-size:12px;margin:2px 2px 6px;list-style:none}
+details.adv summary::before{content:"▸ ";}
+details.adv[open] summary::before{content:"▾ ";}
+.mini{font-family:var(--f-mono);font-size:11px;color:var(--win-ink-2);min-width:44px;text-align:right}
+.row .rng{width:150px}
+
+/* ---------- Sample window (canvas) ---------- */
+canvas.appwin{position:absolute;border-radius:12px;box-shadow:var(--win-shadow)}
+
+/* ---------- Dock ---------- */
+.dock-bar{position:absolute;z-index:50;background:var(--dock-bg);border:1px solid var(--dock-line);
+  backdrop-filter:blur(26px) saturate(1.7);-webkit-backdrop-filter:blur(26px) saturate(1.7);box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.tile{position:absolute;z-index:51;will-change:transform}
+.tile img,.tile canvas{width:100%;height:100%;display:block;pointer-events:none;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.28))}
+.tile.ghost{opacity:0}
+.tile .badge{position:absolute;background:#ff3b30;color:#fff;border-radius:999px;display:grid;place-items:center;font-weight:600;font-variant-numeric:tabular-nums;box-shadow:0 1px 2px rgba(0,0,0,.3);padding:0 .3em}
+.tile .prog{position:absolute;border-radius:999px;background:rgba(0,0,0,.45);overflow:hidden}
+.tile .prog i{display:block;height:100%;background:#fff;border-radius:999px}
+.tile .mini-app{position:absolute;right:-2%;bottom:-2%;width:38%;height:38%;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
+.dot{position:absolute;z-index:52;border-radius:50%;background:var(--dock-dot)}
+.sep{position:absolute;z-index:51;background:var(--dock-sep)}
+.tip{position:absolute;z-index:60;background:var(--tip-bg);color:var(--tip-ink);font-size:13px;padding:4px 12px;border-radius:8px;white-space:nowrap;pointer-events:none;
+  box-shadow:0 4px 14px rgba(0,0,0,.25),0 0 0 .5px rgba(0,0,0,.2);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.tip::after{content:"";position:absolute;width:10px;height:10px;background:inherit;transform:rotate(45deg)}
+.tip.b::after{left:calc(50% - 5px);bottom:-5px}.tip.l::after{top:calc(50% - 5px);left:-5px}.tip.r::after{top:calc(50% - 5px);right:-5px}
+.drag-ghost{position:absolute;z-index:70;pointer-events:none}
+.drag-ghost img{width:100%;height:100%;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35))}
+.drag-ghost .rm{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(100% + 6px);background:var(--tip-bg);color:var(--tip-ink);font-size:12px;padding:2px 10px;border-radius:7px;white-space:nowrap}
+.puff{position:absolute;z-index:70;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.95),rgba(255,255,255,0) 70%);animation:puff .45s ease-out forwards}
+@keyframes puff{from{transform:scale(.4);opacity:1}to{transform:scale(1.6);opacity:0}}
+canvas.fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:45}
+
+/* ---------- Menus & stacks ---------- */
+.menu{position:absolute;z-index:80;min-width:210px;background:var(--menu-bg);color:var(--menu-ink);border-radius:10px;padding:5px;font-size:13px;
+  box-shadow:0 10px 34px rgba(0,0,0,.3),0 0 0 .5px rgba(0,0,0,.25);backdrop-filter:blur(30px) saturate(1.5);-webkit-backdrop-filter:blur(30px) saturate(1.5)}
+.menu .it{padding:3px 10px 3px 24px;border-radius:5px;position:relative;cursor:default;white-space:nowrap}
+.menu .it.on::before{content:"✓";position:absolute;left:8px}
+.menu .it:hover{background:var(--menu-hi);color:#fff}
+.menu .it.dim{color:var(--menu-ink-2)}
+.menu .it.dim:hover{background:none;color:var(--menu-ink-2)}
+.menu .hd{padding:3px 10px 1px 10px;font-size:11px;font-weight:600;color:var(--menu-ink-2)}
+.menu hr{border:0;border-top:1px solid color-mix(in srgb,var(--menu-ink) 14%,transparent);margin:4px 8px}
+.stack{position:absolute;z-index:80;background:var(--menu-bg);color:var(--menu-ink);border-radius:14px;padding:12px;display:grid;grid-template-columns:repeat(3,84px);gap:10px 6px;
+  box-shadow:0 10px 34px rgba(0,0,0,.3),0 0 0 .5px rgba(0,0,0,.25);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
+.stack .f{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;text-align:center;line-height:1.2}
+.stack .f i{width:44px;height:54px;border-radius:4px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);position:relative}
+.stack .f i::after{content:attr(data-ext);position:absolute;bottom:6px;left:0;right:0;text-align:center;font:600 9px var(--f-ui);color:#fff;background:var(--c);margin:0 6px;border-radius:2px}
+.stack .open{grid-column:1/-1;text-align:center;font-size:12px;color:var(--menu-ink-2);border-top:1px solid color-mix(in srgb,var(--menu-ink) 14%,transparent);padding-top:8px}
+
+/* ---------- Reference sections ---------- */
+.below{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);gap:20px;margin-top:20px;align-items:start}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:18px 20px;min-width:0}
+.card h2{font-size:17px;margin:0 0 10px;letter-spacing:-.01em}
+.card h3{font-size:14px;margin:16px 0 6px}
+.card p,.card li{color:var(--ink-2);max-width:78ch}
+.card ul{padding-left:18px;margin:6px 0}
+.card li{margin:4px 0}
+.card li b,.card p b{color:var(--ink)}
+pre.domain{font-family:var(--f-mono);font-size:12px;line-height:1.6;background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;overflow:auto;margin:8px 0 0;color:var(--ink)}
+pre.domain .k{color:var(--accent)} pre.domain .c{color:var(--ink-3)} pre.domain .chg{background:color-mix(in srgb,var(--accent) 18%,transparent);border-radius:3px}
+.tbl{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:600}
+td code{font-family:var(--f-mono);font-size:12px;white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.st{font-size:11px;font-weight:600;border-radius:5px;padding:1px 7px;white-space:nowrap}
+.st.p{color:var(--pending);background:color-mix(in srgb,var(--pending) 15%,transparent)}
+.st.n{color:var(--new);background:color-mix(in srgb,var(--new) 15%,transparent)}
+.st.a{color:var(--active);background:color-mix(in srgb,var(--active) 14%,transparent)}
+.full{grid-column:1/-1}
+.anat{width:100%;height:auto;display:block;margin-top:6px}
+.anat text{font-family:var(--f-ui);font-size:12px;fill:var(--ink-2)}
+.anat .ln{stroke:var(--ink-3);stroke-width:1;fill:none}
+.src a{color:var(--accent)}
+@media (max-width:980px){.below{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){.sw span,.sw span::after{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Malaysia · System Settings › Desktop &amp; Dock · mockup</div>
+      <h1>The Dock and its settings</h1>
+      <p class="lede">A working desktop: the Dock behaves like the macOS one (16 px up to whatever fits the screen, magnification, dots under open apps, bounce on launch, genie on minimize), and the pane adds the “Dock” section that Settings lacks today. Each control writes the <code>dock.domain</code> key shown below.</p>
+    </div>
+    <div class="hints">
+      <span class="hint"><b>Click</b> opens an app</span>
+      <span class="hint"><b>Secondary click</b> on an icon or the separator</span>
+      <span class="hint"><b>Drag</b> the separator to resize</span>
+      <span class="hint"><b>Drag out</b> an icon to remove it</span>
+      <span class="hint"><b>⇧ + minimize</b> in slow motion</span>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button class="btn" id="reset" type="button">Reset</button>
+    <button class="btn" id="minBtn" type="button">Minimize “Notes”</button>
+    <span class="readout" id="readout"></span>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="menubar floating" id="menubar">
+      <span class="logo" aria-hidden="true"></span>
+      <span class="app" id="activeApp">System Settings</span>
+      <span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span>
+      <span class="right"><span>Wi‑Fi</span><span>Wed Nov 11&nbsp;&nbsp;3:05&nbsp;PM</span></span>
+    </div>
+    <div class="desk-icon"><img alt="" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgNjQgNjQiPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iYmFjayIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzU4YTZlZSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzJmN2ZkNiIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJmcm9udCIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzlhZDJmYiIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzVmYjBmMiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGZpbGw9InVybCgjYmFjaykiIGQ9Ik01IDE1YTQgNCAwIDAgMSA0LTRoMTQuNWw1IDVINTVhNCA0IDAgMCAxIDQgNHYyOGE0IDQgMCAwIDEtNCA0SDlhNCA0IDAgMCAxLTQtNHoiLz48cGF0aCBmaWxsPSJ1cmwoI2Zyb250KSIgc3Ryb2tlPSIjMGEzMjZlIiBzdHJva2Utb3BhY2l0eT0iMC4yOCIgc3Ryb2tlLXdpZHRoPSIuOCIgZD0iTTUgMjNhNCA0IDAgMCAxIDQtNGg0NmE0IDQgMCAwIDEgNCA0djI1YTQgNCAwIDAgMS00IDRIOWE0IDQgMCAwIDEtNC00eiIvPjxwYXRoIGQ9Ik05IDE5LjloNDYiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuNjUiIHN0cm9rZS13aWR0aD0iLjkiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDIyIDI1LjUpIHNjYWxlKDEuMjUpIj48cGF0aCBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS1vcGFjaXR5PSIuNDUiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAgLjUpIiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBkPSJNOCAydjhNNC41IDcgOCAxMC41IDExLjUgN00zIDEzLjVoMTAiLz48cGF0aCBzdHJva2U9IiMxZjYyYWQiIHN0cm9rZS1vcGFjaXR5PSIwLjc1IiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBkPSJNOCAydjhNNC41IDcgOCAxMC41IDExLjUgN00zIDEzLjVoMTAiLz48L2c+PC9zdmc+Cg==">Downloads</div>
+
+    <section class="win settings" id="settings" aria-label="System Settings">
+      <nav class="side">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <div class="search">Search</div>
+        <div class="nav"><span class="ic" style="background:#0a84ff"><svg viewBox="0 0 16 16"><path d="M2 6.5a9 9 0 0 1 12 0M4.3 9a5.5 5.5 0 0 1 7.4 0M8 12.2h.01" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span>Wi‑Fi</div>
+        <div class="nav"><span class="ic" style="background:#0a84ff"><svg viewBox="0 0 16 16"><path d="M5 5l6 6-3 3V2l3 3-6 6" stroke="#fff" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>Bluetooth</div>
+        <div class="nav"><span class="ic" style="background:#0a84ff"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" stroke="#fff" stroke-width="1.6" fill="none"/><path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11" stroke="#fff" stroke-width="1.2" fill="none"/></svg></span>VPN</div>
+        <div class="gap"></div>
+        <div class="nav"><span class="ic" style="background:#8e8e93"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.4" fill="#fff"/><circle cx="8" cy="8" r="5.4" stroke="#fff" stroke-width="1.6" fill="none" stroke-dasharray="2.2 1.6"/></svg></span>General</div>
+        <div class="nav"><span class="ic" style="background:#1d1d1f"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" stroke="#fff" stroke-width="1.5" fill="none"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="#fff"/></svg></span>Appearance</div>
+        <div class="nav"><span class="ic" style="background:#0a84ff"><svg viewBox="0 0 16 16"><circle cx="8" cy="3.6" r="1.6" fill="#fff"/><path d="M3.5 6.3h9M8 6.3v3.2l-2.3 4.2M8 9.5l2.3 4.2" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>Accessibility</div>
+        <div class="nav sel"><span class="ic" style="background:#1d1d1f"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2" stroke="#fff" stroke-width="1.4" fill="none"/><path d="M4.5 10.6h7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg></span>Desktop &amp; Dock</div>
+        <div class="nav"><span class="ic" style="background:#30b0c7"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2" fill="#fff"/><path d="M8 2v2.5M8 11.5V14M2 8h2.5M11.5 8H14M3.8 3.8l1.8 1.8M10.4 10.4l1.8 1.8M3.8 12.2l1.8-1.8M10.4 5.6l1.8-1.8" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg></span>Wallpaper</div>
+        <div class="nav"><span class="ic" style="background:#1d1d1f"><svg viewBox="0 0 16 16"><rect x="4" y="7" width="8" height="6.5" rx="1.5" fill="#fff"/><path d="M5.6 7V5.5a2.4 2.4 0 0 1 4.8 0V7" stroke="#fff" stroke-width="1.5" fill="none"/></svg></span>Lock Screen</div>
+        <div class="gap"></div>
+        <div class="nav"><span class="ic" style="background:#ff3b30"><svg viewBox="0 0 16 16"><path d="M4 11V7.5a4 4 0 0 1 8 0V11l1 1.2H3z" fill="#fff"/><circle cx="8" cy="13.6" r="1.2" fill="#fff"/></svg></span>Notifications</div>
+        <div class="nav"><span class="ic" style="background:#ff2d55"><svg viewBox="0 0 16 16"><path d="M3 6.2h2.4L8.5 3.5v9L5.4 9.8H3z" fill="#fff"/><path d="M10.5 6a2.8 2.8 0 0 1 0 4" stroke="#fff" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg></span>Sound</div>
+      </nav>
+      <div class="pane">
+        <div class="pane-head"><span class="arrows">‹&nbsp;&nbsp;›</span>Desktop &amp; Dock</div>
+        <div class="pane-body" id="paneBody">
+
+          <div class="sec-title">Dock <span class="tag new">New</span></div>
+          <div class="group">
+            <div class="sliders">
+              <div class="sl">
+                <label for="s-size">Size <span id="o-size"></span></label>
+                <input type="range" id="s-size" min="16" max="128" step="1">
+                <div class="ends"><span>Small</span><span>Large</span></div>
+              </div>
+              <div class="sl">
+                <label for="s-mag">Magnification <span id="o-mag"></span></label>
+                <input type="range" id="s-mag" min="0" max="100" step="1">
+                <div class="ends"><span class="off">Off</span><span style="margin-right:auto;margin-left:6px">Small</span><span>Large</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="group">
+            <div class="row"><span class="lbl">Position on screen</span>
+              <select class="pop" id="s-pos"><option value="left">Left</option><option value="bottom">Bottom</option><option value="right">Right</option></select></div>
+            <div class="row"><span class="lbl">Minimize windows using</span>
+              <select class="pop" id="s-eff"><option value="genie">Genie Effect</option><option value="scale">Scale Effect</option><option value="suck">Suck Effect</option></select></div>
+            <div class="row"><span class="lbl">Double-click a window’s title bar to<span class="help">Already exists as <code>window.double_click_titlebar</code>; shown here as well.</span></span>
+              <select class="pop" id="s-dbl"><option value="fill">Fill</option><option value="zoom">Zoom</option><option value="minimize">Minimize</option><option value="none">Do Nothing</option></select></div>
+            <div class="row"><span class="lbl">Minimize windows into application icon</span><label class="sw"><input type="checkbox" id="s-minapp" aria-label="Minimize windows into application icon"><span></span></label></div>
+          </div>
+          <div class="group">
+            <div class="row"><span class="lbl">Automatically hide and show the Dock<span class="help">Move the pointer to the screen edge to show it.</span></span><label class="sw"><input type="checkbox" id="s-hide" aria-label="Automatically hide and show the Dock"><span></span></label></div>
+            <div class="row"><span class="lbl">Animate opening applications<span class="help">The icon bounces while the app starts.</span></span><label class="sw"><input type="checkbox" id="s-launch" aria-label="Animate opening applications"><span></span></label></div>
+            <div class="row"><span class="lbl">Show indicators for open applications<span class="help">A dot under the icon of each open app.</span></span><label class="sw"><input type="checkbox" id="s-ind" aria-label="Show indicators for open applications"><span></span></label></div>
+            <div class="row"><span class="lbl">Show recent apps in the Dock<span class="help">Up to three recent apps that are not in the Dock, between two separators.</span></span><label class="sw"><input type="checkbox" id="s-rec" aria-label="Show recent apps in the Dock"><span></span></label></div>
+          </div>
+          <details class="adv" id="adv" open>
+            <summary>Advanced options <span class="tag mal">Malaysia only</span></summary>
+            <div class="group">
+              <div class="row"><span class="lbl">Show only open apps<span class="help">macOS hides it as <code>static-only</code>; here it is visible.</span></span><label class="sw"><input type="checkbox" id="s-static" aria-label="Show only open apps"><span></span></label></div>
+              <div class="row"><span class="lbl">Delay before showing<span class="help"><code>autohide-delay</code>, only with automatic hiding.</span></span><input class="rng" type="range" id="s-delay" min="0" max="1" step="0.05" aria-label="Delay before showing"><span class="mini" id="o-delay"></span></div>
+              <div class="row"><span class="lbl">Animation duration<span class="help"><code>autohide-time-modifier</code>: 0 removes it, 1 is normal.</span></span><input class="rng" type="range" id="s-speed" min="0" max="2" step="0.1" aria-label="Animation duration"><span class="mini" id="o-speed"></span></div>
+            </div>
+          </details>
+
+          <div class="sec-title">Menu Bar <span class="tag have">Already in Malaysia</span></div>
+          <div class="group">
+            <div class="row"><span class="lbl">Style</span>
+              <div class="cards" id="mbStyle">
+                <button type="button" data-v="solid"><span class="thumb"><i></i></span>Classic</button>
+                <button type="button" data-v="translucent"><span class="thumb"><i></i></span>Translucent</button>
+                <button type="button" data-v="floating"><span class="thumb"><i></i></span>Floating</button>
+              </div></div>
+            <div class="row"><span class="lbl">Height<span class="help">The lock screen uses the same height.</span></span>
+              <div class="seg" id="mbHeight"><button type="button" data-v="slim">Slim</button><button type="button" data-v="wide">Wide</button></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <canvas class="appwin" id="notes"></canvas>
+    <canvas class="fx" id="fx"></canvas>
+    <div id="dockLayer"></div>
+  </div>
+  <div id="settingsSlot"></div>
+
+  <div class="below">
+    <div class="card">
+      <h2>How the Dock is built</h2>
+      <svg class="anat" viewBox="0 0 860 190" role="img" aria-label="Anatomy of the Dock">
+        <rect x="40" y="86" width="780" height="62" rx="16" fill="none" stroke="var(--ink-3)" stroke-width="1.2"/>
+        <g fill="var(--accent)" opacity=".85">
+          <rect x="52" y="94" width="42" height="42" rx="10"/><rect x="100" y="94" width="42" height="42" rx="10"/><rect x="148" y="94" width="42" height="42" rx="10"/><rect x="196" y="94" width="42" height="42" rx="10"/><rect x="244" y="94" width="42" height="42" rx="10"/><rect x="292" y="94" width="42" height="42" rx="10"/><rect x="340" y="94" width="42" height="42" rx="10"/>
+        </g>
+        <g fill="var(--ink-2)"><circle cx="73" cy="143" r="2.2"/><circle cx="169" cy="143" r="2.2"/><circle cx="265" cy="143" r="2.2"/><circle cx="508" cy="143" r="2.2"/></g>
+        <rect x="415" y="96" width="1.5" height="38" fill="var(--ink-3)"/>
+        <g fill="var(--new)" opacity=".85"><rect x="438" y="94" width="42" height="42" rx="10"/><rect x="486" y="94" width="42" height="42" rx="10"/></g>
+        <rect x="552" y="96" width="1.5" height="38" fill="var(--ink-3)"/>
+        <g fill="var(--pending)" opacity=".85"><rect x="574" y="94" width="42" height="42" rx="10"/><rect x="622" y="94" width="58" height="42" rx="6"/></g>
+        <rect x="694" y="94" width="42" height="42" rx="10" fill="var(--ink-3)"/>
+        <circle cx="234" cy="98" r="8" fill="#ff3b30"/>
+        <rect x="303" y="128" width="20" height="3" rx="1.5" fill="var(--ink)"/>
+        <path class="ln" d="M196 70v20M73 166v-18M415 60v34M552 60v34M234 44v46M313 166v-34M703 166v-30M651 70v20"/>
+        <text x="52" y="64">Kept apps (persistent-apps)</text>
+        <text x="420" y="54">Separator: drag to resize</text>
+        <text x="440" y="74">Recent</text>
+        <text x="560" y="74">Stacks and minimized windows</text>
+        <text x="190" y="38">Badge (LauncherEntry count)</text>
+        <text x="40" y="182">Dot: open app</text>
+        <text x="250" y="182">Progress (LauncherEntry progress)</text>
+        <text x="640" y="182">Trash, always last</text>
+      </svg>
+      <h3>Rules the mockup follows</h3>
+      <ul>
+        <li><b>Requested and actual size.</b> <code>tilesize</code> goes from 16 to 128 px, but the Dock never crosses the screen edge. The actual size is the smaller of the request and what fits: <code>min(tilesize, usable width ÷ (icons + 0.36 × separators))</code>. More apps lower the maximum.</li>
+        <li><b>Pitch = size.</b> Each icon takes a square slot of <code>tilesize</code>; the artwork keeps its own margin (an 824 body on a 1024 grid), so there is no gap between icons.</li>
+        <li><b>Magnification.</b> Each icon grows with its distance to the pointer along a cosine curve with a radius of 3 icons, up to <code>largesize</code>. It grows away from the bar; the bar only gets wider.</li>
+        <li><b>Dots.</b> Centered in the padding between the icon and the screen edge, not inside the icon. The diameter follows the size (2 to 5 px).</li>
+        <li><b>Bounce on launch.</b> The icon jumps half its height and falls while the app starts; without <code>launchanim</code>, only the dot appears.</li>
+        <li><b>Minimize.</b> Genie, scale or suck into the window slot right of the separator, or into the app icon with <code>minimize-to-application</code>.</li>
+        <li><b>Remove and reorder.</b> Dragging inside reorders; dragging out shows “Remove” and drops a puff. An open app that is removed stays in the Dock until it quits.</li>
+        <li><b>Name bubble</b> over the icon under the pointer, with an arrow toward it.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>What Settings writes</h2>
+      <p>Updates on every change. The hyphenated keys are those of <code>defaults write com.apple.dock</code>.</p>
+      <pre class="domain" id="domain"></pre>
+    </div>
+
+    <div class="card full">
+      <h2>Measured from macOS screenshots</h2>
+      <p>Two screenshots of a 1920 × 1080 point screen with 21 items in the Dock (19 apps, Downloads and Trash), at the smallest and the largest size. At the largest size the Dock already spans the width: the screen sets that maximum, not the slider.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Measure</th><th>Smallest</th><th>Largest</th><th>Mockup rule</th></tr></thead>
+        <tbody>
+          <tr><td>Pitch between icons (actual size)</td><td class="num">≈ 17 px</td><td class="num">≈ 82 px</td><td>16 px floor; ceiling is what fits</td></tr>
+          <tr><td>Visible icon artwork</td><td class="num">≈ 13 px</td><td class="num">≈ 64 px</td><td>80% of the slot (824/1024 grid)</td></tr>
+          <tr><td>Bar height</td><td class="num">≈ 28 px</td><td class="num">≈ 98 px</td><td>size + 2 × (4 + 6% of size)</td></tr>
+          <tr><td>Bar width</td><td class="num">≈ 400 px</td><td class="num">≈ 1785 of 1920 px</td><td>side margin of 3.5% of the screen</td></tr>
+          <tr><td>Distance to the bottom edge</td><td class="num">≈ 5 px</td><td class="num">≈ 5 px</td><td>4 px</td></tr>
+          <tr><td>Bar radius</td><td class="num">≈ 7 px</td><td class="num">≈ 23 px</td><td>24% of the height</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card full">
+      <h2>The “Dock” section in <code>dock.domain</code></h2>
+      <p>Every key in <a href="../configuration/options.md#dock--shell-dock-malaysia-shell-dock-macos-comappledock">options.md</a> is pending: the shell does not read <code>dock.domain</code> yet.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Control</th><th>Key</th><th>Values</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Size</td><td><code>dock.tilesize</code></td><td>16–128 px · 48</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Magnification</td><td><code>dock.magnification</code> + <code>dock.largesize</code></td><td>bool + 16–128 px · 64</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Position on screen</td><td><code>dock.orientation</code></td><td>left · bottom · right</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Minimize windows using</td><td><code>dock.mineffect</code></td><td>genie · scale · suck</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Title bar double-click</td><td><code>window.double_click_titlebar</code></td><td>fill · zoom · minimize · none</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Minimize into application icon</td><td><code>dock.minimize-to-application</code></td><td>bool · false</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Automatically hide</td><td><code>dock.autohide</code></td><td>bool · false</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Animate opening applications</td><td><code>dock.launchanim</code></td><td>bool · true</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Indicators for open applications</td><td><code>dock.show-process-indicators</code></td><td>bool · true</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Recent apps</td><td><code>dock.show-recents</code></td><td>bool · true</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Only open apps</td><td><code>dock.static-only</code></td><td>bool · false</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Delay before showing</td><td><code>dock.autohide-delay</code></td><td>0–1 s · 0</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Animation duration</td><td><code>dock.autohide-time-modifier</code></td><td>0–2 · 1</td><td><span class="st p">pending</span></td></tr>
+        </tbody>
+      </table></div>
+      <h3>What the shell and the compositor still need</h3>
+      <ul>
+        <li><b>App icons.</b> Today each slot shows the title. The Dock must resolve <code>app_id</code> → <code>.desktop</code> → the Malaysia theme icon, and group windows by app (one icon and one dot per app, not per window).</li>
+        <li><b>Kept apps.</b> A persistent list, like macOS <code>persistent-apps</code>, in <code>~/.local/share/malaysia/</code> because it is state, not a preference.</li>
+        <li><b>Minimize target.</b> The Dock sends <code>set_rectangle</code> through <code>zwlr_foreign_toplevel_management_v1</code> with the icon slot; the compositor ignores it today and needs it to draw the genie.</li>
+        <li><b>Magnification without moving windows.</b> The layer-shell surface grows by <code>largesize</code>, but the <code>exclusive_zone</code> stays the unmagnified bar.</li>
+        <li><b>Hiding.</b> With <code>autohide</code>, <code>exclusive_zone</code> becomes 0 and a 1 px strip at the edge detects the pointer.</li>
+      </ul>
+    </div>
+
+    <div class="card full src">
+      <h2>Sources</h2>
+      <ul>
+        <li><a href="https://support.apple.com/guide/mac-help/change-desktop-dock-settings-mchlp1119/mac" target="_blank" rel="noopener">Apple · Change Desktop &amp; Dock settings on Mac</a>: the list and wording of each option.</li>
+        <li><a href="https://support.apple.com/guide/mac-help/use-the-dock-on-mac-mh35859/mac" target="_blank" rel="noopener">Apple · Use the Dock on Mac</a>: separators, recent apps, stacks, drag to remove, resize from the separator.</li>
+        <li><a href="https://developer.apple.com/design/human-interface-guidelines/dock-menus" target="_blank" rel="noopener">Apple HIG · Dock menus</a> and <a href="https://developer.apple.com/documentation/appkit/nsdocktile" target="_blank" rel="noopener">NSDockTile</a>: icon menu and badges.</li>
+        <li><a href="https://www.intego.com/mac-security-blog/unlock-the-macos-docks-hidden-secrets-in-terminal/" target="_blank" rel="noopener">Intego · Hidden Dock settings in Terminal</a>: <code>static-only</code>, <code>autohide-delay</code>, <code>autohide-time-modifier</code>, <code>mineffect suck</code>.</li>
+        <li><a href="dock.md">dock.md</a>, <a href="../configuration/options.md">options.md</a> and <code>crates/malaysia-shell/src/dock.rs</code>. The Settings, Screenshot, Downloads and Trash icons come from <code>malaysia-icon-theme</code>; the other icons are drawn for this mockup.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = t => t * t * (3 - 2 * t);
+const easeInOut = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+/* ---------- Icons ---------- */
+const svgURI = s => "data:image/svg+xml;utf8," + encodeURIComponent(s);
+const body = (g1, g2, inner) => svgURI(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${g1}"/><stop offset="1" stop-color="${g2}"/></linearGradient><clipPath id="c"><rect x="10" y="10" width="80" height="80" rx="18"/></clipPath></defs><g clip-path="url(#c)"><rect x="10" y="10" width="80" height="80" fill="url(#g)"/>${inner}</g><rect x="10.5" y="10.5" width="79" height="79" rx="17.5" fill="none" stroke="#000" stroke-opacity=".12"/></svg>`);
+const W_ = 'stroke="#fff" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+const ICONS = {
+  files: body("#5cb2ff", "#1c6fe3", `<path d="M26 36a4 4 0 0 1 4-4h12l5 5h23a4 4 0 0 1 4 4v25a4 4 0 0 1-4 4H30a4 4 0 0 1-4-4z" fill="#fff" opacity=".95"/><path d="M26 44h48" stroke="#1c6fe3" stroke-width="3" opacity=".35"/>`),
+  launcher: body("#5b6170", "#2c3038", [0,1,2].map(r=>[0,1,2].map(c=>`<rect x="${28+c*16}" y="${28+r*16}" width="11" height="11" rx="3" fill="${["#ff6b6b","#ffd34d","#5ee07a","#4fb4ff","#a78bfa","#ff9f43","#2dd4bf","#f472b6","#e5e7eb"][r*3+c]}"/>`).join("")).join("")),
+  browser: body("#ffffff", "#dfe6ef", `<circle cx="50" cy="50" r="25" stroke="#2f7cf6" stroke-width="4" fill="#e8f1ff"/><path d="M25 50h50M50 25c-9 8-9 42 0 50M50 25c9 8 9 42 0 50M30 37h40M30 63h40" stroke="#2f7cf6" stroke-width="2.6" fill="none"/>`),
+  messages: body("#6fe68a", "#22b347", `<path d="M50 28c-14 0-25 9-25 20 0 6 3 11 8 15l-3 9 10-5c3 1 6 1 10 1 14 0 25-9 25-20s-11-20-25-20z" fill="#fff"/>`),
+  mail: body("#62b8ff", "#1769e0", `<rect x="25" y="33" width="50" height="34" rx="5" fill="#fff"/><path d="M27 36l23 17 23-17" stroke="#1769e0" stroke-width="3" fill="none" stroke-linejoin="round"/>`),
+  photos: body("#ffbe76", "#ff5c8a", `<circle cx="64" cy="36" r="7" fill="#fff"/><path d="M18 74l22-26 14 15 9-9 21 20z" fill="#fff" opacity=".95"/>`),
+  calendar: body("#ffffff", "#eceef2", `<rect x="10" y="10" width="80" height="20" fill="#ff453a"/>${[0,1,2,3].map(r=>[0,1,2,3,4].map(c=>`<rect x="${21+c*12}" y="${38+r*11}" width="8" height="7" rx="1.5" fill="${r===1&&c===2?"#ff453a":"#c7cad1"}"/>`).join("")).join("")}`),
+  notes: body("#ffffff", "#f1f1f1", `<rect x="10" y="10" width="80" height="24" fill="#ffd23f"/><path d="M24 46h52M24 56h52M24 66h40" stroke="#c9c9c9" stroke-width="2.4"/>`),
+  music: body("#ff6b85", "#e0245e", `<path d="M42 66V36l28-6v30" ${W_} stroke-width="5"/><circle cx="36" cy="66" r="7" fill="#fff"/><circle cx="64" cy="60" r="7" fill="#fff"/>`),
+  code: body("#8a7cff", "#4636d6", `<path d="M40 36L26 50l14 14M60 36l14 14-14 14M54 30l-8 40" ${W_} stroke-width="5"/>`),
+  terminal: body("#2a2d34", "#0b0c0f", `<path d="M28 38l10 9-10 9M44 60h18" stroke="#4ade80" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`),
+  calc: body("#454952", "#1d1f24", [0,1,2,3].map(r=>[0,1,2,3].map(c=>`<circle cx="${29+c*14}" cy="${30+r*14}" r="5.4" fill="${c===3?"#ff9f0a":r===0?"#a5a8b0":"#5d616b"}"/>`).join("")).join("")),
+  maps: body("#cdeebc", "#93d27a", `<path d="M10 64L90 40M42 10l18 80" stroke="#fff" stroke-width="7"/><path d="M60 30c-7 0-12 5-12 12 0 9 12 20 12 20s12-11 12-20c0-7-5-12-12-12z" fill="#ff3b30"/><circle cx="60" cy="42" r="4" fill="#fff"/>`),
+  settings: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZyIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzgwODU4ZCIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzRmNTQ1YiIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJmaWciIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZmZmZmYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNlOWVkZjIiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0icmltIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZmZmZmIiBzdG9wLW9wYWNpdHk9IjAuNDUiLz48c3RvcCBvZmZzZXQ9Ii4zNSIgc3RvcC1jb2xvcj0iI2ZmZmZmZiIgc3RvcC1vcGFjaXR5PSIwIi8+PC9saW5lYXJHcmFkaWVudD48Y2xpcFBhdGggaWQ9InNxIj48cGF0aCBkPSJNOTAuMjMgNTAuMDBMOTAuMjIgNjAuNTFMOTAuMTkgNjMuODdMOTAuMTQgNjYuMzBMOTAuMDcgNjguMjhMODkuOTggNjkuOTdMODkuODggNzEuNDZMODkuNzUgNzIuODBMODkuNjAgNzQuMDNMODkuNDMgNzUuMTVMODkuMjQgNzYuMTlMODkuMDMgNzcuMTZMODguODAgNzguMDdMODguNTUgNzguOTNMODguMjggNzkuNzNMODcuOTggODAuNDlMODcuNjYgODEuMjFMODcuMzIgODEuODhMODYuOTYgODIuNTNMODYuNTcgODMuMTNMODYuMTYgODMuNzFMODUuNzMgODQuMjZMODUuMjYgODQuNzdMODQuNzcgODUuMjZMODQuMjYgODUuNzNMODMuNzEgODYuMTZMODMuMTMgODYuNTdMODIuNTMgODYuOTZMODEuODggODcuMzJMODEuMjEgODcuNjZMODAuNDkgODcuOThMNzkuNzMgODguMjhMNzguOTMgODguNTVMNzguMDcgODguODBMNzcuMTYgODkuMDNMNzYuMTkgODkuMjRMNzUuMTUgODkuNDNMNzQuMDMgODkuNjBMNzIuODAgODkuNzVMNzEuNDYgODkuODhMNjkuOTcgODkuOThMNjguMjggOTAuMDdMNjYuMzAgOTAuMTRMNjMuODcgOTAuMTlMNjAuNTEgOTAuMjJMNTAuMDAgOTAuMjNMMzkuNDkgOTAuMjJMMzYuMTMgOTAuMTlMMzMuNzAgOTAuMTRMMzEuNzIgOTAuMDdMMzAuMDMgODkuOThMMjguNTQgODkuODhMMjcuMjAgODkuNzVMMjUuOTcgODkuNjBMMjQuODUgODkuNDNMMjMuODEgODkuMjRMMjIuODQgODkuMDNMMjEuOTMgODguODBMMjEuMDcgODguNTVMMjAuMjcgODguMjhMMTkuNTEgODcuOThMMTguNzkgODcuNjZMMTguMTIgODcuMzJMMTcuNDcgODYuOTZMMTYuODcgODYuNTdMMTYuMjkgODYuMTZMMTUuNzQgODUuNzNMMTUuMjMgODUuMjZMMTQuNzQgODQuNzdMMTQuMjcgODQuMjZMMTMuODQgODMuNzFMMTMuNDMgODMuMTNMMTMuMDQgODIuNTNMMTIuNjggODEuODhMMTIuMzQgODEuMjFMMTIuMDIgODAuNDlMMTEuNzIgNzkuNzNMMTEuNDUgNzguOTNMMTEuMjAgNzguMDdMMTAuOTcgNzcuMTZMMTAuNzYgNzYuMTlMMTAuNTcgNzUuMTVMMTAuNDAgNzQuMDNMMTAuMjUgNzIuODBMMTAuMTIgNzEuNDZMMTAuMDIgNjkuOTdMOS45MyA2OC4yOEw5Ljg2IDY2LjMwTDkuODEgNjMuODdMOS43OCA2MC41MUw5Ljc3IDUwLjAwTDkuNzggMzkuNDlMOS44MSAzNi4xM0w5Ljg2IDMzLjcwTDkuOTMgMzEuNzJMMTAuMDIgMzAuMDNMMTAuMTIgMjguNTRMMTAuMjUgMjcuMjBMMTAuNDAgMjUuOTdMMTAuNTcgMjQuODVMMTAuNzYgMjMuODFMMTAuOTcgMjIuODRMMTEuMjAgMjEuOTNMMTEuNDUgMjEuMDdMMTEuNzIgMjAuMjdMMTIuMDIgMTkuNTFMMTIuMzQgMTguNzlMMTIuNjggMTguMTJMMTMuMDQgMTcuNDdMMTMuNDMgMTYuODdMMTMuODQgMTYuMjlMMTQuMjcgMTUuNzRMMTQuNzQgMTUuMjNMMTUuMjMgMTQuNzRMMTUuNzQgMTQuMjdMMTYuMjkgMTMuODRMMTYuODcgMTMuNDNMMTcuNDcgMTMuMDRMMTguMTIgMTIuNjhMMTguNzkgMTIuMzRMMTkuNTEgMTIuMDJMMjAuMjcgMTEuNzJMMjEuMDcgMTEuNDVMMjEuOTMgMTEuMjBMMjIuODQgMTAuOTdMMjMuODEgMTAuNzZMMjQuODUgMTAuNTdMMjUuOTcgMTAuNDBMMjcuMjAgMTAuMjVMMjguNTQgMTAuMTJMMzAuMDMgMTAuMDJMMzEuNzIgOS45M0wzMy43MCA5Ljg2TDM2LjEzIDkuODFMMzkuNDkgOS43OEw1MC4wMCA5Ljc3TDYwLjUxIDkuNzhMNjMuODcgOS44MUw2Ni4zMCA5Ljg2TDY4LjI4IDkuOTNMNjkuOTcgMTAuMDJMNzEuNDYgMTAuMTJMNzIuODAgMTAuMjVMNzQuMDMgMTAuNDBMNzUuMTUgMTAuNTdMNzYuMTkgMTAuNzZMNzcuMTYgMTAuOTdMNzguMDcgMTEuMjBMNzguOTMgMTEuNDVMNzkuNzMgMTEuNzJMODAuNDkgMTIuMDJMODEuMjEgMTIuMzRMODEuODggMTIuNjhMODIuNTMgMTMuMDRMODMuMTMgMTMuNDNMODMuNzEgMTMuODRMODQuMjYgMTQuMjdMODQuNzcgMTQuNzRMODUuMjYgMTUuMjNMODUuNzMgMTUuNzRMODYuMTYgMTYuMjlMODYuNTcgMTYuODdMODYuOTYgMTcuNDdMODcuMzIgMTguMTJMODcuNjYgMTguNzlMODcuOTggMTkuNTFMODguMjggMjAuMjdMODguNTUgMjEuMDdMODguODAgMjEuOTNMODkuMDMgMjIuODRMODkuMjQgMjMuODFMODkuNDMgMjQuODVMODkuNjAgMjUuOTdMODkuNzUgMjcuMjBMODkuODggMjguNTRMODkuOTggMzAuMDNMOTAuMDcgMzEuNzJMOTAuMTQgMzMuNzBMOTAuMTkgMzYuMTNMOTAuMjIgMzkuNDl6Ii8+PC9jbGlwUGF0aD48L2RlZnM+PHBhdGggZmlsbD0idXJsKCNiZykiIGQ9Ik05MC4yMyA1MC4wMEw5MC4yMiA2MC41MUw5MC4xOSA2My44N0w5MC4xNCA2Ni4zMEw5MC4wNyA2OC4yOEw4OS45OCA2OS45N0w4OS44OCA3MS40Nkw4OS43NSA3Mi44MEw4OS42MCA3NC4wM0w4OS40MyA3NS4xNUw4OS4yNCA3Ni4xOUw4OS4wMyA3Ny4xNkw4OC44MCA3OC4wN0w4OC41NSA3OC45M0w4OC4yOCA3OS43M0w4Ny45OCA4MC40OUw4Ny42NiA4MS4yMUw4Ny4zMiA4MS44OEw4Ni45NiA4Mi41M0w4Ni41NyA4My4xM0w4Ni4xNiA4My43MUw4NS43MyA4NC4yNkw4NS4yNiA4NC43N0w4NC43NyA4NS4yNkw4NC4yNiA4NS43M0w4My43MSA4Ni4xNkw4My4xMyA4Ni41N0w4Mi41MyA4Ni45Nkw4MS44OCA4Ny4zMkw4MS4yMSA4Ny42Nkw4MC40OSA4Ny45OEw3OS43MyA4OC4yOEw3OC45MyA4OC41NUw3OC4wNyA4OC44MEw3Ny4xNiA4OS4wM0w3Ni4xOSA4OS4yNEw3NS4xNSA4OS40M0w3NC4wMyA4OS42MEw3Mi44MCA4OS43NUw3MS40NiA4OS44OEw2OS45NyA4OS45OEw2OC4yOCA5MC4wN0w2Ni4zMCA5MC4xNEw2My44NyA5MC4xOUw2MC41MSA5MC4yMkw1MC4wMCA5MC4yM0wzOS40OSA5MC4yMkwzNi4xMyA5MC4xOUwzMy43MCA5MC4xNEwzMS43MiA5MC4wN0wzMC4wMyA4OS45OEwyOC41NCA4OS44OEwyNy4yMCA4OS43NUwyNS45NyA4OS42MEwyNC44NSA4OS40M0wyMy44MSA4OS4yNEwyMi44NCA4OS4wM0wyMS45MyA4OC44MEwyMS4wNyA4OC41NUwyMC4yNyA4OC4yOEwxOS41MSA4Ny45OEwxOC43OSA4Ny42NkwxOC4xMiA4Ny4zMkwxNy40NyA4Ni45NkwxNi44NyA4Ni41N0wxNi4yOSA4Ni4xNkwxNS43NCA4NS43M0wxNS4yMyA4NS4yNkwxNC43NCA4NC43N0wxNC4yNyA4NC4yNkwxMy44NCA4My43MUwxMy40MyA4My4xM0wxMy4wNCA4Mi41M0wxMi42OCA4MS44OEwxMi4zNCA4MS4yMUwxMi4wMiA4MC40OUwxMS43MiA3OS43M0wxMS40NSA3OC45M0wxMS4yMCA3OC4wN0wxMC45NyA3Ny4xNkwxMC43NiA3Ni4xOUwxMC41NyA3NS4xNUwxMC40MCA3NC4wM0wxMC4yNSA3Mi44MEwxMC4xMiA3MS40NkwxMC4wMiA2OS45N0w5LjkzIDY4LjI4TDkuODYgNjYuMzBMOS44MSA2My44N0w5Ljc4IDYwLjUxTDkuNzcgNTAuMDBMOS43OCAzOS40OUw5LjgxIDM2LjEzTDkuODYgMzMuNzBMOS45MyAzMS43MkwxMC4wMiAzMC4wM0wxMC4xMiAyOC41NEwxMC4yNSAyNy4yMEwxMC40MCAyNS45N0wxMC41NyAyNC44NUwxMC43NiAyMy44MUwxMC45NyAyMi44NEwxMS4yMCAyMS45M0wxMS40NSAyMS4wN0wxMS43MiAyMC4yN0wxMi4wMiAxOS41MUwxMi4zNCAxOC43OUwxMi42OCAxOC4xMkwxMy4wNCAxNy40N0wxMy40MyAxNi44N0wxMy44NCAxNi4yOUwxNC4yNyAxNS43NEwxNC43NCAxNS4yM0wxNS4yMyAxNC43NEwxNS43NCAxNC4yN0wxNi4yOSAxMy44NEwxNi44NyAxMy40M0wxNy40NyAxMy4wNEwxOC4xMiAxMi42OEwxOC43OSAxMi4zNEwxOS41MSAxMi4wMkwyMC4yNyAxMS43MkwyMS4wNyAxMS40NUwyMS45MyAxMS4yMEwyMi44NCAxMC45N0wyMy44MSAxMC43NkwyNC44NSAxMC41N0wyNS45NyAxMC40MEwyNy4yMCAxMC4yNUwyOC41NCAxMC4xMkwzMC4wMyAxMC4wMkwzMS43MiA5LjkzTDMzLjcwIDkuODZMMzYuMTMgOS44MUwzOS40OSA5Ljc4TDUwLjAwIDkuNzdMNjAuNTEgOS43OEw2My44NyA5LjgxTDY2LjMwIDkuODZMNjguMjggOS45M0w2OS45NyAxMC4wMkw3MS40NiAxMC4xMkw3Mi44MCAxMC4yNUw3NC4wMyAxMC40MEw3NS4xNSAxMC41N0w3Ni4xOSAxMC43Nkw3Ny4xNiAxMC45N0w3OC4wNyAxMS4yMEw3OC45MyAxMS40NUw3OS43MyAxMS43Mkw4MC40OSAxMi4wMkw4MS4yMSAxMi4zNEw4MS44OCAxMi42OEw4Mi41MyAxMy4wNEw4My4xMyAxMy40M0w4My43MSAxMy44NEw4NC4yNiAxNC4yN0w4NC43NyAxNC43NEw4NS4yNiAxNS4yM0w4NS43MyAxNS43NEw4Ni4xNiAxNi4yOUw4Ni41NyAxNi44N0w4Ni45NiAxNy40N0w4Ny4zMiAxOC4xMkw4Ny42NiAxOC43OUw4Ny45OCAxOS41MUw4OC4yOCAyMC4yN0w4OC41NSAyMS4wN0w4OC44MCAyMS45M0w4OS4wMyAyMi44NEw4OS4yNCAyMy44MUw4OS40MyAyNC44NUw4OS42MCAyNS45N0w4OS43NSAyNy4yMEw4OS44OCAyOC41NEw4OS45OCAzMC4wM0w5MC4wNyAzMS43Mkw5MC4xNCAzMy43MEw5MC4xOSAzNi4xM0w5MC4yMiAzOS40OXoiLz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyNC40IDI1LjIpIHNjYWxlKDMuMikiPjxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZS13aWR0aD0iMS42IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLW9wYWNpdHk9Ii4xOCIgZD0iTTYuNzUgMy40N0w2Ljk4IDEuNzhMOS4wMiAxLjc4TDkuMjUgMy40N0wxMC4zMiAzLjkxTDExLjY4IDIuODlMMTMuMTEgNC4zMkwxMi4wOSA1LjY4TDEyLjUzIDYuNzVMMTQuMjIgNi45OEwxNC4yMiA5LjAyTDEyLjUzIDkuMjVMMTIuMDkgMTAuMzJMMTMuMTEgMTEuNjhMMTEuNjggMTMuMTFMMTAuMzIgMTIuMDlMOS4yNSAxMi41M0w5LjAyIDE0LjIyTDYuOTggMTQuMjJMNi43NSAxMi41M0w1LjY4IDEyLjA5TDQuMzIgMTMuMTFMMi44OSAxMS42OEwzLjkxIDEwLjMyTDMuNDcgOS4yNUwxLjc4IDkuMDJMMS43OCA2Ljk4TDMuNDcgNi43NUwzLjkxIDUuNjhMMi44OSA0LjMyTDQuMzIgMi44OUw1LjY4IDMuOTF6TTggMTAuMmEyLjIgMi4yIDAgMSAwIDAtNC40YTIuMiAyLjIgMCAwIDAgMCA0LjQiLz48L2c+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjQuNCAyNC40KSBzY2FsZSgzLjIpIj48cGF0aCBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2U9InVybCgjZmlnKSIgZD0iTTYuNzUgMy40N0w2Ljk4IDEuNzhMOS4wMiAxLjc4TDkuMjUgMy40N0wxMC4zMiAzLjkxTDExLjY4IDIuODlMMTMuMTEgNC4zMkwxMi4wOSA1LjY4TDEyLjUzIDYuNzVMMTQuMjIgNi45OEwxNC4yMiA5LjAyTDEyLjUzIDkuMjVMMTIuMDkgMTAuMzJMMTMuMTEgMTEuNjhMMTEuNjggMTMuMTFMMTAuMzIgMTIuMDlMOS4yNSAxMi41M0w5LjAyIDE0LjIyTDYuOTggMTQuMjJMNi43NSAxMi41M0w1LjY4IDEyLjA5TDQuMzIgMTMuMTFMMi44OSAxMS42OEwzLjkxIDEwLjMyTDMuNDcgOS4yNUwxLjc4IDkuMDJMMS43OCA2Ljk4TDMuNDcgNi43NUwzLjkxIDUuNjhMMi44OSA0LjMyTDQuMzIgMi44OUw1LjY4IDMuOTF6TTggMTAuMmEyLjIgMi4yIDAgMSAwIDAtNC40YTIuMiAyLjIgMCAwIDAgMCA0LjQiLz48L2c+PHBhdGggY2xpcC1wYXRoPSJ1cmwoI3NxKSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3JpbSkiIHN0cm9rZS13aWR0aD0iMi40IiBkPSJNOTAuMjMgNTAuMDBMOTAuMjIgNjAuNTFMOTAuMTkgNjMuODdMOTAuMTQgNjYuMzBMOTAuMDcgNjguMjhMODkuOTggNjkuOTdMODkuODggNzEuNDZMODkuNzUgNzIuODBMODkuNjAgNzQuMDNMODkuNDMgNzUuMTVMODkuMjQgNzYuMTlMODkuMDMgNzcuMTZMODguODAgNzguMDdMODguNTUgNzguOTNMODguMjggNzkuNzNMODcuOTggODAuNDlMODcuNjYgODEuMjFMODcuMzIgODEuODhMODYuOTYgODIuNTNMODYuNTcgODMuMTNMODYuMTYgODMuNzFMODUuNzMgODQuMjZMODUuMjYgODQuNzdMODQuNzcgODUuMjZMODQuMjYgODUuNzNMODMuNzEgODYuMTZMODMuMTMgODYuNTdMODIuNTMgODYuOTZMODEuODggODcuMzJMODEuMjEgODcuNjZMODAuNDkgODcuOThMNzkuNzMgODguMjhMNzguOTMgODguNTVMNzguMDcgODguODBMNzcuMTYgODkuMDNMNzYuMTkgODkuMjRMNzUuMTUgODkuNDNMNzQuMDMgODkuNjBMNzIuODAgODkuNzVMNzEuNDYgODkuODhMNjkuOTcgODkuOThMNjguMjggOTAuMDdMNjYuMzAgOTAuMTRMNjMuODcgOTAuMTlMNjAuNTEgOTAuMjJMNTAuMDAgOTAuMjNMMzkuNDkgOTAuMjJMMzYuMTMgOTAuMTlMMzMuNzAgOTAuMTRMMzEuNzIgOTAuMDdMMzAuMDMgODkuOThMMjguNTQgODkuODhMMjcuMjAgODkuNzVMMjUuOTcgODkuNjBMMjQuODUgODkuNDNMMjMuODEgODkuMjRMMjIuODQgODkuMDNMMjEuOTMgODguODBMMjEuMDcgODguNTVMMjAuMjcgODguMjhMMTkuNTEgODcuOThMMTguNzkgODcuNjZMMTguMTIgODcuMzJMMTcuNDcgODYuOTZMMTYuODcgODYuNTdMMTYuMjkgODYuMTZMMTUuNzQgODUuNzNMMTUuMjMgODUuMjZMMTQuNzQgODQuNzdMMTQuMjcgODQuMjZMMTMuODQgODMuNzFMMTMuNDMgODMuMTNMMTMuMDQgODIuNTNMMTIuNjggODEuODhMMTIuMzQgODEuMjFMMTIuMDIgODAuNDlMMTEuNzIgNzkuNzNMMTEuNDUgNzguOTNMMTEuMjAgNzguMDdMMTAuOTcgNzcuMTZMMTAuNzYgNzYuMTlMMTAuNTcgNzUuMTVMMTAuNDAgNzQuMDNMMTAuMjUgNzIuODBMMTAuMTIgNzEuNDZMMTAuMDIgNjkuOTdMOS45MyA2OC4yOEw5Ljg2IDY2LjMwTDkuODEgNjMuODdMOS43OCA2MC41MUw5Ljc3IDUwLjAwTDkuNzggMzkuNDlMOS44MSAzNi4xM0w5Ljg2IDMzLjcwTDkuOTMgMzEuNzJMMTAuMDIgMzAuMDNMMTAuMTIgMjguNTRMMTAuMjUgMjcuMjBMMTAuNDAgMjUuOTdMMTAuNTcgMjQuODVMMTAuNzYgMjMuODFMMTAuOTcgMjIuODRMMTEuMjAgMjEuOTNMMTEuNDUgMjEuMDdMMTEuNzIgMjAuMjdMMTIuMDIgMTkuNTFMMTIuMzQgMTguNzlMMTIuNjggMTguMTJMMTMuMDQgMTcuNDdMMTMuNDMgMTYuODdMMTMuODQgMTYuMjlMMTQuMjcgMTUuNzRMMTQuNzQgMTUuMjNMMTUuMjMgMTQuNzRMMTUuNzQgMTQuMjdMMTYuMjkgMTMuODRMMTYuODcgMTMuNDNMMTcuNDcgMTMuMDRMMTguMTIgMTIuNjhMMTguNzkgMTIuMzRMMTkuNTEgMTIuMDJMMjAuMjcgMTEuNzJMMjEuMDcgMTEuNDVMMjEuOTMgMTEuMjBMMjIuODQgMTAuOTdMMjMuODEgMTAuNzZMMjQuODUgMTAuNTdMMjUuOTcgMTAuNDBMMjcuMjAgMTAuMjVMMjguNTQgMTAuMTJMMzAuMDMgMTAuMDJMMzEuNzIgOS45M0wzMy43MCA5Ljg2TDM2LjEzIDkuODFMMzkuNDkgOS43OEw1MC4wMCA5Ljc3TDYwLjUxIDkuNzhMNjMuODcgOS44MUw2Ni4zMCA5Ljg2TDY4LjI4IDkuOTNMNjkuOTcgMTAuMDJMNzEuNDYgMTAuMTJMNzIuODAgMTAuMjVMNzQuMDMgMTAuNDBMNzUuMTUgMTAuNTdMNzYuMTkgMTAuNzZMNzcuMTYgMTAuOTdMNzguMDcgMTEuMjBMNzguOTMgMTEuNDVMNzkuNzMgMTEuNzJMODAuNDkgMTIuMDJMODEuMjEgMTIuMzRMODEuODggMTIuNjhMODIuNTMgMTMuMDRMODMuMTMgMTMuNDNMODMuNzEgMTMuODRMODQuMjYgMTQuMjdMODQuNzcgMTQuNzRMODUuMjYgMTUuMjNMODUuNzMgMTUuNzRMODYuMTYgMTYuMjlMODYuNTcgMTYuODdMODYuOTYgMTcuNDdMODcuMzIgMTguMTJMODcuNjYgMTguNzlMODcuOTggMTkuNTFMODguMjggMjAuMjdMODguNTUgMjEuMDdMODguODAgMjEuOTNMODkuMDMgMjIuODRMODkuMjQgMjMuODFMODkuNDMgMjQuODVMODkuNjAgMjUuOTdMODkuNzUgMjcuMjBMODkuODggMjguNTRMODkuOTggMzAuMDNMOTAuMDcgMzEuNzJMOTAuMTQgMzMuNzBMOTAuMTkgMzYuMTNMOTAuMjIgMzkuNDl6Ii8+PHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2Utb3BhY2l0eT0iLjE4IiBzdHJva2Utd2lkdGg9Ii42IiBkPSJNOTAuMjMgNTAuMDBMOTAuMjIgNjAuNTFMOTAuMTkgNjMuODdMOTAuMTQgNjYuMzBMOTAuMDcgNjguMjhMODkuOTggNjkuOTdMODkuODggNzEuNDZMODkuNzUgNzIuODBMODkuNjAgNzQuMDNMODkuNDMgNzUuMTVMODkuMjQgNzYuMTlMODkuMDMgNzcuMTZMODguODAgNzguMDdMODguNTUgNzguOTNMODguMjggNzkuNzNMODcuOTggODAuNDlMODcuNjYgODEuMjFMODcuMzIgODEuODhMODYuOTYgODIuNTNMODYuNTcgODMuMTNMODYuMTYgODMuNzFMODUuNzMgODQuMjZMODUuMjYgODQuNzdMODQuNzcgODUuMjZMODQuMjYgODUuNzNMODMuNzEgODYuMTZMODMuMTMgODYuNTdMODIuNTMgODYuOTZMODEuODggODcuMzJMODEuMjEgODcuNjZMODAuNDkgODcuOThMNzkuNzMgODguMjhMNzguOTMgODguNTVMNzguMDcgODguODBMNzcuMTYgODkuMDNMNzYuMTkgODkuMjRMNzUuMTUgODkuNDNMNzQuMDMgODkuNjBMNzIuODAgODkuNzVMNzEuNDYgODkuODhMNjkuOTcgODkuOThMNjguMjggOTAuMDdMNjYuMzAgOTAuMTRMNjMuODcgOTAuMTlMNjAuNTEgOTAuMjJMNTAuMDAgOTAuMjNMMzkuNDkgOTAuMjJMMzYuMTMgOTAuMTlMMzMuNzAgOTAuMTRMMzEuNzIgOTAuMDdMMzAuMDMgODkuOThMMjguNTQgODkuODhMMjcuMjAgODkuNzVMMjUuOTcgODkuNjBMMjQuODUgODkuNDNMMjMuODEgODkuMjRMMjIuODQgODkuMDNMMjEuOTMgODguODBMMjEuMDcgODguNTVMMjAuMjcgODguMjhMMTkuNTEgODcuOThMMTguNzkgODcuNjZMMTguMTIgODcuMzJMMTcuNDcgODYuOTZMMTYuODcgODYuNTdMMTYuMjkgODYuMTZMMTUuNzQgODUuNzNMMTUuMjMgODUuMjZMMTQuNzQgODQuNzdMMTQuMjcgODQuMjZMMTMuODQgODMuNzFMMTMuNDMgODMuMTNMMTMuMDQgODIuNTNMMTIuNjggODEuODhMMTIuMzQgODEuMjFMMTIuMDIgODAuNDlMMTEuNzIgNzkuNzNMMTEuNDUgNzguOTNMMTEuMjAgNzguMDdMMTAuOTcgNzcuMTZMMTAuNzYgNzYuMTlMMTAuNTcgNzUuMTVMMTAuNDAgNzQuMDNMMTAuMjUgNzIuODBMMTAuMTIgNzEuNDZMMTAuMDIgNjkuOTdMOS45MyA2OC4yOEw5Ljg2IDY2LjMwTDkuODEgNjMuODdMOS43OCA2MC41MUw5Ljc3IDUwLjAwTDkuNzggMzkuNDlMOS44MSAzNi4xM0w5Ljg2IDMzLjcwTDkuOTMgMzEuNzJMMTAuMDIgMzAuMDNMMTAuMTIgMjguNTRMMTAuMjUgMjcuMjBMMTAuNDAgMjUuOTdMMTAuNTcgMjQuODVMMTAuNzYgMjMuODFMMTAuOTcgMjIuODRMMTEuMjAgMjEuOTNMMTEuNDUgMjEuMDdMMTEuNzIgMjAuMjdMMTIuMDIgMTkuNTFMMTIuMzQgMTguNzlMMTIuNjggMTguMTJMMTMuMDQgMTcuNDdMMTMuNDMgMTYuODdMMTMuODQgMTYuMjlMMTQuMjcgMTUuNzRMMTQuNzQgMTUuMjNMMTUuMjMgMTQuNzRMMTUuNzQgMTQuMjdMMTYuMjkgMTMuODRMMTYuODcgMTMuNDNMMTcuNDcgMTMuMDRMMTguMTIgMTIuNjhMMTguNzkgMTIuMzRMMTkuNTEgMTIuMDJMMjAuMjcgMTEuNzJMMjEuMDcgMTEuNDVMMjEuOTMgMTEuMjBMMjIuODQgMTAuOTdMMjMuODEgMTAuNzZMMjQuODUgMTAuNTdMMjUuOTcgMTAuNDBMMjcuMjAgMTAuMjVMMjguNTQgMTAuMTJMMzAuMDMgMTAuMDJMMzEuNzIgOS45M0wzMy43MCA5Ljg2TDM2LjEzIDkuODFMMzkuNDkgOS43OEw1MC4wMCA5Ljc3TDYwLjUxIDkuNzhMNjMuODcgOS44MUw2Ni4zMCA5Ljg2TDY4LjI4IDkuOTNMNjkuOTcgMTAuMDJMNzEuNDYgMTAuMTJMNzIuODAgMTAuMjVMNzQuMDMgMTAuNDBMNzUuMTUgMTAuNTdMNzYuMTkgMTAuNzZMNzcuMTYgMTAuOTdMNzguMDcgMTEuMjBMNzguOTMgMTEuNDVMNzkuNzMgMTEuNzJMODAuNDkgMTIuMDJMODEuMjEgMTIuMzRMODEuODggMTIuNjhMODIuNTMgMTMuMDRMODMuMTMgMTMuNDNMODMuNzEgMTMuODRMODQuMjYgMTQuMjdMODQuNzcgMTQuNzRMODUuMjYgMTUuMjNMODUuNzMgMTUuNzRMODYuMTYgMTYuMjlMODYuNTcgMTYuODdMODYuOTYgMTcuNDdMODcuMzIgMTguMTJMODcuNjYgMTguNzlMODcuOTggMTkuNTFMODguMjggMjAuMjdMODguNTUgMjEuMDdMODguODAgMjEuOTNMODkuMDMgMjIuODRMODkuMjQgMjMuODFMODkuNDMgMjQuODVMODkuNjAgMjUuOTdMODkuNzUgMjcuMjBMODkuODggMjguNTRMODkuOTggMzAuMDNMOTAuMDcgMzEuNzJMOTAuMTQgMzMuNzBMOTAuMTkgMzYuMTNMOTAuMjIgMzkuNDl6Ii8+PC9zdmc+Cg==",
+  screenshot: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiZyIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzYyNzM5YSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzJiMzQ0OSIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJmaWciIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZmZmZmYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNlOWVkZjIiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0icmltIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZmZmZmIiBzdG9wLW9wYWNpdHk9IjAuNDUiLz48c3RvcCBvZmZzZXQ9Ii4zNSIgc3RvcC1jb2xvcj0iI2ZmZmZmZiIgc3RvcC1vcGFjaXR5PSIwIi8+PC9saW5lYXJHcmFkaWVudD48Y2xpcFBhdGggaWQ9InNxIj48cGF0aCBkPSJNOTAuMjMgNTAuMDBMOTAuMjIgNjAuNTFMOTAuMTkgNjMuODdMOTAuMTQgNjYuMzBMOTAuMDcgNjguMjhMODkuOTggNjkuOTdMODkuODggNzEuNDZMODkuNzUgNzIuODBMODkuNjAgNzQuMDNMODkuNDMgNzUuMTVMODkuMjQgNzYuMTlMODkuMDMgNzcuMTZMODguODAgNzguMDdMODguNTUgNzguOTNMODguMjggNzkuNzNMODcuOTggODAuNDlMODcuNjYgODEuMjFMODcuMzIgODEuODhMODYuOTYgODIuNTNMODYuNTcgODMuMTNMODYuMTYgODMuNzFMODUuNzMgODQuMjZMODUuMjYgODQuNzdMODQuNzcgODUuMjZMODQuMjYgODUuNzNMODMuNzEgODYuMTZMODMuMTMgODYuNTdMODIuNTMgODYuOTZMODEuODggODcuMzJMODEuMjEgODcuNjZMODAuNDkgODcuOThMNzkuNzMgODguMjhMNzguOTMgODguNTVMNzguMDcgODguODBMNzcuMTYgODkuMDNMNzYuMTkgODkuMjRMNzUuMTUgODkuNDNMNzQuMDMgODkuNjBMNzIuODAgODkuNzVMNzEuNDYgODkuODhMNjkuOTcgODkuOThMNjguMjggOTAuMDdMNjYuMzAgOTAuMTRMNjMuODcgOTAuMTlMNjAuNTEgOTAuMjJMNTAuMDAgOTAuMjNMMzkuNDkgOTAuMjJMMzYuMTMgOTAuMTlMMzMuNzAgOTAuMTRMMzEuNzIgOTAuMDdMMzAuMDMgODkuOThMMjguNTQgODkuODhMMjcuMjAgODkuNzVMMjUuOTcgODkuNjBMMjQuODUgODkuNDNMMjMuODEgODkuMjRMMjIuODQgODkuMDNMMjEuOTMgODguODBMMjEuMDcgODguNTVMMjAuMjcgODguMjhMMTkuNTEgODcuOThMMTguNzkgODcuNjZMMTguMTIgODcuMzJMMTcuNDcgODYuOTZMMTYuODcgODYuNTdMMTYuMjkgODYuMTZMMTUuNzQgODUuNzNMMTUuMjMgODUuMjZMMTQuNzQgODQuNzdMMTQuMjcgODQuMjZMMTMuODQgODMuNzFMMTMuNDMgODMuMTNMMTMuMDQgODIuNTNMMTIuNjggODEuODhMMTIuMzQgODEuMjFMMTIuMDIgODAuNDlMMTEuNzIgNzkuNzNMMTEuNDUgNzguOTNMMTEuMjAgNzguMDdMMTAuOTcgNzcuMTZMMTAuNzYgNzYuMTlMMTAuNTcgNzUuMTVMMTAuNDAgNzQuMDNMMTAuMjUgNzIuODBMMTAuMTIgNzEuNDZMMTAuMDIgNjkuOTdMOS45MyA2OC4yOEw5Ljg2IDY2LjMwTDkuODEgNjMuODdMOS43OCA2MC41MUw5Ljc3IDUwLjAwTDkuNzggMzkuNDlMOS44MSAzNi4xM0w5Ljg2IDMzLjcwTDkuOTMgMzEuNzJMMTAuMDIgMzAuMDNMMTAuMTIgMjguNTRMMTAuMjUgMjcuMjBMMTAuNDAgMjUuOTdMMTAuNTcgMjQuODVMMTAuNzYgMjMuODFMMTAuOTcgMjIuODRMMTEuMjAgMjEuOTNMMTEuNDUgMjEuMDdMMTEuNzIgMjAuMjdMMTIuMDIgMTkuNTFMMTIuMzQgMTguNzlMMTIuNjggMTguMTJMMTMuMDQgMTcuNDdMMTMuNDMgMTYuODdMMTMuODQgMTYuMjlMMTQuMjcgMTUuNzRMMTQuNzQgMTUuMjNMMTUuMjMgMTQuNzRMMTUuNzQgMTQuMjdMMTYuMjkgMTMuODRMMTYuODcgMTMuNDNMMTcuNDcgMTMuMDRMMTguMTIgMTIuNjhMMTguNzkgMTIuMzRMMTkuNTEgMTIuMDJMMjAuMjcgMTEuNzJMMjEuMDcgMTEuNDVMMjEuOTMgMTEuMjBMMjIuODQgMTAuOTdMMjMuODEgMTAuNzZMMjQuODUgMTAuNTdMMjUuOTcgMTAuNDBMMjcuMjAgMTAuMjVMMjguNTQgMTAuMTJMMzAuMDMgMTAuMDJMMzEuNzIgOS45M0wzMy43MCA5Ljg2TDM2LjEzIDkuODFMMzkuNDkgOS43OEw1MC4wMCA5Ljc3TDYwLjUxIDkuNzhMNjMuODcgOS44MUw2Ni4zMCA5Ljg2TDY4LjI4IDkuOTNMNjkuOTcgMTAuMDJMNzEuNDYgMTAuMTJMNzIuODAgMTAuMjVMNzQuMDMgMTAuNDBMNzUuMTUgMTAuNTdMNzYuMTkgMTAuNzZMNzcuMTYgMTAuOTdMNzguMDcgMTEuMjBMNzguOTMgMTEuNDVMNzkuNzMgMTEuNzJMODAuNDkgMTIuMDJMODEuMjEgMTIuMzRMODEuODggMTIuNjhMODIuNTMgMTMuMDRMODMuMTMgMTMuNDNMODMuNzEgMTMuODRMODQuMjYgMTQuMjdMODQuNzcgMTQuNzRMODUuMjYgMTUuMjNMODUuNzMgMTUuNzRMODYuMTYgMTYuMjlMODYuNTcgMTYuODdMODYuOTYgMTcuNDdMODcuMzIgMTguMTJMODcuNjYgMTguNzlMODcuOTggMTkuNTFMODguMjggMjAuMjdMODguNTUgMjEuMDdMODguODAgMjEuOTNMODkuMDMgMjIuODRMODkuMjQgMjMuODFMODkuNDMgMjQuODVMODkuNjAgMjUuOTdMODkuNzUgMjcuMjBMODkuODggMjguNTRMODkuOTggMzAuMDNMOTAuMDcgMzEuNzJMOTAuMTQgMzMuNzBMOTAuMTkgMzYuMTNMOTAuMjIgMzkuNDl6Ii8+PC9jbGlwUGF0aD48L2RlZnM+PHBhdGggZmlsbD0idXJsKCNiZykiIGQ9Ik05MC4yMyA1MC4wMEw5MC4yMiA2MC41MUw5MC4xOSA2My44N0w5MC4xNCA2Ni4zMEw5MC4wNyA2OC4yOEw4OS45OCA2OS45N0w4OS44OCA3MS40Nkw4OS43NSA3Mi44MEw4OS42MCA3NC4wM0w4OS40MyA3NS4xNUw4OS4yNCA3Ni4xOUw4OS4wMyA3Ny4xNkw4OC44MCA3OC4wN0w4OC41NSA3OC45M0w4OC4yOCA3OS43M0w4Ny45OCA4MC40OUw4Ny42NiA4MS4yMUw4Ny4zMiA4MS44OEw4Ni45NiA4Mi41M0w4Ni41NyA4My4xM0w4Ni4xNiA4My43MUw4NS43MyA4NC4yNkw4NS4yNiA4NC43N0w4NC43NyA4NS4yNkw4NC4yNiA4NS43M0w4My43MSA4Ni4xNkw4My4xMyA4Ni41N0w4Mi41MyA4Ni45Nkw4MS44OCA4Ny4zMkw4MS4yMSA4Ny42Nkw4MC40OSA4Ny45OEw3OS43MyA4OC4yOEw3OC45MyA4OC41NUw3OC4wNyA4OC44MEw3Ny4xNiA4OS4wM0w3Ni4xOSA4OS4yNEw3NS4xNSA4OS40M0w3NC4wMyA4OS42MEw3Mi44MCA4OS43NUw3MS40NiA4OS44OEw2OS45NyA4OS45OEw2OC4yOCA5MC4wN0w2Ni4zMCA5MC4xNEw2My44NyA5MC4xOUw2MC41MSA5MC4yMkw1MC4wMCA5MC4yM0wzOS40OSA5MC4yMkwzNi4xMyA5MC4xOUwzMy43MCA5MC4xNEwzMS43MiA5MC4wN0wzMC4wMyA4OS45OEwyOC41NCA4OS44OEwyNy4yMCA4OS43NUwyNS45NyA4OS42MEwyNC44NSA4OS40M0wyMy44MSA4OS4yNEwyMi44NCA4OS4wM0wyMS45MyA4OC44MEwyMS4wNyA4OC41NUwyMC4yNyA4OC4yOEwxOS41MSA4Ny45OEwxOC43OSA4Ny42NkwxOC4xMiA4Ny4zMkwxNy40NyA4Ni45NkwxNi44NyA4Ni41N0wxNi4yOSA4Ni4xNkwxNS43NCA4NS43M0wxNS4yMyA4NS4yNkwxNC43NCA4NC43N0wxNC4yNyA4NC4yNkwxMy44NCA4My43MUwxMy40MyA4My4xM0wxMy4wNCA4Mi41M0wxMi42OCA4MS44OEwxMi4zNCA4MS4yMUwxMi4wMiA4MC40OUwxMS43MiA3OS43M0wxMS40NSA3OC45M0wxMS4yMCA3OC4wN0wxMC45NyA3Ny4xNkwxMC43NiA3Ni4xOUwxMC41NyA3NS4xNUwxMC40MCA3NC4wM0wxMC4yNSA3Mi44MEwxMC4xMiA3MS40NkwxMC4wMiA2OS45N0w5LjkzIDY4LjI4TDkuODYgNjYuMzBMOS44MSA2My44N0w5Ljc4IDYwLjUxTDkuNzcgNTAuMDBMOS43OCAzOS40OUw5LjgxIDM2LjEzTDkuODYgMzMuNzBMOS45MyAzMS43MkwxMC4wMiAzMC4wM0wxMC4xMiAyOC41NEwxMC4yNSAyNy4yMEwxMC40MCAyNS45N0wxMC41NyAyNC44NUwxMC43NiAyMy44MUwxMC45NyAyMi44NEwxMS4yMCAyMS45M0wxMS40NSAyMS4wN0wxMS43MiAyMC4yN0wxMi4wMiAxOS41MUwxMi4zNCAxOC43OUwxMi42OCAxOC4xMkwxMy4wNCAxNy40N0wxMy40MyAxNi44N0wxMy44NCAxNi4yOUwxNC4yNyAxNS43NEwxNC43NCAxNS4yM0wxNS4yMyAxNC43NEwxNS43NCAxNC4yN0wxNi4yOSAxMy44NEwxNi44NyAxMy40M0wxNy40NyAxMy4wNEwxOC4xMiAxMi42OEwxOC43OSAxMi4zNEwxOS41MSAxMi4wMkwyMC4yNyAxMS43MkwyMS4wNyAxMS40NUwyMS45MyAxMS4yMEwyMi44NCAxMC45N0wyMy44MSAxMC43NkwyNC44NSAxMC41N0wyNS45NyAxMC40MEwyNy4yMCAxMC4yNUwyOC41NCAxMC4xMkwzMC4wMyAxMC4wMkwzMS43MiA5LjkzTDMzLjcwIDkuODZMMzYuMTMgOS44MUwzOS40OSA5Ljc4TDUwLjAwIDkuNzdMNjAuNTEgOS43OEw2My44NyA5LjgxTDY2LjMwIDkuODZMNjguMjggOS45M0w2OS45NyAxMC4wMkw3MS40NiAxMC4xMkw3Mi44MCAxMC4yNUw3NC4wMyAxMC40MEw3NS4xNSAxMC41N0w3Ni4xOSAxMC43Nkw3Ny4xNiAxMC45N0w3OC4wNyAxMS4yMEw3OC45MyAxMS40NUw3OS43MyAxMS43Mkw4MC40OSAxMi4wMkw4MS4yMSAxMi4zNEw4MS44OCAxMi42OEw4Mi41MyAxMy4wNEw4My4xMyAxMy40M0w4My43MSAxMy44NEw4NC4yNiAxNC4yN0w4NC43NyAxNC43NEw4NS4yNiAxNS4yM0w4NS43MyAxNS43NEw4Ni4xNiAxNi4yOUw4Ni41NyAxNi44N0w4Ni45NiAxNy40N0w4Ny4zMiAxOC4xMkw4Ny42NiAxOC43OUw4Ny45OCAxOS41MUw4OC4yOCAyMC4yN0w4OC41NSAyMS4wN0w4OC44MCAyMS45M0w4OS4wMyAyMi44NEw4OS4yNCAyMy44MUw4OS40MyAyNC44NUw4OS42MCAyNS45N0w4OS43NSAyNy4yMEw4OS44OCAyOC41NEw4OS45OCAzMC4wM0w5MC4wNyAzMS43Mkw5MC4xNCAzMy43MEw5MC4xOSAzNi4xM0w5MC4yMiAzOS40OXoiLz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyNC40IDI1LjIpIHNjYWxlKDMuMikiPjxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZS13aWR0aD0iMS42IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLW9wYWNpdHk9Ii4xOCIgZD0iTTIuNSA1LjV2LTJhMSAxIDAgMCAxIDEtMWgyTTEwLjUgMi41aDJhMSAxIDAgMCAxIDEgMXYyTTEzLjUgMTAuNXYyYTEgMSAwIDAgMS0xIDFoLTJNNS41IDEzLjVoLTJhMSAxIDAgMCAxLTEtMXYtMk04IDEwYTIgMiAwIDEgMCAwLTRhMiAyIDAgMCAwIDAgNCIvPjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyNC40IDI0LjQpIHNjYWxlKDMuMikiPjxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZS13aWR0aD0iMS42IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZT0idXJsKCNmaWcpIiBkPSJNMi41IDUuNXYtMmExIDEgMCAwIDEgMS0xaDJNMTAuNSAyLjVoMmExIDEgMCAwIDEgMSAxdjJNMTMuNSAxMC41djJhMSAxIDAgMCAxLTEgMWgtMk01LjUgMTMuNWgtMmExIDEgMCAwIDEtMS0xdi0yTTggMTBhMiAyIDAgMSAwIDAtNGEyIDIgMCAwIDAgMCA0Ii8+PC9nPjxwYXRoIGNsaXAtcGF0aD0idXJsKCNzcSkiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNyaW0pIiBzdHJva2Utd2lkdGg9IjIuNCIgZD0iTTkwLjIzIDUwLjAwTDkwLjIyIDYwLjUxTDkwLjE5IDYzLjg3TDkwLjE0IDY2LjMwTDkwLjA3IDY4LjI4TDg5Ljk4IDY5Ljk3TDg5Ljg4IDcxLjQ2TDg5Ljc1IDcyLjgwTDg5LjYwIDc0LjAzTDg5LjQzIDc1LjE1TDg5LjI0IDc2LjE5TDg5LjAzIDc3LjE2TDg4LjgwIDc4LjA3TDg4LjU1IDc4LjkzTDg4LjI4IDc5LjczTDg3Ljk4IDgwLjQ5TDg3LjY2IDgxLjIxTDg3LjMyIDgxLjg4TDg2Ljk2IDgyLjUzTDg2LjU3IDgzLjEzTDg2LjE2IDgzLjcxTDg1LjczIDg0LjI2TDg1LjI2IDg0Ljc3TDg0Ljc3IDg1LjI2TDg0LjI2IDg1LjczTDgzLjcxIDg2LjE2TDgzLjEzIDg2LjU3TDgyLjUzIDg2Ljk2TDgxLjg4IDg3LjMyTDgxLjIxIDg3LjY2TDgwLjQ5IDg3Ljk4TDc5LjczIDg4LjI4TDc4LjkzIDg4LjU1TDc4LjA3IDg4LjgwTDc3LjE2IDg5LjAzTDc2LjE5IDg5LjI0TDc1LjE1IDg5LjQzTDc0LjAzIDg5LjYwTDcyLjgwIDg5Ljc1TDcxLjQ2IDg5Ljg4TDY5Ljk3IDg5Ljk4TDY4LjI4IDkwLjA3TDY2LjMwIDkwLjE0TDYzLjg3IDkwLjE5TDYwLjUxIDkwLjIyTDUwLjAwIDkwLjIzTDM5LjQ5IDkwLjIyTDM2LjEzIDkwLjE5TDMzLjcwIDkwLjE0TDMxLjcyIDkwLjA3TDMwLjAzIDg5Ljk4TDI4LjU0IDg5Ljg4TDI3LjIwIDg5Ljc1TDI1Ljk3IDg5LjYwTDI0Ljg1IDg5LjQzTDIzLjgxIDg5LjI0TDIyLjg0IDg5LjAzTDIxLjkzIDg4LjgwTDIxLjA3IDg4LjU1TDIwLjI3IDg4LjI4TDE5LjUxIDg3Ljk4TDE4Ljc5IDg3LjY2TDE4LjEyIDg3LjMyTDE3LjQ3IDg2Ljk2TDE2Ljg3IDg2LjU3TDE2LjI5IDg2LjE2TDE1Ljc0IDg1LjczTDE1LjIzIDg1LjI2TDE0Ljc0IDg0Ljc3TDE0LjI3IDg0LjI2TDEzLjg0IDgzLjcxTDEzLjQzIDgzLjEzTDEzLjA0IDgyLjUzTDEyLjY4IDgxLjg4TDEyLjM0IDgxLjIxTDEyLjAyIDgwLjQ5TDExLjcyIDc5LjczTDExLjQ1IDc4LjkzTDExLjIwIDc4LjA3TDEwLjk3IDc3LjE2TDEwLjc2IDc2LjE5TDEwLjU3IDc1LjE1TDEwLjQwIDc0LjAzTDEwLjI1IDcyLjgwTDEwLjEyIDcxLjQ2TDEwLjAyIDY5Ljk3TDkuOTMgNjguMjhMOS44NiA2Ni4zMEw5LjgxIDYzLjg3TDkuNzggNjAuNTFMOS43NyA1MC4wMEw5Ljc4IDM5LjQ5TDkuODEgMzYuMTNMOS44NiAzMy43MEw5LjkzIDMxLjcyTDEwLjAyIDMwLjAzTDEwLjEyIDI4LjU0TDEwLjI1IDI3LjIwTDEwLjQwIDI1Ljk3TDEwLjU3IDI0Ljg1TDEwLjc2IDIzLjgxTDEwLjk3IDIyLjg0TDExLjIwIDIxLjkzTDExLjQ1IDIxLjA3TDExLjcyIDIwLjI3TDEyLjAyIDE5LjUxTDEyLjM0IDE4Ljc5TDEyLjY4IDE4LjEyTDEzLjA0IDE3LjQ3TDEzLjQzIDE2Ljg3TDEzLjg0IDE2LjI5TDE0LjI3IDE1Ljc0TDE0Ljc0IDE1LjIzTDE1LjIzIDE0Ljc0TDE1Ljc0IDE0LjI3TDE2LjI5IDEzLjg0TDE2Ljg3IDEzLjQzTDE3LjQ3IDEzLjA0TDE4LjEyIDEyLjY4TDE4Ljc5IDEyLjM0TDE5LjUxIDEyLjAyTDIwLjI3IDExLjcyTDIxLjA3IDExLjQ1TDIxLjkzIDExLjIwTDIyLjg0IDEwLjk3TDIzLjgxIDEwLjc2TDI0Ljg1IDEwLjU3TDI1Ljk3IDEwLjQwTDI3LjIwIDEwLjI1TDI4LjU0IDEwLjEyTDMwLjAzIDEwLjAyTDMxLjcyIDkuOTNMMzMuNzAgOS44NkwzNi4xMyA5LjgxTDM5LjQ5IDkuNzhMNTAuMDAgOS43N0w2MC41MSA5Ljc4TDYzLjg3IDkuODFMNjYuMzAgOS44Nkw2OC4yOCA5LjkzTDY5Ljk3IDEwLjAyTDcxLjQ2IDEwLjEyTDcyLjgwIDEwLjI1TDc0LjAzIDEwLjQwTDc1LjE1IDEwLjU3TDc2LjE5IDEwLjc2TDc3LjE2IDEwLjk3TDc4LjA3IDExLjIwTDc4LjkzIDExLjQ1TDc5LjczIDExLjcyTDgwLjQ5IDEyLjAyTDgxLjIxIDEyLjM0TDgxLjg4IDEyLjY4TDgyLjUzIDEzLjA0TDgzLjEzIDEzLjQzTDgzLjcxIDEzLjg0TDg0LjI2IDE0LjI3TDg0Ljc3IDE0Ljc0TDg1LjI2IDE1LjIzTDg1LjczIDE1Ljc0TDg2LjE2IDE2LjI5TDg2LjU3IDE2Ljg3TDg2Ljk2IDE3LjQ3TDg3LjMyIDE4LjEyTDg3LjY2IDE4Ljc5TDg3Ljk4IDE5LjUxTDg4LjI4IDIwLjI3TDg4LjU1IDIxLjA3TDg4LjgwIDIxLjkzTDg5LjAzIDIyLjg0TDg5LjI0IDIzLjgxTDg5LjQzIDI0Ljg1TDg5LjYwIDI1Ljk3TDg5Ljc1IDI3LjIwTDg5Ljg4IDI4LjU0TDg5Ljk4IDMwLjAzTDkwLjA3IDMxLjcyTDkwLjE0IDMzLjcwTDkwLjE5IDM2LjEzTDkwLjIyIDM5LjQ5eiIvPjxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLW9wYWNpdHk9Ii4xOCIgc3Ryb2tlLXdpZHRoPSIuNiIgZD0iTTkwLjIzIDUwLjAwTDkwLjIyIDYwLjUxTDkwLjE5IDYzLjg3TDkwLjE0IDY2LjMwTDkwLjA3IDY4LjI4TDg5Ljk4IDY5Ljk3TDg5Ljg4IDcxLjQ2TDg5Ljc1IDcyLjgwTDg5LjYwIDc0LjAzTDg5LjQzIDc1LjE1TDg5LjI0IDc2LjE5TDg5LjAzIDc3LjE2TDg4LjgwIDc4LjA3TDg4LjU1IDc4LjkzTDg4LjI4IDc5LjczTDg3Ljk4IDgwLjQ5TDg3LjY2IDgxLjIxTDg3LjMyIDgxLjg4TDg2Ljk2IDgyLjUzTDg2LjU3IDgzLjEzTDg2LjE2IDgzLjcxTDg1LjczIDg0LjI2TDg1LjI2IDg0Ljc3TDg0Ljc3IDg1LjI2TDg0LjI2IDg1LjczTDgzLjcxIDg2LjE2TDgzLjEzIDg2LjU3TDgyLjUzIDg2Ljk2TDgxLjg4IDg3LjMyTDgxLjIxIDg3LjY2TDgwLjQ5IDg3Ljk4TDc5LjczIDg4LjI4TDc4LjkzIDg4LjU1TDc4LjA3IDg4LjgwTDc3LjE2IDg5LjAzTDc2LjE5IDg5LjI0TDc1LjE1IDg5LjQzTDc0LjAzIDg5LjYwTDcyLjgwIDg5Ljc1TDcxLjQ2IDg5Ljg4TDY5Ljk3IDg5Ljk4TDY4LjI4IDkwLjA3TDY2LjMwIDkwLjE0TDYzLjg3IDkwLjE5TDYwLjUxIDkwLjIyTDUwLjAwIDkwLjIzTDM5LjQ5IDkwLjIyTDM2LjEzIDkwLjE5TDMzLjcwIDkwLjE0TDMxLjcyIDkwLjA3TDMwLjAzIDg5Ljk4TDI4LjU0IDg5Ljg4TDI3LjIwIDg5Ljc1TDI1Ljk3IDg5LjYwTDI0Ljg1IDg5LjQzTDIzLjgxIDg5LjI0TDIyLjg0IDg5LjAzTDIxLjkzIDg4LjgwTDIxLjA3IDg4LjU1TDIwLjI3IDg4LjI4TDE5LjUxIDg3Ljk4TDE4Ljc5IDg3LjY2TDE4LjEyIDg3LjMyTDE3LjQ3IDg2Ljk2TDE2Ljg3IDg2LjU3TDE2LjI5IDg2LjE2TDE1Ljc0IDg1LjczTDE1LjIzIDg1LjI2TDE0Ljc0IDg0Ljc3TDE0LjI3IDg0LjI2TDEzLjg0IDgzLjcxTDEzLjQzIDgzLjEzTDEzLjA0IDgyLjUzTDEyLjY4IDgxLjg4TDEyLjM0IDgxLjIxTDEyLjAyIDgwLjQ5TDExLjcyIDc5LjczTDExLjQ1IDc4LjkzTDExLjIwIDc4LjA3TDEwLjk3IDc3LjE2TDEwLjc2IDc2LjE5TDEwLjU3IDc1LjE1TDEwLjQwIDc0LjAzTDEwLjI1IDcyLjgwTDEwLjEyIDcxLjQ2TDEwLjAyIDY5Ljk3TDkuOTMgNjguMjhMOS44NiA2Ni4zMEw5LjgxIDYzLjg3TDkuNzggNjAuNTFMOS43NyA1MC4wMEw5Ljc4IDM5LjQ5TDkuODEgMzYuMTNMOS44NiAzMy43MEw5LjkzIDMxLjcyTDEwLjAyIDMwLjAzTDEwLjEyIDI4LjU0TDEwLjI1IDI3LjIwTDEwLjQwIDI1Ljk3TDEwLjU3IDI0Ljg1TDEwLjc2IDIzLjgxTDEwLjk3IDIyLjg0TDExLjIwIDIxLjkzTDExLjQ1IDIxLjA3TDExLjcyIDIwLjI3TDEyLjAyIDE5LjUxTDEyLjM0IDE4Ljc5TDEyLjY4IDE4LjEyTDEzLjA0IDE3LjQ3TDEzLjQzIDE2Ljg3TDEzLjg0IDE2LjI5TDE0LjI3IDE1Ljc0TDE0Ljc0IDE1LjIzTDE1LjIzIDE0Ljc0TDE1Ljc0IDE0LjI3TDE2LjI5IDEzLjg0TDE2Ljg3IDEzLjQzTDE3LjQ3IDEzLjA0TDE4LjEyIDEyLjY4TDE4Ljc5IDEyLjM0TDE5LjUxIDEyLjAyTDIwLjI3IDExLjcyTDIxLjA3IDExLjQ1TDIxLjkzIDExLjIwTDIyLjg0IDEwLjk3TDIzLjgxIDEwLjc2TDI0Ljg1IDEwLjU3TDI1Ljk3IDEwLjQwTDI3LjIwIDEwLjI1TDI4LjU0IDEwLjEyTDMwLjAzIDEwLjAyTDMxLjcyIDkuOTNMMzMuNzAgOS44NkwzNi4xMyA5LjgxTDM5LjQ5IDkuNzhMNTAuMDAgOS43N0w2MC41MSA5Ljc4TDYzLjg3IDkuODFMNjYuMzAgOS44Nkw2OC4yOCA5LjkzTDY5Ljk3IDEwLjAyTDcxLjQ2IDEwLjEyTDcyLjgwIDEwLjI1TDc0LjAzIDEwLjQwTDc1LjE1IDEwLjU3TDc2LjE5IDEwLjc2TDc3LjE2IDEwLjk3TDc4LjA3IDExLjIwTDc4LjkzIDExLjQ1TDc5LjczIDExLjcyTDgwLjQ5IDEyLjAyTDgxLjIxIDEyLjM0TDgxLjg4IDEyLjY4TDgyLjUzIDEzLjA0TDgzLjEzIDEzLjQzTDgzLjcxIDEzLjg0TDg0LjI2IDE0LjI3TDg0Ljc3IDE0Ljc0TDg1LjI2IDE1LjIzTDg1LjczIDE1Ljc0TDg2LjE2IDE2LjI5TDg2LjU3IDE2Ljg3TDg2Ljk2IDE3LjQ3TDg3LjMyIDE4LjEyTDg3LjY2IDE4Ljc5TDg3Ljk4IDE5LjUxTDg4LjI4IDIwLjI3TDg4LjU1IDIxLjA3TDg4LjgwIDIxLjkzTDg5LjAzIDIyLjg0TDg5LjI0IDIzLjgxTDg5LjQzIDI0Ljg1TDg5LjYwIDI1Ljk3TDg5Ljc1IDI3LjIwTDg5Ljg4IDI4LjU0TDg5Ljk4IDMwLjAzTDkwLjA3IDMxLjcyTDkwLjE0IDMzLjcwTDkwLjE5IDM2LjEzTDkwLjIyIDM5LjQ5eiIvPjwvc3ZnPgo=",
+  downloads: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgNjQgNjQiPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iYmFjayIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzU4YTZlZSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzJmN2ZkNiIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJmcm9udCIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzlhZDJmYiIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzVmYjBmMiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGZpbGw9InVybCgjYmFjaykiIGQ9Ik01IDE1YTQgNCAwIDAgMSA0LTRoMTQuNWw1IDVINTVhNCA0IDAgMCAxIDQgNHYyOGE0IDQgMCAwIDEtNCA0SDlhNCA0IDAgMCAxLTQtNHoiLz48cGF0aCBmaWxsPSJ1cmwoI2Zyb250KSIgc3Ryb2tlPSIjMGEzMjZlIiBzdHJva2Utb3BhY2l0eT0iMC4yOCIgc3Ryb2tlLXdpZHRoPSIuOCIgZD0iTTUgMjNhNCA0IDAgMCAxIDQtNGg0NmE0IDQgMCAwIDEgNCA0djI1YTQgNCAwIDAgMS00IDRIOWE0IDQgMCAwIDEtNC00eiIvPjxwYXRoIGQ9Ik05IDE5LjloNDYiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuNjUiIHN0cm9rZS13aWR0aD0iLjkiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDIyIDI1LjUpIHNjYWxlKDEuMjUpIj48cGF0aCBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS1vcGFjaXR5PSIuNDUiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAgLjUpIiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBkPSJNOCAydjhNNC41IDcgOCAxMC41IDExLjUgN00zIDEzLjVoMTAiLz48cGF0aCBzdHJva2U9IiMxZjYyYWQiIHN0cm9rZS1vcGFjaXR5PSIwLjc1IiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBkPSJNOCAydjhNNC41IDcgOCAxMC41IDExLjUgN00zIDEzLjVoMTAiLz48L2c+PC9zdmc+Cg==",
+  trash: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iMTI4cHgiIGhlaWdodD0iMTI4cHgiIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij48bGluZWFyR3JhZGllbnQgaWQ9ImMiIHgxPSIxNy45OTk5ODIiIHgyPSIxMDkuOTk5NzE1IiB5MT0iNzAuOTk5OTg5IiB5Mj0iNzAuOTk5OTg5IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMjZhMjY5Ii8+PHN0b3Agb2Zmc2V0PSIwLjAzOTQwMjIiIHN0b3AtY29sb3I9IiM0MmQzOTAiLz48c3RvcCBvZmZzZXQ9IjAuMDg2OTU2NSIgc3RvcC1jb2xvcj0iIzJlYzI3ZSIvPjxzdG9wIG9mZnNldD0iMC45NTY1MjQiIHN0b3AtY29sb3I9IiMyZWMyN2UiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMyNmExNjgiLz48L2xpbmVhckdyYWRpZW50PjxjbGlwUGF0aCBpZD0iZCI+PHBhdGggZD0iTTE4IDMyaDkydjgySDE4em0wIDAiLz48L2NsaXBQYXRoPjxjbGlwUGF0aCBpZD0iZiI+PHBhdGggZD0iTTI2LjY1NjI1IDMyaDc0LjY4NzVDMTA2LjEyNSAzMiAxMTAgMzUuODc1IDExMCA0MC42NTYyNXY2NC42ODc1QzExMCAxMTAuMTI1IDEwNi4xMjUgMTE0IDEwMS4zNDM3NSAxMTRoLTc0LjY4NzVDMjEuODc1IDExNCAxOCAxMTAuMTI1IDE4IDEwNS4zNDM3NXYtNjQuNjg3NUMxOCAzNS44NzUgMjEuODc1IDMyIDI2LjY1NjI1IDMybTAgMCIvPjwvY2xpcFBhdGg+PGZpbHRlciBpZD0iYSIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgeD0iMCUiIHk9IjAlIj48ZmVDb2xvck1hdHJpeCBpbj0iU291cmNlR3JhcGhpYyIgdmFsdWVzPSIwIDAgMCAwIDEgMCAwIDAgMCAxIDAgMCAwIDAgMSAwIDAgMCAxIDAiLz48L2ZpbHRlcj48bWFzayBpZD0iaCI+PGcgZmlsdGVyPSJ1cmwoI2EpIj48cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgZmlsbC1vcGFjaXR5PSIwLjIiLz48L2c+PC9tYXNrPjxjbGlwUGF0aCBpZD0iZyI+PHJlY3Qgd2lkdGg9IjE5MiIgaGVpZ2h0PSIxNTIiLz48L2NsaXBQYXRoPjxsaW5lYXJHcmFkaWVudCBpZD0iaSIgeDE9IjIyIiB4Mj0iMTE0IiB5MT0iMjA2IiB5Mj0iMjA2IiBncmFkaWVudFRyYW5zZm9ybT0ibWF0cml4KDEuMDQzNDc4IDAgMCAwLjkwOTA5MSAtNi45NTY1NCAtMTU5LjI3Mjc0KSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2RlZGRkYSIvPjxzdG9wIG9mZnNldD0iMC4wNTYyODg3IiBzdG9wLWNvbG9yPSIjZWVlZGVjIi8+PHN0b3Agb2Zmc2V0PSIwLjExNzc3NiIgc3RvcC1jb2xvcj0iI2RlZGRkYSIvPjxzdG9wIG9mZnNldD0iMC44OTIxMzUiIHN0b3AtY29sb3I9IiNkZWRkZGEiLz48c3RvcCBvZmZzZXQ9IjAuOTQ1OTM3IiBzdG9wLWNvbG9yPSIjZWZlZWVkIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjYzNjMmJjIi8+PC9saW5lYXJHcmFkaWVudD48Y2xpcFBhdGggaWQ9ImoiPjxwYXRoIGQ9Ik0yMCAxMmg2djI0aC02em0wIDAiLz48L2NsaXBQYXRoPjxjbGlwUGF0aCBpZD0iayI+PHBhdGggZD0iTTI0IDEyaDgwYzIuMjEwOTM4IDAgNCAxLjc4OTA2MiA0IDR2MTZjMCAyLjIxMDkzOC0xLjc4OTA2MiA0LTQgNEgyNGMtMi4yMTA5MzggMC00LTEuNzg5MDYyLTQtNFYxNmMwLTIuMjEwOTM4IDEuNzg5MDYyLTQgNC00bTAgMCIvPjwvY2xpcFBhdGg+PGxpbmVhckdyYWRpZW50IGlkPSJsIiB4MT0iNjMuOTE2NjY0IiB4Mj0iNzUuNDE2NjY0IiB5MT0iNzkuMDI5OTUzIiB5Mj0iNzkuMDI5OTUzIiBncmFkaWVudFRyYW5zZm9ybT0ibWF0cml4KDEuMDQzNDc4IDAgMCAwLjg3MzMwMyAtNDYuNjk1Njc3IC00NS4wMTcwNjEpIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjNzc3NjdiIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNzc3NjdiIiBzdG9wLW9wYWNpdHk9IjAiLz48L2xpbmVhckdyYWRpZW50PjxjbGlwUGF0aCBpZD0ibSI+PHBhdGggZD0iTTIwIDEyaDg4djI0SDIwem0wIDAiLz48L2NsaXBQYXRoPjxjbGlwUGF0aCBpZD0ibiI+PHBhdGggZD0iTTI0IDEyaDgwYzIuMjEwOTM4IDAgNCAxLjc4OTA2MiA0IDR2MTZjMCAyLjIxMDkzOC0xLjc4OTA2MiA0LTQgNEgyNGMtMi4yMTA5MzggMC00LTEuNzg5MDYyLTQtNFYxNmMwLTIuMjEwOTM4IDEuNzg5MDYyLTQgNC00bTAgMCIvPjwvY2xpcFBhdGg+PG1hc2sgaWQ9InAiPjxnIGZpbHRlcj0idXJsKCNhKSI+PHJlY3Qgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiIGZpbGwtb3BhY2l0eT0iMC4zMTciLz48L2c+PC9tYXNrPjxsaW5lYXJHcmFkaWVudCBpZD0iciIgeDE9IjYzLjkxNjY3MiIgeDI9Ijc1LjQxNjY3MiIgeTE9Ijc2LjczOTc5OSIgeTI9Ijc2LjczOTc5OSIgZ3JhZGllbnRUcmFuc2Zvcm09Im1hdHJpeCgtMS4wNDM0NzggMCAwIDAuODczMzAzIDE4Mi42OTU2NTggLTI5LjAxNzA2MSkiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZmYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNlOGU3ZTgiIHN0b3Atb3BhY2l0eT0iMCIvPjwvbGluZWFyR3JhZGllbnQ+PGNsaXBQYXRoIGlkPSJvIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE1MiIvPjwvY2xpcFBhdGg+PGxpbmVhckdyYWRpZW50IGlkPSJiIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZGVkZGRhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjZmZmIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgeGxpbms6aHJlZj0iI2IiIGlkPSJzIiB4MT0iODAuNDI4ODIzIiB4Mj0iODAuNDk5NDc4IiB5MT0iOTAuNzU5NDQ5IiB5Mj0iODMuMzg0NDQ5Ii8+PGxpbmVhckdyYWRpZW50IHhsaW5rOmhyZWY9IiNiIiBpZD0idCIgeDE9IjQ1LjYwODkwNyIgeDI9IjUzLjEyNDQ5OCIgeTE9Ijg5LjQ5OTcxNCIgeTI9IjkzLjk5OTcxNCIvPjxsaW5lYXJHcmFkaWVudCB4bGluazpocmVmPSIjYiIgaWQ9InUiIHgxPSI2NC4zNzQzMjYiIHgyPSI1Ny45MzI0NDMiIHkxPSI2MC4wMDAwMDQiIHkyPSI2Mi43Nzc3OTEiLz48cGF0aCBmaWxsPSIjMjZhMjY5IiBkPSJNMjYgMzRoNzZjNC40MTc5NjkgMCA4IDMuNTgyMDMxIDggOHY2NmMwIDQuNDE3OTY5LTMuNTgyMDMxIDgtOCA4SDI2Yy00LjQxNzk2OSAwLTgtMy41ODIwMzEtOC04VjQyYzAtNC40MTc5NjkgMy41ODIwMzEtOCA4LThtMCAwIi8+PHBhdGggZmlsbD0idXJsKCNjKSIgZD0iTTI2IDMwaDc2YzQuNDE3OTY5IDAgOCAzLjU4MjAzMSA4IDh2NjhjMCA0LjQxNzk2OS0zLjU4MjAzMSA4LTggOEgyNmMtNC40MTc5NjkgMC04LTMuNTgyMDMxLTgtOFYzOGMwLTQuNDE3OTY5IDMuNTgyMDMxLTggOC04bTAgMCIvPjxnIGNsaXAtcGF0aD0idXJsKCNkKSI+PGcgY2xpcC1wYXRoPSJ1cmwoI2YpIj48ZyBjbGlwLXBhdGg9InVybCgjZykiIG1hc2s9InVybCgjaCkiIHRyYW5zZm9ybT0ibWF0cml4KDEgMCAwIDEgLTggLTE2KSI+PHBhdGggZD0iTTMxLjg4MjgxMiAyNmg4MC4yMzQzNzZDMTE2LjQ3MjY1NiAyNiAxMjAgMjkuNTI3MzQ0IDEyMCAzMy44ODI4MTJ2MjQuMjM0Mzc2QzEyMCA2Mi40NzI2NTYgMTE2LjQ3MjY1NiA2NiAxMTIuMTE3MTg4IDY2SDMxLjg4MjgxMkMyNy41MjczNDQgNjYgMjQgNjIuNDcyNjU2IDI0IDU4LjExNzE4OFYzMy44ODI4MTJDMjQgMjkuNTI3MzQ0IDI3LjUyNzM0NCAyNiAzMS44ODI4MTIgMjZtMCAwIi8+PC9nPjwvZz48L2c+PHBhdGggZmlsbD0idXJsKCNpKSIgZD0iTTI0IDhoODBjNC40MTc5NjkgMCA4IDMuNTgyMDMxIDggOHYyNGMwIDQuNDE3OTY5LTMuNTgyMDMxIDgtOCA4SDI0Yy00LjQxNzk2OSAwLTgtMy41ODIwMzEtOC04VjE2YzAtNC40MTc5NjkgMy41ODIwMzEtOCA4LThtMCAwIi8+PHBhdGggZmlsbD0iI2Y2ZjVmNCIgZD0iTTI0IDhoODBjNC40MTc5NjkgMCA4IDMuNTgyMDMxIDggOHYxNmMwIDQuNDE3OTY5LTMuNTgyMDMxIDgtOCA4SDI0Yy00LjQxNzk2OSAwLTgtMy41ODIwMzEtOC04VjE2YzAtNC40MTc5NjkgMy41ODIwMzEtOCA4LThtMCAwIi8+PHBhdGggZmlsbD0iIzlhOTk5NiIgZD0iTTI0IDEyaDgwYzIuMjEwOTM4IDAgNCAxLjc4OTA2MiA0IDR2MTZjMCAyLjIxMDkzOC0xLjc4OTA2MiA0LTQgNEgyNGMtMi4yMTA5MzggMC00LTEuNzg5MDYyLTQtNFYxNmMwLTIuMjEwOTM4IDEuNzg5MDYyLTQgNC00bTAgMCIvPjxnIGNsaXAtcGF0aD0idXJsKCNqKSI+PGcgY2xpcC1wYXRoPSJ1cmwoI2spIj48cGF0aCBmaWxsPSJ1cmwoI2wpIiBkPSJNMjYgMTJoLTZ2MjRoNnptMCAwIi8+PC9nPjwvZz48ZyBjbGlwLXBhdGg9InVybCgjbSkiPjxnIGNsaXAtcGF0aD0idXJsKCNuKSI+PGcgY2xpcC1wYXRoPSJ1cmwoI28pIiBtYXNrPSJ1cmwoI3ApIiB0cmFuc2Zvcm09Im1hdHJpeCgxIDAgMCAxIC04IC0xNikiPjxwYXRoIGZpbGw9InVybCgjcikiIGQ9Ik0xMTAgMjh2MjRoNlYyOHptMCAwIi8+PC9nPjwvZz48L2c+PGcgZmlsbC1ydWxlPSJldmVub2RkIj48cGF0aCBmaWxsPSJ1cmwoI3MpIiBkPSJtNzMuODA0Njg4IDgxLjQxMDE1NiAxMC4zOTA2MjQtNiAzIDUuMTk5MjE5YzEuMDcwMzEzIDEuODU1NDY5IDEuMDcwMzEzIDQuMTQwNjI1IDAgNmwtMyA1LjE5NTMxM0w4MiA5NS42MDU0NjlsLTYuOTI5Njg4LTExLjk5NjA5NHptMCAwIi8+PHBhdGggZmlsbD0idXJsKCN0KSIgZD0iTTU4IDg4djEyaC02Yy0yLjE0NDUzMSAwLTQuMTI1LTEuMTQ0NTMxLTUuMTk1MzEyLTNsLTMtNS4xOTUzMTJMNDEuNjA5Mzc1IDg4em0wIDAiLz48cGF0aCBmaWxsPSJ1cmwoI3UpIiBkPSJtNjAuMTk1MzEyIDcyLjE5NTMxMi0xMC4zOTA2MjQtNiAzLTUuMTk1MzEyQzUzLjg3NSA1OS4xNDQ1MzEgNTUuODU1NDY5IDU4IDU4IDU4aDEwLjM5MDYyNWwtNi45MjU3ODEgMTJ6bTAgMCIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Im02NCA1OC00LjM5MDYyNS4wMDM5MDZMNjYuNTM1MTU2IDcwbDEuMjY5NTMyIDIuMTk1MzEyLTMuNDY0ODQ0IDJMNzcgNzYuMTI1bDQuNjYwMTU2LTExLjkyOTY4OC0zLjQ2NDg0NCAyLTMtNS4xOTUzMTJDNzQuMTI1IDU5LjE0NDUzMSA3Mi4xNDQ1MzEgNTggNzAgNTh6bTAgMCIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Im03MCA4NC04IDEwIDggMTB2LTRoNmMyLjE0NDUzMSAwIDQuMTI1LTEuMTQ0NTMxIDUuMTk1MzEyLTNsMy01LjE5NTMxMkw4Ni4zOTA2MjUgODhINzB6bTAgMCIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Im01MyA3MS40ODQzNzUtMTIuNjYwMTU2IDEuOTI1NzgxIDMuNDY0ODQ0IDItMyA1LjE5NTMxM2MtMS4wNzAzMTMgMS44NTkzNzUtMS4wNzAzMTMgNC4xNDQ1MzEgMCA2bDIuOTk2MDkzIDUuMTk5MjE5TDQ2IDk1LjYwNTQ2OWw2LjkyNTc4MS0xMiAxLjI2OTUzMS0yLjE5NTMxMyAzLjQ2NDg0NCAyem0wIDAiLz48L2c+PC9zdmc+",
+};
+const APPS = {
+  files:{name:"Files"}, launcher:{name:"Launcher"}, browser:{name:"Browser"}, messages:{name:"Messages"},
+  mail:{name:"Mail"}, photos:{name:"Photos"}, calendar:{name:"Calendar"}, notes:{name:"Notes"}, music:{name:"Music"},
+  code:{name:"Code"}, terminal:{name:"CurseTerm"}, settings:{name:"System Settings"}, screenshot:{name:"Screenshot"},
+  calc:{name:"Calculator"}, maps:{name:"Maps"},
+};
+
+/* ---------- State ---------- */
+const DEFAULTS = {tilesize:48, magnification:false, largesize:64, orientation:"bottom", mineffect:"genie", minimizeToApp:false,
+  autohide:false, launchanim:true, indicators:true, showRecents:true, staticOnly:false, autohideDelay:0, autohideTime:1,
+  dblclick:"zoom", menubarStyle:"floating", menubarHeight:"slim"};
+let S, D;
+function freshDock(){
+  return {pinned:["files","launcher","browser","messages","mail","photos","calendar","notes","music","code","terminal","settings"],
+    running:new Set(["files","browser","messages","mail","notes","terminal","settings","screenshot"]),
+    recent:["calc","maps"], badges:{mail:12, messages:3}, progress:{browser:.35}, minimized:[], active:"settings", launching:{}};
+}
+const stage = $("#stage"), layer = $("#dockLayer"), fx = $("#fx"), fxc = fx.getContext("2d");
+let W = 0, H = 0;
+const isDark = () => { const t = document.documentElement.getAttribute("data-theme"); return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; };
+
+/* ---------- Dock items ---------- */
+function itemKeys(){
+  const out = [];
+  if (S.staticOnly){
+    const run = [...D.pinned.filter(a => D.running.has(a)), ...Object.keys(APPS).filter(a => D.running.has(a) && !D.pinned.includes(a))];
+    run.forEach(a => out.push("app:" + a));
+  } else {
+    D.pinned.forEach(a => out.push("app:" + a));
+    const extra = Object.keys(APPS).filter(a => D.running.has(a) && !D.pinned.includes(a));
+    const rec = S.showRecents ? D.recent.filter(a => !D.pinned.includes(a) && !D.running.has(a)).slice(0, Math.max(0, 3 - extra.length)) : [];
+    if (S.showRecents && (extra.length || rec.length)){ out.push("sep:recent"); }
+    extra.forEach(a => out.push("app:" + a)); rec.forEach(a => out.push("app:" + a));
+  }
+  out.push("sep:main");
+  if (!S.staticOnly) out.push("stack:downloads");
+  D.minimized.forEach(w => out.push("win:" + w));
+  out.push("trash");
+  return out;
+}
+let visual = []; // {key, p, target, el, dot, ...}
+const byKey = new Map();
+function makeEntry(key){
+  const e = {key, p:0, target:1, kind:key.split(":")[0], id:key.split(":")[1], bounce:null};
+  if (e.kind === "sep"){ e.el = div("sep"); }
+  else {
+    e.el = div("tile");
+    if (e.kind === "win"){
+      const c = document.createElement("canvas"); c.width = 160; c.height = 160; e.thumb = c; e.el.appendChild(c);
+      const mi = new Image(); mi.src = ICONS.notes; mi.className = "mini-app"; e.el.appendChild(mi);
+    } else {
+      const img = new Image(); img.alt = ""; img.draggable = false;
+      img.src = e.kind === "app" ? ICONS[e.id] : e.kind === "stack" ? ICONS.downloads : ICONS.trash;
+      e.el.appendChild(img);
+    }
+    e.dot = div("dot");
+  }
+  layer.appendChild(e.el); if (e.dot) layer.appendChild(e.dot);
+  return e;
+}
+function div(c){ const d = document.createElement("div"); d.className = c; return d; }
+function syncItems(){
+  const keys = itemKeys(), set = new Set(keys);
+  const next = [];
+  keys.forEach(k => { let e = byKey.get(k); if (!e){ e = makeEntry(k); byKey.set(k, e); } e.target = 1; next.push(e); });
+  visual.forEach((e, i) => {
+    if (set.has(e.key)) return;
+    e.target = 0;
+    const prev = visual.slice(0, i).reverse().find(x => next.includes(x));
+    next.splice(prev ? next.indexOf(prev) + 1 : 0, 0, e);
+  });
+  visual = next; kick();
+}
+
+/* ---------- Geometry ---------- */
+let menubarH = 30;
+const pad = t => 4 + t * .06;
+const SEP = .36;
+const edgeMargin = 4;
+function mainLen(){ return S.orientation === "bottom" ? W : H - menubarH; }
+function fitTile(nTiles, nSeps){
+  let t = S.tilesize;
+  const avail0 = mainLen() - 2 * Math.max(12, mainLen() * .035);
+  for (let k = 0; k < 3; k++) t = Math.min(S.tilesize, (avail0 - 2 * pad(t)) / Math.max(1, nTiles + nSeps * SEP));
+  return Math.max(8, t);
+}
+const falloff = d => d >= 3 ? 0 : (Math.cos(Math.PI * d / 3) + 1) / 2;
+let pointer = {x:-1, y:-1, in:false}, magAmt = 0, hideAmt = 0, hoverKey = null, revealAt = 0;
+let G = null; // last layout
+function canon(x, y){ // stage → (main, cross)
+  if (S.orientation === "bottom") return {m:x, c:H - y};
+  if (S.orientation === "left") return {m:y, c:x};
+  return {m:y, c:W - x};
+}
+function rectOf(m, c, lm, lc){ // canonical → CSS rect
+  if (S.orientation === "bottom") return {x:m, y:H - c - lc, w:lm, h:lc};
+  if (S.orientation === "left") return {x:c, y:m, w:lc, h:lm};
+  return {x:W - c - lc, y:m, w:lc, h:lm};
+}
+function computeLayout(usePresence = true){
+  let nT = 0, nS = 0;
+  visual.forEach(e => { const p = usePresence ? e.p : e.target; if (e.kind === "sep") nS += p; else nT += p; });
+  const t = fitTile(nT, nS), pd = pad(t);
+  const L = S.magnification ? Math.max(t, S.largesize) : t;
+  const center = S.orientation === "bottom" ? W / 2 : menubarH + (H - menubarH) / 2;
+  let x = 0; const base = [];
+  visual.forEach(e => { const p = usePresence ? e.p : e.target; const w = (e.kind === "sep" ? t * SEP : t) * p; base.push(x + w / 2); x += w; });
+  const baseLen = x, baseStart = center - baseLen / 2;
+  const pc = canon(pointer.x, pointer.y);
+  const q = pc.m - baseStart;
+  let total = 0; const sizes = [];
+  visual.forEach((e, i) => {
+    const p = usePresence ? e.p : e.target;
+    if (e.kind === "sep"){ sizes.push({s:t, w:t * SEP * p}); total += t * SEP * p; return; }
+    const f = usePresence ? magAmt * falloff(Math.abs(q - base[i]) / t) : 0;
+    const s = t + (L - t) * f; sizes.push({s, w:s * p}); total += s * p;
+  });
+  const thick = t + 2 * pd;
+  const hideOff = (thick + edgeMargin + 6) * (usePresence ? hideAmt : (S.autohide ? 1 : 0));
+  const c0 = edgeMargin - hideOff;
+  const start = center - total / 2;
+  let m = start; const items = [];
+  visual.forEach((e, i) => { items.push({e, m, w:sizes[i].w, s:sizes[i].s}); m += sizes[i].w; });
+  return {t, pd, L, thick, c0, start, total, items, barStart:start - pd, barLen:total + 2 * pd, center};
+}
+
+/* ---------- Render ---------- */
+function render(){
+  G = computeLayout();
+  const {t, pd, c0, thick, items} = G;
+  const bar = rectOf(G.barStart, c0, G.barLen, thick);
+  Object.assign(barEl.style, {left:bar.x + "px", top:bar.y + "px", width:bar.w + "px", height:bar.h + "px", borderRadius:(thick * .24 + 2) + "px"});
+  const dotD = clamp(t * .06, 2, 5);
+  items.forEach(({e, m, w, s}) => {
+    const p = e.p;
+    if (e.kind === "sep"){
+      const len = t * .72, r = rectOf(m + w / 2 - .5, c0 + pd + (t - len) / 2, 1, len);
+      Object.assign(e.el.style, {left:r.x + "px", top:r.y + "px", width:r.w + "px", height:r.h + "px", opacity:p});
+      return;
+    }
+    const size = s * p;
+    let lift = 0;
+    if (e.bounce){ const el = (performance.now() - e.bounce.t0) / 1000, per = .62;
+      const n = Math.floor(el / per); if (n >= e.bounce.n){ e.bounce = null; } else { const ph = (el % per) / per; lift = Math.sin(Math.PI * ph) * t * .55 * (1 - n * .12); } }
+    const r = rectOf(m, c0 + pd + lift, size, size);
+    e.el.style.transform = `translate(${r.x}px,${r.y}px)`;
+    e.el.style.width = r.w + "px"; e.el.style.height = r.h + "px";
+    e.el.style.opacity = drag && drag.started && drag.e.id === e.id && e.kind === "app" ? 0 : Math.min(1, p * 1.4);
+    // badge & progress
+    const badge = e.kind === "app" ? D.badges[e.id] : null;
+    if (badge){
+      if (!e.badge){ e.badge = div("badge"); e.el.appendChild(e.badge); }
+      const bs = Math.max(11, s * .3); Object.assign(e.badge.style, {minWidth:bs + "px", height:bs + "px", fontSize:bs * .62 + "px", top:(-s * .02) + "px", right:(-s * .02) + "px"});
+      e.badge.textContent = badge;
+    } else if (e.badge){ e.badge.remove(); e.badge = null; }
+    const prog = e.kind === "app" ? D.progress[e.id] : null;
+    if (prog != null){
+      if (!e.prog){ e.prog = div("prog"); e.prog.appendChild(document.createElement("i")); e.el.appendChild(e.prog); }
+      const ph = Math.max(3, s * .07);
+      Object.assign(e.prog.style, {left:"18%", right:"18%", bottom:"14%", height:ph + "px"});
+      e.prog.firstChild.style.width = (prog * 100) + "%";
+    } else if (e.prog){ e.prog.remove(); e.prog = null; }
+    // dot
+    const running = e.kind === "app" && D.running.has(e.id);
+    const showDot = S.indicators && running && !e.bounce;
+    const dr = rectOf(m + size / 2 - dotD / 2, c0 + pd / 2 - dotD / 2 + 1, dotD, dotD);
+    Object.assign(e.dot.style, {left:dr.x + "px", top:dr.y + "px", width:dotD + "px", height:dotD + "px", opacity:showDot ? p : 0});
+  });
+  // tooltip
+  const hov = hoverKey && !drag && !menuOpen ? items.find(it => it.e.key === hoverKey) : null;
+  if (hov && hov.e.p > .9){
+    tip.hidden = false; tip.textContent = labelOf(hov.e);
+    const gapC = c0 + pd + hov.s + 12;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    if (S.orientation === "bottom"){ tip.className = "tip b"; tip.style.left = clamp(hov.m + hov.w / 2 - tw / 2, 6, W - tw - 6) + "px"; tip.style.top = (H - gapC - th) + "px"; }
+    else if (S.orientation === "left"){ tip.className = "tip l"; tip.style.left = gapC + "px"; tip.style.top = (hov.m + hov.w / 2 - th / 2) + "px"; }
+    else { tip.className = "tip r"; tip.style.left = (W - gapC - tw) + "px"; tip.style.top = (hov.m + hov.w / 2 - th / 2) + "px"; }
+  } else tip.hidden = true;
+  // clean up gone entries
+  visual = visual.filter(e => { if (e.target === 0 && e.p <= .001){ e.el.remove(); e.dot && e.dot.remove(); byKey.delete(e.key); return false; } return true; });
+  $("#readout").textContent = `Screen ${Math.round(W)} × ${Math.round(H)} · requested ${S.tilesize} px · actual ${Math.round(t)} px${t < S.tilesize - .5 ? " (limited by width)" : ""}`;
+  $("#o-size").textContent = `${S.tilesize} px → ${Math.round(t)} px`;
+}
+function labelOf(e){
+  if (e.kind === "app") return APPS[e.id].name;
+  if (e.kind === "stack") return "Downloads";
+  if (e.kind === "win") return "Notes — Dock ideas";
+  return "Trash";
+}
+const barEl = div("dock-bar"); layer.appendChild(barEl);
+const tip = div("tip"); tip.hidden = true; stage.appendChild(tip);
+
+/* ---------- Frame loop ---------- */
+let raf = 0, last = 0;
+function kick(){ if (!raf){ last = performance.now(); raf = requestAnimationFrame(frame); } }
+function frame(now){
+  raf = 0;
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  let busy = false;
+  const k = 1 - Math.exp(-dt * 14);
+  visual.forEach(e => { const d = e.target - e.p; if (Math.abs(d) > .002){ e.p += d * k; busy = true; } else e.p = e.target; });
+  // magnification
+  const magTarget = S.magnification && magActive() ? 1 : 0;
+  if (Math.abs(magTarget - magAmt) > .002){ magAmt += (magTarget - magAmt) * (1 - Math.exp(-dt * 18)); busy = true; } else magAmt = magTarget;
+  // autohide
+  const hideTarget = S.autohide && !wantVisible(now) ? 1 : 0;
+  const dur = .28 * S.autohideTime;
+  if (hideAmt !== hideTarget){
+    if (dur <= 0) hideAmt = hideTarget; else hideAmt = clamp(hideAmt + Math.sign(hideTarget - hideAmt) * dt / dur);
+    busy = true;
+  }
+  if (S.autohide && revealAt) busy = true;
+  if (visual.some(e => e.bounce)) busy = true;
+  if (winAnim){ stepWinAnim(now); busy = true; }
+  if (fxAnim){ stepFx(now); busy = true; }
+  render(); updateHover();
+  if (busy) kick();
+}
+function magActive(){
+  if (!pointer.in || !G || drag || menuOpen) return false;
+  const pc = canon(pointer.x, pointer.y);
+  const inMain = pc.m >= G.barStart && pc.m <= G.barStart + G.barLen;
+  if (!inMain) return false;
+  if (pc.c >= G.c0 && pc.c <= G.c0 + G.thick) return true;
+  return magAmt > 0 && pc.c >= G.c0 && pc.c <= G.c0 + G.pd + G.L + 4;
+}
+let shown = false;
+function wantVisible(now){
+  if (menuOpen || drag || stackOpen) return true;
+  const pc = canon(pointer.x, pointer.y);
+  if (!pointer.in){ revealAt = 0; return shown = false; }
+  const full = computeLayout(false);
+  const thick = full.thick + edgeMargin;
+  const overDock = pc.c <= thick + (S.magnification ? full.L - full.t : 0) + 6 && pc.m >= full.barStart - 10 && pc.m <= full.barStart + full.barLen + 10;
+  if (shown && overDock) return true;
+  if (pc.c <= 10){
+    if (!revealAt) revealAt = now + S.autohideDelay * 1000;
+    if (now >= revealAt){ revealAt = 0; return shown = true; }
+    return false;
+  }
+  revealAt = 0;
+  return shown = false;
+}
+function updateHover(){
+  let k = null;
+  if (pointer.in && G && !drag){
+    const pc = canon(pointer.x, pointer.y);
+    for (const it of G.items){
+      if (it.e.kind === "sep" || it.e.target === 0) continue;
+      if (pc.m >= it.m && pc.m < it.m + it.w && pc.c >= G.c0 - 2 && pc.c <= G.c0 + G.pd + it.s + 2){ k = it.e.key; break; }
+    }
+  }
+  hoverKey = k;
+}
+function hitSep(){
+  if (!G) return null;
+  const pc = canon(pointer.x, pointer.y);
+  for (const it of G.items) if (it.e.kind === "sep" && pc.m >= it.m - 3 && pc.m <= it.m + it.w + 3 && pc.c >= G.c0 && pc.c <= G.c0 + G.thick) return it;
+  return null;
+}
+
+/* ---------- Pointer ---------- */
+function toStage(ev){ const r = stage.getBoundingClientRect(); return {x:ev.clientX - r.left, y:ev.clientY - r.top}; }
+let drag = null, sepDrag = null, winDrag = null;
+stage.addEventListener("pointermove", ev => {
+  const p = toStage(ev); pointer = {x:p.x, y:p.y, in:true};
+  if (sepDrag){
+    const pc = canon(p.x, p.y);
+    S.tilesize = Math.round(clamp(sepDrag.start + (pc.c - sepDrag.c), 16, 128)); syncInputs(); writeDomain("tilesize");
+  }
+  if (drag) dragMove(p);
+  if (winDrag){ win.x = p.x - winDrag.dx; win.y = Math.max(menubarH, p.y - winDrag.dy); win.zoomed = null; placeWin(); }
+  stage.style.cursor = sepDrag || (!drag && hitSep()) ? (S.orientation === "bottom" ? "ns-resize" : "ew-resize") : "";
+  kick();
+});
+stage.addEventListener("pointerleave", () => { if (!drag && !sepDrag){ pointer.in = false; kick(); } });
+stage.addEventListener("pointerdown", ev => {
+  if (ev.button !== 0) return;
+  if (ev.target.closest(".menu,.stack,.settings")) return;
+  closeMenus();
+  const p = toStage(ev); pointer = {x:p.x, y:p.y, in:true}; render(); updateHover();
+  const s = hitSep();
+  if (s){ sepDrag = {start:S.tilesize, c:canon(p.x, p.y).c}; stage.setPointerCapture(ev.pointerId); ev.preventDefault(); return; }
+  if (hoverKey){
+    const e = byKey.get(hoverKey);
+    drag = {key:hoverKey, e, x0:p.x, y0:p.y, started:false, shift:ev.shiftKey};
+    stage.setPointerCapture(ev.pointerId); ev.preventDefault(); return;
+  }
+  if (hitWin(p, ev)) { stage.setPointerCapture(ev.pointerId); ev.preventDefault(); }
+});
+stage.addEventListener("pointerup", ev => {
+  if (sepDrag){ sepDrag = null; kick(); return; }
+  if (winDrag){ winDrag = null; return; }
+  if (drag){
+    const d = drag; drag = null;
+    if (!d.started) clickItem(d.e, ev);
+    else dragEnd(d);
+    kick();
+  }
+});
+stage.addEventListener("contextmenu", ev => {
+  ev.preventDefault();
+  const p = toStage(ev); pointer = {x:p.x, y:p.y, in:true}; render(); updateHover();
+  const s = hitSep();
+  if (s) return openMenu(sepMenu(), p);
+  if (hoverKey) return openMenu(itemMenu(byKey.get(hoverKey)), p);
+});
+
+/* ---------- Drag & drop ---------- */
+let ghost = null;
+function dragMove(p){
+  const d = drag;
+  if (!d.started){
+    if (Math.hypot(p.x - d.x0, p.y - d.y0) < 5) return;
+    if (d.e.kind !== "app"){ return; }
+    d.started = true; d.wasPinned = D.pinned.includes(d.e.id);
+    ghost = div("drag-ghost"); const im = new Image(); im.src = ICONS[d.e.id]; ghost.appendChild(im); stage.appendChild(ghost);
+  }
+  const t = G.t; ghost.style.width = ghost.style.height = t + "px";
+  ghost.style.left = (p.x - t / 2) + "px"; ghost.style.top = (p.y - t / 2) + "px";
+  const pc = canon(p.x, p.y);
+  const away = pc.c > G.c0 + G.thick + t * 1.1;
+  const id = d.e.id;
+  if (away){
+    if (!ghost.querySelector(".rm")){ const r = div("rm"); r.textContent = "Remove"; ghost.appendChild(r); }
+    if (D.pinned.includes(id)){ D.pinned = D.pinned.filter(a => a !== id); d.removed = true; syncItems(); }
+    return;
+  }
+  ghost.querySelector(".rm")?.remove();
+  // insertion among pinned, by base centers
+  const pinnedItems = G.items.filter(it => it.e.kind === "app" && D.pinned.includes(it.e.id) && it.e.id !== id);
+  let idx = pinnedItems.length;
+  for (let i = 0; i < pinnedItems.length; i++){ const it = pinnedItems[i]; if (pc.m < it.m + it.w / 2){ idx = i; break; } }
+  const lastPinned = pinnedItems[pinnedItems.length - 1];
+  const beyond = lastPinned && pc.m > lastPinned.m + lastPinned.w + t * .8;
+  if (!d.wasPinned && beyond){ if (D.pinned.includes(id)){ D.pinned = D.pinned.filter(a => a !== id); syncItems(); } return; }
+  const order = D.pinned.filter(a => a !== id); order.splice(idx, 0, id);
+  if (order.join() !== D.pinned.join()){ D.pinned = order; d.removed = false; syncItems(); }
+}
+function dragEnd(d){
+  const g = ghost; ghost = null;
+  if (g){
+    if (g.querySelector(".rm")){
+      const r = g.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+      const puff = div("puff"); const sz = r.width * 1.2;
+      Object.assign(puff.style, {left:(r.left - sr.left - sz * .1) + "px", top:(r.top - sr.top - sz * .1) + "px", width:sz + "px", height:sz + "px"});
+      stage.appendChild(puff); setTimeout(() => puff.remove(), 500);
+      if (!D.running.has(d.e.id) && !D.recent.includes(d.e.id)) D.recent.unshift(d.e.id);
+    }
+    g.remove();
+  }
+  syncItems();
+}
+
+/* ---------- Clicks ---------- */
+function clickItem(e, ev){
+  if (e.kind === "app"){
+    const id = e.id;
+    setActive(id);
+    if (!D.running.has(id)){
+      if (D.launching[id]) return;
+      D.launching[id] = true;
+      if (S.launchanim) e.bounce = {t0:performance.now(), n:2};
+      setTimeout(() => { D.running.add(id); delete D.launching[id]; D.recent = D.recent.filter(a => a !== id); syncItems();
+        if (id === "notes" && win.state === "closed") openWin(); }, S.launchanim ? 1240 : 500);
+      kick(); return;
+    }
+    if (id === "notes"){
+      if (win.state === "minimized") restoreWin(ev.shiftKey);
+      else if (win.state === "closed") openWin();
+      else frontWin();
+    }
+    if (id === "settings") frontSettings();
+    return;
+  }
+  if (e.kind === "win") return restoreWin(ev.shiftKey);
+  if (e.kind === "stack") return openStack(e);
+}
+function setActive(id){ D.active = id; $("#activeApp").textContent = APPS[id].name; }
+
+/* ---------- Menus ---------- */
+let menuOpen = null, stackOpen = null;
+function closeMenus(){ menuOpen?.remove(); menuOpen = null; stackOpen?.remove(); stackOpen = null; kick(); }
+document.addEventListener("pointerdown", ev => { if ((menuOpen || stackOpen) && !ev.target.closest(".menu,.stack")) closeMenus(); });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeMenus(); });
+function openMenu(spec, p){
+  closeMenus();
+  const m = div("menu");
+  spec.forEach(s => {
+    if (s === "-"){ m.appendChild(document.createElement("hr")); return; }
+    const it = div(s.hd ? "hd" : "it" + (s.on ? " on" : "") + (s.dim ? " dim" : ""));
+    it.textContent = s.hd || s.t;
+    if (s.fn) it.addEventListener("click", () => { closeMenus(); s.fn(); });
+    m.appendChild(it);
+  });
+  stage.appendChild(m); menuOpen = m;
+  const mw = m.offsetWidth, mh = m.offsetHeight;
+  m.style.left = clamp(p.x - mw / 2, 6, W - mw - 6) + "px";
+  m.style.top = clamp(S.orientation === "bottom" ? p.y - mh - 18 : p.y - mh / 2, menubarH + 4, H - mh - 6) + "px";
+  if (S.orientation === "left") m.style.left = clamp(G.c0 + G.thick + 10, 6, W - mw - 6) + "px";
+  if (S.orientation === "right") m.style.left = clamp(W - G.c0 - G.thick - 10 - mw, 6, W - mw - 6) + "px";
+  kick();
+}
+function sepMenu(){
+  const set = (k, v) => () => { S[k] = v; syncInputs(); writeDomain(k); syncItems(); };
+  return [
+    {t: S.autohide ? "Turn Hiding Off" : "Turn Hiding On", fn:set("autohide", !S.autohide)},
+    {t: S.magnification ? "Turn Magnification Off" : "Turn Magnification On", fn:set("magnification", !S.magnification)},
+    "-", {hd:"Position on Screen"},
+    {t:"Left", on:S.orientation === "left", fn:() => setOrientation("left")},
+    {t:"Bottom", on:S.orientation === "bottom", fn:() => setOrientation("bottom")},
+    {t:"Right", on:S.orientation === "right", fn:() => setOrientation("right")},
+    "-", {hd:"Minimize Using"},
+    {t:"Genie Effect", on:S.mineffect === "genie", fn:set("mineffect", "genie")},
+    {t:"Scale Effect", on:S.mineffect === "scale", fn:set("mineffect", "scale")},
+    "-", {t:"Dock Settings…", fn:() => { frontSettings(); $("#s-size").focus(); }},
+  ];
+}
+function itemMenu(e){
+  if (e.kind === "trash") return [{t:"Open"}, "-", {t:"Empty Trash…", dim:true}];
+  if (e.kind === "stack") return [{hd:"Sort by"}, {t:"Name"}, {t:"Date Added", on:true}, {t:"Kind"}, "-", {hd:"Display as"}, {t:"Folder"}, {t:"Stack", on:true}, "-", {hd:"View content as"}, {t:"Fan"}, {t:"Grid", on:true}, {t:"List"}, {t:"Automatic"}, "-", {t:"Open “Downloads”"}, {t:"Remove from Dock", dim:true}];
+  if (e.kind === "win") return [{t:"Notes — Dock ideas", fn:() => restoreWin(false)}, "-", {t:"Close Window", fn:() => { D.minimized = []; win.state = "closed"; syncItems(); }}];
+  const id = e.id, running = D.running.has(id), kept = D.pinned.includes(id);
+  const out = [];
+  if (id === "notes" && win.state !== "closed") out.push({t:"Dock ideas", on:win.state !== "minimized", fn:() => win.state === "minimized" ? restoreWin(false) : frontWin()}, "-");
+  if (!running) out.push({t:"Open", fn:() => clickItem(e, {})});
+  out.push({hd:"Options"},
+    {t:"Keep in Dock", on:kept, fn:() => { D.pinned = kept ? D.pinned.filter(a => a !== id) : [...D.pinned, id]; if (kept && !running && !D.recent.includes(id)) D.recent.unshift(id); syncItems(); }},
+    {t:"Open at Login"}, {t:"Show in Files"}, "-");
+  if (running) out.push({t:"Show All Windows", dim:id !== "notes"}, {t:"Hide"}, {t:"Quit", fn:() => quitApp(id)});
+  return out;
+}
+function quitApp(id){
+  D.running.delete(id); delete D.progress[id];
+  if (!D.pinned.includes(id)){ D.recent = [id, ...D.recent.filter(a => a !== id)]; }
+  if (id === "notes"){ win.state = "closed"; D.minimized = []; placeWin(); }
+  syncItems();
+}
+function openStack(e){
+  closeMenus();
+  const st = div("stack");
+  [["dock-report.pdf","PDF","#e5484d"],["screenshot-1.png","PNG","#2f7cf6"],["screenshot-2.png","PNG","#2f7cf6"],["malaysia-icons.zip","ZIP","#8e8e93"],["notes.md","MD","#1f9d55"],["sizes.csv","CSV","#1f9d55"]]
+    .forEach(([n, x, c]) => { const f = div("f"); const i = document.createElement("i"); i.dataset.ext = x; i.style.setProperty("--c", c); f.appendChild(i); f.appendChild(document.createTextNode(n)); st.appendChild(f); });
+  const o = div("open"); o.textContent = "Open in Files"; st.appendChild(o);
+  stage.appendChild(st); stackOpen = st;
+  const it = G.items.find(i => i.e === e), sw = st.offsetWidth, sh = st.offsetHeight;
+  if (S.orientation === "bottom"){ st.style.left = clamp(it.m + it.w / 2 - sw / 2, 6, W - sw - 6) + "px"; st.style.top = (H - G.c0 - G.thick - 12 - sh) + "px"; }
+  else { st.style.top = clamp(it.m + it.w / 2 - sh / 2, menubarH + 6, H - sh - 6) + "px"; st.style.left = (S.orientation === "left" ? G.c0 + G.thick + 12 : W - G.c0 - G.thick - 12 - sw) + "px"; }
+  kick();
+}
+
+/* ---------- Sample window (Notas) ---------- */
+const nc = $("#notes"), nctx = nc.getContext("2d");
+const win = {x:0, y:0, w:540, h:380, state:"normal", zoomed:null, z:3};
+let settingsZ = 2;
+function usable(){
+  const thick = S.autohide ? 0 : (computeLayout(false).thick + edgeMargin);
+  let x = 0, y = menubarH, w = W, h = H - menubarH;
+  if (S.orientation === "bottom") h -= thick; else if (S.orientation === "left"){ x += thick; w -= thick; } else w -= thick;
+  return {x, y, w, h};
+}
+function placeWin(){
+  nc.hidden = win.state !== "normal";
+  if (win.state !== "normal") return;
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  const cw = Math.round(win.w * dpr), ch = Math.round(win.h * dpr);
+  if (nc.width !== cw || nc.height !== ch){ nc.width = cw; nc.height = ch; }
+  Object.assign(nc.style, {left:win.x + "px", top:win.y + "px", width:win.w + "px", height:win.h + "px", zIndex:win.z});
+  nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawNotes(nctx, win.w, win.h, isDark(), D.active === "notes");
+}
+function rr(ctx, x, y, w, h, r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function drawNotes(ctx, w, h, dark, active){
+  const C = dark ? {bg:"#1e1e20", side:"#29292c", line:"#3a3a3e", ink:"#f2f2f7", ink2:"#98989f", sel:"#c69a1b", tb:"#2a2a2d"}
+                 : {bg:"#ffffff", side:"#f2f2f4", line:"#e2e2e6", ink:"#1d1d1f", ink2:"#86868b", sel:"#ffd23f", tb:"#f6f6f8"};
+  ctx.clearRect(0, 0, w, h);
+  ctx.save(); rr(ctx, 0, 0, w, h, 12); ctx.clip();
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, w, h);
+  const sw = Math.min(200, w * .36);
+  ctx.fillStyle = C.side; ctx.fillRect(0, 0, sw, h);
+  ctx.fillStyle = C.tb; ctx.fillRect(sw, 0, w - sw, 52);
+  ctx.fillStyle = C.line; ctx.fillRect(sw, 52, w - sw, 1); ctx.fillRect(sw, 0, 1, h);
+  [["#ff5f57"],["#febc2e"],["#28c840"]].forEach(([c], i) => { ctx.beginPath(); ctx.arc(20 + i * 20, 26, 6, 0, 7); ctx.fillStyle = active || true ? c : C.line; ctx.fill(); });
+  ctx.font = "600 11px Inter, system-ui, sans-serif"; ctx.fillStyle = C.ink2; ctx.fillText("iCloud", 18, 74);
+  const notes = [["Dock ideas", "3:05 PM"], ["Screenshot measurements", "Yesterday"], ["Shopping list", "Monday"], ["Monday meeting", "11/4/26"]];
+  notes.forEach(([t, d], i) => {
+    const y = 84 + i * 52;
+    if (i === 0){ rr(ctx, 8, y, sw - 16, 46, 7); ctx.fillStyle = C.sel; ctx.fill(); }
+    ctx.fillStyle = i === 0 && !dark ? "#1d1d1f" : C.ink; ctx.font = "600 12.5px Inter, system-ui, sans-serif"; ctx.fillText(t, 18, y + 19, sw - 30);
+    ctx.fillStyle = i === 0 && !dark ? "#5c4a00" : C.ink2; ctx.font = "11.5px Inter, system-ui, sans-serif"; ctx.fillText(d, 18, y + 36, sw - 30);
+  });
+  ctx.fillStyle = C.ink2; ctx.font = "11.5px Inter, system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("November 11, 2026 at 3:05 PM", sw + (w - sw) / 2, 76); ctx.textAlign = "left";
+  const x0 = sw + 24;
+  ctx.fillStyle = C.ink; ctx.font = "700 20px Inter, system-ui, sans-serif"; ctx.fillText("Dock ideas", x0, 110, w - x0 - 20);
+  ctx.font = "13.5px Inter, system-ui, sans-serif";
+  ["• Magnification: cosine curve over 3 icons", "• The screen width sets the real maximum", "• A dot under each open app", "• Bounce on launch, genie on minimize", "• Dragging the separator resizes", "• Secondary click on the separator: shortcuts"]
+    .forEach((l, i) => ctx.fillText(l, x0, 142 + i * 24, w - x0 - 20));
+  ctx.restore();
+}
+function hitWin(p, ev){
+  if (win.state !== "normal") return false;
+  const lx = p.x - win.x, ly = p.y - win.y;
+  if (lx < 0 || ly < 0 || lx > win.w || ly > win.h) return false;
+  frontWin();
+  if (ly < 52){
+    if (Math.hypot(lx - 20, ly - 26) < 8){ win.state = "closed"; placeWin(); kick(); return true; }
+    if (Math.hypot(lx - 40, ly - 26) < 8){ minimizeWin(ev.shiftKey); return true; }
+    if (Math.hypot(lx - 60, ly - 26) < 8){ frameAction("fill"); return true; }
+    const now = performance.now();
+    if (lastTitle && now - lastTitle < 400){ lastTitle = 0; frameAction(S.dblclick, ev.shiftKey); return true; }
+    lastTitle = now;
+    winDrag = {dx:lx, dy:ly}; return true;
+  }
+  return true;
+}
+function frontWin(){ win.z = 4; settingsZ = 3; settingsEl.style.zIndex = 3; setActive("notes"); placeWin(); }
+function frontSettings(){ settingsZ = 4; settingsEl.style.zIndex = 4; win.z = 3; setActive("settings"); placeWin(); }
+function openWin(){ win.state = "normal"; frontWin(); kick(); }
+let winAnim = null, lastTitle = 0;
+function frameAction(kind, slow){
+  if (kind === "none") return;
+  if (kind === "minimize") return minimizeWin(slow);
+  const u = usable();
+  let to;
+  if (win.zoomed === kind && win.saved){ to = win.saved; win.zoomed = null; }
+  else {
+    win.saved = win.zoomed ? win.saved : {x:win.x, y:win.y, w:win.w, h:win.h};
+    to = kind === "fill" ? {x:u.x, y:u.y, w:u.w, h:u.h}
+       : (() => { const w = Math.min(u.w - 40, 980), h = Math.min(u.h - 24, 700); return {x:u.x + (u.w - w) / 2, y:u.y + 8, w, h}; })();
+    win.zoomed = kind;
+  }
+  winAnim = {from:{x:win.x, y:win.y, w:win.w, h:win.h}, to, t0:performance.now(), dur:260}; kick();
+}
+function stepWinAnim(now){
+  const a = winAnim, u = clamp((now - a.t0) / a.dur), e = easeInOut(u);
+  ["x","y","w","h"].forEach(k => win[k] = lerp(a.from[k], a.to[k], e));
+  placeWin(); if (u >= 1) winAnim = null;
+}
+
+/* ---------- Minimize effects ---------- */
+let fxAnim = null;
+function targetRect(){
+  const L = computeLayout(false);
+  const key = S.minimizeToApp && hasNotesTile() ? "app:notes" : "win:notes";
+  const it = L.items.find(i => i.e.key === key);
+  if (!it) return null;
+  const s = L.t;
+  return rectOf(it.m + (it.w - s) / 2, L.c0 + L.pd, s, s);
+}
+const hasNotesTile = () => visual.some(e => e.key === "app:notes" && e.target === 1);
+function snapshot(){ const c = document.createElement("canvas"); c.width = nc.width; c.height = nc.height; c.getContext("2d").drawImage(nc, 0, 0); return c; }
+function minimizeWin(slow){
+  if (win.state !== "normal" || fxAnim) return;
+  const img = snapshot(), from = {x:win.x, y:win.y, w:win.w, h:win.h};
+  if (!S.minimizeToApp || !hasNotesTile()) { D.minimized = ["notes"]; syncItems(); }
+  const to = targetRect(); if (!to) return;
+  const thumb = byKey.get("win:notes"); if (thumb) drawThumb(thumb, img);
+  win.state = "anim"; placeWin();
+  fxAnim = {img, from, to, t0:performance.now(), dur:slow ? 5000 : 520, reverse:false, done:() => { win.state = "minimized"; }};
+  kick();
+}
+function restoreWin(slow){
+  if (win.state !== "minimized" || fxAnim) return;
+  win.state = "normal"; placeWin(); const img = snapshot(); win.state = "anim"; placeWin();
+  const to = targetRect() || {x:W / 2, y:H - 40, w:40, h:40};
+  fxAnim = {img, from:{x:win.x, y:win.y, w:win.w, h:win.h}, to, t0:performance.now(), dur:slow ? 5000 : 480, reverse:true,
+    done:() => { win.state = "normal"; frontWin(); }};
+  D.minimized = []; syncItems(); setActive("notes");
+  kick();
+}
+function drawThumb(e, img){
+  const c = e.thumb, x = c.getContext("2d"); x.clearRect(0, 0, 160, 160);
+  const r = Math.min(140 / img.width, 140 / img.height), w = img.width * r, h = img.height * r;
+  x.save(); x.shadowColor = "rgba(0,0,0,.35)"; x.shadowBlur = 6; x.shadowOffsetY = 2;
+  x.drawImage(img, (160 - w) / 2, (160 - h) / 2 + 6, w, h); x.restore();
+}
+function canonMatrix(){ // canonical (y grows toward the Dock edge) → stage
+  if (S.orientation === "bottom") return [1, 0, 0, 1];
+  if (S.orientation === "left") return [0, 1, -1, 0];
+  return [0, -1, 1, 0];
+}
+function toCanonRect(r){
+  const [a, b, c, d] = canonMatrix();
+  // inverse of rotation = transpose
+  const pts = [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].map(([X, Y]) => [a * X + b * Y, c * X + d * Y]);
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  return {x:Math.min(...xs), y:Math.min(...ys), w:Math.max(...xs) - Math.min(...xs), h:Math.max(...ys) - Math.min(...ys)};
+}
+function stepFx(now){
+  const A = fxAnim;
+  let u = clamp((now - A.t0) / A.dur);
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (fx.width !== Math.round(W * dpr) || fx.height !== Math.round(H * dpr)){ fx.width = Math.round(W * dpr); fx.height = Math.round(H * dpr); }
+  fxc.setTransform(1, 0, 0, 1, 0, 0); fxc.clearRect(0, 0, fx.width, fx.height);
+  const p = A.reverse ? 1 - u : u;
+  const [a, b, c, d] = canonMatrix();
+  if (!A.canon){
+    const Wc = toCanonRect(A.from), Tc = toCanonRect(A.to);
+    const src = document.createElement("canvas"); const sc = A.img.width / A.from.w;
+    src.width = Math.round(Wc.w * sc); src.height = Math.round(Wc.h * sc);
+    const sx = src.getContext("2d");
+    sx.setTransform(a * sc, c * sc, b * sc, d * sc, -Wc.x * sc, -Wc.y * sc);
+    sx.drawImage(A.img, A.from.x, A.from.y, A.from.w, A.from.h);
+    A.canon = {Wc, Tc, src, sc};
+  }
+  const {Wc, Tc, src, sc} = A.canon;
+  fxc.setTransform(a * dpr, b * dpr, c * dpr, d * dpr, 0, 0);
+  if (S.mineffect === "scale"){
+    const e = easeInOut(p);
+    fxc.globalAlpha = 1 - .25 * e;
+    fxc.drawImage(src, lerp(Wc.x, Tc.x, e), lerp(Wc.y, Tc.y, e), lerp(Wc.w, Tc.w, e), lerp(Wc.h, Tc.h, e));
+    fxc.globalAlpha = 1;
+  } else {
+    const suck = S.mineffect === "suck";
+    const pa = smooth(clamp(p / (suck ? .3 : .42)));
+    const pb = easeInOut(clamp((p - (suck ? .1 : .18)) / (suck ? .9 : .82)));
+    const tl = suck ? Tc.x + Tc.w * .3 : Tc.x, tr = suck ? Tc.x + Tc.w * .7 : Tc.x + Tc.w;
+    const span = Math.max(1, Tc.y - Wc.y);
+    const edges = y => { const k = smooth(clamp((y - Wc.y) / span)); const kk = suck ? Math.pow(k, .6) : k;
+      return [lerp(Wc.x, lerp(Wc.x, tl, kk), pa), lerp(Wc.x + Wc.w, lerp(Wc.x + Wc.w, tr, kk), pa)]; };
+    const N = 140, sh = Wc.h / N, end = Tc.y + Tc.h;
+    for (let i = 0; i < N; i++){
+      const s0 = i * sh, s1 = s0 + sh;
+      const y0 = lerp(Wc.y + s0, Tc.y + s0 * Tc.h / Wc.h, pb), y1 = lerp(Wc.y + s1, Tc.y + s1 * Tc.h / Wc.h, pb);
+      if (y0 >= end) break;
+      const [l, r] = edges((y0 + y1) / 2);
+      fxc.drawImage(src, 0, s0 * sc, src.width, sh * sc, l, y0, Math.max(.5, r - l), Math.max(.6, y1 - y0) + .4);
+    }
+  }
+  if (u >= 1){ fxc.setTransform(1, 0, 0, 1, 0, 0); fxc.clearRect(0, 0, fx.width, fx.height); fxAnim = null; A.done(); placeWin(); }
+}
+
+/* ---------- Settings binding ---------- */
+const settingsEl = $("#settings");
+const I = id => $("#" + id);
+function setFill(el){ const min = +el.min, max = +el.max; el.style.setProperty("--fill", ((el.value - min) / (max - min) * 100) + "%"); }
+function magToSlider(){ return S.magnification ? Math.max(1, Math.round((S.largesize - 16) / 112 * 100)) : 0; }
+function syncInputs(){
+  I("s-size").value = S.tilesize; I("s-mag").value = magToSlider();
+  I("s-mag").classList.toggle("mag-off", !S.magnification);
+  I("o-mag").textContent = S.magnification ? `${S.largesize} px` : "off";
+  I("s-pos").value = S.orientation; I("s-eff").value = S.mineffect; I("s-dbl").value = S.dblclick;
+  I("s-minapp").checked = S.minimizeToApp; I("s-hide").checked = S.autohide; I("s-launch").checked = S.launchanim;
+  I("s-ind").checked = S.indicators; I("s-rec").checked = S.showRecents; I("s-static").checked = S.staticOnly;
+  I("s-delay").value = S.autohideDelay; I("o-delay").textContent = S.autohideDelay.toFixed(2) + " s";
+  I("s-speed").value = S.autohideTime; I("o-speed").textContent = S.autohideTime.toFixed(1) + " ×";
+  ["s-size","s-mag","s-delay","s-speed"].forEach(i => setFill(I(i)));
+  document.querySelectorAll("#mbStyle button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.menubarStyle));
+  document.querySelectorAll("#mbHeight button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.menubarHeight));
+  const mb = $("#menubar"); mb.className = "menubar " + S.menubarStyle + (S.menubarHeight === "wide" ? " wide" : "");
+  menubarH = S.menubarHeight === "wide" ? 38 : 30;
+}
+const bind = (id, ev, fn, key) => I(id).addEventListener(ev, e => { fn(e.target); syncInputs(); writeDomain(key); syncItems(); placeWin(); kick(); });
+bind("s-size", "input", el => S.tilesize = +el.value, "tilesize");
+bind("s-mag", "input", el => { const v = +el.value; S.magnification = v > 0; if (v > 0) S.largesize = Math.round(16 + v / 100 * 112); }, "largesize");
+bind("s-pos", "change", el => setOrientation(el.value, true), "orientation");
+bind("s-eff", "change", el => S.mineffect = el.value, "mineffect");
+bind("s-dbl", "change", el => S.dblclick = el.value, "dblclick");
+bind("s-minapp", "change", el => S.minimizeToApp = el.checked, "minimizeToApp");
+bind("s-hide", "change", el => S.autohide = el.checked, "autohide");
+bind("s-launch", "change", el => S.launchanim = el.checked, "launchanim");
+bind("s-ind", "change", el => S.indicators = el.checked, "indicators");
+bind("s-rec", "change", el => S.showRecents = el.checked, "showRecents");
+bind("s-static", "change", el => S.staticOnly = el.checked, "staticOnly");
+bind("s-delay", "input", el => S.autohideDelay = +el.value, "autohideDelay");
+bind("s-speed", "input", el => S.autohideTime = +el.value, "autohideTime");
+document.querySelectorAll("#mbStyle button").forEach(b => b.addEventListener("click", () => { S.menubarStyle = b.dataset.v; syncInputs(); writeDomain("menubarStyle"); }));
+document.querySelectorAll("#mbHeight button").forEach(b => b.addEventListener("click", () => { S.menubarHeight = b.dataset.v; syncInputs(); writeDomain("menubarHeight"); layoutStage(); }));
+function setOrientation(o, fromInput){
+  S.orientation = o; if (!fromInput){ syncInputs(); writeDomain("orientation"); }
+  visual.forEach(e => e.p = e.target); fitWinToUsable(); kick();
+}
+function fitWinToUsable(){
+  const u = usable();
+  if (win.zoomed){ const k = win.zoomed; win.zoomed = null; win.saved = null; frameAction(k); return; }
+  win.w = Math.min(win.w, u.w - 20); win.h = Math.min(win.h, u.h - 20);
+  win.x = clamp(win.x, u.x + 10, u.x + u.w - win.w - 10); win.y = clamp(win.y, u.y + 10, u.y + u.h - win.h - 10);
+  placeWin();
+}
+
+/* ---------- dock.domain preview ---------- */
+const KEYMAP = {tilesize:"tilesize", largesize:"largesize", orientation:"orientation", mineffect:"mineffect", minimizeToApp:"minimize-to-application",
+  autohide:"autohide", launchanim:"launchanim", indicators:"show-process-indicators", showRecents:"show-recents", staticOnly:"static-only",
+  autohideDelay:"autohide-delay", autohideTime:"autohide-time-modifier"};
+function writeDomain(changed){
+  const v = x => typeof x === "string" ? `"${x}"` : typeof x === "number" && !Number.isInteger(x) ? x.toFixed(2).replace(/0$/, "") : String(x);
+  const line = (k, val, cm, hi) => `<span class="${hi ? "chg" : ""}"><span class="k">${k}</span> = ${val}${cm ? `   <span class="c"># ${cm}</span>` : ""}</span>`;
+  const ch = k => changed === k || (changed === "largesize" && k === "magnification");
+  const L = [];
+  L.push(`<span class="c"># ~/.config/malaysia/dock.domain</span>`);
+  L.push(line("autohide", v(S.autohide), "", ch("autohide")));
+  L.push(line("orientation", v(S.orientation), "bottom | left | right", ch("orientation")));
+  L.push(line("magnification", v(S.magnification), "", ch("magnification")));
+  L.push(line("tilesize", S.tilesize, "16–128", ch("tilesize")));
+  L.push(line("largesize", S.largesize, "16–128", ch("largesize")));
+  L.push(line("mineffect", v(S.mineffect), "genie | scale | suck", ch("mineffect")));
+  L.push(line("show-process-indicators", v(S.indicators), "", ch("indicators")));
+  L.push(line("static-only", v(S.staticOnly), "", ch("staticOnly")));
+  L.push(line("minimize-to-application", v(S.minimizeToApp), "", ch("minimizeToApp")));
+  L.push(line("show-recents", v(S.showRecents), "", ch("showRecents")));
+  L.push(line("launchanim", v(S.launchanim), "", ch("launchanim")));
+  L.push(line("autohide-delay", Number(S.autohideDelay).toFixed(2), "seconds", ch("autohideDelay")));
+  L.push(line("autohide-time-modifier", Number(S.autohideTime).toFixed(1), "0 removes the animation", ch("autohideTime")));
+  L.push("");
+  L.push(`<span class="c"># ~/.config/malaysia/window.domain (active)</span>`);
+  L.push(line("double_click_titlebar", v(S.dblclick), "fill | zoom | minimize | none", ch("dblclick")));
+  L.push("");
+  L.push(`<span class="c"># ~/.config/malaysia/menubar.domain (active)</span>`);
+  L.push(line("style", v(S.menubarStyle), "solid | translucent | floating", ch("menubarStyle")));
+  L.push(line("bar_height", v(S.menubarHeight), "slim | wide", ch("menubarHeight")));
+  $("#domain").innerHTML = L.join("\n");
+}
+
+/* ---------- Stage layout ---------- */
+function layoutStage(){
+  const r = stage.getBoundingClientRect(); W = r.width; H = r.height;
+  const compact = W < 980;
+  settingsEl.classList.toggle("compact", compact);
+  if (compact && settingsEl.parentElement !== $("#settingsSlot")) $("#settingsSlot").appendChild(settingsEl);
+  if (!compact && settingsEl.parentElement !== stage) stage.insertBefore(settingsEl, nc);
+  if (!compact){
+    const sw = Math.min(760, W * .56), sh = Math.min(620, H - menubarH - 150);
+    Object.assign(settingsEl.style, {left:Math.max(20, W * .1) + "px", top:(menubarH + 28) + "px", width:sw + "px", height:sh + "px", zIndex:settingsZ});
+  } else Object.assign(settingsEl.style, {left:"", top:"", width:"", height:""});
+  if (!layoutStage.did){
+    win.w = Math.min(540, W - 40); win.h = Math.min(380, H - 200);
+    win.x = compact ? (W - win.w) / 2 : Math.min(W - win.w - 30, Math.max(20, W * .1) + Math.min(760, W * .56) - 60);
+    win.y = compact ? menubarH + 40 : menubarH + 150;
+    layoutStage.did = true;
+  }
+  fitWinToUsable(); kick();
+}
+new ResizeObserver(layoutStage).observe(stage);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => placeWin());
+new MutationObserver(() => placeWin()).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+
+/* ---------- Boot ---------- */
+function reset(){
+  closeMenus(); fxAnim = null;
+  S = {...DEFAULTS}; D = freshDock();
+  visual.forEach(e => { e.el.remove(); e.dot && e.dot.remove(); }); visual = []; byKey.clear();
+  win.state = "normal"; win.zoomed = null; layoutStage.did = false;
+  syncInputs(); writeDomain(); syncItems(); visual.forEach(e => e.p = 1); layoutStage();
+  frontSettings();
+}
+$("#reset").addEventListener("click", reset);
+$("#minBtn").addEventListener("click", ev => { if (win.state === "minimized") restoreWin(ev.shiftKey); else { if (win.state === "closed") openWin(); minimizeWin(ev.shiftKey); } });
+setInterval(() => { if (D.progress.browser != null){ D.progress.browser += .012; if (D.progress.browser >= 1){ D.progress.browser = .05; } kick(); } }, 400);
+reset();
+settingsEl.addEventListener("pointerdown", () => frontSettings());
+document.fonts && document.fonts.ready.then(() => placeWin());
+})();
+</script>
+</body>
+</html>
