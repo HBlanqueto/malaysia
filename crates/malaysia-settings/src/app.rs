@@ -118,6 +118,7 @@ pub fn settings_window(
         .account(initials(&name), name, tr!("local-account"))
         .sidebar_toggle(false)
         .sidebar_resizable(false)
+        .restoration("settings")
         .navigation_destination(destination)
         .group(
             [

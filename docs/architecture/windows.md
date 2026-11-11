@@ -9,7 +9,7 @@ The SSD titlebar belongs to the compositor (ADR 0020) and uses Tengen: a top bar
 - Bar background `titlebar_bg` (focused/unfocused) and a 1 px hairline at the bottom.
 - Close/minimize/maximize traffic lights on the left, with `traffic-close`/`traffic-min`/`traffic-zoom`; gray when the window has no focus.
 - Centered title, rasterized with `cosmic-text` and colored with `title.focused`/`title.unfocused`.
-- Frame for all windows: continuous corners with their bar's radius: 16 (titlebar or SSD), 20 (compact), 26 (unified, CSD without a hint and dialogs) or 15 (utility) (ADR 0059), also on shell alerts (`malaysia-dialog` layer), shadow (`shadow.frag`), outer border (`border.frag`) and inner hairline. Maximized squares the corners; fullscreen and focus mode remove the frame (ADR 0037).
+- Frame for all windows: continuous corners with their bar's radius: 16 (titlebar or SSD), 20 (compact), 26 (unified, CSD without a hint and dialogs) or 15 (utility) (ADR 0059), also on shell alerts (`malaysia-dialog` layer), shadow (`shadow.frag`), outer border (`border.frag`) and inner hairline. Maximized keeps the corners; fullscreen and focus mode remove the frame (ADR 0037).
 - Dialogs use the same frame and are centered over the parent window.
 - A modal dialog (`xdg-dialog-v1` `set_modal`, which BarrierKit sheets and alerts send) is attached to its parent like an AppKit sheet:
   1. Its position is never stored: after every commit and every move it is centered again over the parent (`attach_modal_dialogs`).

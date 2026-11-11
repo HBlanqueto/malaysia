@@ -648,7 +648,7 @@ pub(crate) fn frame_radius(
     client_decorated: bool,
     bar: Option<crate::window_style::Bar>,
 ) -> u32 {
-    if state != crate::decoration::WindowState::Normal {
+    if state == crate::decoration::WindowState::Fullscreen {
         return 0;
     }
     crate::window_style::corner_radius(forced, bar, role, client_decorated)

@@ -93,7 +93,7 @@ fn a_lone_error_is_its_own_description() {
 }
 
 #[test]
-fn maximized_squares_the_corners_and_only_fullscreen_drops_the_border() {
+fn maximized_keeps_the_corners_and_only_fullscreen_drops_them_and_the_border() {
     use crate::decoration::{Role, WindowState};
 
     assert_eq!(
@@ -102,7 +102,7 @@ fn maximized_squares_the_corners_and_only_fullscreen_drops_the_border() {
     );
     assert_eq!(
         frame_radius(None, WindowState::Maximized, Role::Toplevel, false, None),
-        0
+        ctdesign::WINDOW_CORNER.titlebar
     );
     for state in [WindowState::Normal, WindowState::Maximized] {
         assert!(frame_has_border(state));
