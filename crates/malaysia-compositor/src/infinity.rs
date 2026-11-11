@@ -91,6 +91,9 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
         if manager.version() >= 5 {
             manager.space(state.space_state());
         }
+        if manager.version() >= 8 {
+            manager.desktop(state.shown_desktop());
+        }
         for id in state.arranged.keys() {
             if let Some(handle) = state.foreign.management.handle_for_client(*id, client.id()) {
                 manager.restorable(handle, 1);
@@ -172,7 +175,7 @@ fn window_id_from_handle(handle: &ZwlrForeignToplevelHandleV1) -> Option<WindowI
 
 impl InfinityGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
-        display_handle.create_global::<State, InfinityWindowManagerV1, _>(7, InfinityGlobalData)
+        display_handle.create_global::<State, InfinityWindowManagerV1, _>(8, InfinityGlobalData)
     }
 }
 
@@ -359,8 +362,14 @@ impl State {
         }
     }
 
+    pub(crate) fn shown_desktop(&self) -> u32 {
+        self.spaces
+            .desktop_number(self.spaces.current().id)
+            .map_or(0, |number| number as u32)
+    }
+
     pub(crate) fn send_space_state(&mut self) {
-        let state = self.space_state();
+        let state = (self.space_state(), self.shown_desktop());
         if self.last_space_state == Some(state) {
             return;
         }
@@ -368,7 +377,10 @@ impl State {
         self.infinity_managers.retain(|manager| manager.is_alive());
         for manager in &self.infinity_managers {
             if manager.version() >= 5 {
-                manager.space(state);
+                manager.space(state.0);
+            }
+            if manager.version() >= 8 {
+                manager.desktop(state.1);
             }
         }
     }

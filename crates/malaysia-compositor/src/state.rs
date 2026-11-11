@@ -139,9 +139,10 @@ pub struct State {
     pub(crate) space_slide: Option<crate::spaces::SpaceSlide>,
     pub(crate) focus_transition: Option<crate::spaces::FocusTransition>,
     pub(crate) focus_reveal: crate::spaces::FocusReveal,
-    pub(crate) last_space_state: Option<
+    pub(crate) last_space_state: Option<(
         infinity_protocol::server::infinity_window_manager_v1::infinity_window_manager_v1::FocusBar,
-    >,
+        u32,
+    )>,
     pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     pub(crate) arranged: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     pub(crate) fullscreen: HashMap<WindowId, SceneRect<f64, SceneLogical>>,

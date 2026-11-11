@@ -280,7 +280,11 @@ impl App for BarApp {
             (config.style, config.height())
         };
         let width = bar_width.read().round() as i32;
-        let look = bar_look(style, wallpaper_under_bar(&wallpaper.read(), width, height));
+        let desktop = *Toplevels::get().desktop.read();
+        let look = bar_look(
+            style,
+            wallpaper_under_bar(&wallpaper.read(), desktop, width, height),
+        );
         let text = theme::color(look.ink);
         let bar = theme::color(Rgba {
             a: look.background.a * shown_desktop,
@@ -840,7 +844,12 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
     }
 }
 
-fn wallpaper_under_bar(wallpaper: &WallpaperState, width: i32, height: i32) -> Option<Rgba> {
+fn wallpaper_under_bar(
+    wallpaper: &WallpaperState,
+    desktop: Option<u32>,
+    width: i32,
+    height: i32,
+) -> Option<Rgba> {
     let output = wallpaper
         .outputs
         .first()
@@ -848,8 +857,7 @@ fn wallpaper_under_bar(wallpaper: &WallpaperState, width: i32, height: i32) -> O
     let width = f64::from(width);
     let output_height = width * f64::from(output.height) / f64::from(output.width);
     wallpaper
-        .grid
-        .as_ref()?
+        .grid_for(desktop)?
         .behind((width, output_height), (0.0, 0.0, width, f64::from(height)))
 }
 

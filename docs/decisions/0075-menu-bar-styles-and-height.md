@@ -49,8 +49,11 @@ wallpaper alone and shows it behind any surface that asks for it with
 ## Consequences
 
 - A new install shows the floating bar over the wallpaper with the blur on.
-- The ink follows the shared wallpaper grid, not the grid of the current
-  desktop: the shell does not know the desktop number of the bar yet.
+- The ink follows the wallpaper of the shown desktop. Infinity v8 sends the
+  bar the number of that desktop (`desktop` event of
+  `infinity_window_manager_v1`), and the bar reads its grid from
+  `wallpaper.state` with `grid_for`; a desktop without its own wallpaper, or
+  a focus space, uses the shared grid.
 - Windows do not move when the height changes; the compositor applies the new
   exclusive zone as with any layer.
 
