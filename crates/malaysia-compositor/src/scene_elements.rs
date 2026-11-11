@@ -1018,16 +1018,14 @@ fn frame_decorations<R: MalaysiaRenderer>(
                 .or(palette
                     .inner_line
                     .map(|color| (color, color, ctdesign::Rgba::TRANSPARENT)));
-            if let Some((color, edge_color, glow)) = inner_line {
+            if let Some(colors) = inner_line {
                 let (area, mut uniforms) = border_shader(
                     frame_rect_physical,
                     radius_physical,
                     scale,
                     exponent,
                     false,
-                    color,
-                    edge_color,
-                    glow,
+                    colors,
                 );
                 uniforms.extend(frame.arrow.uniforms(1.0));
                 inner = Some(
@@ -1047,9 +1045,11 @@ fn frame_decorations<R: MalaysiaRenderer>(
                 scale,
                 exponent,
                 true,
-                palette.outer_border,
-                palette.outer_border,
-                ctdesign::Rgba::TRANSPARENT,
+                (
+                    palette.outer_border,
+                    palette.outer_border,
+                    ctdesign::Rgba::TRANSPARENT,
+                ),
             );
             uniforms.extend(frame.arrow.uniforms(1.0));
             outer = Some(
@@ -1105,9 +1105,7 @@ pub(crate) fn border_shader(
     scale: f64,
     exponent: f32,
     outer: bool,
-    color: ctdesign::Rgba,
-    edge_color: ctdesign::Rgba,
-    glow: ctdesign::Rgba,
+    (color, edge_color, glow): (ctdesign::Rgba, ctdesign::Rgba, ctdesign::Rgba),
 ) -> (
     Rectangle<i32, Logical>,
     Vec<smithay::backend::renderer::gles::Uniform<'static>>,
