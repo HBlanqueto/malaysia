@@ -57,7 +57,7 @@ Environment variables that change behavior without a domain:
 | `MALAYSIA_RESIZE_CONFIGURE_TIMEOUT_MS` | compositor | how long an interactive resize waits for the client's configure ack | 100 |
 | `MALAYSIA_SHELL_EXE` | compositor | one more `malaysia-shell` binary that Infinity trusts | none |
 | `MALAYSIA_TERMINAL` | launcher | terminal for `.desktop` entries with `Terminal=true`; then `TERMINAL` | `wezterm` |
-| `MALAYSIA_ICON_THEME` | launcher | icon theme searched before `hicolor` | `Adwaita` |
+| `MALAYSIA_ICON_THEME` | launcher | icon theme searched first, then the themes in its `Inherits` and `hicolor` | `Malaysia` |
 | `MALAYSIA_SCALE` | compositor | output scale; wins over `display.scale` | none |
 | `MALAYSIA_POWER_DRY_RUN` | compositor, shell | `1`: Suspend, Restart, Shut Down and Log Out only log the logind call | none (`./dev.sh` sets `1`) |
 | `XDG_DESKTOP_DIR` | compositor | Desktop folder for screenshots; wins over `user-dirs.dirs` | `user-dirs.dirs` |

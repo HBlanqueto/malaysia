@@ -366,9 +366,11 @@ pub(crate) fn load_icon_in(
         return icon_data(&direct);
     }
     let data_dirs = crate::desktop::data_dirs();
-    let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| "Adwaita".to_string());
-    let themes = [theme.as_str(), "hicolor"];
-    for theme in themes {
+    let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| "Malaysia".to_string());
+    let mut themes = Vec::new();
+    lookup_order(&theme, &data_dirs, &mut themes);
+    lookup_order("hicolor", &data_dirs, &mut themes);
+    for theme in &themes {
         for dir in &data_dirs {
             for size in sizes {
                 for context in contexts {
@@ -394,6 +396,28 @@ pub(crate) fn load_icon_in(
         }
     }
     None
+}
+
+// Icon Theme Specification: the theme, then each theme in its Inherits, depth first.
+fn lookup_order(theme: &str, data_dirs: &[PathBuf], order: &mut Vec<String>) {
+    if order.iter().any(|known| known == theme) {
+        return;
+    }
+    order.push(theme.to_string());
+    let index = data_dirs.iter().find_map(|dir| {
+        std::fs::read_to_string(dir.join("icons").join(theme).join("index.theme")).ok()
+    });
+    let parents = index
+        .as_deref()
+        .and_then(|index| ctappearance::ini::value(index, "Icon Theme", "Inherits"))
+        .unwrap_or_default();
+    for parent in parents
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        lookup_order(parent, data_dirs, order);
+    }
 }
 
 fn icon_data(path: &std::path::Path) -> Option<IconData> {
