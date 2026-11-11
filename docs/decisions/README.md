@@ -43,7 +43,7 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0035](0035-own-app-identification-and-csd.md) | Own apps and CSD | moved to barrierkit |
 | [0036](0036-global-menu.md) | Global menu | implemented |
 | [0037](0037-compositor-drawn-window-frame.md) | Window frame | accepted |
-| [0038](0038-reduce-transparency-by-default.md) | Reduced transparency | accepted |
+| [0038](0038-reduce-transparency-by-default.md) | Reduced transparency | point 1 superseded by 0075 |
 | [0039](0039-infinity-v1-window-management-for-the-shell.md) | Infinity v1 | moved to barrierkit |
 | [0040](0040-real-global-menu.md) | Real global menu | implemented |
 | [0041](0041-island-sidebar.md) | Island sidebar | moved to barrierkit |
@@ -75,5 +75,6 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0072](0072-wallpaper-settings.md) | Wallpaper in System Settings | accepted |
 | [0073](0073-wallpaper-desktops-collections-dynamic-animated.md) | Wallpaper per desktop and display, collections, dynamic and animated wallpapers | accepted |
 | [0074](0074-lock-screen-and-lock-transition.md) | Lock screen over the wallpaper and the lock transition | accepted |
+| [0075](0075-menu-bar-styles-and-height.md) | Menu bar styles, height and blur by default | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.

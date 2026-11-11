@@ -161,9 +161,9 @@ shadow, inner border and integrated SSD titlebar; CSD windows receive
 corners/shadow/border without a titlebar. Hover glyphs and double click also done.
 Pending: window capture with frame (focus mode is Block 17). Test:
 `./dev.sh titlebar` and `./dev.sh demo`.
-Also pending: Tahoe's transparent menu bar, with an option to show its
-background; until then the desktop is built as with «Reduce transparency»
-and the bar is opaque (`shell-bar`).
+The menu bar is solid, translucent or floating (default) over the blurred
+wallpaper, 30 or 38 px high, chosen in System Settings › Desktop & Dock
+(ADR 0075).
 
 ### 14 — Global menu
 

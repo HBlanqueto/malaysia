@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use bk::app::load_defaults;
 use bk::menu::{
     ItemsSource, MenuNavigation, MenuView, RevealRoots, SearchableEntry, SubmenuSource,
 };
@@ -8,9 +9,10 @@ use bk::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
 };
 use bk::prelude::*;
+use ctappearance::menubar::MenubarConfig;
 use ctdesign::{
-    MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TEXT_LIFT, MENUBAR_TITLE_BLEED,
-    MENUBAR_TITLE_MAX_WIDTH, MENUBAR_TITLE_PADDING_X, MenuPalette, Rgba, SYMBOL,
+    MENUBAR_APP_NAME_WEIGHT, MENUBAR_TEXT_LIFT, MENUBAR_TITLE_BLEED, MENUBAR_TITLE_MAX_WIDTH,
+    MENUBAR_TITLE_PADDING_X, MenuPalette, Rgba, SYMBOL,
 };
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
@@ -166,7 +168,7 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
             anchor_x as i32,
             0,
             anchor_width.max(1.0) as u32,
-            MENUBAR_HEIGHT as u32,
+            load_defaults::<MenubarConfig>("menubar").height() as u32,
         ),
         anchor: PopupAnchor::BottomLeft,
         gravity: PopupGravity::BottomRight,

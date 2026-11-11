@@ -4,19 +4,20 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bk::app::{load_defaults, use_defaults};
+use bk::app::{load_defaults, use_defaults, use_watched};
 use bk::menu::{ItemsSource, MenuItem};
 use bk::platform::Timers;
 use bk::prelude::*;
 use bk::shell::{
-    Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec,
-    ToplevelInfo, Toplevels, run_layer, use_status_items,
+    Anchors, BlurRegion, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer,
+    LayerGeometry, LayerSpec, ToplevelInfo, Toplevels, run_layer, set_blur_region,
+    set_layer_geometry, use_status_items,
 };
-use ctappearance::MenuBarSize;
-use ctappearance::menubar::MenubarConfig;
+use ctappearance::menubar::{MenubarConfig, MenubarStyle, colors_over};
+use ctappearance::{MenuBarSize, WallpaperState};
 use ctdesign::{
-    MENUBAR_FONT_SIZE, MENUBAR_FONT_SIZE_LARGE, MENUBAR_HEIGHT, MENUBAR_MARGIN,
-    MENUBAR_MARGIN_RIGHT, MENUBAR_SYSTEM_MENU_MIN_WIDTH, MENUBAR_TEXT_LIFT, SANS_FAMILIES,
+    MENUBAR_FONT_SIZE, MENUBAR_FONT_SIZE_LARGE, MENUBAR_MARGIN, MENUBAR_MARGIN_RIGHT,
+    MENUBAR_SYSTEM_MENU_MIN_WIDTH, MENUBAR_TEXT_LIFT, SANS_FAMILIES,
 };
 use freya_core::integration::AppComponent;
 use torin::prelude::Gaps;
@@ -174,6 +175,8 @@ impl App for BarApp {
         let status_anchors = use_hook(status::StatusAnchors::default);
         let extras = extras::use_extras();
         let menubar_config = use_defaults::<MenubarConfig>("menubar");
+        let wallpaper = use_watched(ctappearance::load_wallpaper_state);
+        let mut bar_width = use_state(|| 0.0f32);
 
         let now = self.clock.read().clone();
         let focus = use_focus();
@@ -272,7 +275,29 @@ impl App for BarApp {
             .as_ref()
             .map_or((0.0, 0.0), |progress| (progress.cover, progress.settle));
         let shown_desktop = 1.0 - cover;
-        let (text, bar) = bar_colors(shown_desktop);
+        let (style, height) = {
+            let config = menubar_config.read();
+            (config.style, config.height())
+        };
+        let width = bar_width.read().round() as i32;
+        let look = bar_look(style, wallpaper_under_bar(&wallpaper.read(), width, height));
+        let text = theme::color(look.ink);
+        let bar = theme::color(Rgba {
+            a: look.background.a * shown_desktop,
+            ..look.background
+        });
+        let blurred = look.blurred && progress.is_none();
+        let applied = use_hook(|| Rc::new(Cell::new(None::<(i32, i32, bool)>)));
+        if applied.replace(Some((width, height, blurred))) != Some((width, height, blurred)) {
+            set_layer_geometry(bar_geometry(height));
+            set_blur_region(BlurRegion {
+                rects: if blurred {
+                    vec![(0, 0, width, height)]
+                } else {
+                    Vec::new()
+                },
+            });
+        }
 
         let menu_state = MenuState::new();
         let help_query = use_hook(|| {
@@ -356,7 +381,7 @@ impl App for BarApp {
             });
         }
 
-        let extras_ink = bar_ink().mix(ctdesign::LOCK_INK, cover);
+        let extras_ink = look.ink.mix(ctdesign::LOCK_INK, cover);
         let extra_specs = Rc::new(extras::extra_titles(
             &extras,
             &menubar_config.read(),
@@ -385,7 +410,7 @@ impl App for BarApp {
             .on_sized(move |event: Event<SizedEventData>| {
                 tail_width.set_if_modified(event.data().area.width());
             })
-            .child(live::live_area(activities, text))
+            .child(live::live_area(activities, text, height))
             .child(clock::clock_label(now, text, focus));
         let tail_slot = rect()
             .width(if settle > 0.0 {
@@ -398,6 +423,9 @@ impl App for BarApp {
             .overflow(Overflow::Clip)
             .child(tail);
         let bar_view = bar_root(bar)
+            .on_sized(move |event: Event<SizedEventData>| {
+                bar_width.set_if_modified(event.data().area.width());
+            })
             .child(left)
             .child(right.child(others).child(kept).child(tail_slot));
         let locking = progress.is_some();
@@ -771,26 +799,58 @@ fn tick_at(tick: State<u64>, deadline: Instant) {
     });
 }
 
-fn bar_colors(shown_desktop: f32) -> (Color, Color) {
-    let resolved = theme::resolved();
-    let background = if Toplevels::get().focus_bar.read().over_focus() {
-        ctdesign::FOCUS_BAR_BACKGROUND
-    } else {
-        theme::surface_background(&resolved, theme::SurfaceKind::LayerShell)
-    };
-    let background = Rgba {
-        a: background.a * shown_desktop,
-        ..background
-    };
-    (theme::color(bar_ink()), theme::color(background))
+struct BarLook {
+    background: Rgba,
+    ink: Rgba,
+    blurred: bool,
 }
 
-fn bar_ink() -> Rgba {
+fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
     if Toplevels::get().focus_bar.read().over_focus() {
-        ctdesign::FOCUS_BAR_TEXT
-    } else {
-        theme::resolved().shell.text
+        return BarLook {
+            background: ctdesign::FOCUS_BAR_BACKGROUND,
+            ink: ctdesign::FOCUS_BAR_TEXT,
+            blurred: false,
+        };
     }
+    let resolved = theme::resolved();
+    let solid = theme::surface_background(&resolved, theme::SurfaceKind::LayerShell);
+    let (ink, glass) = colors_over(under.unwrap_or(solid));
+    match style {
+        _ if resolved.reduce_transparency => BarLook {
+            background: solid,
+            ink: resolved.shell.text,
+            blurred: false,
+        },
+        MenubarStyle::Solid => BarLook {
+            background: solid,
+            ink: resolved.shell.text,
+            blurred: true,
+        },
+        MenubarStyle::Translucent => BarLook {
+            background: glass,
+            ink,
+            blurred: true,
+        },
+        MenubarStyle::Floating => BarLook {
+            background: Rgba { a: 0.0, ..glass },
+            ink,
+            blurred: false,
+        },
+    }
+}
+
+fn wallpaper_under_bar(wallpaper: &WallpaperState, width: i32, height: i32) -> Option<Rgba> {
+    let output = wallpaper
+        .outputs
+        .first()
+        .filter(|output| output.width > 0)?;
+    let width = f64::from(width);
+    let output_height = width * f64::from(output.height) / f64::from(output.width);
+    wallpaper
+        .grid
+        .as_ref()?
+        .behind((width, output_height), (0.0, 0.0, width, f64::from(height)))
 }
 
 fn title_specs(
@@ -954,21 +1014,32 @@ fn is_shell_dialog(app_id: &str) -> bool {
         })
 }
 
-fn surface_spec() -> LayerSpec {
+fn bar_geometry(height: i32) -> LayerGeometry {
+    LayerGeometry {
+        anchors: Anchors::TOP,
+        exclusive_zone: height,
+        size: (0, height as u32),
+        keyboard: KeyboardInteractivity::None,
+    }
+}
+
+fn surface_spec(height: i32) -> LayerSpec {
+    let geometry = bar_geometry(height);
     LayerSpec {
         namespace: ctdesign::MENUBAR_LAYER_NAMESPACE.to_string(),
         layer: SurfaceLayer::Top,
-        anchors: Anchors::TOP,
-        exclusive_zone: MENUBAR_HEIGHT,
-        keyboard: KeyboardInteractivity::None,
-        size: Some((0, MENUBAR_HEIGHT as u32)),
+        anchors: geometry.anchors,
+        exclusive_zone: geometry.exclusive_zone,
+        keyboard: geometry.keyboard,
+        size: Some(geometry.size),
     }
 }
 
 pub fn run() -> anyhow::Result<()> {
     let entries = Rc::new(crate::desktop::read_entries());
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
-    let app_menus = State::create_global(load_defaults::<MenubarConfig>("menubar").app_menus);
+    let config = load_defaults::<MenubarConfig>("menubar");
+    let app_menus = State::create_global(config.app_menus);
     let menu_snapshot = State::create_global(None::<Arc<RemoteMenu>>);
     let dbus = dbusmenu::start(*app_menus.peek());
     let app = AppComponent::new(BarApp {
@@ -979,7 +1050,8 @@ pub fn run() -> anyhow::Result<()> {
         menu_snapshot,
     });
 
-    let result = run_layer(app, surface_spec()).map_err(|error| anyhow::anyhow!("{error}"));
+    let result =
+        run_layer(app, surface_spec(config.height())).map_err(|error| anyhow::anyhow!("{error}"));
     tracing::info!("menubar: closed");
     result
 }
@@ -1008,12 +1080,12 @@ mod tests {
             exclusive_zone,
             size,
             ..
-        } = surface_spec();
+        } = surface_spec(ctdesign::MENUBAR_HEIGHT_WIDE);
         assert_eq!(layer, SurfaceLayer::Top);
         assert!(anchors.top && anchors.left && anchors.right);
         assert!(!anchors.bottom);
-        assert_eq!(exclusive_zone, MENUBAR_HEIGHT);
-        assert_eq!(size, Some((0, MENUBAR_HEIGHT as u32)));
+        assert_eq!(exclusive_zone, ctdesign::MENUBAR_HEIGHT_WIDE);
+        assert_eq!(size, Some((0, ctdesign::MENUBAR_HEIGHT_WIDE as u32)));
     }
 
     #[test]

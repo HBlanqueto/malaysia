@@ -3,6 +3,7 @@ mod apps;
 mod bluetooth;
 mod collection;
 mod crop;
+mod desktop;
 mod energy;
 mod freedesktop;
 mod localize;

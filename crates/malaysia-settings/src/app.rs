@@ -22,6 +22,7 @@ use torin::prelude::Gaps;
 use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_busy_device, use_pairing_prompt};
 use crate::collection::collection_sheet;
 use crate::crop::crop_sheet;
+use crate::desktop::desktop_pane;
 use crate::energy::energy_pane;
 use crate::freedesktop::{Themes, confirm, freedesktop, own_themes};
 use crate::localize::{tr, tr_list};
@@ -179,6 +180,7 @@ pub fn settings_window(
                 SETTINGS.section_icon_bg,
                 appearance(config, dominant, resolved, error),
             ))
+            .pane(desktop_pane(resolved, error))
             .pane(wallpaper_pane(wallpaper, resolved.scheme.is_dark(), error))
             .pane(crate::notifications::notifications_pane(error))
             .pane(crate::notifications::focus_pane(error)),
@@ -951,7 +953,7 @@ fn accent_index(config: &AppearanceConfig) -> Option<usize> {
     }
 }
 
-fn position<T: PartialEq>(options: &[T], value: T) -> usize {
+pub(crate) fn position<T: PartialEq>(options: &[T], value: T) -> usize {
     options
         .iter()
         .position(|option| *option == value)

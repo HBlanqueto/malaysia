@@ -12,6 +12,21 @@ scheme-auto = Auto
 scheme-light = Light
 scheme-dark = Dark
 
+desktop-dock = Desktop & Dock
+menu-bar = Menu bar
+menu-bar-style = Style
+menu-bar-style-keywords = menu bar, top bar, blur, transparency, glass
+menu-bar-style-solid = Solid
+menu-bar-style-solid-help = Uses the theme color over the blurred wallpaper.
+menu-bar-style-translucent = Translucent
+menu-bar-style-translucent-help = Glass over the blurred wallpaper; it gets lighter or darker to match the wallpaper.
+menu-bar-style-floating = Floating
+menu-bar-style-floating-help = No background: the menus sit on the wallpaper, light or dark to match it.
+menu-bar-height = Height
+menu-bar-height-help = The lock screen uses the same height.
+menu-bar-height-slim = Slim
+menu-bar-height-wide = Wide
+
 color = Color
 accent-color = Accent color
 accent-color-keywords = blue, purple, pink, red, orange, yellow, green, graphite, gray, multicolor, wallpaper

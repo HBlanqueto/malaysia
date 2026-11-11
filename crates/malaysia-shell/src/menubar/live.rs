@@ -12,8 +12,7 @@ use bk::style::Palette;
 use bk::theme;
 use ctdesign::{
     BODY, CAPTION, HEADLINE, LIVE_ACTIVITY_GAP, LIVE_ACTIVITY_HEIGHT, LIVE_ACTIVITY_RADIUS,
-    LIVE_ACTIVITY_WIDTH, MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, NOTIFICATION_GAP,
-    NOTIFICATION_PADDING,
+    LIVE_ACTIVITY_WIDTH, MENUBAR_FONT_SIZE, MENUBAR_MARGIN, NOTIFICATION_GAP, NOTIFICATION_PADDING,
 };
 use freya_core::integration::AppComponent;
 use torin::prelude::{Area, Gaps};
@@ -67,7 +66,7 @@ fn keep_ticking(timers: Timers, tick: State<u64>) {
     });
 }
 
-pub(crate) fn live_area(activities: State<Vec<Activity>>, color: Color) -> HStack {
+pub(crate) fn live_area(activities: State<Vec<Activity>>, color: Color, bar_height: i32) -> HStack {
     let shown = activities.read().clone();
     HStack::new()
         .height(Size::fill())
@@ -76,7 +75,7 @@ pub(crate) fn live_area(activities: State<Vec<Activity>>, color: Color) -> HStac
         .children(
             shown
                 .into_iter()
-                .map(|activity| pill(activity, activities, color)),
+                .map(|activity| pill(activity, activities, color, bar_height)),
         )
 }
 
@@ -113,18 +112,23 @@ fn elapsed(started: i64) -> String {
     format!("{}:{:02}", seconds / 60, seconds % 60)
 }
 
-fn pill(activity: Activity, activities: State<Vec<Activity>>, color: Color) -> Element {
+fn pill(
+    activity: Activity,
+    activities: State<Vec<Activity>>,
+    color: Color,
+    bar_height: i32,
+) -> Element {
     let area = Rc::new(Cell::new(Area::default()));
     let measured = area.clone();
     let id = activity.id.clone();
     HStack::new()
-        .height(Size::px(MENUBAR_HEIGHT as f32 * 0.8))
+        .height(Size::px(bar_height as f32 * 0.8))
         .padding(Gaps::new(0.0, NOTIFICATION_GAP, 0.0, NOTIFICATION_GAP))
-        .corner_radius(MENUBAR_HEIGHT as f32 * 0.4)
+        .corner_radius(bar_height as f32 * 0.4)
         .cross_align(Alignment::Center)
         .spacing(MENUBAR_MARGIN as f32 / 2.0)
         .on_sized(move |event: Event<SizedEventData>| measured.set(event.area))
-        .on_press(move |_| expand(id.clone(), activities, area.get()))
+        .on_press(move |_| expand(id.clone(), activities, area.get(), bar_height))
         .child(
             Image::system(symbol(&activity))
                 .size(MENUBAR_FONT_SIZE)
@@ -134,14 +138,14 @@ fn pill(activity: Activity, activities: State<Vec<Activity>>, color: Color) -> E
         .into_element()
 }
 
-fn expand(id: String, activities: State<Vec<Activity>>, area: Area) {
+fn expand(id: String, activities: State<Vec<Activity>>, area: Area, bar_height: i32) {
     let width = LIVE_ACTIVITY_WIDTH;
     let spec = PopupSpec {
         anchor_rect: (
             area.min_x() as i32,
             0,
             area.width().max(1.0) as u32,
-            MENUBAR_HEIGHT as u32,
+            bar_height as u32,
         ),
         anchor: PopupAnchor::Bottom,
         gravity: PopupGravity::Bottom,

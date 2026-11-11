@@ -2,9 +2,11 @@ use bk::prelude::*;
 use ctdesign::SETTINGS;
 use torin::prelude::Position;
 
-use bk::theme::color as rgba;
+use bk::theme::{SurfaceKind, color as rgba, surface_background};
+use ctappearance::menubar::{MenubarConfig, MenubarHeight, MenubarStyle, colors_over};
 use ctappearance::{AppearanceConfig, ColorScheme, Resolved, resolve};
-use ctdesign::Rgba;
+use ctdesign::{MENUBAR_HEIGHT, Rgba};
+use torin::prelude::Gaps;
 
 fn preview_for_theme(
     base_config: &AppearanceConfig,
@@ -147,6 +149,62 @@ fn preview_app(resolved: &Resolved) -> Rect {
                         .into_element()
                 })),
         )
+}
+
+pub fn menubar_preview(
+    style: MenubarStyle,
+    height: MenubarHeight,
+    with_window: bool,
+    resolved: &Resolved,
+) -> Rect {
+    let config = MenubarConfig {
+        bar_height: height,
+        ..MenubarConfig::default()
+    };
+    let bar_height = SETTINGS.preview_bar_h as f32 * config.height() as f32 / MENUBAR_HEIGHT as f32;
+    let solid = surface_background(resolved, SurfaceKind::LayerShell);
+    let (ink, glass) = colors_over(resolved.accent);
+    let (background, ink) = match style {
+        MenubarStyle::Solid => (solid, resolved.shell.text),
+        MenubarStyle::Translucent => (glass, ink),
+        MenubarStyle::Floating => (Rgba { a: 0.0, ..glass }, ink),
+    };
+    let padding = SETTINGS.preview_bar_padding as f32;
+    let inset = SETTINGS.preview_app_inset as f32;
+    let window = rect()
+        .position(Position::new_absolute().top(bar_height + inset).left(inset))
+        .width(Size::px(SETTINGS.card_width as f32 - 2.0 * inset))
+        .height(Size::px(SETTINGS.card_height as f32))
+        .corner_radius(SETTINGS.preview_window_radius as f32)
+        .background(rgba(resolved.surfaces.window));
+    let bar = HStack::new()
+        .position(Position::new_absolute().top(0.0).left(0.0))
+        .width(Size::fill())
+        .height(Size::px(bar_height))
+        .padding(Gaps::new(0.0, padding, 0.0, padding))
+        .main_align(Alignment::SpaceBetween)
+        .cross_align(Alignment::Center)
+        .background(rgba(background))
+        .child(preview_bar_items(4, ink))
+        .child(preview_bar_items(2, ink));
+    gradient_background(resolved.accent)
+        .maybe_child(with_window.then_some(window))
+        .child(bar)
+}
+
+fn preview_bar_items(count: usize, ink: Rgba) -> HStack {
+    HStack::new()
+        .main_align(Alignment::Start)
+        .cross_align(Alignment::Center)
+        .spacing(SETTINGS.preview_bar_item_gap as f32)
+        .children((0..count).map(|_| {
+            rect()
+                .width(Size::px(SETTINGS.preview_bar_item_w as f32))
+                .height(Size::px(SETTINGS.preview_menu_line_h as f32))
+                .corner_radius(SETTINGS.preview_menu_line_radius as f32)
+                .background(rgba(ink))
+                .into_element()
+        }))
 }
 
 #[cfg(test)]

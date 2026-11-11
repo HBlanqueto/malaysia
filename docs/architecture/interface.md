@@ -31,7 +31,7 @@ Themes `light`/`dark`/`dark-tint`; radius 16, traffic lights 14 (radius 4), SSD 
 
 ## Shell
 
-`malaysia-wallpaper` (Background), `malaysia-shell menubar` (Top, 30 px), `dock` (Top, bottom), `lock` (lock surfaces) and `launcher` (Overlay). They read `~/.config/malaysia/` and `~/.local/share/malaysia/`; they do not write configuration.
+`malaysia-wallpaper` (Background), `malaysia-shell menubar` (Top, 30 or 38 px), `dock` (Top, bottom), `lock` (lock surfaces) and `launcher` (Overlay). They read `~/.config/malaysia/` and `~/.local/share/malaysia/`; they do not write configuration.
 
 ## Windows
 

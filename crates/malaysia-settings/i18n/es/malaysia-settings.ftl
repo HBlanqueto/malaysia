@@ -12,6 +12,21 @@ scheme-auto = Automático
 scheme-light = Claro
 scheme-dark = Oscuro
 
+desktop-dock = Escritorio y Dock
+menu-bar = Barra de menús
+menu-bar-style = Estilo
+menu-bar-style-keywords = barra de menús, panel superior, desenfoque, transparencia, cristal
+menu-bar-style-solid = Sólida
+menu-bar-style-solid-help = Usa el color del tema sobre el fondo de pantalla desenfocado.
+menu-bar-style-translucent = Translúcida
+menu-bar-style-translucent-help = Cristal sobre el fondo de pantalla desenfocado; se aclara u oscurece según el fondo.
+menu-bar-style-floating = Flotante
+menu-bar-style-floating-help = Sin fondo: los menús quedan sobre el fondo de pantalla, en claro u oscuro según el fondo.
+menu-bar-height = Altura
+menu-bar-height-help = La pantalla de bloqueo usa la misma altura.
+menu-bar-height-slim = Ligera
+menu-bar-height-wide = Ancha
+
 color = Color
 accent-color = Color de acento
 accent-color-keywords = azul, morado, rosa, rojo, naranja, amarillo, verde, gris, multicolor, fondo

@@ -208,6 +208,7 @@ impl App for NotificationsApp {
                     bottom: true,
                     left: false,
                 },
+                exclusive_zone: 0,
                 size: (surface_width() + close_room() as u32, 0),
                 keyboard: KeyboardInteractivity::OnDemand,
             }
@@ -219,6 +220,7 @@ impl App for NotificationsApp {
                     bottom: false,
                     left: false,
                 },
+                exclusive_zone: 0,
                 size: (1, 1),
                 keyboard: KeyboardInteractivity::None,
             }
@@ -230,6 +232,7 @@ impl App for NotificationsApp {
                     bottom: false,
                     left: false,
                 },
+                exclusive_zone: 0,
                 size: (surface_width(), banner_height.read().ceil() as u32),
                 keyboard: KeyboardInteractivity::None,
             }

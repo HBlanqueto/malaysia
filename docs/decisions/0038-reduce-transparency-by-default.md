@@ -1,6 +1,6 @@
 # 0038 — Reduce transparency by default
 
-Status: accepted (2026-10-24).
+Status: accepted (2026-10-24); point 1 superseded by [ADR 0075](0075-menu-bar-styles-and-height.md) (2026-11-11): the default is now `false`.
 
 ## Context
 

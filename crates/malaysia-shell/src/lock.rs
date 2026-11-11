@@ -9,14 +9,15 @@ use bk::platform::Timers;
 use bk::prelude::*;
 use bk::shell::{BlurRegion, SessionUnlock, run_lock, set_blur_region};
 use chrono::Datelike;
+use ctappearance::menubar::MenubarConfig;
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
     BODY, DURATION_FAST_MS, LOCK_AVATAR_FILL, LOCK_AVATAR_SIZE, LOCK_BOTTOM_MARGIN,
     LOCK_CLOCK_FONT_SIZE, LOCK_DATE_FONT_SIZE, LOCK_FIELD_ERROR, LOCK_FIELD_FILL,
     LOCK_FIELD_HEIGHT, LOCK_FIELD_INK, LOCK_FIELD_MAX_WIDTH, LOCK_FIELD_MIN_WIDTH, LOCK_INK,
     LOCK_KEYBOARD_WIDTH, LOCK_LOGIN_MS, LOCK_MASK_FONT_SIZE, LOCK_RISE_MS, LOCK_RISE_OFFSET,
-    LOCK_SPACING, LOCK_TOP_PERCENT, MENUBAR_HEIGHT, MENUBAR_TITLE_PADDING_X, NOTIFICATION_GAP,
-    NOTIFICATION_WIDTH, SYMBOL, TITLE_2,
+    LOCK_SPACING, LOCK_TOP_PERCENT, MENUBAR_TITLE_PADDING_X, NOTIFICATION_GAP, NOTIFICATION_WIDTH,
+    SYMBOL, TITLE_2,
 };
 use freya_animation::prelude::{AnimNum, Function, OnChange, use_animation_with_dependencies};
 use freya_components::image_viewer::ImageViewer;
@@ -82,6 +83,7 @@ const ENTRY_MS: u64 = LOGIN_DELAY_MS + LOCK_LOGIN_MS;
 
 impl App for LockApp {
     fn render(&self) -> impl IntoElement {
+        let bar_height = use_defaults::<MenubarConfig>("menubar").read().height() as f32;
         let label_state = self.label;
         let mut field = self.field;
         let received = self.received.clone();
@@ -150,7 +152,7 @@ impl App for LockApp {
         };
 
         let account = use_service::<Accounts>().snapshot.read().clone();
-        let mut hint_shown = use_state(|| false);
+        let hint_shown = use_state(|| false);
         let keyboard_layout = SessionUnlock::get().keyboard_layout();
         let name = use_hook(|| user_display_name().unwrap_or_else(|| self.user.clone()));
         let notices = lock_notices();
@@ -178,7 +180,7 @@ impl App for LockApp {
         let row = rect()
             .position(Position::new_absolute())
             .width(Size::fill())
-            .height(Size::px(MENUBAR_HEIGHT as f32))
+            .height(Size::px(bar_height))
             .child(status_row(
                 HStack::new()
                     .height(Size::fill())
@@ -317,7 +319,7 @@ impl App for LockApp {
             .child(login_view)
             .child(row);
         if *self.power_menu.read() {
-            root = root.child(power_options(self.power_menu));
+            root = root.child(power_options(self.power_menu, bar_height));
         }
         for family in ctdesign::SANS_FAMILIES {
             root = root.font_family(family);
@@ -363,7 +365,7 @@ fn initial(name: &str) -> String {
         .unwrap_or_default()
 }
 
-fn power_options(mut open: State<bool>) -> Element {
+fn power_options(mut open: State<bool>, bar_height: f32) -> Element {
     let resolved = theme::resolved();
     let palette = theme::menu_palette(&resolved, theme::SurfaceKind::LayerShell);
     let item = |label: String, action: fn()| {
@@ -404,7 +406,7 @@ fn power_options(mut open: State<bool>) -> Element {
     )
     .position(
         Position::new_absolute()
-            .top(MENUBAR_HEIGHT as f32)
+            .top(bar_height)
             .right(ctdesign::MENUBAR_MARGIN_RIGHT as f32),
     )
     .into_element()

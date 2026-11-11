@@ -2,17 +2,17 @@
 
 > Overview map: [`interface.md`](interface.md).
 
-Native component (ADR 0023/0034): a 30 px top bar with the active app, the clock and the menus.
+Native component (ADR 0023/0034): a top bar, 30 or 38 px high, with the active app, the clock and the menus.
 
 ## How it works
 
 ```
 foreign-toplevel ──► active app (app_id)
         ▼
-bk layer surface → layer-shell Top (30 px) → Skia on Vulkan
+bk layer surface → layer-shell Top (30 or 38 px) → Skia on Vulkan
 ```
 
-1. `Top` layer, anchored top/left/right, `exclusive_zone = 28`; windows do not go underneath.
+1. `Top` layer, anchored top/left/right, with `exclusive_zone` equal to its height (`MenubarConfig::height()`); windows do not go underneath.
 2. The bar is a `bk` layer surface (`run_layer`); the kit draws it with Skia on Vulkan ([barrierkit ADR 0056](https://github.com/HBlanqueto/barrierkit/blob/main/docs/decisions/0056-barrierkit-on-vulkan.md)).
 3. The clock shows `%H:%M` and commits at the minute boundary.
 4. The active app is the activated toplevel in foreign-toplevel; while a shell dialog (Force Quit, About) is active, the bar keeps the previous app. Each new active app is recorded in Recent Items. The menubar uses the **app_id**, never the window title.
@@ -25,6 +25,17 @@ bk layer surface → layer-shell Top (30 px) → Skia on Vulkan
 3. Without an app or window, «Malaysia».
 
 It is bold (`MENUBAR_APP_NAME_WEIGHT`, 700), color `ink-strong`, 13 px, with the `ctdesign` sans (Geist); the clock uses the regular weight.
+
+## Style and height
+
+`menubar.style` and `menubar.bar_height` ([`options.md`](../configuration/options.md#menubar--shell-menu-bar-macos-menu-bar), ADR 0075) choose how the bar looks. System Settings › Desktop & Dock writes them.
+
+1. The bar reads `menubar.domain` and `wallpaper.state` and redraws when either changes.
+2. It takes the wallpaper color under the bar from the wallpaper grid (`WallpaperGrid::behind` over its own rectangle).
+3. `solid` paints `shell-bar` with the theme's text. `translucent` paints the glass and ink of `colors_over` for that color. `floating` uses the same ink with no background.
+4. `solid` and `translucent` ask the compositor to blur the wallpaper under the whole bar (`set_blur_region`). The blur stops while the screen locks.
+5. With `reduce_transparency`, every style is an opaque `solid` bar without blur.
+6. When the height changes, the bar sends its new size and exclusive zone together (`set_layer_geometry`). The lock screen row, the menus and the live activities read the same height.
 
 ## Exclusive zone
 

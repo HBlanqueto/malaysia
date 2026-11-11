@@ -109,7 +109,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
 | `appearance.scroll_bars` | `"automatic"` \| `"when_scrolling"` \| `"always"` | `"automatic"` | **active** | the kit's `ScrollView`: always after a mouse wheel and only while scrolling after a touchpad, only while scrolling, or always, **System Settings** |
 | `appearance.scroll_bar_click` | `"next_page"` \| `"clicked_spot"` | `"next_page"` | **active** | a click on the scroll bar track pages toward it or jumps there, **System Settings** |
-| `appearance.reduce_transparency` | bool | `false` | **active** | shell and kit: solid backgrounds; `false` enables the compositor blur (ADR 0038, 0071) |
+| `appearance.reduce_transparency` | bool | `false` | **active** | shell and kit: solid backgrounds and no compositor blur; `false` enables the blur (ADR 0038, 0071, 0075) |
 | `appearance.window_color` | `"neutral"` \| `"accent"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings**; an old `"wallpaper"` reads as `"neutral"` |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints the menu bar and the Dock with the accent tint, **System Settings** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` | `"auto"` | **active** | titlebar traffic lights; an old `"wallpaper"` reads as `"accent"`, **System Settings** |
@@ -426,6 +426,8 @@ compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhib
 | `menubar.show_battery_percentage` | bool | `true` | **active** | shell (percentage next to the battery); System Settings › Battery writes it |
 | `menubar.show_vpn` | bool | `true` | **active** | shell (VPN menu, only with a VPN profile); System Settings › VPN writes it |
 | `menubar.show_printer` | bool | `true` | **active** | shell (printer while CUPS has a queued job, on the bar and the lock screen; ADR 0074) |
+| `menubar.style` | `solid` / `translucent` / `floating` | `floating` | **active** | shell: the bar background and ink over the blurred wallpaper; System Settings › Desktop & Dock writes it (ADR 0075) |
+| `menubar.bar_height` | `slim` / `wide` | `slim` | **active** | shell: 30 or 38 px, for the bar and the lock screen; System Settings › Desktop & Dock writes it (ADR 0075) |
 
 ## `wifi` — Wi-Fi (System Settings → Wi-Fi; ADR 0069)
 
@@ -536,7 +538,7 @@ accent_color = [0.208, 0.518, 0.894]
 wallpaper_accent = false        # the «Wallpaper» accent swatch
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
-reduce_transparency = true      # Reduce transparency (solid backgrounds; false = compositor blur)
+reduce_transparency = false     # Reduce transparency (solid backgrounds; false = compositor blur)
 scroll_bars = "automatic"       # automatic | when_scrolling | always
 scroll_bar_click = "next_page"  # next_page | clicked_spot
 window_color = "neutral"        # neutral | accent
