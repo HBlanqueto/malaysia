@@ -1,7 +1,10 @@
 use malaysia_scene::geometry::{
     Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
 };
+use std::time::{Duration, Instant};
+
 use malaysia_scene::scene::{PopupId, PopupParent, WindowId};
+use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, Serial, Size};
 use smithay::wayland::shell::wlr_layer::KeyboardInteractivity;
@@ -34,11 +37,20 @@ struct PopupFocusFrame {
     previous_window: Option<WindowId>,
 }
 
+struct ClosedMenu {
+    surface: WlSurface,
+    grab_serial: Serial,
+    closed_at: Instant,
+}
+
+const MENU_SWITCH_WINDOW: Duration = Duration::from_millis(500);
+
 #[derive(Default)]
 pub struct Popups {
     popups: Vec<PopupData>,
     next_id: u64,
     focus_stack: Vec<PopupFocusFrame>,
+    closed_menu: Option<ClosedMenu>,
 }
 
 impl Popups {
@@ -94,6 +106,36 @@ impl Popups {
             previous_focus,
             previous_window,
         });
+    }
+
+    fn note_closed_menu(&mut self, surfaces: &[WlSurface]) {
+        self.closed_menu = self
+            .focus_stack
+            .first()
+            .filter(|root| surfaces.contains(&root.surface))
+            .map(|root| ClosedMenu {
+                surface: root.surface.clone(),
+                grab_serial: root.grab_serial,
+                closed_at: Instant::now(),
+            });
+    }
+
+    pub(crate) fn take_menu_switch(
+        &mut self,
+        surface: &WlSurface,
+        serial: Serial,
+        last_delivered: Option<Serial>,
+    ) -> bool {
+        let Some(closed) = self.closed_menu.take() else {
+            return false;
+        };
+        closed.surface.id().same_client_as(&surface.id())
+            && menu_switch_serial_ok(
+                closed.grab_serial,
+                closed.closed_at.elapsed(),
+                serial,
+                last_delivered,
+            )
     }
 
     pub(crate) fn grab_serial_of(&self, surface: &WlSurface) -> Option<Serial> {
@@ -164,6 +206,18 @@ impl Popups {
     fn remove_id(&mut self, id: PopupId) {
         self.popups.retain(|data| data.id != id);
     }
+}
+
+// xdg_popup.grab: a menu bar that moves to the next menu reuses the press serial of the menu it closed.
+fn menu_switch_serial_ok(
+    closed_grab: Serial,
+    since_closed: Duration,
+    serial: Serial,
+    last_delivered: Option<Serial>,
+) -> bool {
+    since_closed <= MENU_SWITCH_WINDOW
+        && serial.is_no_older_than(&closed_grab)
+        && last_delivered.is_some_and(|last| serial <= last)
 }
 
 fn popup_root(topmost: PopupId, ancestors: &[PopupId]) -> PopupId {
@@ -292,6 +346,7 @@ impl State {
         for id in subtree {
             self.forget_popup(id);
         }
+        self.popups.closed_menu = None;
         self.restore_popup_focus(&surfaces);
         self.request_redraw();
     }
@@ -349,6 +404,7 @@ impl State {
         for id in subtree {
             self.forget_popup(id);
         }
+        self.popups.note_closed_menu(&surfaces);
         self.restore_popup_focus(&surfaces);
         self.request_redraw();
     }
@@ -410,10 +466,28 @@ fn smithay_rect(rect: SceneRect<f64, SceneLogical>) -> Rectangle<i32, Logical> {
 
 #[cfg(test)]
 mod tests {
-    use super::{popup_root, scene_rect, smithay_rect};
+    use std::time::Duration;
+
+    use super::{MENU_SWITCH_WINDOW, menu_switch_serial_ok, popup_root, scene_rect, smithay_rect};
     use malaysia_scene::geometry::{Point as ScenePoint, Rect, Size as SceneSize};
     use malaysia_scene::scene::PopupId;
-    use smithay::utils::{Point, Rectangle, Size};
+    use smithay::utils::{Point, Rectangle, Serial, Size};
+
+    #[test]
+    fn a_menu_switch_grabs_with_the_closed_menu_serial_or_a_newer_delivered_one() {
+        let (closed, key, last) = (Serial::from(10), Serial::from(12), Some(Serial::from(12)));
+        let soon = Duration::from_millis(5);
+        assert!(menu_switch_serial_ok(closed, soon, closed, last));
+        assert!(menu_switch_serial_ok(closed, soon, key, last));
+        assert!(!menu_switch_serial_ok(closed, soon, Serial::from(9), last));
+        assert!(!menu_switch_serial_ok(closed, soon, Serial::from(13), last));
+        assert!(!menu_switch_serial_ok(
+            closed,
+            MENU_SWITCH_WINDOW + soon,
+            closed,
+            last
+        ));
+    }
 
     #[test]
     fn scene_rect_round_trips_whole_pixels() {

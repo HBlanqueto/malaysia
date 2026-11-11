@@ -953,6 +953,15 @@ impl XdgShellHandler for State {
         }
 
         let Some(start) = self.held_grab(serial) else {
+            let last_delivered = self.client_last_input_serial(&wl_surface);
+            if self
+                .popups
+                .take_menu_switch(&wl_surface, serial, last_delivered)
+            {
+                tracing::info!(popup = ?wl_surface.id(), "popup grab accepted: menu switch");
+                self.focus_popup_surface(&wl_surface, serial);
+                return;
+            }
             tracing::info!(
                 serial = ?serial,
                 "rejected popup grab: no button press with this serial is held"
