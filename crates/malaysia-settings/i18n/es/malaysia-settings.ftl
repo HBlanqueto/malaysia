@@ -337,10 +337,49 @@ wallpaper-custom = Encuadre personalizado…
 wallpaper-images = Imágenes
 wallpaper-colors = Colores
 crop-title = Encuadre personalizado
-crop-help = Arrastra el marco o haz clic donde quieras centrarlo. Lo que queda fuera no se ve en el escritorio.
 crop-zoom = Zoom
 crop-reset = Restablecer
 crop-apply = Aplicar
+crop-title-named = Encuadre personalizado · { $name }
+crop-help = Elige qué parte se ve. Arrastra el marco, tira de una esquina para acercar o haz clic donde quieras centrarlo.
+crop-help-dynamic = Elige qué parte se ve. Arrastra el marco, tira de una esquina para acercar o haz clic donde quieras centrarlo. El encuadre vale para todas las imágenes del fondo.
+crop-help-video = Elige qué parte se ve. Arrastra el marco, tira de una esquina para acercar o haz clic donde quieras centrarlo. El encuadre vale para todos los fotogramas del vídeo.
+crop-pixels-image = { $width } × { $height } px de la imagen
+crop-pixels-video = { $width } × { $height } px del vídeo
+crop-zoom-out = Alejar
+crop-zoom-in = Acercar
+crop-review = Revisar en
+crop-now = Ahora
+crop-light = Claro
+crop-dark = Oscuro
+crop-preview = Vista previa
+crop-sharp = Nítida: la imagen tiene más píxeles de los que muestra la pantalla.
+crop-soft = Se amplía al { $percent } %; se verá algo suave.
+crop-blurry = Se amplía al { $percent } %: se verá borrosa. Aleja el zoom o usa una imagen más grande.
+crop-built-in = Integrada
+crop-external = Externa
+crop-all-displays = Igual en todas las pantallas
+crop-all-displays-help = Mismo centro y zoom; el marco se adapta a la forma de cada una.
+crop-each-display-help = Cada pantalla guarda su propio encuadre.
+crop-guides = Guías de tercios
+crop-chrome = Barra de menús y Dock
+crop-chrome-help = Para ver qué tapan.
+collection-new = Nueva colección
+collection-edit-title = Editar colección
+collection-help = Junta carpetas completas e imágenes sueltas. Una carpeta sola también es una colección: si añades fotos a la carpeta, aparecen aquí solas.
+collection-name-help = Opcional. Si lo dejas vacío, usa el de la primera carpeta.
+collection-add-folder = Agregar carpeta…
+collection-add-images = Agregar imágenes…
+collection-create = Crear
+collection-folder-detail = { $path } · { $count ->
+    [one] { $count } imagen
+   *[other] { $count } imágenes
+} · se actualiza sola
+collection-image-detail = Imagen suelta
+collection-count = { $count ->
+    [one] { $count } imagen
+   *[other] { $count } imágenes
+}
 wallpaper-dynamic = Dinámicos
 wallpaper-animated = Animados
 wallpaper-mode = Modo
@@ -375,20 +414,12 @@ wallpaper-video = vídeo
 wallpaper-shader = shader
 collection = Colección
 collection-name = Nombre
-collection-name-placeholder = Opcional
-collection-name-help = Si lo dejas vacío, usa el de la primera carpeta.
 collection-contents = Contenido
 collection-contents-help = Agrega una carpeta completa o imágenes sueltas.
-collection-add-folder = Añadir carpeta…
-collection-add-images = Añadir imágenes…
 collection-remove = Quitar
 collection-delete = Eliminar colección
 collection-save = Guardar
 collection-edit = Editar…
 collection-empty = Esta colección está vacía.
-collection-count = { $count ->
-    [one] { $count } fondo
-   *[other] { $count } fondos
 }
 crop-display = Pantalla
-crop-all-displays = Igual en todas las pantallas

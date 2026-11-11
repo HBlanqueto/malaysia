@@ -291,9 +291,9 @@ hand («Custom framing…»: drag, click to center, zoom 100–400 %).
 desktop («Show on all desktops»), a crop per display, collections of folders
 and images, the filter, shuffling of colors and collections, custom colors,
 and the Dynamic and Animated sections, with previews written by
-`malaysia-wallpaper`. Not tried in a real session yet. Left out: «Show all»
-grids, pausing an animated wallpaper by hand, and the desktop preview of the
-crop sheet.
+`malaysia-wallpaper`; the crop and collection sheets follow the mock-up.
+Not tried in a real session yet. Left out: «Show all» grids and pausing an
+animated wallpaper by hand.
 
 ### 17 — Spaces and focus mode
 

@@ -1,18 +1,27 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use bk::compact::IconButton;
 use bk::media::use_artwork;
 use bk::prelude::*;
 use bk::views::feedback::Sheet;
-use ctappearance::{WallpaperOutput, WallpaperSelection, desktop_key, load_wallpaper_state};
-use ctdesign::{HAIRLINE, SETTINGS};
-use torin::prelude::{Content, Position};
+use ctappearance::{
+    WallpaperAppearance, WallpaperKind, WallpaperOutput, WallpaperSelection, desktop_key,
+    load_wallpaper_state, thumbnail_image_size,
+};
+use ctdesign::{
+    BADGE, CHECKBOX, DESKTOP_CLEAR, DIALOG_PADDING, HAIRLINE, HUD_BACKGROUND, LIST_GROUP, SETTINGS,
+};
+use torin::prelude::{Content, Gaps, Position};
 
 use crate::localize::{intern, tr};
-use crate::wallpaper::{Wallpaper, save};
+use crate::wallpaper::{Wallpaper, is_dynamic, name_of, preview, save};
 
 #[derive(Clone, PartialEq)]
 pub struct CropDraft {
-    path: PathBuf,
+    name: &'static str,
+    stills: Vec<(&'static str, PathBuf)>,
+    video: bool,
+    dynamic: bool,
     desktop: Option<u32>,
     outputs: Vec<WallpaperOutput>,
     crops: Vec<Option<[f32; 4]>>,
@@ -20,9 +29,27 @@ pub struct CropDraft {
 }
 
 impl CropDraft {
-    pub fn new(path: PathBuf, desktop: Option<u32>, selection: &WallpaperSelection) -> Self {
+    pub fn new(
+        file: Option<&Path>,
+        desktop: Option<u32>,
+        selection: &WallpaperSelection,
+        look: WallpaperAppearance,
+    ) -> Option<Self> {
+        let dynamic = file.is_none_or(is_dynamic);
+        let stills = if dynamic {
+            vec![
+                (tr!("crop-now"), preview(file, look)?),
+                (
+                    tr!("crop-light"),
+                    preview(file, WallpaperAppearance::Light)?,
+                ),
+                (tr!("crop-dark"), preview(file, WallpaperAppearance::Dark)?),
+            ]
+        } else {
+            vec![(tr!("crop-now"), preview(file, look)?)]
+        };
         let outputs = load_wallpaper_state().outputs;
-        let owner = desktop_key(desktop.filter(|&number| selection.has_own(number)));
+        let owner = desktop_key(desktop);
         let separate = outputs.iter().any(|output| {
             selection
                 .crop
@@ -36,13 +63,16 @@ impl CropDraft {
                 .map(|output| selection.crop_for(desktop, &output.name))
                 .collect()
         };
-        Self {
-            path,
+        Some(Self {
+            name: name_of(file),
+            stills,
+            video: file.and_then(WallpaperKind::of) == Some(WallpaperKind::Video),
+            dynamic,
             desktop,
             outputs,
             crops,
             separate,
-        }
+        })
     }
 
     fn aspect(&self, output: usize) -> f32 {
@@ -52,6 +82,39 @@ impl CropDraft {
             .map_or(SETTINGS.wallpaper.crop_aspect, |output| {
                 output.width as f32 / output.height as f32
             })
+    }
+
+    fn display_name(&self, output: &WallpaperOutput) -> &'static str {
+        let externals = self
+            .outputs
+            .iter()
+            .filter(|each| !built_in(&each.name))
+            .count();
+        if built_in(&output.name) {
+            tr!("crop-built-in")
+        } else if externals == 1 {
+            tr!("crop-external")
+        } else {
+            intern(output.name.clone())
+        }
+    }
+}
+
+fn built_in(connector: &str) -> bool {
+    ["eDP", "LVDS", "DSI"]
+        .iter()
+        .any(|prefix| connector.starts_with(prefix))
+}
+
+fn ratio(width: u32, height: u32) -> (u32, u32) {
+    let (mut a, mut b) = (width, height);
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    let divisor = a.max(1);
+    match (width / divisor, height / divisor) {
+        (8, 5) => (16, 10),
+        reduced => reduced,
     }
 }
 
@@ -67,9 +130,9 @@ struct View {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-struct Drag {
-    start: [f32; 2],
-    centre: [f32; 2],
+enum Drag {
+    Move { start: [f32; 2], centre: [f32; 2] },
+    Corner,
 }
 
 fn widest(image: (f32, f32), aspect: f32) -> f32 {
@@ -138,49 +201,91 @@ struct CropEditor {
     on_cancel: Callback<(), ()>,
 }
 
+fn view_at(draft: &CropDraft, views: &[Option<View>], index: usize, image: (f32, f32)) -> View {
+    views.get(index).copied().flatten().unwrap_or_else(|| {
+        view_of(
+            draft.crops.get(index).copied().flatten(),
+            image,
+            draft.aspect(index),
+        )
+    })
+}
+
+fn sheet_content_width() -> f32 {
+    SETTINGS.wallpaper.crop_width as f32 - 2.0 * DIALOG_PADDING
+}
+
+fn canvas_width() -> f32 {
+    sheet_content_width() - SETTINGS.wallpaper.crop_side as f32 - SPACE_4
+}
+
+// Freya paints an image over the siblings of its layer; what covers it needs the next one.
+fn over_image(left: f32, top: f32, width: f32, height: f32) -> Rect {
+    absolute(left, top, width, height).layer(1)
+}
+
+fn absolute(left: f32, top: f32, width: f32, height: f32) -> Rect {
+    rect()
+        .position(Position::new_absolute().left(left).top(top))
+        .width(Size::px(width.max(0.0)))
+        .height(Size::px(height.max(0.0)))
+}
+
 impl Component for CropEditor {
     fn render(&self) -> impl IntoElement {
         let metrics = SETTINGS.wallpaper;
-        let artwork = use_artwork(self.draft.path.clone());
-        let mut views = use_state(|| vec![None::<View>; self.draft.crops.len()]);
-        let mut output = use_state(|| 0usize);
-        let mut separate = use_state(|| self.draft.separate);
+        let palette = Palette::current();
+        let draft = self.draft.clone();
+        let artwork = use_artwork(draft.stills[0].1.clone());
+        let mut views = use_state(|| vec![None::<View>; draft.crops.len()]);
+        let output = use_state(|| 0usize);
+        let separate = use_state(|| draft.separate);
+        let guides = use_state(|| true);
+        let chrome = use_state(|| true);
+        let mut still = use_state(|| 0usize);
         let mut drag = use_state(|| None::<Drag>);
         let mut origin = use_state(|| (0.0f32, 0.0f32));
-        let title = Text::new(tr!("crop-title")).font(HEADLINE);
-        let help = Text::new(tr!("crop-help"));
+
+        let title = VStack::new()
+            .width(Size::fill())
+            .cross_align(Alignment::Start)
+            .spacing(SPACE_1)
+            .child(Text::new(intern(tr!("crop-title-named", name = draft.name))).font(HEADLINE))
+            .child(
+                Text::new(if draft.video {
+                    tr!("crop-help-video")
+                } else if draft.dynamic {
+                    tr!("crop-help-dynamic")
+                } else {
+                    tr!("crop-help")
+                })
+                .font(CALLOUT)
+                .foreground_style(ShapeStyle::Role(Role::SecondaryLabel)),
+            );
         let Some(handle) = artwork.read().clone() else {
             return VStack::new()
-                .spacing(SPACE_2)
+                .width(Size::px(sheet_content_width()))
+                .spacing(SPACE_3)
                 .child(title)
-                .child(help)
                 .into_element();
         };
-        let image_size = (handle.image.width() as f32, handle.image.height() as f32);
+        let real = thumbnail_image_size(&draft.stills[0].1)
+            .unwrap_or((handle.image.width() as u32, handle.image.height() as u32));
+        let image_size = (real.0 as f32, real.1 as f32);
         let shown = *output.read();
-        let aspect = self.draft.aspect(shown);
-        let draft = self.draft.clone();
-        let view_at = move |index: usize, views: &[Option<View>]| {
-            views.get(index).copied().flatten().unwrap_or_else(|| {
-                view_of(
-                    draft.crops.get(index).copied().flatten(),
-                    image_size,
-                    draft.aspect(index),
-                )
-            })
-        };
-        let current = view_at(shown, &views.read());
-        let mut view = move |next: View| {
+        let aspect = draft.aspect(shown);
+        let current = view_at(&draft, &views.read(), shown, image_size);
+        let [x, y, w, h] = frame(image_size, aspect, current.centre, zoom(current.step));
+        let width = canvas_width();
+        let height = width * image_size.1 / image_size.0;
+        let mut set_view = move |next: View| {
             if let Some(slot) = views.write().get_mut(shown) {
                 *slot = Some(next);
             }
         };
-        let [x, y, w, h] = frame(image_size, aspect, current.centre, zoom(current.step));
-        let width = metrics.crop_width as f32;
-        let height = width * image_size.1 / image_size.0;
-        let local = move |x: f64, y: f64| {
+        let local = move |at: (f64, f64)| {
             let (left, top) = *origin.peek();
-            [(x as f32 - left) / width, (y as f32 - top) / height]
+            [(at.0 as f32 - left) / width, (at.1 as f32 - top) / height]
         };
         let move_to = move |centre: [f32; 2]| {
             let [x, y, w, h] = frame(image_size, aspect, centre, zoom(current.step));
@@ -189,38 +294,82 @@ impl Component for CropEditor {
                 step: current.step,
             }
         };
+        let corner_hit = metrics.crop_corner as f32;
+        let near_corner = move |point: [f32; 2]| {
+            [(x, y), (x + w, y), (x, y + h), (x + w, y + h)]
+                .iter()
+                .any(|&(cx, cy)| {
+                    ((point[0] - cx) * width).abs() <= corner_hit
+                        && ((point[1] - cy) * height).abs() <= corner_hit
+                })
+        };
+        let pull_corner = move |point: [f32; 2]| {
+            let centre = [x + w / 2.0, y + h / 2.0];
+            let across = 2.0 * (point[0] - centre[0]).abs();
+            let down = 2.0 * (point[1] - centre[1]).abs() * aspect / (image_size.0 / image_size.1);
+            let wanted = across.max(down).max(f32::EPSILON);
+            let step = ((widest(image_size, aspect) / wanted - 1.0) / metrics.crop_zoom_step)
+                .round()
+                .clamp(0.0, (zoom_steps() - 1) as f32) as usize;
+            View { centre, step }
+        };
+
         let dim = color(Rgba {
             a: metrics.crop_dim,
             ..Rgba::rgb8(0, 0, 0)
         });
-        let shade = move |left: f32, top: f32, w: f32, h: f32| {
-            rect()
-                .position(Position::new_absolute().left(left).top(top))
-                .width(Size::px(w.max(0.0)))
-                .height(Size::px(h.max(0.0)))
-                .background(dim)
-        };
+        let white = Rgba::rgb8(0xff, 0xff, 0xff);
+        let guide = color(Rgba {
+            a: metrics.crop_guide,
+            ..white
+        });
+        let (frame_w, frame_h) = (w * width, h * height);
         let corner = metrics.crop_corner as f32;
         let stroke = metrics.crop_corner_stroke as f32;
-        let white = color(Rgba::rgb8(0xff, 0xff, 0xff));
-        let mark = move |left: f32, top: f32, w: f32, h: f32| {
-            rect()
-                .position(Position::new_absolute().left(left).top(top))
-                .width(Size::px(w))
-                .height(Size::px(h))
-                .background(white)
-        };
-        let (frame_w, frame_h) = (w * width, h * height);
         let corners = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)].map(|(right, bottom)| {
             let left = right * (frame_w + 2.0 * stroke - corner) - stroke;
             let top = bottom * (frame_h + 2.0 * stroke - corner) - stroke;
             let edge_x = right * (frame_w + stroke) - stroke;
             let edge_y = bottom * (frame_h + stroke) - stroke;
             [
-                mark(left, edge_y, corner, stroke),
-                mark(edge_x, top, stroke, corner),
+                absolute(left, edge_y, corner, stroke).background(color(white)),
+                absolute(edge_x, top, stroke, corner).background(color(white)),
             ]
         });
+        let thirds = guides.read().then(|| {
+            [1.0 / 3.0, 2.0 / 3.0].into_iter().flat_map(move |third| {
+                [
+                    absolute(third * frame_w, 0.0, HAIRLINE, frame_h).background(guide),
+                    absolute(0.0, third * frame_h, frame_w, HAIRLINE).background(guide),
+                ]
+            })
+        });
+        let (pixels_w, pixels_h) = (
+            (w * image_size.0).round() as u32,
+            (h * image_size.1).round() as u32,
+        );
+        let pixels = intern(if draft.video {
+            tr!("crop-pixels-video", width = pixels_w, height = pixels_h)
+        } else {
+            tr!("crop-pixels-image", width = pixels_w, height = pixels_h)
+        });
+        let badge = rect()
+            .layer(1)
+            .position(Position::new_absolute().left(0.0).bottom(SPACE_2))
+            .width(Size::px(width))
+            .center()
+            .child(
+                rect()
+                    .height(Size::px(BADGE.height))
+                    .padding(Gaps::new(0.0, BADGE.padding_x, 0.0, BADGE.padding_x))
+                    .corner_radius(BADGE.height / 2.0)
+                    .center()
+                    .background(color(HUD_BACKGROUND))
+                    .child(text(pixels, CAPTION, white)),
+            );
+        let still_path = draft.stills[(*still.read()).min(draft.stills.len() - 1)]
+            .1
+            .clone();
         let canvas = rect()
             .a11y_role(AccessibilityRole::Image)
             .a11y_alt(tr!("crop-title"))
@@ -228,88 +377,179 @@ impl Component for CropEditor {
             .height(Size::px(height))
             .corner_radius(SETTINGS.card_radius as f32)
             .overflow(Overflow::Clip)
+            .background(color(DESKTOP_CLEAR))
             .on_sized(move |event: Event<SizedEventData>| {
                 origin.set_if_modified((event.area.min_x(), event.area.min_y()));
             })
             .on_pointer_down(move |event: Event<PointerEventData>| {
                 let at = event.global_location();
-                let point = local(at.x, at.y);
+                let point = local((at.x, at.y));
+                if near_corner(point) {
+                    drag.set(Some(Drag::Corner));
+                    return;
+                }
                 let inside = (x..=x + w).contains(&point[0]) && (y..=y + h).contains(&point[1]);
                 let next = if inside { current } else { move_to(point) };
-                view(next);
-                drag.set(Some(Drag {
+                set_view(next);
+                drag.set(Some(Drag::Move {
                     start: point,
                     centre: next.centre,
                 }));
             })
             .on_global_pointer_move(move |event: Event<PointerEventData>| {
-                let Some(held) = *drag.peek() else {
-                    return;
-                };
                 let at = event.global_location();
-                let point = local(at.x, at.y);
-                view(move_to([
-                    held.centre[0] + point[0] - held.start[0],
-                    held.centre[1] + point[1] - held.start[1],
-                ]));
+                let point = local((at.x, at.y));
+                match *drag.peek() {
+                    Some(Drag::Move { start, centre }) => set_view(move_to([
+                        centre[0] + point[0] - start[0],
+                        centre[1] + point[1] - start[1],
+                    ])),
+                    Some(Drag::Corner) => set_view(pull_corner(point)),
+                    None => {}
+                }
             })
             .on_global_pointer_up(move |_| drag.set_if_modified(None))
             .child(
-                image(handle)
-                    .width(Size::px(width))
-                    .height(Size::px(height))
-                    .aspect_ratio(AspectRatio::None),
+                Still {
+                    path: still_path.clone(),
+                    width,
+                    height,
+                }
+                .into_element(),
             )
-            .child(shade(0.0, 0.0, width, y * height))
-            .child(shade(
-                0.0,
-                (y + h) * height,
-                width,
-                height - (y + h) * height,
-            ))
-            .child(shade(0.0, y * height, x * width, frame_h))
-            .child(shade(
-                (x + w) * width,
-                y * height,
-                width - (x + w) * width,
-                frame_h,
-            ))
+            .child(over_image(0.0, 0.0, width, y * height).background(dim))
             .child(
-                rect()
-                    .position(Position::new_absolute().left(x * width).top(y * height))
-                    .width(Size::px(frame_w))
-                    .height(Size::px(frame_h))
-                    .border(Border::new().fill(white).width(HAIRLINE))
+                over_image(0.0, (y + h) * height, width, height - (y + h) * height).background(dim),
+            )
+            .child(over_image(0.0, y * height, x * width, frame_h).background(dim))
+            .child(
+                over_image(
+                    (x + w) * width,
+                    y * height,
+                    width - (x + w) * width,
+                    frame_h,
+                )
+                .background(dim),
+            )
+            .child(
+                over_image(x * width, y * height, frame_w, frame_h)
+                    .border(Border::new().fill(color(white)).width(metrics.crop_frame))
+                    .children(thirds.into_iter().flatten().map(IntoElement::into_element))
                     .children(corners.into_iter().flatten().map(IntoElement::into_element)),
-            );
+            )
+            .child(badge);
+
         let steps = zoom_steps();
+        let step_by = move |delta: isize| {
+            let step = (current.step as isize + delta).clamp(0, steps as isize - 1) as usize;
+            View {
+                centre: current.centre,
+                step,
+            }
+        };
+        let button_size = metrics.crop_zoom_button as f32;
+        let zoom_button = move |symbol: Symbol, label: &'static str, delta: isize| {
+            IconButton::new(symbol, label)
+                .style(move |style| IconButtonStyle {
+                    size: button_size,
+                    ..style
+                })
+                .on_press(move |()| set_view(step_by(delta)))
+        };
+        let slider_width =
+            width - 2.0 * button_size - metrics.crop_zoom_label as f32 - 3.0 * SPACE_3;
         let zoom_row = HStack::new()
+            .width(Size::fill())
+            .content(Content::flex())
             .spacing(SPACE_3)
             .cross_align(Alignment::Center)
-            .child(Text::new(tr!("crop-zoom")))
+            .child(zoom_button(Symbol::Minus, tr!("crop-zoom-out"), -1))
             .child(
                 Slider::stepped(tr!("crop-zoom"), steps)
+                    .style(move |style| SliderStyle {
+                        width: slider_width,
+                        ..style
+                    })
                     .value(current.step)
                     .on_change(move |step| {
-                        view(View {
+                        set_view(View {
                             centre: current.centre,
                             step,
                         })
                     }),
+            )
+            .child(zoom_button(Symbol::Plus, tr!("crop-zoom-in"), 1))
+            .child(
+                rect()
+                    .width(Size::px(metrics.crop_zoom_label as f32))
+                    .main_align(Alignment::End)
+                    .child(text(
+                        intern(format!("{} %", (zoom(current.step) * 100.0).round())),
+                        CALLOUT,
+                        palette.secondary_label,
+                    )),
             );
+        let review = (draft.stills.len() > 1).then(|| {
+            let picker = draft.stills.iter().fold(
+                SegmentedControl::new(tr!("crop-review")),
+                |picker, (label, _)| picker.segment(label),
+            );
+            HStack::new()
+                .width(Size::fill())
+                .content(Content::flex())
+                .spacing(SPACE_3)
+                .cross_align(Alignment::Center)
+                .child(text(tr!("crop-review"), CALLOUT, palette.secondary_label))
+                .child(
+                    rect().width(Size::flex(1.0)).child(
+                        picker
+                            .selected(*still.read())
+                            .on_change(move |index| still.set(index)),
+                    ),
+                )
+        });
+        let main = VStack::new()
+            .width(Size::px(width))
+            .spacing(SPACE_3)
+            .child(canvas)
+            .child(zoom_row)
+            .maybe_child(review);
+
+        let side_width = metrics.crop_side as f32;
+        let side = VStack::new()
+            .width(Size::px(side_width))
+            .cross_align(Alignment::Start)
+            .spacing(SPACE_2)
+            .child(Text::new(tr!("crop-preview")).font(HEADLINE))
+            .child(DesktopPreview {
+                path: still_path,
+                crop: [x, y, w, h],
+                aspect,
+                chrome: *chrome.read(),
+            })
+            .maybe_child(quality(&draft, shown, w * image_size.0))
+            .child(options(&draft, output, separate, guides, chrome));
+
         let apply = self.on_apply.clone();
-        let draft_for_apply = self.draft.clone();
         let cancel = self.on_cancel.clone();
+        let applied = draft.clone();
         let buttons = HStack::new()
             .width(Size::fill())
             .content(Content::flex())
             .spacing(SPACE_2)
-            .child(Button::new(tr!("crop-reset")).on_press(move |_| {
-                view(View {
-                    centre: [0.5, 0.5],
-                    step: 0,
-                })
-            }))
+            .child(
+                Button::new(tr!("crop-reset"))
+                    .style(|style| ButtonStyle {
+                        label: StateValue::new(ShapeStyle::Accent),
+                        ..style.borderless()
+                    })
+                    .on_press(move |_| {
+                        set_view(View {
+                            centre: [0.5, 0.5],
+                            step: 0,
+                        })
+                    }),
+            )
             .child(rect().width(Size::flex(1.0)))
             .child(Button::new(tr!("cancel")).on_press(move |_| cancel.call(())))
             .child(
@@ -318,16 +558,16 @@ impl Component for CropEditor {
                     .on_press(move |_| {
                         let views = views.peek();
                         let crop_at = |index: usize| {
-                            let view = view_at(index, &views);
+                            let view = view_at(&applied, &views, index, image_size);
                             frame(
                                 image_size,
-                                draft_for_apply.aspect(index),
+                                applied.aspect(index),
                                 view.centre,
                                 zoom(view.step),
                             )
                         };
                         let crops = if *separate.peek() {
-                            draft_for_apply
+                            applied
                                 .outputs
                                 .iter()
                                 .enumerate()
@@ -339,33 +579,232 @@ impl Component for CropEditor {
                         apply.call(Applied { crops })
                     }),
             );
-        let displays = (self.draft.outputs.len() > 1).then(|| {
-            let picker = self.draft.outputs.iter().fold(
-                SegmentedControl::new(tr!("crop-display")),
-                |picker, each| picker.segment(intern(each.name.clone())),
-            );
-            VStack::new()
-                .spacing(SPACE_2)
-                .child(
-                    picker
-                        .selected(shown)
-                        .on_change(move |index| output.set(index)),
-                )
-                .child(
-                    Checkbox::new(tr!("crop-all-displays"))
-                        .checked(!*separate.read())
-                        .on_toggle(move |same: bool| separate.set(!same)),
-                )
-        });
         VStack::new()
-            .width(Size::px(width))
+            .width(Size::px(sheet_content_width()))
+            .cross_align(Alignment::Start)
             .spacing(SPACE_3)
-            .child(VStack::new().spacing(SPACE_1).child(title).child(help))
-            .maybe_child(displays)
-            .child(canvas)
-            .child(zoom_row)
+            .child(title)
+            .child(HStack::new().spacing(SPACE_4).child(main).child(side))
             .child(buttons)
             .into_element()
+    }
+}
+
+fn quality(draft: &CropDraft, output: usize, shown_pixels: f32) -> Option<Text> {
+    let display = draft.outputs.get(output)?;
+    let scale = display.width as f32 / shown_pixels.max(1.0);
+    let metrics = SETTINGS.wallpaper;
+    let (line, ink) = if scale <= metrics.crop_soft {
+        (tr!("crop-sharp").to_owned(), Role::SecondaryLabel)
+    } else if scale <= metrics.crop_blurry {
+        (
+            tr!("crop-soft", percent = ((scale * 100.0).round() as u32)),
+            Role::SecondaryLabel,
+        )
+    } else {
+        (
+            tr!("crop-blurry", percent = ((scale * 100.0).round() as u32)),
+            Role::Destructive,
+        )
+    };
+    Some(
+        Text::new(intern(line))
+            .font(CAPTION)
+            .foreground_style(ShapeStyle::Role(ink)),
+    )
+}
+
+fn options(
+    draft: &CropDraft,
+    mut output: State<usize>,
+    mut separate: State<bool>,
+    mut guides: State<bool>,
+    mut chrome: State<bool>,
+) -> Rect {
+    let palette = Palette::current();
+    let help_indent = CHECKBOX.size + SETTINGS.check.gap as f32;
+    let help = move |line: &'static str| {
+        rect().padding(Gaps::new(0.0, 0.0, 0.0, help_indent)).child(
+            Text::new(line)
+                .font(CAPTION)
+                .foreground_style(ShapeStyle::Role(Role::SecondaryLabel)),
+        )
+    };
+    let shown = *output.read();
+    let display = draft.outputs.get(shown).map(|display| {
+        let (wide, high) = ratio(display.width, display.height);
+        let detail = intern(format!(
+            "{} · {} × {} · {wide}:{high}",
+            display.name, display.width, display.height
+        ));
+        let picker = (draft.outputs.len() > 1).then(|| {
+            draft
+                .outputs
+                .iter()
+                .fold(
+                    SegmentedControl::new(tr!("crop-display")),
+                    |picker, each| picker.segment(draft.display_name(each)),
+                )
+                .selected(shown)
+                .on_change(move |index| output.set(index))
+        });
+        VStack::new()
+            .width(Size::fill())
+            .cross_align(Alignment::Start)
+            .spacing(SPACE_1)
+            .child(Text::new(tr!("crop-display")))
+            .child(text(detail, CAPTION, palette.secondary_label))
+            .maybe_child(picker)
+    });
+    let same = (draft.outputs.len() > 1).then(|| {
+        VStack::new()
+            .width(Size::fill())
+            .cross_align(Alignment::Start)
+            .spacing(SPACE_1)
+            .child(
+                Checkbox::new(tr!("crop-all-displays"))
+                    .checked(!*separate.read())
+                    .on_toggle(move |same: bool| separate.set(!same)),
+            )
+            .child(help(if *separate.read() {
+                tr!("crop-each-display-help")
+            } else {
+                tr!("crop-all-displays-help")
+            }))
+    });
+    let rows: Vec<Element> = [
+        display.map(IntoElement::into_element),
+        same.map(IntoElement::into_element),
+        Some(
+            Checkbox::new(tr!("crop-guides"))
+                .checked(*guides.read())
+                .on_toggle(move |on: bool| guides.set(on))
+                .into_element(),
+        ),
+        Some(
+            VStack::new()
+                .width(Size::fill())
+                .cross_align(Alignment::Start)
+                .spacing(SPACE_1)
+                .child(
+                    Checkbox::new(tr!("crop-chrome"))
+                        .checked(*chrome.read())
+                        .on_toggle(move |on: bool| chrome.set(on)),
+                )
+                .child(help(tr!("crop-chrome-help")))
+                .into_element(),
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .enumerate()
+    .flat_map(|(index, row)| {
+        (index > 0)
+            .then(|| Divider::new().into_element())
+            .into_iter()
+            .chain([row])
+    })
+    .collect();
+    rect()
+        .width(Size::fill())
+        .direction(Direction::Vertical)
+        .spacing(SPACE_2)
+        .padding(Gaps::new_all(LIST_GROUP.row_padding_x))
+        .corner_radius(LIST_GROUP.radius)
+        .background(color(palette.content_background))
+        .children(rows)
+}
+
+#[derive(PartialEq)]
+struct Still {
+    path: PathBuf,
+    width: f32,
+    height: f32,
+}
+
+impl Component for Still {
+    fn render(&self) -> impl IntoElement {
+        let artwork = use_artwork(self.path.clone());
+        rect()
+            .key(format!("{:?}", self.path))
+            .width(Size::px(self.width))
+            .height(Size::px(self.height))
+            .maybe_child(artwork.read().clone().map(|handle| {
+                image(handle)
+                    .width(Size::px(self.width))
+                    .height(Size::px(self.height))
+                    .aspect_ratio(AspectRatio::None)
+            }))
+    }
+}
+
+#[derive(PartialEq)]
+struct DesktopPreview {
+    path: PathBuf,
+    crop: [f32; 4],
+    aspect: f32,
+    chrome: bool,
+}
+
+impl Component for DesktopPreview {
+    fn render(&self) -> impl IntoElement {
+        let metrics = SETTINGS.wallpaper;
+        let artwork = use_artwork(self.path.clone());
+        let width = metrics.crop_side as f32;
+        let height = width / self.aspect;
+        let [x, y, w, h] = self.crop;
+        let (image_w, image_h) = (width / w, height / h);
+        let shell = bk::theme::resolved().shell;
+        let control = Palette::current().control_background;
+        let gap = metrics.crop_preview_dock_gap;
+        let dock_width = width * metrics.crop_preview_dock_width;
+        let tiles = metrics.crop_preview_dock_tiles;
+        let tile = (dock_width - gap * (tiles as f32 + 1.0)) / tiles as f32;
+        let dock = over_image(
+            (width - dock_width) / 2.0,
+            height * (1.0 - metrics.crop_preview_dock_bottom) - tile - 2.0 * gap,
+            dock_width,
+            tile + 2.0 * gap,
+        )
+        .direction(Direction::Horizontal)
+        .padding(Gaps::new_all(gap))
+        .spacing(gap)
+        .corner_radius(metrics.crop_preview_dock_radius)
+        .background(color(shell.bar))
+        .children((0..tiles).map(|_| {
+            rect()
+                .width(Size::px(tile))
+                .height(Size::px(tile))
+                .corner_radius(gap)
+                .background(color(control))
+                .into_element()
+        }));
+        rect()
+            .key(format!("{:?}", self.path))
+            .width(Size::px(width))
+            .height(Size::px(height))
+            .corner_radius(SETTINGS.card_radius as f32)
+            .overflow(Overflow::Clip)
+            .background(color(DESKTOP_CLEAR))
+            .border(
+                Border::new()
+                    .fill(color(SETTINGS.card_outline))
+                    .width(HAIRLINE)
+                    .alignment(BorderAlignment::Inner),
+            )
+            .maybe_child(artwork.read().clone().map(|handle| {
+                absolute(-x * image_w, -y * image_h, image_w, image_h).child(
+                    image(handle)
+                        .width(Size::px(image_w))
+                        .height(Size::px(image_h))
+                        .aspect_ratio(AspectRatio::None),
+                )
+            }))
+            .maybe_child(self.chrome.then(|| {
+                over_image(0.0, 0.0, width, height * metrics.crop_preview_bar)
+                    .background(color(shell.bar))
+            }))
+            .maybe_child(self.chrome.then_some(dock))
     }
 }
 
@@ -375,6 +814,12 @@ mod tests {
 
     fn close(a: [f32; 4], b: [f32; 4]) -> bool {
         a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-4)
+    }
+
+    #[test]
+    fn a_2560_by_1600_display_reads_16_10_and_a_1920_by_1080_one_16_9() {
+        assert_eq!(ratio(2560, 1600), (16, 10));
+        assert_eq!(ratio(1920, 1080), (16, 9));
     }
 
     #[test]

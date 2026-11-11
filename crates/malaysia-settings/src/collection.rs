@@ -1,12 +1,15 @@
 use std::path::{Path, PathBuf};
 
+use bk::compact::IconButton;
+use bk::media::use_artwork;
 use bk::prelude::*;
 use bk::views::feedback::Sheet;
-use ctappearance::{WallpaperCollection, WallpaperConfig, WallpaperSource};
-use ctdesign::SETTINGS;
-use torin::prelude::Content;
+use bk::views::form::{Form, Row, Section};
+use ctappearance::{WallpaperCollection, WallpaperConfig, WallpaperSource, wallpapers_in};
+use ctdesign::{LIST_GROUP, SETTINGS};
+use torin::prelude::{Content, Gaps};
 
-use crate::localize::tr;
+use crate::localize::{intern, tr};
 use crate::wallpaper::{Wallpaper, save, save_collections};
 
 #[derive(Clone, Default, PartialEq)]
@@ -172,111 +175,208 @@ struct CollectionEditor {
     error: State<Option<String>>,
 }
 
+fn source_row(
+    path: &Path,
+    folder: bool,
+    draft: &CollectionDraft,
+    mut editing: State<Option<CollectionDraft>>,
+) -> Row {
+    let metrics = SETTINGS.wallpaper;
+    let name = path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    let detail = if folder {
+        intern(tr!(
+            "collection-folder-detail",
+            path = path.display().to_string(),
+            count = wallpapers_in(path).len()
+        ))
+    } else {
+        tr!("collection-image-detail")
+    };
+    let thumb = rect()
+        .width(Size::px(metrics.source_width as f32))
+        .height(Size::px(metrics.source_height as f32))
+        .corner_radius(metrics.source_radius as f32)
+        .overflow(Overflow::Clip)
+        .center()
+        .background(color(Palette::current().control_background))
+        .maybe_child(
+            folder.then(|| Image::system(Symbol::Folder).color(Palette::current().secondary_label)),
+        )
+        .maybe_child((!folder).then(|| SourceImage {
+            path: path.to_path_buf(),
+        }));
+    let mut next = draft.clone();
+    let removed = path.to_path_buf();
+    Row::new(intern(name)).detail(detail).icon(thumb).control(
+        IconButton::new(Symbol::XMark, tr!("collection-remove")).on_press(move |()| {
+            next.folders.retain(|each| *each != removed);
+            next.images.retain(|each| *each != removed);
+            editing.set(Some(next.clone()));
+        }),
+    )
+}
+
+#[derive(PartialEq)]
+struct SourceImage {
+    path: PathBuf,
+}
+
+impl Component for SourceImage {
+    fn render(&self) -> impl IntoElement {
+        let metrics = SETTINGS.wallpaper;
+        let artwork = use_artwork(self.path.clone());
+        rect()
+            .width(Size::px(metrics.source_width as f32))
+            .height(Size::px(metrics.source_height as f32))
+            .maybe_child(artwork.read().clone().map(|handle| {
+                image(handle)
+                    .expanded()
+                    .aspect_ratio(AspectRatio::Max)
+                    .image_cover(ImageCover::Center)
+            }))
+    }
+}
+
+fn plain_form() -> Form {
+    Form::new().style(|style| FormStyle {
+        padding: [0.0; 4],
+        ..style
+    })
+}
+
 impl Component for CollectionEditor {
     fn render(&self) -> impl IntoElement {
         let name = use_state(|| self.draft.name.clone());
         let (wallpaper, error) = (self.wallpaper, self.error);
         let mut editing = wallpaper.editing;
         let draft = self.draft.clone();
-        let source = |path: &Path, symbol: Symbol, folder: bool| {
-            let mut next = draft.clone();
-            let removed = path.to_path_buf();
-            HStack::new()
-                .width(Size::fill())
-                .content(Content::flex())
-                .spacing(SPACE_2)
-                .cross_align(Alignment::Center)
-                .child(Image::system(symbol))
-                .child(
-                    rect()
-                        .width(Size::flex(1.0))
-                        .child(Text::new(path.display().to_string()).line_limit(1)),
-                )
-                .child(Button::new(tr!("collection-remove")).on_press(move |_| {
-                    let list = if folder {
-                        &mut next.folders
-                    } else {
-                        &mut next.images
-                    };
-                    list.retain(|path| *path != removed);
-                    editing.set(Some(next.clone()));
-                }))
-                .into_element()
-        };
-        let sources: Vec<Element> = self
-            .draft
+        let palette = Palette::current();
+        let content_width = SETTINGS.wallpaper.sheet_width as f32 - 2.0 * ctdesign::DIALOG_PADDING;
+        let total: usize = draft
             .folders
             .iter()
-            .map(|folder| source(folder, Symbol::Folder, true))
+            .map(|folder| wallpapers_in(folder).len())
+            .sum::<usize>()
+            + draft.images.len();
+        let title = VStack::new()
+            .cross_align(Alignment::Start)
+            .spacing(SPACE_1)
+            .child(
+                Text::new(if draft.index.is_some() {
+                    tr!("collection-edit-title")
+                } else {
+                    tr!("collection-new")
+                })
+                .font(HEADLINE),
+            )
+            .child(
+                Text::new(tr!("collection-help"))
+                    .font(CALLOUT)
+                    .foreground_style(ShapeStyle::Role(Role::SecondaryLabel)),
+            );
+        let name_form = plain_form().section(
+            Section::new().row(
+                Row::new(tr!("collection-name"))
+                    .detail(tr!("collection-name-help"))
+                    .control(
+                        TextField::new(name, intern(fallback_name(&draft)))
+                            .width(Size::px(SETTINGS.wallpaper.field_width as f32)),
+                    ),
+            ),
+        );
+        let [top, right, bottom, left] = LIST_GROUP.header_padding;
+        let contents_head = HStack::new()
+            .width(Size::fill())
+            .content(Content::flex())
+            .cross_align(Alignment::Center)
+            .padding(Gaps::new(top, right, bottom, left))
+            .child(
+                rect()
+                    .width(Size::flex(1.0))
+                    .child(Text::new(tr!("collection-contents")).font(HEADLINE)),
+            )
+            .child(text(
+                intern(tr!("collection-count", count = total)),
+                CAPTION,
+                palette.secondary_label,
+            ));
+        let rows: Vec<Row> = draft
+            .folders
+            .iter()
+            .map(|folder| source_row(folder, true, &draft, editing))
             .chain(
-                self.draft
+                draft
                     .images
                     .iter()
-                    .map(|image| source(image, Symbol::Photo, false)),
+                    .map(|image| source_row(image, false, &draft, editing)),
             )
             .collect();
-        let (with_folder, with_images) = (self.draft.clone(), self.draft.clone());
+        let sources = if rows.is_empty() {
+            Section::new().row(Row::new(tr!("collection-contents-help")))
+        } else {
+            rows.into_iter().fold(Section::new(), Section::row)
+        };
+        let (with_folder, with_images) = (draft.clone(), draft.clone());
         let adders = HStack::new()
             .spacing(SPACE_2)
             .child(
-                Button::new(tr!("collection-add-folder"))
+                Button::system_image(tr!("collection-add-folder"), Symbol::Folder)
+                    .size(ControlSize::Small)
                     .on_press(move |_| choose(editing, with_folder.clone(), true)),
             )
             .child(
-                Button::new(tr!("collection-add-images"))
+                Button::system_image(tr!("collection-add-images"), Symbol::Photo)
+                    .size(ControlSize::Small)
                     .on_press(move |_| choose(editing, with_images.clone(), false)),
             );
-        let saved = self.draft.clone();
-        let empty = self.draft.folders.is_empty() && self.draft.images.is_empty();
+        let saved = draft.clone();
+        let empty = draft.folders.is_empty() && draft.images.is_empty();
         let buttons = HStack::new()
             .width(Size::fill())
             .content(Content::flex())
             .spacing(SPACE_2)
-            .maybe_child(self.draft.index.map(|index| {
-                Button::new(tr!("collection-delete")).on_press(move |_| {
-                    delete(wallpaper, index, error);
-                    editing.set(None);
-                })
+            .maybe_child(draft.index.map(|index| {
+                Button::new(tr!("collection-delete"))
+                    .style(|style| ButtonStyle {
+                        label: StateValue::new(ShapeStyle::Role(Role::Destructive)),
+                        ..style.borderless()
+                    })
+                    .on_press(move |_| {
+                        delete(wallpaper, index, error);
+                        editing.set(None);
+                    })
             }))
             .child(rect().width(Size::flex(1.0)))
             .child(Button::new(tr!("cancel")).on_press(move |_| editing.set(None)))
             .child(
-                Button::new(tr!("collection-save"))
-                    .style(ButtonStyle::bordered_prominent)
-                    .disabled(empty)
-                    .on_press(move |_| {
-                        store(wallpaper, &saved, &name.peek(), error);
-                        editing.set(None);
-                    }),
+                Button::new(if draft.index.is_some() {
+                    tr!("collection-save")
+                } else {
+                    tr!("collection-create")
+                })
+                .style(ButtonStyle::bordered_prominent)
+                .disabled(empty)
+                .on_press(move |_| {
+                    store(wallpaper, &saved, &name.peek(), error);
+                    editing.set(None);
+                }),
             );
-        let help = |line: &'static str| text(line, CALLOUT, Palette::current().secondary_label);
         VStack::new()
-            .width(Size::px(SETTINGS.wallpaper.sheet_width as f32))
+            .width(Size::px(content_width))
             .cross_align(Alignment::Start)
             .spacing(SPACE_3)
-            .child(Text::new(tr!("collection")).font(HEADLINE))
+            .child(title)
+            .child(name_form)
             .child(
                 VStack::new()
                     .width(Size::fill())
-                    .cross_align(Alignment::Start)
-                    .spacing(SPACE_1)
-                    .child(Text::new(tr!("collection-name")))
-                    .child(
-                        TextField::new(name, tr!("collection-name-placeholder"))
-                            .width(Size::fill()),
-                    )
-                    .child(help(tr!("collection-name-help"))),
+                    .child(contents_head)
+                    .child(plain_form().section(sources)),
             )
-            .child(
-                VStack::new()
-                    .width(Size::fill())
-                    .cross_align(Alignment::Start)
-                    .spacing(SPACE_1)
-                    .child(Text::new(tr!("collection-contents")))
-                    .child(help(tr!("collection-contents-help")))
-                    .children(sources)
-                    .child(adders),
-            )
+            .child(adders)
             .child(buttons)
     }
 }

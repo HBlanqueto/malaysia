@@ -117,7 +117,7 @@ struct Item {
     group: Group,
 }
 
-fn is_dynamic(file: &Path) -> bool {
+pub fn is_dynamic(file: &Path) -> bool {
     frame_path(file, WallpaperAppearance::Light).is_some_and(|frame| frame.exists())
 }
 
@@ -185,7 +185,7 @@ fn group_label(group: Group, collections: &WallpaperConfig) -> &'static str {
     }
 }
 
-fn name_of(file: Option<&Path>) -> &'static str {
+pub fn name_of(file: Option<&Path>) -> &'static str {
     let stem = file.map_or_else(
         || BUILT_IN.into(),
         |file| file.file_stem().unwrap_or_default().to_string_lossy(),
@@ -211,11 +211,11 @@ fn appearance(dark: bool) -> WallpaperAppearance {
     }
 }
 
-fn preview(file: Option<&Path>, look: WallpaperAppearance) -> Option<PathBuf> {
+pub fn preview(file: Option<&Path>, look: WallpaperAppearance) -> Option<PathBuf> {
     let Some(file) = file else {
         let still = match look {
-            WallpaperAppearance::Light => "collapse-light.jpg",
-            WallpaperAppearance::Dark => "collapse-dark.jpg",
+            WallpaperAppearance::Light => "collapse-light.png",
+            WallpaperAppearance::Dark => "collapse-dark.png",
         };
         return system_wallpapers_dir().map(|dir| dir.join("previews").join(still));
     };
@@ -492,7 +492,7 @@ fn hero(
                     Row::new(tr!("wallpaper-mode")).control(mode_button(still, wallpaper, error)),
                 );
             }
-            let framed = preview(shown.as_deref(), look);
+            let framed = CropDraft::new(shown.as_deref(), edited, selection, look);
             section = section.row(
                 Row::new(tr!("wallpaper-scale"))
                     .control(scale_button(scale, framed, edited, wallpaper, error)),
@@ -605,7 +605,7 @@ fn mode_button(
 
 fn scale_button(
     scale: WallpaperScale,
-    framed: Option<PathBuf>,
+    framed: Option<CropDraft>,
     desktop: Option<u32>,
     wallpaper: Wallpaper,
     error: State<Option<String>>,
@@ -622,8 +622,8 @@ fn scale_button(
         .selected(selected)
         .on_change(move |index: usize| match SCALES[index] {
             WallpaperScale::Custom => {
-                if let Some(path) = framed.clone() {
-                    cropping.set(Some(CropDraft::new(path, desktop, &selection.peek())));
+                if let Some(draft) = framed.clone() {
+                    cropping.set(Some(draft));
                 }
             }
             chosen => {
@@ -880,6 +880,7 @@ impl Component for Choice {
         let selected = self.selected;
         let symbol = self.symbol.map(|symbol| {
             rect()
+                .layer(1)
                 .position(Position::new_absolute())
                 .width(Size::px(width))
                 .height(Size::px(height))

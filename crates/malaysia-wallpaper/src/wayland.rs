@@ -520,7 +520,13 @@ impl App {
             .outputs()
             .filter_map(|output| {
                 let info = self.output_state.info(&output)?;
-                let (width, height) = info.logical_size?;
+                let (logical_width, logical_height) = info.logical_size?;
+                let mode = info.modes.iter().find(|mode| mode.current)?.dimensions;
+                let (width, height) = if (mode.0 > mode.1) == (logical_width > logical_height) {
+                    mode
+                } else {
+                    (mode.1, mode.0)
+                };
                 Some(WallpaperOutput {
                     name: info.name?,
                     width: width.max(0) as u32,

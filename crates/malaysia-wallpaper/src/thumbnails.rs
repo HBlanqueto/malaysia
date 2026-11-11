@@ -51,11 +51,7 @@ fn previews(file: &Path, device: &wgpu::Device, queue: &wgpu::Queue) -> anyhow::
         }
         _ => return Ok(()),
     };
-    write_png(
-        &thumbnail,
-        file,
-        &image.downscale_to_fit(WALLPAPER_THUMBNAIL),
-    )
+    write_png(&thumbnail, file, &image, WALLPAPER_THUMBNAIL)
 }
 
 // The frames are written before the thumbnail, so a fresh thumbnail means fresh frames.
@@ -71,13 +67,19 @@ fn heif(file: &Path) -> anyhow::Result<DecodedImage> {
         (WallpaperAppearance::Dark, &dark),
     ] {
         if let Some(frame) = frame_path(file, appearance) {
-            write_png(&frame, file, &image.downscale_to_fit(WALLPAPER_FRAME))?;
+            write_png(&frame, file, image, WALLPAPER_FRAME)?;
         }
     }
     Ok(light)
 }
 
-fn write_png(path: &Path, file: &Path, image: &DecodedImage) -> anyhow::Result<()> {
+fn write_png(
+    path: &Path,
+    file: &Path,
+    original: &DecodedImage,
+    largest: u32,
+) -> anyhow::Result<()> {
+    let image = original.downscale_to_fit(largest);
     let folder = path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("the thumbnail has no folder"))?;
@@ -99,6 +101,9 @@ fn write_png(path: &Path, file: &Path, image: &DecodedImage) -> anyhow::Result<(
     encoder.add_text_chunk("Thumb::URI".into(), file_uri(file))?;
     let modified = modified_seconds(file).unwrap_or_default();
     encoder.add_text_chunk("Thumb::MTime".into(), modified.to_string())?;
+    let (original_width, original_height) = original.size;
+    encoder.add_text_chunk("Thumb::Image::Width".into(), original_width.to_string())?;
+    encoder.add_text_chunk("Thumb::Image::Height".into(), original_height.to_string())?;
     let rgba8: Vec<u8> = (0..(width * height) as usize)
         .flat_map(|pixel| image.rgba8_at(pixel * 4))
         .collect();
@@ -125,8 +130,9 @@ mod tests {
             size: (2, 1),
             pixels: Pixels::Srgb8(vec![255; 8]),
         };
-        write_png(&thumbnail, &file, &image).unwrap();
+        write_png(&thumbnail, &file, &image, WALLPAPER_THUMBNAIL).unwrap();
         assert!(thumbnail_is_fresh(&thumbnail, &file));
+        assert_eq!(ctappearance::thumbnail_image_size(&thumbnail), Some((2, 1)));
         std::fs::remove_dir_all(&dir).ok();
     }
 }

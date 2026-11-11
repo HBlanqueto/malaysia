@@ -337,10 +337,49 @@ wallpaper-custom = Custom framing…
 wallpaper-images = Images
 wallpaper-colors = Colors
 crop-title = Custom framing
-crop-help = Drag the frame or click where you want it centered. What lies outside does not show on the desktop.
 crop-zoom = Zoom
 crop-reset = Reset
 crop-apply = Apply
+crop-title-named = Custom Framing · { $name }
+crop-help = Choose which part shows. Drag the frame, pull a corner to zoom in or click where you want it centered.
+crop-help-dynamic = Choose which part shows. Drag the frame, pull a corner to zoom in or click where you want it centered. The framing applies to every image of the wallpaper.
+crop-help-video = Choose which part shows. Drag the frame, pull a corner to zoom in or click where you want it centered. The framing applies to every frame of the video.
+crop-pixels-image = { $width } × { $height } px of the image
+crop-pixels-video = { $width } × { $height } px of the video
+crop-zoom-out = Zoom Out
+crop-zoom-in = Zoom In
+crop-review = Review in
+crop-now = Now
+crop-light = Light
+crop-dark = Dark
+crop-preview = Preview
+crop-sharp = Sharp: the image has more pixels than the display shows.
+crop-soft = Enlarged to { $percent } %; it will look a little soft.
+crop-blurry = Enlarged to { $percent } %: it will look blurry. Zoom out or use a larger image.
+crop-built-in = Built-in
+crop-external = External
+crop-all-displays = Same on all displays
+crop-all-displays-help = Same center and zoom; the frame adapts to the shape of each one.
+crop-each-display-help = Each display keeps its own framing.
+crop-guides = Rule of thirds guides
+crop-chrome = Menu bar and Dock
+crop-chrome-help = To see what they cover.
+collection-new = New Collection
+collection-edit-title = Edit Collection
+collection-help = Gather whole folders and single images. A folder alone is a collection too: add photos to the folder and they show up here by themselves.
+collection-name-help = Optional. If you leave it empty, it takes the name of the first folder.
+collection-add-folder = Add Folder…
+collection-add-images = Add Images…
+collection-create = Create
+collection-folder-detail = { $path } · { $count ->
+    [one] { $count } image
+   *[other] { $count } images
+} · updates by itself
+collection-image-detail = Single image
+collection-count = { $count ->
+    [one] { $count } image
+   *[other] { $count } images
+}
 wallpaper-dynamic = Dynamic
 wallpaper-animated = Animated
 wallpaper-mode = Mode
@@ -375,20 +414,12 @@ wallpaper-video = video
 wallpaper-shader = shader
 collection = Collection
 collection-name = Name
-collection-name-placeholder = Optional
-collection-name-help = If you leave it empty, it takes the name of the first folder.
 collection-contents = Contents
 collection-contents-help = Add a whole folder or single images.
-collection-add-folder = Add Folder…
-collection-add-images = Add Images…
 collection-remove = Remove
 collection-delete = Delete Collection
 collection-save = Save
 collection-edit = Edit…
 collection-empty = This collection is empty.
-collection-count = { $count ->
-    [one] { $count } wallpaper
-   *[other] { $count } wallpapers
 }
 crop-display = Display
-crop-all-displays = Same on all displays

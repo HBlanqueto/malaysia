@@ -336,7 +336,7 @@ System Settings cannot decode HEIC, video or GLSL, so `malaysia-wallpaper`
 writes their previews: freedesktop thumbnails in
 `~/.cache/thumbnails/x-large/` and the light and dark stills of a dynamic HEIC
 in `~/.cache/malaysia/wallpaper-frames/`. The embedded default has
-`previews/collapse-light.jpg` and `previews/collapse-dark.jpg`.
+`previews/collapse-light.png` and `previews/collapse-dark.png`.
 
 **Like macOS, the current selection lives in a separate store**:
 `~/.local/share/malaysia/wallpaper-selection.state` (the equivalent of
