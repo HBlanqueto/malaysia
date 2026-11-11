@@ -29,7 +29,7 @@ The surface is transparent: the compositor draws the wallpaper under it.
 
 - **Top right:** only the power button, in the slot the menu bar leaves free (`menubar::lock_row::status_row`). It opens Suspend, Restart and Shut Down, drawn inside the surface because a lock surface has no pop-ups. The status icons beside it are the menu bar's own.
 - **Top center:** the long date and the time, `LOCK_TOP_PERCENT` of the screen height from the top, updated every minute; notifications from `on_lock_screen` below them.
-- **Bottom center:** the AccountsService picture (or the initial), the GECOS name, the capsule field and the PAM error. The field shows the PAM prompt while empty and asks the compositor to blur behind it (`set_blur_region`); with «Reduce transparency» it is opaque instead.
+- **Bottom center:** the AccountsService picture (or the initial), the GECOS name, the capsule field and the PAM error. The field shows the PAM prompt while empty and asks the compositor to blur behind it (`set_blur_region`). It is light in every theme; «Reduce transparency» only drops the blur.
 
 ## The menu bar
 

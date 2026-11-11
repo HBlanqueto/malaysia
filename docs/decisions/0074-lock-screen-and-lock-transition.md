@@ -2,7 +2,9 @@
 
 Status: accepted and implemented (2026-11-11); revised the same day after the
 first try on hardware: the menu bar stays on screen while locked, so one bar
-changes mode instead of two being swapped, and the date and time sit lower.
+changes mode instead of two being swapped; the date and time sit lower; and
+the field is always light, as in macOS, instead of dark gray with «Reduce
+transparency».
 
 ## Goal and scope
 
@@ -101,8 +103,10 @@ The approved mock-up, «Del escritorio al bloqueo»:
    2. ADR 0071 gives lock surfaces the `"wallpaper"` mode, so the field
       samples the cached blurred wallpaper. The compositor draws each
       rectangle of a lock surface as a capsule (`blur::capsules`).
-   3. With `appearance.reduce_transparency` on (the default), the
-      compositor draws no blur. The field then uses `LOCK_FIELD_FILL_OPAQUE`.
+   3. The field is light in every theme, as in macOS: a white capsule at
+      `LOCK_FIELD_FILL` with its text at `LOCK_FIELD_INK`, left-aligned.
+      With `appearance.reduce_transparency` on (the default), the compositor
+      draws no blur behind it, but the fill stays the same.
 3. **What the lock screen shows.** All of it is drawn by
    `malaysia-shell lock`. Text and icons are `LOCK_INK` (white).
    1. **Top right: the status row.** From right to left: the power button,
@@ -227,10 +231,11 @@ The approved mock-up, «Del escritorio al bloqueo»:
    | `LOCK_BOTTOM_MARGIN`, `LOCK_SPACING` | 92, 12 |
    | `LOCK_AVATAR_SIZE` | 52 |
    | `LOCK_FIELD_HEIGHT` | 30 (was 44) |
-   | `LOCK_FIELD_MIN_WIDTH`, `LOCK_FIELD_MAX_WIDTH` | 108, 200 |
+   | `LOCK_FIELD_MIN_WIDTH`, `LOCK_FIELD_MAX_WIDTH` | 160, 200 |
    | `LOCK_MASK_FONT_SIZE` | 18 |
    | `LOCK_INK`, `LOCK_FIELD_INK` | `#ffffff`, `#ffffffbf` |
-   | `LOCK_FIELD_FILL`, `LOCK_FIELD_FILL_OPAQUE`, `LOCK_FIELD_ERROR` | `#ffffff2e`, `#5c5d61`, `#ff6b6b73` |
+   | `LOCK_FIELD_FILL`, `LOCK_FIELD_ERROR` | `#ffffff4d`, `#ff6b6b73` |
+   | `LOCK_AVATAR_FILL` (the circle with the initial) | `#5c5d61` |
 
    `MENUBAR_LAYER_NAMESPACE` and `WALLPAPER_LAYER_NAMESPACE` name the two
    layer surfaces the compositor keeps. The old `LOCK_FONT_SIZE`,

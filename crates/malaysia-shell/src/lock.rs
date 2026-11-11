@@ -11,8 +11,8 @@ use bk::shell::{BlurRegion, SessionUnlock, run_lock, set_blur_region};
 use chrono::Datelike;
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
-    BODY, DURATION_FAST_MS, LOCK_AVATAR_SIZE, LOCK_BOTTOM_MARGIN, LOCK_CLOCK_FONT_SIZE,
-    LOCK_DATE_FONT_SIZE, LOCK_FIELD_ERROR, LOCK_FIELD_FILL, LOCK_FIELD_FILL_OPAQUE,
+    BODY, DURATION_FAST_MS, LOCK_AVATAR_FILL, LOCK_AVATAR_SIZE, LOCK_BOTTOM_MARGIN,
+    LOCK_CLOCK_FONT_SIZE, LOCK_DATE_FONT_SIZE, LOCK_FIELD_ERROR, LOCK_FIELD_FILL,
     LOCK_FIELD_HEIGHT, LOCK_FIELD_INK, LOCK_FIELD_MAX_WIDTH, LOCK_FIELD_MIN_WIDTH, LOCK_INK,
     LOCK_LOGIN_MS, LOCK_MASK_FONT_SIZE, LOCK_RISE_MS, LOCK_RISE_OFFSET, LOCK_SPACING,
     LOCK_TOP_PERCENT, MENUBAR_HEIGHT, NOTIFICATION_GAP, NOTIFICATION_WIDTH, TITLE_2,
@@ -221,8 +221,6 @@ impl App for LockApp {
         let typing = !masked.is_empty();
         let fill = if error.is_some() {
             LOCK_FIELD_ERROR
-        } else if resolved.reduce_transparency {
-            LOCK_FIELD_FILL_OPAQUE
         } else {
             LOCK_FIELD_FILL
         };
@@ -235,7 +233,13 @@ impl App for LockApp {
             .height(Size::px(LOCK_FIELD_HEIGHT))
             .corner_radius(LOCK_FIELD_HEIGHT / 2.0)
             .background(theme::color(fill))
-            .center()
+            .main_align(Alignment::Center)
+            .padding(Gaps::new(
+                0.0,
+                LOCK_FIELD_HEIGHT / 2.0,
+                0.0,
+                LOCK_FIELD_HEIGHT / 2.0,
+            ))
             .on_sized(|event: Event<SizedEventData>| {
                 let area = event.data().area;
                 set_blur_region(BlurRegion {
@@ -310,7 +314,7 @@ fn avatar(picture: Option<String>, name: &str) -> Element {
             )
             .into_element(),
         None => frame
-            .background(theme::color(LOCK_FIELD_FILL_OPAQUE))
+            .background(theme::color(LOCK_AVATAR_FILL))
             .center()
             .child(
                 Text::new(initial(name))
