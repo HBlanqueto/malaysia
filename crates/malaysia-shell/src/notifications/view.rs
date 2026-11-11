@@ -777,12 +777,6 @@ fn card(
         .padding(NOTIFICATION_PADDING)
         .corner_radius(NOTIFICATION_RADIUS)
         .background(theme::color(palette.raised_background))
-        .on_pointer_enter(move |_| hovered_state.set(Some(id)))
-        .on_pointer_leave(move |_| {
-            if *left.peek() == Some(id) {
-                left.set(None);
-            }
-        })
         .on_press(press)
         .child(
             HStack::new()
@@ -799,6 +793,12 @@ fn card(
         });
     rect()
         .width(Size::fill())
+        .on_pointer_over(move |_| hovered_state.set(Some(id)))
+        .on_pointer_out(move |_| {
+            if *left.peek() == Some(id) {
+                left.set(None);
+            }
+        })
         .child(framed(context, id, body))
         .maybe_child(hovered.then(|| close_button(context, id)))
         .into_element()
