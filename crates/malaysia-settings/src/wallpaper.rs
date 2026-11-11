@@ -1357,11 +1357,11 @@ impl Component for Choice {
             .on_press(move |_| on_press.call(()))
             .child(thumb)
             .maybe_child((!self.round).then(|| {
-                rect()
+                text(self.label, CAPTION, palette.label)
                     .width(Size::px(width))
-                    .main_align(Alignment::Center)
-                    .direction(Direction::Horizontal)
-                    .child(text(self.label, CAPTION, palette.label))
+                    .text_align(TextAlign::Center)
+                    .max_lines(1)
+                    .text_overflow(TextOverflow::Ellipsis)
             }));
         let element = match self.on_remove.clone() {
             Some(remove) => element.context_menu(
