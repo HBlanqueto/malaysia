@@ -334,6 +334,8 @@ impl App {
             })
             .map_err(|e| anyhow::anyhow!("failed to add signal source: {e}"))?;
 
+        // Surfaces configured during App::new had no loop to schedule their first frame on.
+        self.schedule_redraw_all();
         info!("malaysia-wallpaper running");
         event_loop.run(None, self, |app| {
             if let Err(error) = app.connection.flush() {
@@ -694,6 +696,9 @@ impl App {
     }
 
     fn schedule_redraw_all(&mut self) {
+        if self.loop_handle.is_none() {
+            return;
+        }
         let any_new =
             self.outputs
                 .values_mut()
@@ -713,21 +718,21 @@ impl App {
 
     fn schedule_redraw(&mut self, surface: WlSurface) {
         let surface_id = surface.id();
-        let Some(output) = self.outputs.get_mut(&surface_id) else {
+        let (Some(output), Some(handle)) =
+            (self.outputs.get_mut(&surface_id), self.loop_handle.as_ref())
+        else {
             return;
         };
         if output.pending_redraw {
             return;
         }
         output.pending_redraw = true;
-        if let Some(handle) = self.loop_handle.as_ref() {
-            handle.insert_idle(move |app| {
-                if let Some(output) = app.outputs.get_mut(&surface_id) {
-                    output.pending_redraw = false;
-                }
-                app.render_or_stop(&surface);
-            });
-        }
+        handle.insert_idle(move |app| {
+            if let Some(output) = app.outputs.get_mut(&surface_id) {
+                output.pending_redraw = false;
+            }
+            app.render_or_stop(&surface);
+        });
     }
 
     fn new_output_surface(&mut self, output: WlOutput, desktop: Option<u32>) -> anyhow::Result<()> {
