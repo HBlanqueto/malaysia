@@ -1094,6 +1094,9 @@ mod tests;
 #[cfg(test)]
 mod capture_lock_tests;
 
+#[cfg(test)]
+mod stacking_tests;
+
 delegate_gtk!(State);
 
 delegate_dispatch2!(State);
