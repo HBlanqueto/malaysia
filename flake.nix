@@ -9,10 +9,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
+    malaysia-icon-theme = {
+      url = "github:HBlanqueto/malaysia-icon-theme/0165cc87f338f96ff72e9294b478eaa8c75f7c4f";
+      flake = false;
+    };
   };
 
   outputs =
-    { self, nixpkgs, crane, barrierkit }:
+    { self, nixpkgs, crane, barrierkit, malaysia-icon-theme }:
     let
       systems = [ "x86_64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -182,6 +186,7 @@
         "malaysia-shell" = malaysia;
         skia-binaries = skia;
         appmenu-gtk-module = pkgs.callPackage ./nix/appmenu-gtk-module.nix { };
+        malaysia-icon-theme = pkgs.callPackage ./nix/malaysia-icon-theme.nix { src = malaysia-icon-theme; };
         electron-global-menu = pkgs.electron_43.override {
           electron-unwrapped = pkgs.electron_43.unwrapped.overrideAttrs (old: {
             patches = old.patches ++ [ ./nix/patches/electron-wayland-appmenu.patch ];

@@ -39,7 +39,10 @@ The flake exposes `nixosModules.default`:
 manager, creates `/etc/pam.d/malaysia-lock`, enables `hardware.graphics` and starts
 `malaysia-session.target` with the `menubar` and `dock` components
 (`programs.malaysia.shellComponents`) and the wallpaper
-(`programs.malaysia.wallpaper.enable`). The display manager runs
+(`programs.malaysia.wallpaper.enable`). It also installs the
+[Malaysia icon theme](https://github.com/HBlanqueto/malaysia-icon-theme) and
+makes it the default `icon-theme` of GTK and the shell; Settings can still pick
+another. The display manager runs
 `malaysia-compositor --drm`, the direct session of Block 8a.
 
 ## Build

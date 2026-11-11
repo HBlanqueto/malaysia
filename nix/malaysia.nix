@@ -52,6 +52,7 @@ in
       pkgs.libsForQt5.qt5ct
       self.packages.${pkgs.stdenv.hostPlatform.system}.qt6ct-color-scheme
       pkgs.kdePackages.breeze-icons
+      self.packages.${pkgs.stdenv.hostPlatform.system}.malaysia-icon-theme
     ]
     ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
 
@@ -68,6 +69,14 @@ in
     environment.sessionVariables = lib.mkIf cfg.globalMenu.gtk3.enable {
       GTK_MODULES = [ "appmenu-gtk-module" ];
       XDG_DATA_DIRS = [ (pkgs.glib.getSchemaDataDirPath appmenuGtkModule) ];
+    };
+
+    # A default, not a lock: Settings writes the user's choice over it and «Back to Malaysia» resets to it.
+    programs.dconf = {
+      enable = lib.mkDefault true;
+      profiles.user.databases = [
+        { settings."org/gnome/desktop/interface".icon-theme = "Malaysia"; }
+      ];
     };
 
     fonts.packages = [
