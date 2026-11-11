@@ -409,6 +409,9 @@ The hyphenated keys are **exactly** those of `defaults write com.apple.dock ...`
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
 | `lock.idle_timeout_seconds` | integer (seconds) | `0` | **active**, read when the compositor starts | `ext-idle-notify-v1` / auto-lock; also locks before suspend |
+| `lock.clock_style` | `"regular"` \| `"italic"` \| `"rounded"` \| `"dots"` | `"regular"` | **active**, read when the lock starts | shell (lock): clock font ([ADR 0076](../decisions/0076-lock-screen-clock-fonts.md)) |
+| `lock.clock_fill` | `"solid"` \| `"outline"` | `"solid"` | **active**, read when the lock starts | shell (lock): `outline` leaves the digits hollow |
+| `lock.clock_numerals` | `"latn"` \| `"arab"` \| `"beng"` \| `"mymr"` \| `"knda"` \| `"deva"` \| `"guru"` \| `"gujr"` \| `"khmr"` \| `"mlym"` \| `"mtei"` \| `"olck"` \| `"orya"` \| `"telu"` | `"latn"` | **active**, read when the lock starts | shell (lock): numeral system of the clock |
 
 `0` disables automatic locking. When the timeout expires without input, the
 compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhibitor
@@ -607,6 +610,9 @@ remember_selection = false
 ```toml
 # ~/.config/malaysia/lock.domain
 idle_timeout_seconds = 300      # 0 disables auto-lock
+clock_style = "rounded"         # regular | italic | rounded | dots
+clock_fill = "solid"            # solid | outline
+clock_numerals = "latn"         # latn, arab, beng, deva… (CLDR numbering system)
 ```
 
 ```toml

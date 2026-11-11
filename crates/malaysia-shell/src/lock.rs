@@ -26,6 +26,7 @@ use malaysia_services::accounts::Accounts;
 use malaysia_services::bus::use_service;
 use torin::prelude::{Gaps, Position};
 
+use crate::clock_face::ClockFace;
 use crate::localize::tr;
 use crate::menubar::lock_row::{power_icon, slot, status_row};
 use crate::menubar::{bar::schedule_next_minute, system::user_display_name};
@@ -73,6 +74,8 @@ struct LockApp {
     attempt: Rc<RefCell<Option<pam::Attempt>>>,
     user: String,
     clock: State<String>,
+    clock_face: ClockFace,
+    clock_family: &'static str,
     leaving: State<bool>,
     power_menu: State<bool>,
 }
@@ -206,12 +209,14 @@ impl App for LockApp {
                         .font_size(LOCK_DATE_FONT_SIZE)
                         .color(theme::color(LOCK_INK)),
                 )
-                .child(
-                    Text::new(self.clock.read().clone())
+                .child({
+                    let mut clock = Text::new(self.clock_face.localized(&self.clock.read()))
                         .font(ctdesign::LARGE_TITLE)
                         .font_size(LOCK_CLOCK_FONT_SIZE)
-                        .color(theme::color(LOCK_INK)),
-                )
+                        .color(theme::color(LOCK_INK));
+                    clock.text_style_data_mut().font_families = vec![self.clock_family.into()];
+                    clock
+                })
                 .maybe_child((!notices.is_empty()).then(|| {
                     VStack::new()
                         .width(Size::px(NOTIFICATION_WIDTH as f32))
@@ -547,6 +552,8 @@ pub fn run() -> anyhow::Result<()> {
     let attempt = Rc::new(RefCell::new(None));
     let user = pam::current_user().unwrap_or_default();
     start_attempt(&attempt, &events, &user);
+    let clock_face = ClockFace::load();
+    let clock_family = clock_face.register();
     let app = AppComponent::new(LockApp {
         label: State::create_global(tr!("lock-password").to_string()),
         field: State::create_global(PasswordField::default()),
@@ -555,6 +562,8 @@ pub fn run() -> anyhow::Result<()> {
         attempt,
         user,
         clock: State::create_global(chrono::Local::now().format("%H:%M").to_string()),
+        clock_face,
+        clock_family,
         leaving: State::create_global(false),
         power_menu: State::create_global(false),
     });
