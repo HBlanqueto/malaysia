@@ -4,6 +4,7 @@ mod bluetooth;
 mod collection;
 mod crop;
 mod desktop;
+mod dock;
 mod energy;
 mod freedesktop;
 mod localize;

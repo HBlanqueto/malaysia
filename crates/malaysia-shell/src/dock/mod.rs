@@ -1,0 +1,1008 @@
+mod geometry;
+mod items;
+
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    f32::consts::PI,
+    path::PathBuf,
+    rc::Rc,
+    time::Duration,
+};
+
+use bk::adornments::Badge;
+use bk::animation::use_switch_progress;
+use bk::app::{load_defaults, load_restoration, save_defaults, save_restoration, use_defaults};
+use bk::menu::{CheckState, MenuItem};
+use bk::platform::Timers;
+use bk::prelude::*;
+use bk::shell::{
+    Activation, Anchors, BlurRegion, InputRegion, KeyboardInteractivity, Layer, LayerGeometry,
+    LayerSpec, ToplevelInfo, Toplevels, run_layer, set_blur_region, set_input_region,
+    set_layer_geometry,
+};
+use bk::styles::Animation;
+use bk::theme::{self, SurfaceKind};
+use ctappearance::dock::{DockConfig, DockOrientation, MinimizeEffect};
+use ctappearance::notifications::NotificationsConfig;
+use ctdesign::{
+    DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
+    DOCK_HIDE_MS, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y,
+    DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS,
+    DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN,
+    DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
+};
+use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
+use freya_core::integration::AppComponent;
+use serde::{Deserialize, Serialize};
+use torin::prelude::{Gaps, Position};
+
+use crate::desktop::{self, DesktopEntry};
+use crate::launcher::{ICON_SIZES, IconData, app_icon, launch, load_icon, load_icon_in};
+use crate::launcher_entry::{self, Entries, Entry};
+use crate::localize::tr;
+use crate::menubar::{find_entry, resolve_app_name};
+use crate::spawn::{open_settings, xdg_open};
+use geometry::Slot;
+use items::{AppTile, Item};
+
+const DOMAIN: &str = "dock";
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+struct DockState {
+    persistent_apps: Vec<String>,
+    recent_apps: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Drag {
+    id: String,
+    kept: bool,
+    from: (f32, f32),
+    at: (f32, f32),
+    moved: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Frame {
+    orientation: DockOrientation,
+    width: f32,
+    height: f32,
+}
+
+type Area = (f32, f32, f32, f32);
+type Regions = (Vec<(i32, i32, i32, i32)>, Vec<(i32, i32, i32, i32)>);
+
+impl Frame {
+    fn vertical(self) -> bool {
+        self.orientation != DockOrientation::Bottom
+    }
+
+    fn main_length(self) -> f32 {
+        if self.vertical() {
+            self.height
+        } else {
+            self.width
+        }
+    }
+
+    fn canonical(self, (x, y): (f32, f32)) -> (f32, f32) {
+        match self.orientation {
+            DockOrientation::Bottom => (x, self.height - y),
+            DockOrientation::Left => (y, x),
+            DockOrientation::Right => (y, self.width - x),
+        }
+    }
+
+    fn area(self, main: f32, cross: f32, main_length: f32, cross_length: f32) -> Area {
+        match self.orientation {
+            DockOrientation::Bottom => (
+                main,
+                self.height - cross - cross_length,
+                main_length,
+                cross_length,
+            ),
+            DockOrientation::Left => (cross, main, cross_length, main_length),
+            DockOrientation::Right => (
+                self.width - cross - cross_length,
+                main,
+                cross_length,
+                main_length,
+            ),
+        }
+    }
+}
+
+fn placed((x, y, width, height): Area) -> Rect {
+    rect()
+        .position(Position::new_absolute().left(x).top(y))
+        .width(Size::px(width))
+        .height(Size::px(height))
+}
+
+fn region((x, y, width, height): Area) -> (i32, i32, i32, i32) {
+    (
+        x.floor() as i32,
+        y.floor() as i32,
+        width.ceil() as i32,
+        height.ceil() as i32,
+    )
+}
+
+fn anchors(orientation: DockOrientation) -> Anchors {
+    match orientation {
+        DockOrientation::Bottom => Anchors::BOTTOM,
+        DockOrientation::Left => Anchors {
+            left: true,
+            top: true,
+            bottom: true,
+            right: false,
+        },
+        DockOrientation::Right => Anchors {
+            right: true,
+            top: true,
+            bottom: true,
+            left: false,
+        },
+    }
+}
+
+// The surface leaves room above the bar for magnified and bouncing icons and the name label.
+fn layer_geometry(config: &DockConfig, thickness: f32) -> LayerGeometry {
+    let requested = config.tilesize();
+    let headroom = (config.largesize() - requested).max(requested * DOCK_BOUNCE_HEIGHT);
+    let label = 2.0 * (DOCK_LABEL_GAP + DOCK_LABEL_PADDING_Y) + DOCK_LABEL_FONT_SIZE;
+    let extent =
+        (DOCK_EDGE_MARGIN + geometry::thickness(requested) + headroom + label).ceil() as u32;
+    LayerGeometry {
+        anchors: anchors(config.orientation),
+        exclusive_zone: if config.autohide {
+            0
+        } else {
+            (DOCK_EDGE_MARGIN + thickness).ceil() as i32
+        },
+        size: if config.orientation == DockOrientation::Bottom {
+            (0, extent)
+        } else {
+            (extent, 0)
+        },
+        keyboard: KeyboardInteractivity::None,
+    }
+}
+
+fn edit_config(change: impl FnOnce(&mut DockConfig)) {
+    let mut config: DockConfig = load_defaults(DOMAIN);
+    change(&mut config);
+    if let Err(error) = save_defaults(DOMAIN, &config) {
+        tracing::warn!(%error, "dock: could not save dock.domain");
+    }
+}
+
+fn edit_state(mut state: State<DockState>, change: impl FnOnce(&mut DockState)) {
+    let mut next = state.peek().clone();
+    change(&mut next);
+    if next == *state.peek() {
+        return;
+    }
+    if let Err(error) = save_restoration(DOMAIN, &next) {
+        tracing::warn!(%error, "dock: could not save dock.state");
+    }
+    state.set(next);
+}
+
+fn use_launcher_entries() -> Entries {
+    let entries = use_hook(Entries::default);
+    let tick = use_state(|| 0u64);
+    use_hook({
+        let entries = entries.clone();
+        move || {
+            let wake = Timers::get().wakeup(move || {
+                let mut tick = tick;
+                *tick.write() += 1;
+            });
+            launcher_entry::start(entries, wake);
+        }
+    });
+    let _ = *tick.read();
+    entries
+}
+
+fn launcher_entry(entries: &Entries, id: &str) -> Option<Entry> {
+    entries
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(id))
+        .map(|(_, entry)| entry.clone())
+}
+
+fn entry_for<'a>(id: &str, entries: &'a [DesktopEntry]) -> Option<&'a DesktopEntry> {
+    entries
+        .iter()
+        .find(|entry| entry.id == id)
+        .or_else(|| find_entry(id, entries))
+}
+
+fn window_title(window: &ToplevelInfo) -> String {
+    if window.title.is_empty() {
+        window.app_id.clone()
+    } else {
+        window.title.clone()
+    }
+}
+
+fn downloads_dir() -> PathBuf {
+    ctappearance::xdg::user_dir("DOWNLOAD").unwrap_or_else(|| {
+        PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join("Downloads")
+    })
+}
+
+struct DockApp {
+    entries: Rc<Vec<DesktopEntry>>,
+}
+
+impl App for DockApp {
+    fn render(&self) -> impl IntoElement {
+        let entries = &self.entries;
+        let toplevels = Toplevels::get();
+        let windows = toplevels.list.read().clone();
+        let config = use_defaults::<DockConfig>(DOMAIN).read().clone();
+        let notifications = use_defaults::<NotificationsConfig>("notifications")
+            .read()
+            .clone();
+        let launcher_entries = use_launcher_entries();
+        let state = use_state(|| load_restoration::<DockState>(DOMAIN));
+        let mut size = use_state(|| (0.0f32, 0.0f32));
+        let mut pointer = use_state(|| None::<(f32, f32)>);
+        let mut hovering = use_state(|| false);
+        let mut shown = use_state(|| !config.autohide);
+        let mut launching = use_state(Vec::<String>::new);
+        let mut resizing = use_state(|| None::<(f32, i32)>);
+        let mut dragging = use_state(|| None::<Drag>);
+        let after_drag = use_hook(|| Rc::new(Cell::new(false)));
+        let revealing = use_hook(|| Rc::new(Cell::new(false)));
+        let written_size = use_hook(|| Rc::new(Cell::new(0)));
+        let icons = use_hook(|| Rc::new(RefCell::new(HashMap::<String, Option<IconData>>::new())));
+        let activation = Activation::get();
+        let timers = Timers::get();
+
+        let running = items::running(&windows, entries);
+        let running_ids: Vec<String> = running.iter().map(|(id, _)| id.clone()).collect();
+        let previous = use_hook(|| Rc::new(RefCell::new(Vec::<String>::new())));
+        use_side_effect_with_deps(&running_ids, move |now: &Vec<String>| {
+            let closed: Vec<String> = previous
+                .borrow()
+                .iter()
+                .filter(|id| !now.contains(id))
+                .cloned()
+                .collect();
+            *previous.borrow_mut() = now.clone();
+            launching.write().retain(|id| !now.contains(id));
+            if !closed.is_empty() {
+                edit_state(state, |state| {
+                    state.recent_apps =
+                        items::remember_closed(&state.recent_apps, &closed, &state.persistent_apps);
+                });
+            }
+        });
+        use_side_effect_with_deps(&config.autohide, move |autohide: &bool| {
+            shown.set(!*autohide)
+        });
+
+        let magnify = use_switch_progress(
+            hovering,
+            Animation::Ease {
+                duration_ms: DOCK_MAGNIFY_MS,
+            },
+        );
+        let hide_ms = (DOCK_HIDE_MS as f32 * config.autohide_time_modifier.max(0.0)) as u64;
+        let visible = use_switch_progress(
+            shown,
+            if hide_ms == 0 {
+                Animation::None
+            } else {
+                Animation::Ease {
+                    duration_ms: hide_ms,
+                }
+            },
+        );
+        let mut bounce = use_animation(|conf| {
+            conf.on_finish(OnFinish::Restart {
+                delay: Duration::ZERO,
+            });
+            AnimNum::new(0.0, 1.0).time(DOCK_BOUNCE_MS)
+        });
+        let bouncing = !launching.read().is_empty();
+        use_side_effect_with_deps(&bouncing, move |bouncing: &bool| {
+            if *bouncing {
+                bounce.start();
+            } else {
+                bounce.reset();
+            }
+        });
+        let phase = bounce.get().value();
+
+        let (width, height) = *size.read();
+        let frame = Frame {
+            orientation: config.orientation,
+            width,
+            height,
+        };
+        let dock_state = state.read().clone();
+        let list = items::items(
+            &config,
+            &dock_state.persistent_apps,
+            &dock_state.recent_apps,
+            &running,
+        );
+        let slots: Vec<Slot> = list
+            .iter()
+            .map(|item| match item {
+                Item::Separator => Slot::Separator,
+                _ => Slot::Tile,
+            })
+            .collect();
+        let tile = geometry::fit(config.tilesize(), frame.main_length(), &slots);
+        let largesize = config.largesize();
+        let pointer_at = *pointer.read();
+        let layout = geometry::layout(
+            &slots,
+            tile,
+            largesize,
+            frame.main_length() / 2.0,
+            pointer_at.map(|at| frame.canonical(at).0),
+            magnify,
+        );
+        let cross0 = DOCK_EDGE_MARGIN - (layout.thickness + DOCK_EDGE_MARGIN) * (1.0 - visible);
+        let icon_cross = cross0 + layout.padding;
+        let envelope = layout.thickness.max(layout.padding + largesize);
+
+        let applied_layer = use_hook(|| Rc::new(Cell::new(None::<LayerGeometry>)));
+        let layer = layer_geometry(&config, layout.thickness);
+        if width > 0.0 && applied_layer.replace(Some(layer)) != Some(layer) {
+            set_layer_geometry(layer);
+        }
+        let bar = frame.area(
+            layout.bar_start,
+            cross0,
+            layout.bar_length,
+            layout.thickness,
+        );
+        let input = if config.autohide && visible < 0.01 {
+            frame.area(0.0, 0.0, frame.main_length(), DOCK_REVEAL_STRIP as f32)
+        } else if *hovering.read() {
+            frame.area(layout.bar_start, cross0, layout.bar_length, envelope)
+        } else {
+            bar
+        };
+        let regions = (
+            vec![region(input)],
+            if visible > 0.01 {
+                vec![region(bar)]
+            } else {
+                Vec::new()
+            },
+        );
+        let applied_regions = use_hook(|| Rc::new(RefCell::new(None::<Regions>)));
+        if width > 0.0 && applied_regions.borrow().as_ref() != Some(&regions) {
+            set_input_region(InputRegion {
+                rects: regions.0.clone(),
+            });
+            set_blur_region(BlurRegion {
+                rects: regions.1.clone(),
+            });
+            *applied_regions.borrow_mut() = Some(regions);
+        }
+
+        let resolved = bk::theme::resolved();
+        let glass_rgba = bk::theme::surface_background(&resolved, SurfaceKind::LayerShell);
+        let glass = theme::color(glass_rgba);
+        let ink = theme::color(resolved.shell.text);
+        let separator_ink = theme::color(resolved.menu_separator(glass_rgba));
+        let progress_track = theme::color(resolved.shell.tile);
+        let progress_fill = theme::color(resolved.shell.tile_active);
+        let dot = (tile * DOCK_DOT).clamp(DOCK_DOT_MIN, DOCK_DOT_MAX);
+        let drag_now = dragging.read().clone();
+        let launching_now = launching.read().clone();
+
+        let icon = {
+            let icons = icons.clone();
+            move |name: &str, contexts: &[&str]| -> Option<IconData> {
+                icons
+                    .borrow_mut()
+                    .entry(name.to_string())
+                    .or_insert_with(|| {
+                        if contexts == ["apps"] {
+                            load_icon(Some(name))
+                        } else {
+                            load_icon_in(Some(name), ICON_SIZES, contexts)
+                        }
+                    })
+                    .clone()
+            }
+        };
+        let app_name = |id: &str| match entry_for(id, entries) {
+            Some(entry) => entry.name.clone(),
+            None => resolve_app_name(Some(id), entries),
+        };
+        let app_icon_named = |id: &str, size: f32| {
+            let name = entry_for(id, entries)
+                .and_then(|entry| entry.icon.clone())
+                .unwrap_or_else(|| id.to_string());
+            app_icon(icon(&name, &["apps"]).as_ref(), &app_name(id), size)
+        };
+
+        let open_app = {
+            let toplevels = toplevels.clone();
+            let entries = entries.clone();
+            let activation = activation.clone();
+            let timers = timers.clone();
+            let launchanim = config.launchanim;
+            Rc::new(move |app: &AppTile| {
+                let mut launching = launching;
+                if let Some(window) = app.windows.iter().find(|window| !window.minimized) {
+                    toplevels.activate(window.id);
+                    return;
+                }
+                if let Some(window) = app.windows.first() {
+                    toplevels.unset_minimized(window.id);
+                    toplevels.activate(window.id);
+                    return;
+                }
+                let Some(entry) = entry_for(&app.id, &entries).cloned() else {
+                    return;
+                };
+                if launchanim && !launching.peek().contains(&app.id) {
+                    launching.write().push(app.id.clone());
+                    let id = app.id.clone();
+                    timers.after(Duration::from_millis(DOCK_LAUNCH_TIMEOUT_MS), move || {
+                        let mut launching = launching;
+                        launching.write().retain(|launching| *launching != id)
+                    });
+                }
+                launch(&activation, &timers, entry, || {});
+            })
+        };
+
+        let mut children: Vec<Element> = vec![
+            placed(bar)
+                .corner_radius(layout.thickness * DOCK_RADIUS)
+                .background(glass)
+                .into_element(),
+        ];
+        let mut drop_targets: Vec<(String, f32)> = Vec::new();
+        for (item, slot) in list.iter().zip(&layout.placed) {
+            let center = slot.start + slot.length / 2.0;
+            match item {
+                Item::Separator => {
+                    let length = tile * DOCK_SEPARATOR_LENGTH;
+                    let line = if frame.vertical() {
+                        rect().width(Size::px(length)).height(Size::px(1.0))
+                    } else {
+                        rect().width(Size::px(1.0)).height(Size::px(length))
+                    };
+                    let start_size = config.tilesize;
+                    children.push(
+                        placed(frame.area(slot.start, cross0, slot.length, layout.thickness))
+                            .center()
+                            .child(line.background(separator_ink))
+                            .on_pointer_down(move |event: Event<PointerEventData>| {
+                                let at = event.global_location();
+                                let (_, cross) = frame.canonical((at.x as f32, at.y as f32));
+                                resizing.set(Some((cross, start_size)));
+                            })
+                            .context_menu(separator_menu(&config), on_separator_command)
+                            .into_element(),
+                    );
+                }
+                Item::App(app) => {
+                    if app.kept && drag_now.as_ref().is_none_or(|drag| drag.id != app.id) {
+                        drop_targets.push((app.id.clone(), center));
+                    }
+                    let lift = if launching_now.contains(&app.id) {
+                        (PI * phase).sin() * tile * DOCK_BOUNCE_HEIGHT
+                    } else {
+                        0.0
+                    };
+                    let dragged = drag_now
+                        .as_ref()
+                        .is_some_and(|drag| drag.moved && drag.id == app.id);
+                    let launcher = launcher_entry(&launcher_entries, &app.id);
+                    let badge = launcher
+                        .as_ref()
+                        .and_then(Entry::badge)
+                        .filter(|_| notifications.app(&app.id).badge);
+                    let progress = launcher.as_ref().and_then(Entry::progress);
+                    let open = open_app.clone();
+                    let pressed = app.clone();
+                    let after_drag_down = after_drag.clone();
+                    let after_drag = after_drag.clone();
+                    let commands = AppCommands {
+                        app: app.clone(),
+                        toplevels: toplevels.clone(),
+                        state,
+                        open: open_app.clone(),
+                    };
+                    let (kept, id) = (app.kept, app.id.clone());
+                    children.push(
+                        placed(frame.area(slot.start, icon_cross + lift, slot.size, slot.size))
+                            .opacity(if dragged { 0.0 } else { 1.0 })
+                            .child(app_icon_named(&app.id, slot.size))
+                            .maybe_child(badge.map(|count| {
+                                rect()
+                                    .position(Position::new_absolute().top(0.0).right(0.0))
+                                    .child(Badge::new(count.to_string()))
+                            }))
+                            .maybe_child(progress.map(|progress| {
+                                progress_bar(slot.size, progress, progress_track, progress_fill)
+                            }))
+                            .on_pointer_down(move |event: Event<PointerEventData>| {
+                                let at = event.global_location();
+                                let at = (at.x as f32, at.y as f32);
+                                after_drag_down.set(false);
+                                dragging.set(Some(Drag {
+                                    id: id.clone(),
+                                    kept,
+                                    from: at,
+                                    at,
+                                    moved: false,
+                                }));
+                            })
+                            .on_press(move |_| {
+                                let dragged =
+                                    dragging.peek().as_ref().is_some_and(|drag| drag.moved);
+                                if !(dragged || after_drag.replace(false)) {
+                                    open(&pressed);
+                                }
+                            })
+                            .context_menu(app_menu(app), move |command: String| {
+                                commands.run(&command)
+                            })
+                            .into_element(),
+                    );
+                    let bouncing = launching_now.contains(&app.id);
+                    if config.show_process_indicators && !app.windows.is_empty() && !bouncing {
+                        children.push(
+                            placed(frame.area(
+                                center - dot / 2.0,
+                                cross0 + layout.padding / 2.0 - dot / 2.0,
+                                dot,
+                                dot,
+                            ))
+                            .corner_radius(dot / 2.0)
+                            .background(ink)
+                            .into_element(),
+                        );
+                    }
+                }
+                Item::Window(window) => {
+                    let toplevels = toplevels.clone();
+                    let close = toplevels.clone();
+                    let id = window.id;
+                    let key = items::app_key(window, entries);
+                    children.push(
+                        placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
+                            .center()
+                            .child(
+                                rect()
+                                    .width(Size::px(slot.size * DOCK_WINDOW_FRAME))
+                                    .height(Size::px(slot.size * DOCK_WINDOW_FRAME))
+                                    .corner_radius(slot.size * DOCK_RADIUS / 2.0)
+                                    .background(progress_track)
+                                    .center()
+                                    .child(app_icon_named(&key, slot.size * DOCK_WINDOW_ICON)),
+                            )
+                            .on_press(move |_| {
+                                toplevels.unset_minimized(id);
+                                toplevels.activate(id);
+                            })
+                            .context_menu(
+                                vec![MenuItem::action("close", tr!("menu-close-window"))],
+                                move |_: String| close.close(id),
+                            )
+                            .into_element(),
+                    );
+                }
+                Item::Downloads => {
+                    let folder = downloads_dir();
+                    children.push(
+                        placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
+                            .child(app_icon(
+                                icon("folder-download", &["places"]).as_ref(),
+                                tr!("dock-downloads"),
+                                slot.size,
+                            ))
+                            .on_press(move |_| xdg_open(&folder))
+                            .into_element(),
+                    );
+                }
+                Item::Trash => {
+                    children.push(
+                        placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
+                            .child(app_icon(
+                                icon("user-trash", &["places"]).as_ref(),
+                                tr!("dock-trash"),
+                                slot.size,
+                            ))
+                            .on_press(move |_| xdg_open("trash:///"))
+                            .into_element(),
+                    );
+                }
+            }
+        }
+
+        let hovered = pointer_at
+            .filter(|_| *hovering.read() && drag_now.is_none())
+            .and_then(|at| geometry::slot_at(&layout, frame.canonical(at).0))
+            .and_then(|index| {
+                let label = match &list[index] {
+                    Item::App(app) => app_name(&app.id),
+                    Item::Window(window) => window_title(window),
+                    Item::Downloads => tr!("dock-downloads").to_string(),
+                    Item::Trash => tr!("dock-trash").to_string(),
+                    Item::Separator => return None,
+                };
+                Some((label, layout.placed[index]))
+            });
+        if let Some((text, slot)) = hovered {
+            let bubble = rect()
+                .padding(Gaps::new(
+                    DOCK_LABEL_PADDING_Y,
+                    DOCK_LABEL_PADDING_X,
+                    DOCK_LABEL_PADDING_Y,
+                    DOCK_LABEL_PADDING_X,
+                ))
+                .corner_radius(DOCK_LABEL_RADIUS)
+                .background(glass)
+                .child(Text::new(text).font_size(DOCK_LABEL_FONT_SIZE).color(ink));
+            let beyond = icon_cross + slot.size + DOCK_LABEL_GAP;
+            let center = slot.start + slot.length / 2.0;
+            let lane = match config.orientation {
+                DockOrientation::Bottom => rect()
+                    .position(
+                        Position::new_absolute()
+                            .left(center - width / 2.0)
+                            .bottom(beyond),
+                    )
+                    .width(Size::px(width))
+                    .main_align(Alignment::Center)
+                    .direction(Direction::Horizontal),
+                DockOrientation::Left => rect()
+                    .position(
+                        Position::new_absolute()
+                            .left(beyond)
+                            .top(center - slot.size / 2.0),
+                    )
+                    .height(Size::px(slot.size))
+                    .main_align(Alignment::Center),
+                DockOrientation::Right => rect()
+                    .position(
+                        Position::new_absolute()
+                            .right(beyond)
+                            .top(center - slot.size / 2.0),
+                    )
+                    .height(Size::px(slot.size))
+                    .main_align(Alignment::Center)
+                    .cross_align(Alignment::End),
+            };
+            children.push(lane.child(bubble).into_element());
+        }
+
+        if let Some(drag) = drag_now.as_ref().filter(|drag| drag.moved) {
+            let (_, cross) = frame.canonical(drag.at);
+            let removing = cross > cross0 + layout.thickness + tile;
+            children.push(
+                placed((drag.at.0 - tile / 2.0, drag.at.1 - tile / 2.0, tile, tile))
+                    .child(app_icon_named(&drag.id, tile))
+                    .maybe_child(removing.then(|| {
+                        rect()
+                            .position(
+                                Position::new_absolute()
+                                    .left(0.0)
+                                    .top(-DOCK_LABEL_GAP * 2.0),
+                            )
+                            .width(Size::px(tile))
+                            .center()
+                            .child(
+                                rect()
+                                    .padding(Gaps::new(
+                                        DOCK_LABEL_PADDING_Y,
+                                        DOCK_LABEL_PADDING_X,
+                                        DOCK_LABEL_PADDING_Y,
+                                        DOCK_LABEL_PADDING_X,
+                                    ))
+                                    .corner_radius(DOCK_LABEL_RADIUS)
+                                    .background(glass)
+                                    .child(
+                                        Text::new(tr!("dock-remove"))
+                                            .font_size(DOCK_LABEL_FONT_SIZE)
+                                            .color(ink),
+                                    ),
+                            )
+                    }))
+                    .into_element(),
+            );
+        }
+
+        let bar_span = (layout.bar_start, layout.bar_start + layout.bar_length);
+        let thickness = layout.thickness;
+        let autohide = config.autohide;
+        let delay = config.autohide_delay;
+        let reveal_timers = timers.clone();
+        let reveal = revealing.clone();
+        let leave = revealing.clone();
+        let tilesize = config.tilesize;
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .on_sized(move |event: Event<SizedEventData>| {
+                size.set_if_modified((event.area.width(), event.area.height()))
+            })
+            .on_pointer_move(move |event: Event<PointerEventData>| {
+                let at = event.global_location();
+                let at = (at.x as f32, at.y as f32);
+                pointer.set(Some(at));
+                let (main, cross) = frame.canonical(at);
+                let reach = if *hovering.peek() {
+                    envelope
+                } else {
+                    thickness
+                };
+                hovering.set_if_modified(
+                    (bar_span.0..=bar_span.1).contains(&main) && cross <= cross0 + reach,
+                );
+                if autohide && !*shown.peek() && !reveal.get() {
+                    reveal.set(true);
+                    let reveal = reveal.clone();
+                    reveal_timers.after(Duration::from_secs_f32(delay.max(0.0)), move || {
+                        if reveal.replace(false) {
+                            let mut shown = shown;
+                            shown.set(true);
+                        }
+                    });
+                }
+            })
+            .on_pointer_leave(move |_| {
+                hovering.set(false);
+                leave.set(false);
+                if autohide && dragging.peek().is_none() && resizing.peek().is_none() {
+                    shown.set(false);
+                }
+            })
+            .on_global_pointer_move(move |event: Event<PointerEventData>| {
+                let at = event.global_location();
+                let at = (at.x as f32, at.y as f32);
+                if let Some((start_cross, start_size)) = *resizing.peek() {
+                    let (_, cross) = frame.canonical(at);
+                    let next = (start_size as f32 + cross - start_cross)
+                        .round()
+                        .clamp(DOCK_TILESIZE_MIN as f32, DOCK_TILESIZE_MAX as f32)
+                        as i32;
+                    if next != tilesize && written_size.replace(next) != next {
+                        edit_config(|config| config.tilesize = next);
+                    }
+                }
+                let moving = dragging.peek().clone();
+                if let Some(mut drag) = moving {
+                    let (dx, dy) = (at.0 - drag.from.0, at.1 - drag.from.1);
+                    drag.moved |= dx.hypot(dy) > DRAG.threshold;
+                    drag.at = at;
+                    dragging.set(Some(drag));
+                }
+            })
+            .on_global_pointer_up(move |_| {
+                resizing.set(None);
+                let Some(drag) = dragging.peek().clone() else {
+                    return;
+                };
+                dragging.set(None);
+                if !drag.moved {
+                    return;
+                }
+                after_drag.set(true);
+                let (main, cross) = frame.canonical(drag.at);
+                let remove = cross > cross0 + thickness + tile;
+                let before = drop_targets
+                    .iter()
+                    .find(|(_, center)| main < *center)
+                    .map(|(id, _)| id.clone());
+                let beyond_kept = before.is_none()
+                    && drop_targets
+                        .last()
+                        .is_some_and(|(_, center)| main > center + tile * 1.5);
+                let keep = !remove && !(beyond_kept && !drag.kept);
+                edit_state(state, |state| {
+                    state.persistent_apps =
+                        items::dropped(&state.persistent_apps, &drag.id, before.as_deref(), keep);
+                });
+            })
+            .children(children)
+    }
+}
+
+fn progress_bar(size: f32, progress: f64, track: Color, fill: Color) -> Rect {
+    let inset = size / 8.0;
+    let width = size - 2.0 * inset;
+    rect()
+        .position(Position::new_absolute().bottom(inset).left(inset))
+        .width(Size::px(width))
+        .height(Size::px(DOCK_PROGRESS_HEIGHT))
+        .corner_radius(DOCK_PROGRESS_HEIGHT / 2.0)
+        .background(track)
+        .child(
+            rect()
+                .width(Size::px(width * progress.clamp(0.0, 1.0) as f32))
+                .height(Size::fill())
+                .corner_radius(DOCK_PROGRESS_HEIGHT / 2.0)
+                .background(fill),
+        )
+}
+
+fn app_menu(app: &AppTile) -> Vec<MenuItem> {
+    let mut menu: Vec<MenuItem> = app
+        .windows
+        .iter()
+        .map(|window| {
+            MenuItem::action(format!("window:{}", window.id), window_title(window))
+                .with_check(CheckState::Checkbox(window.active))
+        })
+        .collect();
+    if !menu.is_empty() {
+        menu.push(MenuItem::Separator);
+    }
+    menu.push(MenuItem::submenu(
+        tr!("dock-options"),
+        vec![
+            MenuItem::action("keep", tr!("dock-keep-in-dock"))
+                .with_check(CheckState::Checkbox(app.kept)),
+        ],
+    ));
+    menu.push(MenuItem::Separator);
+    if app.windows.is_empty() {
+        menu.push(MenuItem::action("open", tr!("dock-open")));
+    } else {
+        menu.push(MenuItem::action("hide", tr!("dock-hide")));
+        menu.push(MenuItem::action("quit", tr!("dock-quit")));
+    }
+    menu
+}
+
+struct AppCommands {
+    app: AppTile,
+    toplevels: Toplevels,
+    state: State<DockState>,
+    open: Rc<dyn Fn(&AppTile)>,
+}
+
+impl AppCommands {
+    fn run(&self, command: &str) {
+        let windows = || self.app.windows.iter().map(|window| window.id);
+        match command {
+            "keep" => {
+                let (id, kept) = (self.app.id.clone(), self.app.kept);
+                edit_state(self.state, |state| {
+                    state.persistent_apps =
+                        items::dropped(&state.persistent_apps, &id, None, !kept);
+                });
+            }
+            "open" => (self.open)(&self.app),
+            "hide" => windows().for_each(|id| self.toplevels.minimize(id)),
+            "quit" => windows().for_each(|id| self.toplevels.close(id)),
+            window => {
+                if let Some(id) = window
+                    .strip_prefix("window:")
+                    .and_then(|id| id.parse().ok())
+                {
+                    self.toplevels.unset_minimized(id);
+                    self.toplevels.activate(id);
+                }
+            }
+        }
+    }
+}
+
+const ORIENTATIONS: [(DockOrientation, &str); 3] = [
+    (DockOrientation::Left, "left"),
+    (DockOrientation::Bottom, "bottom"),
+    (DockOrientation::Right, "right"),
+];
+
+const EFFECTS: [(MinimizeEffect, &str); 2] = [
+    (MinimizeEffect::Genie, "genie"),
+    (MinimizeEffect::Scale, "scale"),
+];
+
+fn orientation_label(orientation: DockOrientation) -> &'static str {
+    match orientation {
+        DockOrientation::Left => tr!("dock-left"),
+        DockOrientation::Bottom => tr!("dock-bottom"),
+        DockOrientation::Right => tr!("dock-right"),
+    }
+}
+
+fn effect_label(effect: MinimizeEffect) -> &'static str {
+    match effect {
+        MinimizeEffect::Genie => tr!("dock-genie"),
+        MinimizeEffect::Scale => tr!("dock-scale"),
+        MinimizeEffect::Suck => tr!("dock-suck"),
+    }
+}
+
+fn separator_menu(config: &DockConfig) -> Vec<MenuItem> {
+    let radio = |id: &str, label: &str, on: bool| {
+        MenuItem::action(id.to_string(), label.to_string()).with_check(CheckState::Radio(on))
+    };
+    vec![
+        MenuItem::action(
+            "hiding",
+            if config.autohide {
+                tr!("dock-hiding-off")
+            } else {
+                tr!("dock-hiding-on")
+            },
+        ),
+        MenuItem::action(
+            "magnification",
+            if config.magnification {
+                tr!("dock-magnification-off")
+            } else {
+                tr!("dock-magnification-on")
+            },
+        ),
+        MenuItem::Separator,
+        MenuItem::submenu(
+            tr!("dock-position"),
+            ORIENTATIONS
+                .iter()
+                .map(|(value, id)| {
+                    radio(id, orientation_label(*value), config.orientation == *value)
+                })
+                .collect(),
+        ),
+        MenuItem::submenu(
+            tr!("dock-minimize-using"),
+            EFFECTS
+                .iter()
+                .map(|(value, id)| radio(id, effect_label(*value), config.mineffect == *value))
+                .collect(),
+        ),
+        MenuItem::Separator,
+        MenuItem::action("settings", tr!("dock-settings")),
+    ]
+}
+
+fn on_separator_command(command: String) {
+    match command.as_str() {
+        "hiding" => edit_config(|config| config.autohide = !config.autohide),
+        "magnification" => edit_config(|config| config.magnification = !config.magnification),
+        "settings" => open_settings("desktop-dock"),
+        id => {
+            if let Some((value, _)) = ORIENTATIONS.iter().find(|(_, key)| *key == id) {
+                edit_config(|config| config.orientation = *value);
+            } else if let Some((value, _)) = EFFECTS.iter().find(|(_, key)| *key == id) {
+                edit_config(|config| config.mineffect = *value);
+            }
+        }
+    }
+}
+
+pub fn run() -> anyhow::Result<()> {
+    let config: DockConfig = load_defaults(DOMAIN);
+    let geometry = layer_geometry(&config, geometry::thickness(config.tilesize()));
+    let app = AppComponent::new(DockApp {
+        entries: Rc::new(desktop::read_entries()),
+    });
+    run_layer(
+        app,
+        LayerSpec {
+            namespace: "malaysia-dock".to_string(),
+            layer: Layer::Top,
+            anchors: geometry.anchors,
+            exclusive_zone: geometry.exclusive_zone,
+            keyboard: geometry.keyboard,
+            size: Some(geometry.size),
+        },
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))
+}

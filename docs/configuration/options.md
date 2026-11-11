@@ -390,19 +390,23 @@ desktop (`shown`, `shuffled_at`).
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `dock.autohide` | bool | `false` | pending | shell (dock) |
-| `dock.orientation` | `"bottom"` \| `"left"` \| `"right"` | `"bottom"` | pending | shell |
-| `dock.magnification` | bool | `false` | pending | shell |
-| `dock.tilesize` | integer (px) | `48` | pending | shell |
-| `dock.largesize` | integer (px) | `64` | pending | shell |
-| `dock.mineffect` | `"genie"` \| `"scale"` \| `"suck"` | `"genie"` | pending | shell |
-| `dock.show-process-indicators` | bool | `true` | pending | shell |
-| `dock.static-only` | bool | `false` | pending | shell |
-| `dock.minimize-to-application` | bool | `false` | pending | shell |
-| `dock.show-recents` | bool | `true` | pending | shell |
-| `dock.launchanim` | bool | `true` | pending | shell: the icon bounces while the app starts |
-| `dock.autohide-delay` | float (seconds) | `0.0` | pending | shell: wait before the hidden Dock shows |
-| `dock.autohide-time-modifier` | float | `1.0` | pending | shell: multiplies the show and hide animation; `0` removes it |
+| `dock.autohide` | bool | `false` | **active** | shell (dock): slides off the edge; exclusive zone 0 |
+| `dock.orientation` | `"bottom"` \| `"left"` \| `"right"` | `"bottom"` | **active** | shell (dock) |
+| `dock.magnification` | bool | `false` | **active** | shell (dock) |
+| `dock.tilesize` | integer (px, 16–128) | `48` | **active** | shell (dock): fitted to the screen; dragging the separator writes it |
+| `dock.largesize` | integer (px, 16–128) | `64` | **active** | shell (dock): magnified size |
+| `dock.mineffect` | `"genie"` \| `"scale"` \| `"suck"` | `"genie"` | pending | compositor: the minimize animation is not drawn yet |
+| `dock.show-process-indicators` | bool | `true` | **active** | shell (dock) |
+| `dock.static-only` | bool | `false` | **active** | shell (dock) |
+| `dock.minimize-to-application` | bool | `false` | **active** | shell (dock): no tile per minimized window |
+| `dock.show-recents` | bool | `true` | **active** | shell (dock): up to 3 |
+| `dock.launchanim` | bool | `true` | **active** | shell (dock): the icon bounces while the app starts |
+| `dock.autohide-delay` | float (seconds) | `0.0` | **active** | shell (dock): wait before the hidden Dock shows |
+| `dock.autohide-time-modifier` | float | `1.0` | **active** | shell (dock): multiplies the show and hide animation; `0` removes it |
+
+System Settings › Desktop & Dock writes every key but `suck`. The kept and
+recent apps are state, not preferences: `persistent-apps` and `recent-apps`
+in `~/.local/share/malaysia/dock.state`.
 
 `mineffect` uses macOS's names: "**Minimize windows using: Genie / Scale**".
 The hyphenated keys are **exactly** those of `defaults write com.apple.dock ...`.

@@ -197,17 +197,26 @@ fn launcher(close: Rc<dyn Fn()>) -> Rc<dyn Fn(AppEntry)> {
     let timers = Timers::get();
     Rc::new(move |entry: AppEntry| {
         let close = close.clone();
-        let launched = Cell::new(false);
-        let launch = Rc::new(move |token: Option<String>| {
-            if !launched.replace(true) {
-                spawn_entry(&entry.desktop, token.as_deref());
-                close();
-            }
-        });
-        let fallback = launch.clone();
-        timers.after(Duration::from_millis(250), move || fallback(None));
-        activation.request(move |token| launch(token));
+        launch(&activation, &timers, entry.desktop, move || close());
     })
+}
+
+pub(crate) fn launch(
+    activation: &Activation,
+    timers: &Timers,
+    entry: DesktopEntry,
+    launched: impl Fn() + 'static,
+) {
+    let spawned = Cell::new(false);
+    let spawn = Rc::new(move |token: Option<String>| {
+        if !spawned.replace(true) {
+            spawn_entry(&entry, token.as_deref());
+            launched();
+        }
+    });
+    let fallback = spawn.clone();
+    timers.after(Duration::from_millis(250), move || fallback(None));
+    activation.request(move |token| spawn(token));
 }
 
 pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
@@ -341,14 +350,13 @@ pub fn run() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
+pub(crate) const ICON_SIZES: &[&str] = &[
+    "scalable", "512x512", "256x256", "128x128", "96x96", "64x64", "48x48", "32x32", "24x24",
+    "16x16",
+];
+
 pub(crate) fn load_icon(icon: Option<&str>) -> Option<IconData> {
-    load_icon_sized(
-        icon,
-        &[
-            "scalable", "512x512", "256x256", "128x128", "96x96", "64x64", "48x48", "32x32",
-            "24x24", "16x16",
-        ],
-    )
+    load_icon_sized(icon, ICON_SIZES)
 }
 
 pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<IconData> {

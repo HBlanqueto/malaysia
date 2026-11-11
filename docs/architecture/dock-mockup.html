@@ -391,32 +391,29 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
     <div class="card full">
       <h2>The “Dock” section in <code>dock.domain</code></h2>
-      <p>Every key in <a href="../configuration/options.md#dock--shell-dock-malaysia-shell-dock-macos-comappledock">options.md</a> is pending: the shell does not read <code>dock.domain</code> yet.</p>
+      <p>The shell reads every key; <a href="../configuration/options.md#dock--shell-dock-malaysia-shell-dock-macos-comappledock">options.md</a> is the source of each status.</p>
       <div class="tbl"><table>
         <thead><tr><th>Control</th><th>Key</th><th>Values</th><th>Status</th></tr></thead>
         <tbody>
-          <tr><td>Size</td><td><code>dock.tilesize</code></td><td>16–128 px · 48</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Magnification</td><td><code>dock.magnification</code> + <code>dock.largesize</code></td><td>bool + 16–128 px · 64</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Position on screen</td><td><code>dock.orientation</code></td><td>left · bottom · right</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Size</td><td><code>dock.tilesize</code></td><td>16–128 px · 48</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Magnification</td><td><code>dock.magnification</code> + <code>dock.largesize</code></td><td>bool + 16–128 px · 64</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Position on screen</td><td><code>dock.orientation</code></td><td>left · bottom · right</td><td><span class="st a">active</span></td></tr>
           <tr><td>Minimize windows using</td><td><code>dock.mineffect</code></td><td>genie · scale · suck</td><td><span class="st p">pending</span></td></tr>
           <tr><td>Title bar double-click</td><td><code>window.double_click_titlebar</code></td><td>fill · zoom · minimize · none</td><td><span class="st a">active</span></td></tr>
-          <tr><td>Minimize into application icon</td><td><code>dock.minimize-to-application</code></td><td>bool · false</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Automatically hide</td><td><code>dock.autohide</code></td><td>bool · false</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Animate opening applications</td><td><code>dock.launchanim</code></td><td>bool · true</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Indicators for open applications</td><td><code>dock.show-process-indicators</code></td><td>bool · true</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Recent apps</td><td><code>dock.show-recents</code></td><td>bool · true</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Only open apps</td><td><code>dock.static-only</code></td><td>bool · false</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Delay before showing</td><td><code>dock.autohide-delay</code></td><td>0–1 s · 0</td><td><span class="st p">pending</span></td></tr>
-          <tr><td>Animation duration</td><td><code>dock.autohide-time-modifier</code></td><td>0–2 · 1</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Minimize into application icon</td><td><code>dock.minimize-to-application</code></td><td>bool · false</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Automatically hide</td><td><code>dock.autohide</code></td><td>bool · false</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Animate opening applications</td><td><code>dock.launchanim</code></td><td>bool · true</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Indicators for open applications</td><td><code>dock.show-process-indicators</code></td><td>bool · true</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Recent apps</td><td><code>dock.show-recents</code></td><td>bool · true</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Only open apps</td><td><code>dock.static-only</code></td><td>bool · false</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Delay before showing</td><td><code>dock.autohide-delay</code></td><td>0–1 s · 0</td><td><span class="st a">active</span></td></tr>
+          <tr><td>Animation duration</td><td><code>dock.autohide-time-modifier</code></td><td>0–2 · 1</td><td><span class="st a">active</span></td></tr>
         </tbody>
       </table></div>
-      <h3>What the shell and the compositor still need</h3>
+      <h3>What is still pending</h3>
       <ul>
-        <li><b>App icons.</b> Today each slot shows the title. The Dock must resolve <code>app_id</code> → <code>.desktop</code> → the Malaysia theme icon, and group windows by app (one icon and one dot per app, not per window).</li>
-        <li><b>Kept apps.</b> A persistent list, like macOS <code>persistent-apps</code>, in <code>~/.local/share/malaysia/</code> because it is state, not a preference.</li>
-        <li><b>Minimize target.</b> The Dock sends <code>set_rectangle</code> through <code>zwlr_foreign_toplevel_management_v1</code> with the icon slot; the compositor ignores it today and needs it to draw the genie.</li>
-        <li><b>Magnification without moving windows.</b> The layer-shell surface grows by <code>largesize</code>, but the <code>exclusive_zone</code> stays the unmagnified bar.</li>
-        <li><b>Hiding.</b> With <code>autohide</code>, <code>exclusive_zone</code> becomes 0 and a 1 px strip at the edge detects the pointer.</li>
+        <li><b>Minimize target.</b> The Dock sends <code>set_rectangle</code> through <code>zwlr_foreign_toplevel_management_v1</code> with the icon slot; the compositor needs it to draw the genie, scale or suck effect.</li>
+        <li><b>Window pictures.</b> A minimized window tile shows the app icon, not a picture of the window.</li>
       </ul>
     </div>
 

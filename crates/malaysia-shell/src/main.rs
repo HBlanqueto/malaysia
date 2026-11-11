@@ -21,7 +21,7 @@ malaysia-shell <component>
 
 components:
   menubar     the bar at the top (active app + clock), Top layer
-  dock        the app dock at the bottom (running apps), Top layer
+  dock        the Dock (kept, open and recent apps), Top layer
   lock        the session lock screen (ext-session-lock-v1)
   launcher    the application launcher on the Overlay layer
   notifications

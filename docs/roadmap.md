@@ -164,6 +164,11 @@ Pending: window capture with frame (focus mode is Block 17). Test:
 The menu bar is solid, translucent or floating (default) over the blurred
 wallpaper, 30 or 38 px high, chosen in System Settings › Desktop & Dock
 (ADR 0075).
+The Dock follows macOS: one icon per app with kept, open and recent apps,
+dots, badges, name label, magnification, size fitted to the screen, left,
+bottom or right, automatic hiding and launch bounce, all set in System
+Settings › Desktop & Dock ([dock.md](architecture/dock.md)). Pending: the
+minimize animation (`mineffect`) and its `set_rectangle` target.
 
 ### 14 — Global menu
 
