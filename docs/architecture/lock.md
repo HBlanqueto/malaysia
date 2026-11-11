@@ -36,7 +36,7 @@ The surface is transparent: the compositor draws the wallpaper under it.
 The menu bar is the only bar on screen; it changes mode and is never replaced. It follows `use_screen_lock()`:
 
 1. On `locking` it fades out its background, its left side, other apps' status items and its clock.
-2. Its own extras slide right until they end at the lock screen's slot (`LOCK_SLOT`), and their ink turns `LOCK_INK`.
+2. Its clock area narrows to `LOCK_SLOT`, so its own extras slide right until they end at the lock screen's slot (`LOCK_SLOT`), and their ink turns `LOCK_INK`.
 3. The compositor keeps drawing it above the lock surfaces and sends it frame callbacks while locked. It gets no input: the power button belongs to the lock surface.
 4. On `unlocked` it plays this back in `DURATION_BASE`, while the compositor fades the desktop back in.
 

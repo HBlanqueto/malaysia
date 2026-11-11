@@ -367,8 +367,7 @@ impl App for BarApp {
         let mut kept = HStack::new()
             .cross_align(Alignment::Start)
             .spacing(0.0)
-            .height(Size::fill())
-            .offset_x((*tail_width.read() - lock_row::LOCK_SLOT) * settle);
+            .height(Size::fill());
         for index in 0..extra_specs.len() {
             kept = kept.child(menu::menu_title(
                 index,
@@ -388,9 +387,19 @@ impl App for BarApp {
             })
             .child(live::live_area(activities, text))
             .child(clock::clock_label(now, text, focus));
+        let tail_slot = rect()
+            .width(if settle > 0.0 {
+                let natural = *tail_width.read();
+                Size::px(natural + (lock_row::LOCK_SLOT - natural) * settle)
+            } else {
+                Size::auto()
+            })
+            .height(Size::fill())
+            .overflow(Overflow::Clip)
+            .child(tail);
         let bar_view = bar_root(bar)
             .child(left)
-            .child(right.child(others).child(kept).child(tail));
+            .child(right.child(others).child(kept).child(tail_slot));
         let locking = progress.is_some();
         let closing_state = menu_state.clone();
         use_side_effect_with_deps(&locking, move |locking| {

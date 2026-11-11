@@ -193,6 +193,7 @@ impl App for LockApp {
                 .position(Position::new_absolute())
                 .width(Size::fill())
                 .height(Size::fill())
+                .main_align(Alignment::Start)
                 .cross_align(Alignment::Center)
                 .offset_y(rise_offset)
                 .opacity(rise * stay)
@@ -442,7 +443,8 @@ fn keyboard_indicator(layout: Option<String>) -> HStack {
         .height(Size::fill())
         .main_align(Alignment::End)
         .cross_align(Alignment::Center)
-        .spacing(MENUBAR_TITLE_PADDING_X);
+        .spacing(MENUBAR_TITLE_PADDING_X)
+        .overflow(Overflow::Clip);
     let Some(layout) = layout.filter(|layout| !layout.is_empty()) else {
         return row;
     };

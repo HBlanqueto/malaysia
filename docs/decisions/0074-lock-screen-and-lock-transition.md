@@ -165,8 +165,9 @@ The approved mock-up, «Del escritorio al bloqueo»:
         (decision 6). It carries the duration of the fade.
       - Over `LOCK_FADE`, the menubar fades out its background, its left
         side, other apps' status items and its clock.
-      - Then, in `LOCK_SETTLE`, its own extras slide right until they end at
-        the power button's slot, and their ink turns `LOCK_INK`. The menubar
+      - Then, in `LOCK_SETTLE`, its clock area narrows to `LOCK_SLOT`, so
+        its own extras slide right until they end at the lock screen's slot,
+        and their ink turns `LOCK_INK`. The menubar
         keeps that state while locked.
    4. **The swap.**
       - The swap happens when `LOCK_FADE + LOCK_SETTLE` has passed and every
@@ -189,7 +190,8 @@ The approved mock-up, «Del escritorio al bloqueo»:
       - The slot `menubar::lock_row::LOCK_SLOT` (the keyboard layout and the
         power button) is the one position both processes share. The menubar
         leaves it free and the lock surface draws there
-        (`lock_row::status_row`).
+        (`lock_row::status_row`). The free width is set, not measured, and the
+        keyboard layout is clipped to it, so the two never overlap.
    7. **The time limit.**
       - If any output has no lock surface buffer `LOCK_START_GRACE` (3 s)
         after `lock`, the compositor stops waiting. It presents the wallpaper
