@@ -140,6 +140,7 @@ impl App for NotificationsApp {
         let snapshot = use_state(|| Snapshot::read(&link));
         let banner_height = use_state(|| 0.0f32);
         let hovered = use_state(|| None::<u32>);
+        let hovered_close = use_state(|| None::<u32>);
         let replying = use_state(|| None::<u32>);
         let draft = use_state(String::new);
         let expanded = use_state(HashSet::<String>::new);
@@ -192,7 +193,7 @@ impl App for NotificationsApp {
                     &link,
                     &timers,
                     *id,
-                    [hovered, replying],
+                    [hovered, hovered_close, replying],
                     snapshot,
                     Duration::from_millis(NOTIFICATION_BANNER_MS),
                 );
@@ -255,6 +256,7 @@ impl App for NotificationsApp {
             link: link.clone(),
             snapshot,
             hovered,
+            hovered_close,
             replying,
             draft,
             previews: config.show_previews != ShowPreviews::Never,
@@ -313,6 +315,7 @@ struct Context {
     link: Link,
     snapshot: State<Snapshot>,
     hovered: State<Option<u32>>,
+    hovered_close: State<Option<u32>>,
     replying: State<Option<u32>>,
     draft: State<String>,
     previews: bool,
@@ -357,7 +360,7 @@ fn schedule_expiry(
     link: &Link,
     timers: &Timers,
     id: u32,
-    held: [State<Option<u32>>; 2],
+    held: [State<Option<u32>>; 3],
     snapshot: State<Snapshot>,
     delay: Duration,
 ) {
@@ -665,7 +668,7 @@ fn card(
 ) -> Element {
     let palette = Palette::current();
     let id = notification.id;
-    let hovered = *context.hovered.read() == Some(id);
+    let hovered = *context.hovered.read() == Some(id) || *context.hovered_close.read() == Some(id);
     let title = if notification.summary.is_empty() || !context.previews {
         notification.app_name.clone()
     } else {
@@ -974,6 +977,8 @@ fn edged(body: Rect, fill: Rgba) -> Rect {
 fn close_button(context: &Context, id: u32) -> Rect {
     let palette = Palette::current();
     let context = context.clone();
+    let mut entered = context.hovered_close;
+    let mut left = context.hovered_close;
     let offset = -NOTIFICATION_CLOSE_SIZE / 3.0;
     rect()
         .position(Position::new_absolute().top(offset).left(offset))
@@ -988,6 +993,12 @@ fn close_button(context: &Context, id: u32) -> Rect {
                 .alignment(BorderAlignment::Inner),
         )
         .center()
+        .on_pointer_over(move |_| entered.set(Some(id)))
+        .on_pointer_out(move |_| {
+            if *left.peek() == Some(id) {
+                left.set(None);
+            }
+        })
         .on_press(move |_| {
             server::close(&context.link, id, false);
             context.refresh();
