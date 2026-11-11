@@ -216,7 +216,8 @@ The approved mock-up, «Del escritorio al bloqueo»:
    - The compositor fades the other surfaces in over the same time.
    - Input returns at once.
 8. **Tokens.** These are in `components.shell.lock` in `ctdesign`. The
-   values are the mock-up's and are tuned on hardware.
+   sizes and positions match macOS's lock screen at 1920 × 1080; the
+   durations are the mock-up's and are tuned on hardware.
 
    | Token | Value |
    |---|---|
@@ -225,10 +226,10 @@ The approved mock-up, «Del escritorio al bloqueo»:
    | `LOCK_RISE_MS` | 900 |
    | `LOCK_RISE_OFFSET` | 120 |
    | `LOCK_LOGIN_MS` | 600 |
-   | `LOCK_CLOCK_FONT_SIZE` | 108 |
-   | `LOCK_DATE_FONT_SIZE` | 24 |
-   | `LOCK_TOP_PERCENT` (of the screen height) | 15 |
-   | `LOCK_BOTTOM_MARGIN`, `LOCK_SPACING` | 92, 12 |
+   | `LOCK_CLOCK_FONT_SIZE` | 140 |
+   | `LOCK_DATE_FONT_SIZE` | 28 |
+   | `LOCK_TOP_PERCENT` (of the screen height) | 9 |
+   | `LOCK_BOTTOM_MARGIN` (to the error line), `LOCK_SPACING` | 55, 12 |
    | `LOCK_AVATAR_SIZE` | 52 |
    | `LOCK_FIELD_HEIGHT` | 30 (was 44) |
    | `LOCK_FIELD_MIN_WIDTH`, `LOCK_FIELD_MAX_WIDTH` | 160, 200 |
