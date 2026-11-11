@@ -256,6 +256,7 @@ pub fn run() -> Result<(), SessionError> {
     session.state.shadow = crate::effects::compile_shadow(renderer);
     session.state.border = crate::effects::compile_border(renderer);
     session.state.display_filter = crate::display_filter::compile(renderer);
+    session.state.minimize_program = crate::minimize::compile(renderer);
     session.state.blur = crate::blur::compile(renderer);
 
     session.backend.window().request_redraw();

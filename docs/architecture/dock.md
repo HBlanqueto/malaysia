@@ -64,7 +64,11 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    along the Dock moves it among the kept apps; dragging it away shows
    Remove and takes it out of `persistent-apps`. An open app stays until it
    quits.
-10. **Hiding.** With `autohide`, the bar slides off the edge when the pointer
+10. **Minimize target.** The Dock sends each window's slot with
+    `set_minimize_target` (`zwlr_foreign_toplevel_handle_v1.set_rectangle`):
+    the app's icon with `minimize-to-application`, otherwise the window's own
+    tile, or the slot before the Trash where that tile will appear.
+11. **Hiding.** With `autohide`, the bar slides off the edge when the pointer
    leaves. A strip of `DOCK_REVEAL_STRIP` px at the edge takes the pointer;
    after `autohide-delay` seconds the bar slides back in. The slide lasts
    `DOCK_HIDE_MS` × `autohide-time-modifier`.
@@ -72,6 +76,14 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 ## Compositor side
 
 `ext-foreign-toplevel-list-v1` uses Smithay's state; `zwlr_foreign_toplevel_management_v1` is served by hand (Smithay 0.7 does not ship it), announces the existing windows on bind and each request acts on its window.
+
+Minimizing or restoring a window runs `mineffect` toward its target
+(`minimize.rs`): the compositor draws the window into a texture and bends it
+with `grade-graphics/src/minimize.frag` for `DOCK_MINIMIZE_MS`. The genie
+follows Wayfire's squeezimize (MIT, see `NOTICE`): the content slides toward
+the target while its sides narrow along a sigmoid. The window travels toward
+the screen edge nearest the target; without one it goes to the bottom
+centre. While it restores, the window is drawn only by the effect.
 
 A popup whose root parent is a layer surface, such as a Dock menu, is drawn
 above the `Top` and `Overlay` layers and takes the pointer before them; the
@@ -82,8 +94,6 @@ space, so focus spaces hide it like the bottom one.
 ## Divergences
 
 - `zwlr_foreign_toplevel_management_v1` by hand (ADR 0023 allows for it).
-- The minimize animation (`mineffect`) is pending: the Dock does not send
-  `set_rectangle` yet, and the compositor ignores it.
 - A minimized window tile shows the app icon, not a picture of the window.
 - The drag image stays inside the Dock's surface.
 - `activate` carries no press serial in this version of the XML, so it is not validated against the implicit grab.

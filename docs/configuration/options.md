@@ -395,7 +395,7 @@ desktop (`shown`, `shuffled_at`).
 | `dock.magnification` | bool | `false` | **active** | shell (dock) |
 | `dock.tilesize` | integer (px, 16–128) | `48` | **active** | shell (dock): fitted to the screen; dragging the separator writes it |
 | `dock.largesize` | integer (px, 16–128) | `64` | **active** | shell (dock): magnified size |
-| `dock.mineffect` | `"genie"` \| `"scale"` \| `"suck"` | `"genie"` | pending | compositor: the minimize animation is not drawn yet |
+| `dock.mineffect` | `"genie"` \| `"scale"` \| `"suck"` | `"genie"` | **active** | compositor: minimizes and restores toward the Dock tile, `DOCK_MINIMIZE_MS` |
 | `dock.show-process-indicators` | bool | `true` | **active** | shell (dock) |
 | `dock.static-only` | bool | `false` | **active** | shell (dock) |
 | `dock.minimize-to-application` | bool | `false` | **active** | shell (dock): no tile per minimized window |

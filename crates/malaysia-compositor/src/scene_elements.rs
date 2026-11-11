@@ -268,6 +268,7 @@ fn append_desktop<R: MalaysiaRenderer>(
 ) {
     let scale = state.scale.fractional_scale();
     crate::popup_fade::start_requested(state, renderer.gles(), scale);
+    crate::minimize::start_requested(state, renderer.gles(), scale);
     reset_dead_cursor(state);
     if include_cursor {
         append_cursor(renderer, elements, state, cursor);
@@ -357,8 +358,9 @@ fn append_desktop<R: MalaysiaRenderer>(
             .iter_visible(&state.minimized)
             .rev()
             .map(|window| window.id())
-            .filter(|id| Some(*id) != moving)
+            .filter(|id| Some(*id) != moving && !state.is_minimizing(*id))
             .collect();
+        crate::minimize::append(state, Instant::now(), scale, elements);
         for id in window_ids {
             let offset = match reveal {
                 Some(frame) if frame.owner == id && frame.slides => {

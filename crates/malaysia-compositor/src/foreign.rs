@@ -7,6 +7,9 @@ use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
 use smithay::wayland::foreign_toplevel_list::{ForeignToplevelHandle, ForeignToplevelListState};
 
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::utils::{Logical, Point, Rectangle, Size};
+
 use crate::state::State;
 
 pub struct ForeignState {
@@ -196,6 +199,19 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
             zwlr_foreign_toplevel_handle_v1::Request::UnsetFullscreen => {
                 state.infinity_set_fullscreen(id, false);
             }
+            zwlr_foreign_toplevel_handle_v1::Request::SetRectangle {
+                surface,
+                x,
+                y,
+                width,
+                height,
+            } => {
+                state.set_minimize_hint(
+                    id,
+                    &surface,
+                    Rectangle::new(Point::from((x, y)), Size::from((width, height))),
+                );
+            }
             _ => {}
         }
     }
@@ -228,6 +244,8 @@ impl State {
     }
 
     pub(crate) fn foreign_window_destroyed(&mut self, id: WindowId) {
+        self.minimize_hints.remove(&id);
+        self.minimizing.retain(|effect| effect.window != id);
         self.list_handles.retain(|(wid, _)| *wid != id);
         self.foreign.management.handles.retain(|(wid, handle)| {
             if *wid == id {
@@ -318,8 +336,31 @@ impl State {
             self.windows.set_hidden(id, false);
             tracing::info!(window = id.get(), "window restored");
         }
+        self.request_minimize_effect(id, minimized);
         self.foreign_state_changed(id);
         self.request_redraw();
+    }
+
+    // wlr-foreign-toplevel: the rectangle is relative to the surface that sent it; 0 × 0 unsets it.
+    fn set_minimize_hint(
+        &mut self,
+        id: WindowId,
+        surface: &WlSurface,
+        rect: Rectangle<i32, Logical>,
+    ) {
+        let origin = self
+            .layers
+            .entry_of(surface)
+            .map(|entry| entry.geometry.loc);
+        match origin {
+            Some(origin) if rect.size.w > 0 && rect.size.h > 0 => {
+                self.minimize_hints
+                    .insert(id, Rectangle::new(origin + rect.loc, rect.size));
+            }
+            _ => {
+                self.minimize_hints.remove(&id);
+            }
+        }
     }
 }
 

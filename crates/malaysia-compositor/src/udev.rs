@@ -271,6 +271,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     state.shadow = crate::effects::compile_shadow(renderer);
     state.border = crate::effects::compile_border(renderer);
     state.display_filter = crate::display_filter::compile(renderer);
+    state.minimize_program = crate::minimize::compile(renderer);
     state.blur = crate::blur::compile(renderer);
     drop(multi);
 

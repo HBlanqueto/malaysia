@@ -398,7 +398,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
           <tr><td>Size</td><td><code>dock.tilesize</code></td><td>16–128 px · 48</td><td><span class="st a">active</span></td></tr>
           <tr><td>Magnification</td><td><code>dock.magnification</code> + <code>dock.largesize</code></td><td>bool + 16–128 px · 64</td><td><span class="st a">active</span></td></tr>
           <tr><td>Position on screen</td><td><code>dock.orientation</code></td><td>left · bottom · right</td><td><span class="st a">active</span></td></tr>
-          <tr><td>Minimize windows using</td><td><code>dock.mineffect</code></td><td>genie · scale · suck</td><td><span class="st p">pending</span></td></tr>
+          <tr><td>Minimize windows using</td><td><code>dock.mineffect</code></td><td>genie · scale · suck</td><td><span class="st a">active</span></td></tr>
           <tr><td>Title bar double-click</td><td><code>window.double_click_titlebar</code></td><td>fill · zoom · minimize · none</td><td><span class="st a">active</span></td></tr>
           <tr><td>Minimize into application icon</td><td><code>dock.minimize-to-application</code></td><td>bool · false</td><td><span class="st a">active</span></td></tr>
           <tr><td>Automatically hide</td><td><code>dock.autohide</code></td><td>bool · false</td><td><span class="st a">active</span></td></tr>
@@ -412,7 +412,6 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       </table></div>
       <h3>What is still pending</h3>
       <ul>
-        <li><b>Minimize target.</b> The Dock sends <code>set_rectangle</code> through <code>zwlr_foreign_toplevel_management_v1</code> with the icon slot; the compositor needs it to draw the genie, scale or suck effect.</li>
         <li><b>Window pictures.</b> A minimized window tile shows the app icon, not a picture of the window.</li>
       </ul>
     </div>

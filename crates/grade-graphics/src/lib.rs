@@ -12,6 +12,12 @@ pub mod shaders {
         include_str!("display_filter.frag"),
     );
 
+    pub const MINIMIZE: &str = concat!(
+        "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
+        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
+        include_str!("minimize.frag"),
+    );
+
     pub const BLUR_DOWN: &str = concat!(
         "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
         "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",

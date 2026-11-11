@@ -164,6 +164,10 @@ pub struct State {
     pub(crate) theme_fade: Option<crate::theme_fade::ThemeFade>,
     pub(crate) popup_fade_request: Option<WindowId>,
     pub(crate) popup_fades: Vec<crate::popup_fade::PopupFade>,
+    pub(crate) minimize_hints: std::collections::HashMap<WindowId, Rectangle<i32, Logical>>,
+    pub(crate) minimize_requests: Vec<(WindowId, bool)>,
+    pub(crate) minimizing: Vec<crate::minimize::Minimizing>,
+    pub(crate) minimize_program: Option<GlesTexProgram>,
     pub(crate) rounded_clip: Option<GlesTexProgram>,
     pub(crate) shadow: Option<GlesPixelProgram>,
     pub(crate) border: Option<GlesPixelProgram>,
@@ -427,6 +431,10 @@ impl State {
             theme_fade: None,
             popup_fade_request: None,
             popup_fades: Vec::new(),
+            minimize_hints: std::collections::HashMap::new(),
+            minimize_requests: Vec::new(),
+            minimizing: Vec::new(),
+            minimize_program: None,
             rounded_clip: None,
             display_filter: None,
             blur: None,
@@ -476,6 +484,8 @@ impl State {
         self.space_slide.is_some()
             || self.focus_transition.is_some()
             || !self.popup_fades.is_empty()
+            || !self.minimizing.is_empty()
+            || !self.minimize_requests.is_empty()
             || self.focus_reveal.animating(now)
             || self.theme_fade.is_some()
             || self.lock_transition.animating(now)

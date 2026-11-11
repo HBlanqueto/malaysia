@@ -23,6 +23,7 @@ mod keymap;
 mod layers;
 mod lock;
 mod lock_transition;
+mod minimize;
 mod notification_panel;
 mod panels;
 mod popup;

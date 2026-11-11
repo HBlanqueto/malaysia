@@ -19,8 +19,8 @@ use bk::popup_button::pop_up_menu;
 use bk::prelude::*;
 use bk::shell::{
     Activation, Anchors, BlurRegion, CardFrames, InputRegion, KeyboardInteractivity, Layer,
-    LayerGeometry, LayerSpec, ToplevelInfo, Toplevels, run_layer, set_blur_region, set_card_frames,
-    set_input_region, set_layer_geometry,
+    LayerGeometry, LayerSpec, MinimizeTarget, ToplevelInfo, Toplevels, run_layer, set_blur_region,
+    set_card_frames, set_input_region, set_layer_geometry, set_minimize_target,
 };
 use bk::styles::Animation;
 use bk::theme::{self, SurfaceKind};
@@ -405,6 +405,40 @@ impl App for DockApp {
                 cards: regions.1.clone(),
             });
             *applied_regions.borrow_mut() = Some(regions);
+        }
+        let rest = geometry::layout(
+            &slots,
+            tile,
+            largesize,
+            frame.main_length() / 2.0,
+            None,
+            0.0,
+        );
+        let targets: Vec<MinimizeTarget> =
+            items::minimize_slots(&list, config.minimize_to_application)
+                .into_iter()
+                .map(|(window, index)| {
+                    let slot = rest.placed[index];
+                    let (x, y, width, height) = region(frame.area(
+                        slot.start,
+                        DOCK_EDGE_MARGIN + rest.padding,
+                        slot.size,
+                        slot.size,
+                    ));
+                    MinimizeTarget {
+                        window,
+                        rect: (x, y, width, height),
+                    }
+                })
+                .collect();
+        let sent_targets = use_hook(|| Rc::new(RefCell::new(Vec::<MinimizeTarget>::new())));
+        if width > 0.0 {
+            let mut sent = sent_targets.borrow_mut();
+            targets
+                .iter()
+                .filter(|target| !sent.contains(target))
+                .for_each(|target| set_minimize_target(*target));
+            *sent = targets;
         }
 
         let resolved = bk::theme::resolved();

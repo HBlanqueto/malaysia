@@ -114,6 +114,32 @@ pub(crate) fn items(
     items
 }
 
+// macOS: a window minimizes into its app's icon, or into the slot its own tile takes before the Trash.
+pub(crate) fn minimize_slots(items: &[Item], into_app: bool) -> Vec<(u64, usize)> {
+    let trash = items.iter().position(|item| *item == Item::Trash);
+    items
+        .iter()
+        .enumerate()
+        .flat_map(|(index, item)| match item {
+            Item::App(app) => app
+                .windows
+                .iter()
+                .filter_map(|window| {
+                    if into_app {
+                        Some((window.id, index))
+                    } else {
+                        trash
+                            .filter(|_| !window.minimized)
+                            .map(|trash| (window.id, trash))
+                    }
+                })
+                .collect(),
+            Item::Window(window) => vec![(window.id, index)],
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
 pub(crate) fn dropped(kept: &[String], id: &str, before: Option<&str>, keep: bool) -> Vec<String> {
     let mut next: Vec<String> = kept.iter().filter(|kept| *kept != id).cloned().collect();
     if keep {
@@ -220,6 +246,28 @@ mod tests {
             ..DockConfig::default()
         };
         assert!(!ids(&items(&config, &[], &[], &groups)).contains(&"window:7".to_string()));
+    }
+
+    #[test]
+    fn a_window_minimizes_into_its_own_tile_or_into_the_app_icon() {
+        let groups = running(&[window(1, "mail", false), window(2, "mail", true)], &[]);
+        let slots = items(&DockConfig::default(), &[], &[], &groups);
+        let trash = slots.len() - 1;
+        let tile = slots
+            .iter()
+            .position(|item| matches!(item, Item::Window(window) if window.id == 2))
+            .unwrap();
+        assert_eq!(minimize_slots(&slots, false), [(1, trash), (2, tile)]);
+        let config = DockConfig {
+            minimize_to_application: true,
+            ..DockConfig::default()
+        };
+        let slots = items(&config, &[], &[], &groups);
+        let app = slots
+            .iter()
+            .position(|item| matches!(item, Item::App(_)))
+            .unwrap();
+        assert_eq!(minimize_slots(&slots, true), [(1, app), (2, app)]);
     }
 
     #[test]

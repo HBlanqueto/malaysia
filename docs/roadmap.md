@@ -167,8 +167,8 @@ wallpaper, 30 or 38 px high, chosen in System Settings › Desktop & Dock
 The Dock follows macOS: one icon per app with kept, open and recent apps,
 dots, badges, name label, magnification, size fitted to the screen, left,
 bottom or right, automatic hiding and launch bounce, all set in System
-Settings › Desktop & Dock ([dock.md](architecture/dock.md)). Pending: the
-minimize animation (`mineffect`) and its `set_rectangle` target.
+Settings › Desktop & Dock ([dock.md](architecture/dock.md)). Minimizing
+runs the genie, scale or suck effect toward the Dock tile.
 
 ### 14 — Global menu
 
