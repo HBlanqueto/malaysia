@@ -4,7 +4,6 @@ use std::time::Duration;
 use bk::buttons::{LabelStyle, MenuButton};
 use bk::color_picker::{ColorPicker, hex};
 use bk::compact::IconButton;
-use bk::image_well::is_image;
 use bk::interaction::use_interaction;
 use bk::media::use_artwork;
 use bk::menu::MenuItem;
@@ -230,9 +229,6 @@ pub fn preview(file: Option<&Path>, look: WallpaperAppearance) -> Option<PathBuf
         };
         return system_wallpapers_dir().map(|dir| dir.join("previews").join(still));
     };
-    if is_image(file) {
-        return Some(file.to_path_buf());
-    }
     frame_path(file, look)
         .filter(|frame| frame.exists())
         .or_else(|| thumbnail_path(file))
@@ -330,7 +326,10 @@ pub fn wallpaper_pane(wallpaper: Wallpaper, dark: bool, error: State<Option<Stri
             let picked = source_of(item);
             Callback::new(move |()| pick(wallpaper, picked.clone(), error))
         },
-        preview: preview(item.file.as_deref(), look),
+        preview: match item.group {
+            Group::Colors => item.file.clone(),
+            _ => preview(item.file.as_deref(), look),
+        },
         symbol: None,
         kind: kind_symbol(item),
         on_remove: None,
@@ -724,7 +723,11 @@ fn hero(
         });
     }
     Section::new().illustration(Hero {
-        preview: preview(shown.as_deref(), look),
+        preview: if is_color {
+            shown.clone()
+        } else {
+            preview(shown.as_deref(), look)
+        },
         scale,
         rows,
     })

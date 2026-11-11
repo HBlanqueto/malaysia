@@ -82,11 +82,12 @@ compositor's background layer or the wallpaper files.
    (`paused`): the video stops where it is and the shader keeps the time it
    reached. With «Reduce motion» videos pause and shaders stop at time 0. `share/wallpapers/tide.frag` is the first animated wallpaper.
 10. **Previews come from `malaysia-wallpaper`.** It writes freedesktop
-    thumbnails (x-large, `Thumb::URI` and `Thumb::MTime`) of each HEIC,
+    thumbnails (x-large, `Thumb::URI` and `Thumb::MTime`) of each image,
     video and shader in the system folder, the colors and the collections,
-    and a light and a dark still of each dynamic HEIC. Settings reads them,
-    shows a dynamic HEIC under Dynamic when both stills exist, and waits for
-    a missing thumbnail. Thumbnails and stills record the size of the
+    and a light and a dark still of each dynamic HEIC. Settings shows them
+    instead of the original (a color shows its own small PNG), shows a
+    dynamic HEIC under Dynamic when both stills exist, and waits for a
+    missing thumbnail. Thumbnails and stills record the size of the
     original image (`Thumb::Image::Width` and `Height`), so the crop sheet
     shows real pixels. The built-in Collapse uses
     `share/wallpapers/previews/collapse-light.png` and `-dark.png`, which

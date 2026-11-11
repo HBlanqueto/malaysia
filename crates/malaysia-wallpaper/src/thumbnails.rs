@@ -10,7 +10,7 @@ use ctappearance::{
 use ctdesign::{SETTINGS, WALLPAPER_FRAME, WALLPAPER_THUMBNAIL};
 
 use crate::dynamic::Dynamic;
-use crate::image::{DecodedImage, decode_heif, is_heif};
+use crate::image::{DecodedImage, decode_heif, decode_image_bytes, is_heif};
 use crate::shader::Shader;
 use crate::video::Video;
 
@@ -38,6 +38,7 @@ fn previews(file: &Path, device: &wgpu::Device, queue: &wgpu::Queue) -> anyhow::
     }
     let image = match WallpaperKind::of(file) {
         Some(WallpaperKind::Image) if is_heif(file) => heif(file)?,
+        Some(WallpaperKind::Image) => decode_image_bytes(&std::fs::read(file)?)?,
         Some(WallpaperKind::Video) => Video::open(file, None)?
             .take()
             .ok_or_else(|| anyhow::anyhow!("the video gave no frame"))?,
@@ -49,7 +50,7 @@ fn previews(file: &Path, device: &wgpu::Device, queue: &wgpu::Queue) -> anyhow::
             );
             Shader::new(device, &std::fs::read_to_string(file)?)?.snapshot(device, queue, size)?
         }
-        _ => return Ok(()),
+        None => return Ok(()),
     };
     write_png(&thumbnail, file, &image, WALLPAPER_THUMBNAIL)
 }
