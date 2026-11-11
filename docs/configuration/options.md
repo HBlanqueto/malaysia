@@ -348,6 +348,7 @@ can also be keyed `"<desktop>/<display>"`:
 # ~/.local/share/malaysia/wallpaper-selection.state
 scale = "custom"     # "fill" (default), "fit", "stretch", "center" or "custom"
 shuffle = "daily"    # "login", "hourly" (default) or "daily"
+paused = ["2"]       # desktops whose animated wallpaper stands still
 
 [desktops]
 default = "file:///run/current-system/sw/share/wallpapers/bandura.jpg"
@@ -370,6 +371,7 @@ default = "dark"   # a dynamic wallpaper kept on its "light" or "dark" image
 | `desktops.<desktop>` | `builtin`, `file://` URI, `shuffle:colors`, `shuffle:collection:<name>` | none (Collapse) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** |
 | `crop.<desktop>`, `crop."<desktop>/<display>"` | `[x, y, width, height]`, fractions of the image | none | **active** | `malaysia-wallpaper` with `custom`, **System Settings › Wallpaper** («Custom framing…») |
 | `appearance.<desktop>` | `"light"` \| `"dark"` | none (Automatic) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Mode») |
+| `paused` | array of desktop keys | none (playing) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Play») |
 | `shuffle` | `"login"` \| `"hourly"` \| `"daily"` | `"hourly"` | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Change Picture») |
 
 `ctappearance::WallpaperSelection` reads and writes this file for both

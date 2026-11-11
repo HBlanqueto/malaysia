@@ -52,6 +52,7 @@ pub struct Wallpaper {
     pub cropping: State<Option<CropDraft>>,
     pub editing: State<Option<CollectionDraft>>,
     adding_color: State<Option<Rgba>>,
+    expanded: State<std::collections::BTreeSet<String>>,
     filter: State<String>,
     scope: State<usize>,
 }
@@ -67,6 +68,7 @@ pub fn use_wallpaper() -> Wallpaper {
         cropping: use_state(|| None),
         editing: use_state(|| None),
         adding_color: use_state(|| None),
+        expanded: use_state(Default::default),
         filter: use_state(String::new),
         scope: use_state(|| 0),
     }
@@ -336,6 +338,79 @@ pub fn wallpaper_pane(wallpaper: Wallpaper, dark: bool, error: State<Option<Stri
     Pane::new("wallpaper", tr!("wallpaper"), Symbol::Photo, TINT, form)
 }
 
+pub fn link(label: &'static str) -> Button {
+    Button::new(label).style(|style| ButtonStyle {
+        label: StateValue::new(ShapeStyle::Accent),
+        ..style.borderless()
+    })
+}
+
+struct Shelf {
+    key: String,
+    title: &'static str,
+    detail: Option<&'static str>,
+    symbol: Option<Symbol>,
+    count: usize,
+    edit: Option<Callback<(), ()>>,
+}
+
+fn shelf(wallpaper: Wallpaper, shelf: Shelf, items: Vec<Element>, height: f32) -> Section {
+    let mut expanded = wallpaper.expanded;
+    let open = expanded.read().contains(&shelf.key);
+    let key = shelf.key.clone();
+    let toggle = (shelf.count > SETTINGS.wallpaper.row_fits).then(|| {
+        let label = if open {
+            tr!("wallpaper-show-less")
+        } else {
+            intern(tr!("wallpaper-show-all", count = shelf.count))
+        };
+        link(label).on_press(move |_| {
+            let mut next = expanded.peek().clone();
+            if !next.remove(&key) {
+                next.insert(key.clone());
+            }
+            expanded.set(next);
+        })
+    });
+    let title = HStack::new()
+        .spacing(SPACE_1)
+        .cross_align(Alignment::Center)
+        .maybe_child(
+            shelf
+                .symbol
+                .map(|symbol| Image::system(symbol).color(Palette::current().secondary_label)),
+        )
+        .child(Text::new(shelf.title).font(HEADLINE));
+    let header = HStack::new()
+        .width(Size::fill())
+        .content(Content::flex())
+        .cross_align(Alignment::Center)
+        .spacing(SPACE_2)
+        .child(
+            VStack::new()
+                .width(Size::flex(1.0))
+                .cross_align(Alignment::Start)
+                .child(title)
+                .maybe_child(
+                    shelf
+                        .detail
+                        .map(|detail| text(detail, CAPTION, Palette::current().secondary_label)),
+                ),
+        )
+        .maybe_child(
+            shelf
+                .edit
+                .map(|edit| link(tr!("collection-edit")).on_press(move |_| edit.call(()))),
+        )
+        .maybe_child(toggle);
+    let section = Section::titled(shelf.title).header(header);
+    match (items.is_empty(), open) {
+        (true, _) => section,
+        (false, true) => section.illustration(grid(items)),
+        (false, false) => section.illustration(strip(items.into_iter(), height)),
+    }
+}
+
 fn gallery(
     mut form: Form,
     wallpaper: Wallpaper,
@@ -346,27 +421,51 @@ fn gallery(
     error: State<Option<String>>,
 ) -> Form {
     let in_group = |group: Group| items.iter().filter(move |item| item.group == group);
-    for group in [Group::Dynamic, Group::Animated, Group::Images] {
+    for (group, key) in [
+        (Group::Dynamic, "dynamic"),
+        (Group::Animated, "animated"),
+        (Group::Images, "images"),
+    ] {
         let tiles: Vec<Element> = in_group(group)
             .map(|item| choice(item).into_element())
             .collect();
         if !tiles.is_empty() {
-            form = form.section(
-                Section::titled(group_label(group, collections))
-                    .illustration(strip(tiles.into_iter(), tile_row_height())),
-            );
+            let shown = Shelf {
+                key: key.into(),
+                title: group_label(group, collections),
+                detail: None,
+                symbol: None,
+                count: tiles.len(),
+                edit: None,
+            };
+            form = form.section(shelf(wallpaper, shown, tiles, tile_row_height()));
         }
     }
     for (index, collection) in collections.collections.iter().enumerate() {
         let group = Group::Collection(index);
+        let count = in_group(group).count();
         let first = in_group(group).next().and_then(|item| item.file.clone());
         let mut editing = wallpaper.editing;
         let draft = CollectionDraft::editing(index, collection);
-        let section = Section::titled(group_label(group, collections)).footer(intern(tr!(
-            "collection-count",
-            count = in_group(group).count()
-        )));
-        let section = match first {
+        let images = tr!("collection-count", count = count);
+        let detail = match (collection.folders.as_slice(), collection.images.is_empty()) {
+            ([folder], true) => format!("{} · {images}", folder.display()),
+            _ => images,
+        };
+        let only_folder = collection.folders.len() == 1 && collection.images.is_empty();
+        let shown = Shelf {
+            key: format!("collection:{}", collection.name),
+            title: group_label(group, collections),
+            detail: Some(intern(detail)),
+            symbol: Some(if only_folder {
+                Symbol::Folder
+            } else {
+                Symbol::SquareOnSquare
+            }),
+            count,
+            edit: Some(Callback::new(move |()| editing.set(Some(draft.clone())))),
+        };
+        form = form.section(match first {
             Some(first) => {
                 let shuffled = WallpaperSource::ShuffleCollection(collection.name.clone());
                 let shuffle = Choice {
@@ -379,20 +478,17 @@ fn gallery(
                     on_remove: None,
                 };
                 let tiles = std::iter::once(shuffle.into_element())
-                    .chain(in_group(group).map(|item| choice(item).into_element()));
-                section.illustration(strip(tiles, tile_row_height()))
+                    .chain(in_group(group).map(|item| choice(item).into_element()))
+                    .collect();
+                shelf(wallpaper, shown, tiles, tile_row_height())
             }
-            None => section.row(Row::new(tr!("collection-empty"))),
-        };
-        form = form.section(
-            section.row(Row::navigation(tr!("collection-edit"), move |()| {
-                editing.set(Some(draft.clone()))
-            })),
-        );
+            None => shelf(wallpaper, shown, Vec::new(), 0.0).row(Row::new(tr!("collection-empty"))),
+        });
     }
     let mut adding_color = wallpaper.adding_color;
     let own_colors = custom_colors_dir();
-    let dots = [
+    let colors: Vec<&Item> = in_group(Group::Colors).collect();
+    let dots: Vec<Element> = [
         Choice {
             label: tr!("wallpaper-shuffle-colors"),
             round: true,
@@ -415,7 +511,7 @@ fn gallery(
         },
     ]
     .into_iter()
-    .chain(in_group(Group::Colors).map(|item| {
+    .chain(colors.iter().map(|item| {
         let removable = item
             .file
             .clone()
@@ -426,11 +522,17 @@ fn gallery(
             ..choice(item)
         }
     }))
-    .map(IntoElement::into_element);
-    form.section(
-        Section::titled(tr!("wallpaper-colors"))
-            .illustration(strip(dots, SETTINGS.wallpaper.dot as f32)),
-    )
+    .map(IntoElement::into_element)
+    .collect();
+    let shown = Shelf {
+        key: "colors".into(),
+        title: tr!("wallpaper-colors"),
+        detail: None,
+        symbol: None,
+        count: colors.len(),
+        edit: None,
+    };
+    form.section(shelf(wallpaper, shown, dots, SETTINGS.wallpaper.dot as f32))
 }
 
 fn hero(
@@ -498,6 +600,20 @@ fn hero(
                     .control(scale_button(scale, framed, edited, wallpaper, error)),
             );
         }
+    }
+    if matches!(kind, Some(WallpaperKind::Video | WallpaperKind::Shader)) {
+        let selection_state = wallpaper.selection;
+        section = section.row(
+            Row::new(tr!("wallpaper-play")).control(
+                Switch::new(tr!("wallpaper-play"))
+                    .on(!selection.paused_for(desktop))
+                    .on_toggle(move |playing: bool| {
+                        let mut next = selection_state.peek().clone();
+                        next.set_paused(edited_desktop(&next), !playing);
+                        save(selection_state, next, error);
+                    }),
+            ),
+        );
     }
     if let Some(number) = desktop {
         let selection_state = wallpaper.selection;
@@ -878,14 +994,28 @@ impl Component for Choice {
         });
         let on_press = self.on_press.clone();
         let selected = self.selected;
+        let over_preview = self.preview.is_some();
         let symbol = self.symbol.map(|symbol| {
+            let mark = Image::system(symbol);
+            // Freya paints by layer (one more per level): the preview's image sits three levels down.
             rect()
-                .layer(1)
+                .layer(3)
                 .position(Position::new_absolute())
                 .width(Size::px(width))
                 .height(Size::px(height))
                 .center()
-                .child(Image::system(symbol).color(palette.label))
+                .maybe(over_preview, |mark| {
+                    mark.background(color(Rgba {
+                        a: metrics.shuffle_scrim,
+                        ..Rgba::rgb8(0, 0, 0)
+                    }))
+                })
+                .child(if over_preview {
+                    mark.size(metrics.shuffle_icon)
+                        .color(Rgba::rgb8(0xff, 0xff, 0xff))
+                } else {
+                    mark.color(palette.label)
+                })
         });
         let thumb = rect()
             .key(self.label)

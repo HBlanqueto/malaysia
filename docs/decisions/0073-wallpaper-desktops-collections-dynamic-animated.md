@@ -78,8 +78,9 @@ compositor's background layer or the wallpaper files.
    Shadertoy's single-pass contract (`mainImage`, `iResolution`, `iTime`) and
    fill the screen at its resolution, so they offer no framing. Both run at
    most at `WALLPAPER_FPS` and wait for the frame callback, so a hidden
-   desktop costs nothing. With «Reduce motion» videos pause and shaders stop
-   at time 0. `share/wallpapers/tide.frag` is the first animated wallpaper.
+   desktop costs nothing. «Play» pauses the wallpaper of a desktop
+   (`paused`): the video stops where it is and the shader keeps the time it
+   reached. With «Reduce motion» videos pause and shaders stop at time 0. `share/wallpapers/tide.frag` is the first animated wallpaper.
 10. **Previews come from `malaysia-wallpaper`.** It writes freedesktop
     thumbnails (x-large, `Thumb::URI` and `Thumb::MTime`) of each HEIC,
     video and shader in the system folder, the colors and the collections,
@@ -90,10 +91,14 @@ compositor's background layer or the wallpaper files.
     shows real pixels. The built-in Collapse uses
     `share/wallpapers/previews/collapse-light.png` and `-dark.png`, which
     carry the same keys.
-11. **The filter.** A search field with a scope (All, a kind or a
+11. **Long rows.** A section with more than `SETTINGS.wallpaper.row_fits`
+    wallpapers offers «Show All (N)» in its header, which turns the row into
+    a grid, and «Show Less» back. The header (bk `Section::header`) also
+    carries a collection's folder, count and «Edit…».
+12. **The filter.** A search field with a scope (All, a kind or a
     collection) matches the name, the kind, the collection and the file name;
     while it filters, the sections merge into one grid of results.
-12. **Each desktop tints its windows.** `wallpaper.state` keeps a grid per
+13. **Each desktop tints its windows.** `wallpaper.state` keeps a grid per
     desktop with its own wallpaper; the compositor picks the grid of the
     window's desktop.
 
@@ -105,9 +110,8 @@ compositor's background layer or the wallpaper files.
    decoding (bk's `GpuZeroCopy`) is not wired in the wallpaper yet.
 3. Thumbnails appear a moment after a folder is added; a file
    `malaysia-wallpaper` cannot decode keeps an empty tile.
-4. The 16d items of the mock-up left out: «Show all» grids for long rows
-   and pausing an animated wallpaper by hand. The mock-up's sample folder
-   and images only stand in for real files in a browser.
+4. The mock-up's sample folder and images only stand in for real files in a
+   browser; Malaysia uses the file chooser portal.
 
 ## Rejected alternatives
 

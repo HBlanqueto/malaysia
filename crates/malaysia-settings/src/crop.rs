@@ -14,7 +14,7 @@ use ctdesign::{
 use torin::prelude::{Content, Gaps, Position};
 
 use crate::localize::{intern, tr};
-use crate::wallpaper::{Wallpaper, is_dynamic, name_of, preview, save};
+use crate::wallpaper::{Wallpaper, is_dynamic, link, name_of, preview, save};
 
 #[derive(Clone, PartialEq)]
 pub struct CropDraft {
@@ -219,9 +219,9 @@ fn canvas_width() -> f32 {
     sheet_content_width() - SETTINGS.wallpaper.crop_side as f32 - SPACE_4
 }
 
-// Freya paints an image over the siblings of its layer; what covers it needs the next one.
+// Freya paints by layer (one more per level, unordered within one): stay above the image a rect deep.
 fn over_image(left: f32, top: f32, width: f32, height: f32) -> Rect {
-    absolute(left, top, width, height).layer(1)
+    absolute(left, top, width, height).layer(2)
 }
 
 fn absolute(left: f32, top: f32, width: f32, height: f32) -> Rect {
@@ -354,7 +354,7 @@ impl Component for CropEditor {
             tr!("crop-pixels-image", width = pixels_w, height = pixels_h)
         });
         let badge = rect()
-            .layer(1)
+            .layer(2)
             .position(Position::new_absolute().left(0.0).bottom(SPACE_2))
             .width(Size::px(width))
             .center()
@@ -537,19 +537,12 @@ impl Component for CropEditor {
             .width(Size::fill())
             .content(Content::flex())
             .spacing(SPACE_2)
-            .child(
-                Button::new(tr!("crop-reset"))
-                    .style(|style| ButtonStyle {
-                        label: StateValue::new(ShapeStyle::Accent),
-                        ..style.borderless()
-                    })
-                    .on_press(move |_| {
-                        set_view(View {
-                            centre: [0.5, 0.5],
-                            step: 0,
-                        })
-                    }),
-            )
+            .child(link(tr!("crop-reset")).on_press(move |_| {
+                set_view(View {
+                    centre: [0.5, 0.5],
+                    step: 0,
+                })
+            }))
             .child(rect().width(Size::flex(1.0)))
             .child(Button::new(tr!("cancel")).on_press(move |_| cancel.call(())))
             .child(

@@ -102,12 +102,36 @@ struct Shown {
     content: Content,
     grid: Option<WallpaperGrid>,
     dominant: Option<Rgba>,
+    paused: bool,
+}
+
+struct Clock {
+    started: Instant,
+    frozen: Option<f32>,
+}
+
+impl Clock {
+    fn seconds(&self) -> f32 {
+        self.frozen
+            .unwrap_or_else(|| self.started.elapsed().as_secs_f32())
+    }
+
+    fn run(&mut self, running: bool) {
+        match (running, self.frozen) {
+            (true, Some(at)) => {
+                self.started = Instant::now() - Duration::from_secs_f32(at);
+                self.frozen = None;
+            }
+            (false, None) => self.frozen = Some(self.seconds()),
+            _ => {}
+        }
+    }
 }
 
 enum Content {
     Image(WallpaperTexture),
     Video(Video, WallpaperTexture),
-    Shader(Shader, Instant),
+    Shader(Shader, Clock),
 }
 
 impl Shown {
@@ -125,11 +149,14 @@ impl Shown {
             content,
             grid: grid(still),
             dominant: dominant(still),
+            paused: false,
         }
     }
 
-    fn animated(&self) -> bool {
-        matches!(self.content, Content::Video(..) | Content::Shader(..))
+    fn moving(&self, reduced_motion: bool) -> bool {
+        !reduced_motion
+            && !self.paused
+            && matches!(self.content, Content::Video(..) | Content::Shader(..))
     }
 }
 
@@ -351,9 +378,13 @@ impl App {
         if self.state.shown.is_empty() {
             self.state.shuffled_at = None;
         }
-        for shown in self.shown.values() {
-            if let Content::Video(video, _) = &shown.content {
-                video.set_playing(!self.reduced_motion);
+        for (key, shown) in &mut self.shown {
+            shown.paused = self.selection.paused_for(key.parse().ok());
+            let running = !self.reduced_motion && !shown.paused;
+            match &mut shown.content {
+                Content::Video(video, _) => video.set_playing(running),
+                Content::Shader(_, clock) => clock.run(running),
+                Content::Image(_) => {}
             }
         }
         if changed {
@@ -460,7 +491,13 @@ impl App {
                     None,
                     0,
                     &still,
-                    Content::Shader(shader, Instant::now()),
+                    Content::Shader(
+                        shader,
+                        Clock {
+                            started: Instant::now(),
+                            frozen: None,
+                        },
+                    ),
                 ))
             }
             (Some(WallpaperKind::Image), _) => {
@@ -599,13 +636,13 @@ impl App {
     }
 
     fn animate_shaders(&mut self) {
-        if self.reduced_motion {
-            return;
-        }
+        let reduced_motion = self.reduced_motion;
         let keys: Vec<String> = self
             .shown
             .iter()
-            .filter(|(_, shown)| matches!(shown.content, Content::Shader(..)))
+            .filter(|(_, shown)| {
+                shown.moving(reduced_motion) && matches!(shown.content, Content::Shader(..))
+            })
             .map(|(key, _)| key.clone())
             .collect();
         for key in keys {
@@ -893,7 +930,11 @@ impl App {
             Err(wgpu::CurrentSurfaceTexture::Lost) => anyhow::bail!("wgpu surface lost"),
             Err(error) => anyhow::bail!("wgpu render error: {error:?}"),
         };
-        let animated = !self.reduced_motion && self.shown.get(&key).is_some_and(Shown::animated);
+        let reduced_motion = self.reduced_motion;
+        let animated = self
+            .shown
+            .get(&key)
+            .is_some_and(|shown| shown.moving(reduced_motion));
         let Some(output) = self.outputs.get_mut(&id) else {
             return Ok(());
         };
@@ -934,11 +975,11 @@ impl App {
                     render.draw(view, format, texture);
                 })
             }
-            Content::Shader(shader, started) => {
+            Content::Shader(shader, clock) => {
                 let seconds = if self.reduced_motion {
                     0.0
                 } else {
-                    started.elapsed().as_secs_f32()
+                    clock.seconds()
                 };
                 let size = output.buffer_size;
                 self.render.present(&output.wgpu_surface, |render, view| {
@@ -1141,3 +1182,23 @@ delegate_compositor!(App);
 delegate_output!(App);
 
 sctk::delegate_layer!(App);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_paused_shader_clock_resumes_where_it_stopped() {
+        let mut clock = Clock {
+            started: Instant::now() - Duration::from_secs(10),
+            frozen: None,
+        };
+        clock.run(false);
+        let stopped = clock.seconds();
+        assert!((stopped - 10.0).abs() < 0.5);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(clock.seconds(), stopped);
+        clock.run(true);
+        assert!((clock.seconds() - stopped).abs() < 0.05);
+    }
+}

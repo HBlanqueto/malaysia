@@ -292,8 +292,8 @@ desktop («Show on all desktops»), a crop per display, collections of folders
 and images, the filter, shuffling of colors and collections, custom colors,
 and the Dynamic and Animated sections, with previews written by
 `malaysia-wallpaper`; the crop and collection sheets follow the mock-up.
-Not tried in a real session yet. Left out: «Show all» grids and pausing an
-animated wallpaper by hand.
+«Show All» turns a long row into a grid and «Play» pauses an animated
+wallpaper. Not tried in a real session yet.
 
 ### 17 — Spaces and focus mode
 
