@@ -8,9 +8,9 @@ use bk::styles::{Axis, RadioGroupStyle};
 use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
-    AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick, ScrollBars,
-    TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle, WindowColorMode,
-    WindowTintScope, lights_for, load_appearance, palette,
+    AppearanceConfig, BlurBehind, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick,
+    ScrollBars, TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle,
+    WindowColorMode, WindowTintScope, lights_for, load_appearance, palette,
 };
 use ctdesign::{
     ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, MENU_POPOVER, POINTER_SIZES, Rgba,
@@ -20,12 +20,15 @@ use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::Gaps;
 
 use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_busy_device, use_pairing_prompt};
+use crate::collection::collection_sheet;
+use crate::crop::crop_sheet;
 use crate::energy::energy_pane;
 use crate::freedesktop::{Themes, confirm, freedesktop, own_themes};
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
 use crate::previews::theme_preview;
 use crate::state::{account_name, initials, save_config};
+use crate::wallpaper::{color_sheet, use_wallpaper, wallpaper_pane};
 use crate::wifi::{WifiDialog, wifi_dialog, wifi_pane};
 use bk::app::use_menu_action;
 use malaysia_services::SETTINGS_PANE_ACTION as PANE_ACTION;
@@ -55,6 +58,11 @@ const COLOR_FILTERS: [ColorFilter; 4] = [
     ColorFilter::RedGreen,
     ColorFilter::GreenRed,
     ColorFilter::BlueYellow,
+];
+const BLUR_BEHIND: [BlurBehind; 3] = [
+    BlurBehind::Mixed,
+    BlurBehind::Wallpaper,
+    BlurBehind::Windows,
 ];
 pub(crate) const ACCESSIBILITY_TINT: Rgba = ACCENT_SWATCHES[0].1;
 const COLOR_FILTER_PENCILS: &[u8] = include_bytes!("../assets/color-filters.svg");
@@ -97,6 +105,7 @@ pub fn settings_window(
         }
     });
     let wifi_shown = use_state(|| None::<WifiDialog>);
+    let wallpaper = use_wallpaper();
     let busy_device = use_busy_device(&bluetooth);
     let confirming_own_themes = use_state(|| false);
     let themes_changed = use_state(|| 0u32);
@@ -169,6 +178,7 @@ pub fn settings_window(
                 SETTINGS.section_icon_bg,
                 appearance(config, dominant, resolved, error),
             ))
+            .pane(wallpaper_pane(wallpaper, resolved.scheme.is_dark(), error))
             .pane(crate::notifications::notifications_pane(error))
             .pane(crate::notifications::focus_pane(error)),
     );
@@ -190,6 +200,10 @@ pub fn settings_window(
         }))
         .maybe_child(wifi_dialog(wifi_shown, &network))
         .maybe_child(pairing_sheet(pairing))
+        .maybe_child(crop_sheet(wallpaper, error))
+        .maybe_child(collection_sheet(wallpaper, error))
+        .child(crate::collection::FilePicker { wallpaper })
+        .maybe_child(color_sheet(wallpaper, error))
         .maybe_child(confirm(confirming_own_themes, error))
         .children(failures.into_iter().filter_map(failure_alert))
 }
@@ -536,6 +550,7 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                     )),
                 ),
         )
+        .section(blur(config, error))
         .section(
             Section::titled(tr!("text"))
                 .row(Row::page(tr!("text-size"), "text-size").detail(tr!("text-size-help")))
@@ -719,6 +734,59 @@ fn text_size_names() -> &'static [&'static str] {
             )
             .collect()
     })
+}
+
+const BLUR_BEHIND_NAMES: [Text; 3] = [
+    || tr!("blur-behind-mixed"),
+    || tr!("blur-behind-wallpaper"),
+    || tr!("blur-behind-windows"),
+];
+
+const BLUR_BEHIND_HELP: [Text; 3] = [
+    || tr!("blur-behind-mixed-help"),
+    || tr!("blur-behind-wallpaper-help"),
+    || tr!("blur-behind-windows-help"),
+];
+
+fn blur(config: &AppearanceConfig, error: State<Option<String>>) -> Section {
+    let reduced = config.transparency_reduced();
+    let selected = position(&BLUR_BEHIND, config.blur_behind);
+    let help = |text: &'static str| {
+        if reduced {
+            tr!("blur-reduced-help")
+        } else {
+            text
+        }
+    };
+    Section::titled(tr!("blur"))
+        .row(
+            Row::new(tr!("blur-behind"))
+                .detail(help(BLUR_BEHIND_HELP[selected]()))
+                .control(
+                    BLUR_BEHIND_NAMES
+                        .iter()
+                        .fold(PopUpButton::new(tr!("blur-behind")), |popup, name| {
+                            popup.item(name())
+                        })
+                        .selected(selected)
+                        .disabled(reduced)
+                        .on_change(edit(error, |config, index: usize| {
+                            config.blur_behind = BLUR_BEHIND[index];
+                        })),
+                ),
+        )
+        .row(
+            Row::new(tr!("blur-all-windows"))
+                .detail(help(tr!("blur-all-windows-help")))
+                .control(
+                    Switch::new(tr!("blur-all-windows"))
+                        .on(config.blur_all_windows)
+                        .disabled(reduced)
+                        .on_toggle(edit(error, |config, on: bool| {
+                            config.blur_all_windows = on;
+                        })),
+                ),
+        )
 }
 
 const COLOR_FILTER_NAMES: [Text; 4] = [

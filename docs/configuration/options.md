@@ -32,9 +32,11 @@ directories — preferences and state:
 └── debug.domain
 
 ~/.local/share/malaysia/       ← ~/Library/Application Support
-├── wallpaper-selection.state ← current wallpaper per desktop ([desktops]), like
+├── wallpaper-selection.state ← current wallpaper per desktop and display, like
 │                            com.apple.wallpaper
-├── wallpaper.state        ← dominant wallpaper color (written by malaysia-wallpaper)
+├── wallpaper.state        ← dominant color, tint grids, displays and the shuffled
+│                            wallpaper (written by malaysia-wallpaper)
+├── wallpapers/colors/     ← the user's own color wallpapers (System Settings)
 ├── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
 │                            `cleared_at` (unix; «Clear Menu»), written by the menubar
 └── notifications.state    ← delivered notifications, `next_id` and the active `focus`,
@@ -107,7 +109,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
 | `appearance.scroll_bars` | `"automatic"` \| `"when_scrolling"` \| `"always"` | `"automatic"` | **active** | the kit's `ScrollView`: always after a mouse wheel and only while scrolling after a touchpad, only while scrolling, or always, **System Settings** |
 | `appearance.scroll_bar_click` | `"next_page"` \| `"clicked_spot"` | `"next_page"` | **active** | a click on the scroll bar track pages toward it or jumps there, **System Settings** |
-| `appearance.reduce_transparency` | bool | `true` | **active** | shell and kit: solid backgrounds; `false` will enable the compositor blur (ADR 0038) |
+| `appearance.reduce_transparency` | bool | `true` | **active** | shell and kit: solid backgrounds; `false` enables the compositor blur (ADR 0038, 0071) |
 | `appearance.window_color` | `"neutral"` \| `"accent"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings**; an old `"wallpaper"` reads as `"neutral"` |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints the menu bar and the Dock with the accent tint, **System Settings** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` | `"auto"` | **active** | titlebar traffic lights; an old `"wallpaper"` reads as `"accent"`, **System Settings** |
@@ -129,6 +131,8 @@ They are not domain options; they are fixed and documented here:
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
 | `appearance.color_filter` | `"grayscale"` \| `"red_green"` \| `"green_red"` \| `"blue_yellow"` | `"grayscale"` | **active** | compositor: grayscale or a color-blindness filter (ADR 0066) |
 | `appearance.color_filter_intensity` | a value of `COLOR_FILTER_INTENSITY` | `1.0` | **active** | compositor: blends the filter with the original colors |
+| `appearance.blur_behind` | `"mixed"`, `"wallpaper"`, `"windows"` | `"mixed"` | pending | compositor: what the blur behind a surface shows (ADR 0071); today every surface shows only the wallpaper. **System Settings › Accessibility › Display › Blur** |
+| `appearance.blur_all_windows` | bool | `false` | pending | compositor: also blur windows that do not ask for it (ADR 0071). **System Settings › Accessibility › Display › Blur** |
 | `appearance.qt_bridge` | bool | `true` | **active** | portal: writes `qt6ct.conf` and `qt5ct.conf` in `~/.config/qt6ct` and `~/.config/qt5ct` (Fusion, the Malaysia palette in `malaysia-colors.conf`, Breeze or Breeze Dark icons unless another theme is set, the Qt text size); other keys stay (ADR 0067). Off, the portal removes its palette. Settings sets it with `gtk_bridge` (Accessibility › freedesktop Options, ADR 0070) |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Settings sets it with `qt_bridge` (Accessibility › freedesktop Options, ADR 0070) |
 
@@ -298,43 +302,89 @@ include the pointer. The clipboard is `image/png` and the compositor serves it; 
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `wallpaper.dir` | string (path) | `/run/current-system/sw/share/wallpapers/solid-colors` | pending | `malaysia-wallpaper`, settings app |
-| `wallpaper.scale` | `"fill"` \| `"stretch"` \| `"fit"` \| `"center"` | `"fill"` | pending | `malaysia-wallpaper` |
-| `wallpaper.shuffle` | bool | `false` | pending | `malaysia-wallpaper` |
-
-**Malaysia's wallpapers live in the project itself** (`share/wallpapers/solid-colors/`,
-the macOS "Solid Colors" set, vendored in the repo) and the flake installs them as system
-data in `/run/current-system/sw/share/wallpapers/`, just as GNOME installs
-its own in `/usr/share/backgrounds`. `wallpaper.dir` points there by default; a
-development setup can point it at the repo or another folder. The
-**`malaysia-wallpaper`** component draws the wallpaper on the `Background` layer with the
-images from that folder (ADR 0049; **Vulkan**/wgpu render presented through dmabuf).
-
-**The default wallpaper is `malaysia-dream.heic`**: a square 6016×6016
-lossless HEIC of a single salmon colour (`#e16e79`), embedded in the
-`malaysia-wallpaper` binary. A HEIC can hold several images; future colours go
-in that same file. `malaysia-wallpaper` decodes PNG, JPEG and HEIF (libheif).
-It is the one shown when the store picks none, does not exist yet, or the
-selection points to a file that does not exist or does not decode. If `wallpaper.dir`
-points to another folder and there is no selection, `malaysia-dream.heic` still shows.
-
-**Like macOS, the current selection lives in a separate store**:
-`~/.local/share/malaysia/wallpaper-selection.state` (the equivalent of `~/Library/Application
-Support`, where macOS keeps `com.apple.wallpaper`) — per desktop, with a `file://`
-to the image:
+| `wallpaper.collections` | array of `{ name, folders, images }` | none | **active** | `malaysia-wallpaper` (shuffle), **System Settings › Wallpaper** («Add…», «Edit…») |
 
 ```toml
-# ~/.local/share/malaysia/wallpaper-selection.state  (current selection, per desktop)
-[desktops]
-default = "file:///home/.../Solid Colors/Solid Mint.png"   # optional; without this line, malaysia-dream.heic
+# ~/.config/malaysia/wallpaper.domain
+[[collections]]
+name = "Viajes"
+folders = ["/home/ana/Pictures/Viajes"]
+images = ["/home/ana/Pictures/faro.jpg"]
 ```
 
-Editing that file changes the wallpaper **live** (`malaysia-wallpaper` watches the
-store and repaints). The preferences above (`dir`, `scale`, `shuffle`) go in
-`~/.config/malaysia/wallpaper.domain` once they are read; the catalog is in the
-system (`share/wallpapers/`). On a wallpaper change, the client writes the dominant
-color to `wallpaper.state` (`dominant = [r, g, b]`) for the window tint
-and the portal's `accent-color`.
+**Malaysia's wallpapers live in the project itself** (`share/wallpapers/`,
+with the macOS "Solid Colors" set in `solid-colors/`, vendored in the repo)
+and the flake installs them as system data in
+`/run/current-system/sw/share/wallpapers/`, just as GNOME installs its own in
+`/usr/share/backgrounds`. System Settings lists the first
+`$XDG_DATA_DIRS/wallpapers`: HEIC files with a light and a dark still go to
+Dynamic, videos and GLSL shaders to Animated, the other images to Images,
+`solid-colors/` and the user's colors to Colors (ADR 0073). The
+**`malaysia-wallpaper`** component draws the wallpaper on the `Background`
+layer (ADR 0049; **Vulkan**/wgpu render presented through dmabuf).
+
+**The default wallpaper is `collapse.heic`**: a square 6016×6016 HEIC with a
+light and a dark image, embedded in the `malaysia-wallpaper` binary; it
+follows the appearance. `malaysia-wallpaper` decodes PNG, JPEG, HEIF
+(libheif), MP4, MOV, WebM and MKV (GStreamer) and GLSL shaders (`.frag`,
+`.glsl`, Shadertoy's `mainImage`). Collapse shows when the store picks none,
+does not exist yet, or the selection points to a file that does not exist or
+does not decode. `malaysia-dream.heic` (one salmon color, `#e16e79`) is the
+first color.
+
+System Settings cannot decode HEIC, video or GLSL, so `malaysia-wallpaper`
+writes their previews: freedesktop thumbnails in
+`~/.cache/thumbnails/x-large/` and the light and dark stills of a dynamic HEIC
+in `~/.cache/malaysia/wallpaper-frames/`. The embedded default has
+`previews/collapse-light.png` and `previews/collapse-dark.png`.
+
+**Like macOS, the current selection lives in a separate store**:
+`~/.local/share/malaysia/wallpaper-selection.state` (the equivalent of
+`~/Library/Application Support`, where macOS keeps `com.apple.wallpaper`).
+Each map is keyed by desktop number, or `default` for every desktop; a crop
+can also be keyed `"<desktop>/<display>"`:
+
+```toml
+# ~/.local/share/malaysia/wallpaper-selection.state
+scale = "custom"     # "fill" (default), "fit", "stretch", "center" or "custom"
+shuffle = "daily"    # "login", "hourly" (default) or "daily"
+paused = ["2"]       # desktops whose animated wallpaper stands still
+
+[desktops]
+default = "file:///run/current-system/sw/share/wallpapers/bandura.jpg"
+2 = "shuffle:collection:Viajes"   # or "builtin", "shuffle:colors", a file:// URI
+
+[scales]
+2 = "fill"
+
+[crop]
+default = [0.2, 0.15, 0.55, 0.62]            # x, y, width, height of the image (0–1)
+"default/HDMI-A-1" = [0.3, 0.1, 0.5, 0.62]   # this display only
+
+[appearance]
+default = "dark"   # a dynamic wallpaper kept on its "light" or "dark" image
+```
+
+| Key | Type | Default | Status | Consumed by |
+|---|---|---|---|---|
+| `scale`, `scales.<desktop>` | `"fill"` \| `"fit"` \| `"stretch"` \| `"center"` \| `"custom"` | `"fill"` | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Scale to screen») |
+| `desktops.<desktop>` | `builtin`, `file://` URI, `shuffle:colors`, `shuffle:collection:<name>` | none (Collapse) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** |
+| `crop.<desktop>`, `crop."<desktop>/<display>"` | `[x, y, width, height]`, fractions of the image | none | **active** | `malaysia-wallpaper` with `custom`, **System Settings › Wallpaper** («Custom framing…») |
+| `appearance.<desktop>` | `"light"` \| `"dark"` | none (Automatic) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Mode») |
+| `paused` | array of desktop keys | none (playing) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Play») |
+| `shuffle` | `"login"` \| `"hourly"` \| `"daily"` | `"hourly"` | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Change Picture») |
+
+`ctappearance::WallpaperSelection` reads and writes this file for both
+(ADRs 0072 and 0073). A desktop without its own line shows the shared
+wallpaper with its scale, crop and appearance. With `custom`, the crop covers
+the screen like `fill`. Choosing another wallpaper removes its crops and
+turns `custom` into `fill`.
+
+Editing either file changes the wallpaper **live** (`malaysia-wallpaper`
+watches them and repaints). The client writes `wallpaper.state`: the
+dominant color for the window tint and the portal's `accent-color`, a tint
+grid per desktop, the displays (`outputs`) and the shuffled wallpaper of each
+desktop (`shown`, `shuffled_at`).
 
 ## `dock` — shell dock (`malaysia-shell dock`; macOS `com.apple.dock`)
 
@@ -375,6 +425,7 @@ compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhib
 | `menubar.show_battery` | bool | `true` | **active** | shell (Battery menu); System Settings › Battery writes it |
 | `menubar.show_battery_percentage` | bool | `true` | **active** | shell (percentage next to the battery); System Settings › Battery writes it |
 | `menubar.show_vpn` | bool | `true` | **active** | shell (VPN menu, only with a VPN profile); System Settings › VPN writes it |
+| `menubar.show_printer` | bool | `true` | **active** | shell (printer while CUPS has a queued job, on the bar and the lock screen; ADR 0074) |
 
 ## `wifi` — Wi-Fi (System Settings → Wi-Fi; ADR 0069)
 
@@ -422,11 +473,9 @@ They apply to **every** window, client- or server-decorated.
 | `effects.shadow.radius` | float (px) | `24.0` | pending | same |
 | `effects.shadow.offset` | `[x,y]` (px) | `[0,6]` | pending | same |
 | `effects.shadow.opacity` | float `[0,1]` | `0.35` | pending | same |
-| `effects.blur.enabled` | bool | `false` | pending | blur render |
-| `effects.blur.radius` | float (px) | `20.0` | pending | same |
 
-Once a **transparent theme** exists, the app paints with alpha and `effects.blur.*`
-makes the compositor blur what is behind (macOS-style vibrancy).
+Blur is not an `effects` key: an app asks for it with `ext-background-effect-v1`,
+and `appearance.reduce_transparency` turns it on (ADR 0071).
 
 ## `debug` — development
 
@@ -467,13 +516,13 @@ domain domains
 Examples (same syntax as `defaults`):
 
 ```
-domain write effects.blur.enabled -bool true        # or "read effects.blur.enabled"
+domain write effects.shadow.enabled -bool true      # or "read effects.shadow.enabled"
 domain write appearance.color_scheme -string dark
 domain write dock.autohide -bool true
 domain write window.decorations -string force_server
 domain read  effects.shadow.radius
-domain delete effects.blur.enabled                  # back to the default
-domain find  blur
+domain delete effects.shadow.enabled                # back to the default
+domain find  shadow
 ```
 
 ## Example files (`.domain` extension, one file per domain)
@@ -487,7 +536,7 @@ accent_color = [0.208, 0.518, 0.894]
 wallpaper_accent = false        # the «Wallpaper» accent swatch
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
-reduce_transparency = true      # Reduce transparency (solid backgrounds; false = future blur)
+reduce_transparency = true      # Reduce transparency (solid backgrounds; false = compositor blur)
 scroll_bars = "automatic"       # automatic | when_scrolling | always
 scroll_bar_click = "next_page"  # next_page | clicked_spot
 window_color = "neutral"        # neutral | accent
@@ -509,6 +558,8 @@ pointer_size = 1.0
 color_filters = false
 color_filter = "grayscale"
 color_filter_intensity = 1.0
+blur_behind = "mixed"           # mixed | wallpaper | windows
+blur_all_windows = false
 
 [text_sizes]                    # optional; a missing key uses text_size
 qt = 1.3                        # barrierkit | gtk | qt
@@ -609,9 +660,6 @@ enabled = true
 radius = 24.0
 offset = [0.0, 6.0]
 opacity = 0.35
-[blur]
-enabled = false
-radius = 20.0
 ```
 
 ```toml

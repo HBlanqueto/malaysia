@@ -17,6 +17,8 @@ ctappearance.workspace = true
 ctdesign.workspace = true
 
 async-channel.workspace = true
+async-io.workspace = true
+png.workspace = true
 freya-clipboard.workspace = true
 libc.workspace = true
 tracing.workspace = true

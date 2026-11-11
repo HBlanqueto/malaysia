@@ -40,7 +40,7 @@ fn logout_label(name: Option<&str>) -> String {
     }
 }
 
-fn user_display_name() -> Option<String> {
+pub(crate) fn user_display_name() -> Option<String> {
     // SAFETY: the static entry is copied below before any other `getpw*` call on this thread.
     let pw = unsafe { libc::getpwuid(libc::getuid()) };
     if pw.is_null() {

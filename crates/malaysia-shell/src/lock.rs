@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{cell::RefCell, rc::Rc};
 
@@ -6,18 +7,29 @@ use bk::app::use_defaults;
 use bk::password::{PasswordField, State as FieldState};
 use bk::platform::Timers;
 use bk::prelude::*;
-use bk::shell::{SessionUnlock, run_lock};
+use bk::shell::{BlurRegion, SessionUnlock, run_lock, set_blur_region};
+use chrono::Datelike;
+use ctappearance::menubar::MenubarConfig;
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
-    LOCK_FIELD_HEIGHT, LOCK_FIELD_WIDTH, LOCK_FONT_SIZE, LOCK_LABEL_FONT_SIZE, LOCK_LABEL_OFFSET,
-    LOCK_MASK_FONT_SIZE, LOCK_TITLE_SCALE, NOTIFICATION_GAP, NOTIFICATION_MARGIN,
+    BODY, DURATION_FAST_MS, LOCK_AVATAR_SIZE, LOCK_BOTTOM_MARGIN, LOCK_CLOCK_FONT_SIZE,
+    LOCK_DATE_FONT_SIZE, LOCK_FIELD_ERROR, LOCK_FIELD_FILL, LOCK_FIELD_FILL_OPAQUE,
+    LOCK_FIELD_HEIGHT, LOCK_FIELD_INK, LOCK_FIELD_MAX_WIDTH, LOCK_FIELD_MIN_WIDTH, LOCK_INK,
+    LOCK_LOGIN_MS, LOCK_MASK_FONT_SIZE, LOCK_RISE_MS, LOCK_RISE_OFFSET, LOCK_SPACING,
+    LOCK_TOP_MARGIN, MENUBAR_HEIGHT, NOTIFICATION_GAP, NOTIFICATION_WIDTH, TITLE_2,
 };
+use freya_animation::prelude::{AnimNum, Function, OnChange, use_animation_with_dependencies};
+use freya_components::image_viewer::ImageViewer;
 use freya_core::integration::AppComponent;
-use torin::prelude::Position;
+use malaysia_services::accounts::Accounts;
+use malaysia_services::bus::use_service;
+use torin::prelude::{Gaps, Position};
 
 use crate::localize::tr;
+use crate::menubar::lock_row::{power_icon, slot, status_row};
+use crate::menubar::{bar::schedule_next_minute, extras, system::user_display_name};
 use crate::notifications::{Center, Notification};
-use crate::pam;
+use crate::{pam, power};
 use bk::theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,7 +71,14 @@ struct LockApp {
     received: Receiver<pam::Event>,
     attempt: Rc<RefCell<Option<pam::Attempt>>>,
     user: String,
+    clock: State<String>,
+    leaving: State<bool>,
+    power_menu: State<bool>,
 }
+
+// ADR 0074: the login appears once the clock has mostly risen.
+const LOGIN_DELAY_MS: u64 = LOCK_RISE_MS * 3 / 5;
+const ENTRY_MS: u64 = LOGIN_DELAY_MS + LOCK_LOGIN_MS;
 
 impl App for LockApp {
     fn render(&self) -> impl IntoElement {
@@ -71,13 +90,21 @@ impl App for LockApp {
         let events = self.events.clone();
         let user = self.user.clone();
         let unlock = SessionUnlock::get();
+        let timers = Timers::get();
+        let leaving = self.leaving;
+
+        let clock = self.clock;
+        let minute_timers = timers.clone();
+        use_hook(move || schedule_next_minute(minute_timers, clock));
 
         use_future(move || {
             let received = received.clone();
             let attempt = attempt_for_events.clone();
             let unlock = unlock.clone();
+            let timers = timers.clone();
             let mut label = label_state;
             let mut field = field;
+            let mut leaving = leaving;
             async move {
                 while let Ok(event) = received.recv().await {
                     let action = apply_pam_event(&mut label.write(), &mut field.write(), &event);
@@ -85,11 +112,109 @@ impl App for LockApp {
                         *attempt.borrow_mut() = None;
                     }
                     if action == Action::Unlock {
-                        unlock.unlock();
+                        leaving.set(true);
+                        let unlock = unlock.clone();
+                        timers.after(Duration::from_millis(DURATION_FAST_MS), move || {
+                            unlock.unlock();
+                        });
                     }
                 }
             }
         });
+
+        let resolved = theme::resolved();
+        let shown = SessionUnlock::get().locked();
+        let entry = use_animation_with_dependencies(&shown, |conf, shown| {
+            conf.on_change(OnChange::Rerun);
+            let total = if *shown { ENTRY_MS } else { 0 };
+            AnimNum::new(0.0, total as f32)
+                .time(total)
+                .function(Function::Linear)
+        });
+        let leave = use_animation_with_dependencies(&*self.leaving.read(), |conf, leaving| {
+            conf.on_change(OnChange::Rerun);
+            let total = if *leaving { DURATION_FAST_MS } else { 0 };
+            AnimNum::new(0.0, total as f32)
+                .time(total)
+                .function(Function::Linear)
+        });
+        let elapsed = if shown { entry.get().value() } else { 0.0 };
+        let stay = 1.0 - progress(leave.get().value(), 0, DURATION_FAST_MS);
+        let rise = ease_out(progress(elapsed, 0, LOCK_RISE_MS));
+        let login = ease_out(progress(elapsed, LOGIN_DELAY_MS, LOCK_LOGIN_MS)) * stay;
+        let power = ease_out(progress(elapsed, 0, LOCK_LOGIN_MS));
+        let rise_offset = if resolved.reduced_motion {
+            0.0
+        } else {
+            (1.0 - rise) * LOCK_RISE_OFFSET
+        };
+
+        let extras = extras::use_extras();
+        let menubar_config = use_defaults::<MenubarConfig>("menubar");
+        let picture = use_service::<Accounts>().snapshot;
+        let name = use_hook(|| user_display_name().unwrap_or_else(|| self.user.clone()));
+        let notices = lock_notices();
+        let mut power_menu = self.power_menu;
+
+        let on_key = move |event: Event<KeyboardEventData>| {
+            let secret = field.write().handle_key(&event.key, event.modifiers);
+            if let Some(secret) = secret {
+                start_attempt(&attempt, &events, &user);
+                if let Some(attempt) = attempt.borrow().as_ref() {
+                    attempt.answer(secret);
+                }
+            }
+        };
+
+        let power_button = rect()
+            .opacity(power)
+            .on_press(move |_| {
+                let open = *power_menu.read();
+                power_menu.set(!open);
+            })
+            .a11y_alt(tr!("lock-power-menu"))
+            .child(power_icon(theme::color(LOCK_INK)))
+            .into_element();
+        let row = rect()
+            .position(Position::new_absolute())
+            .width(Size::fill())
+            .height(Size::px(MENUBAR_HEIGHT as f32))
+            .child(status_row(
+                extras::lock_icons(&extras, &menubar_config.read(), LOCK_INK),
+                slot(power_button),
+            ));
+
+        let header =
+            VStack::new()
+                .position(Position::new_absolute().top(LOCK_TOP_MARGIN))
+                .width(Size::fill())
+                .cross_align(Alignment::Center)
+                .offset_y(rise_offset)
+                .opacity(rise * stay)
+                .child(
+                    Text::new(long_date(chrono::Local::now().date_naive()))
+                        .font(TITLE_2)
+                        .font_size(LOCK_DATE_FONT_SIZE)
+                        .color(theme::color(LOCK_INK)),
+                )
+                .child(
+                    Text::new(self.clock.read().clone())
+                        .font(ctdesign::LARGE_TITLE)
+                        .font_size(LOCK_CLOCK_FONT_SIZE)
+                        .color(theme::color(LOCK_INK)),
+                )
+                .maybe_child((!notices.is_empty()).then(|| {
+                    VStack::new()
+                        .width(Size::px(NOTIFICATION_WIDTH as f32))
+                        .margin(Gaps::new(LOCK_SPACING, 0.0, 0.0, 0.0))
+                        .spacing(NOTIFICATION_GAP)
+                        .opacity(login)
+                        .children(notices.iter().take(LOCK_NOTICES).map(
+                            |(notification, hidden)| {
+                                crate::notifications::lock_card(notification, *hidden)
+                            },
+                        ))
+                }));
 
         let view = self.field.read();
         let error = match view.state() {
@@ -97,83 +222,195 @@ impl App for LockApp {
             _ => None,
         };
         let masked = view.masked();
-        let palette = bk::theme::lock_palette(&bk::theme::resolved());
-        let background = theme::color(palette.bg_surface);
-        let ink = theme::color(palette.ink);
-        let muted = theme::color(palette.ink_muted);
-        let accent = theme::color(palette.accent);
-        let danger = theme::color(palette.danger);
+        let typing = !masked.is_empty();
+        let fill = if error.is_some() {
+            LOCK_FIELD_ERROR
+        } else if resolved.reduce_transparency {
+            LOCK_FIELD_FILL_OPAQUE
+        } else {
+            LOCK_FIELD_FILL
+        };
+        let field_view = rect()
+            .width(Size::px(if typing {
+                LOCK_FIELD_MAX_WIDTH
+            } else {
+                LOCK_FIELD_MIN_WIDTH
+            }))
+            .height(Size::px(LOCK_FIELD_HEIGHT))
+            .corner_radius(LOCK_FIELD_HEIGHT / 2.0)
+            .background(theme::color(fill))
+            .center()
+            .on_sized(|event: Event<SizedEventData>| {
+                let area = event.data().area;
+                set_blur_region(BlurRegion {
+                    rects: vec![(
+                        area.origin.x.round() as i32,
+                        area.origin.y.round() as i32,
+                        area.size.width.round() as i32,
+                        area.size.height.round() as i32,
+                    )],
+                });
+            })
+            .child(if typing {
+                Text::new(masked)
+                    .font_size(LOCK_MASK_FONT_SIZE)
+                    .color(theme::color(LOCK_INK))
+            } else {
+                Text::new(self.label.read().clone())
+                    .font(BODY)
+                    .color(theme::color(LOCK_FIELD_INK))
+            });
+        let login_view = VStack::new()
+            .position(Position::new_absolute().bottom(LOCK_BOTTOM_MARGIN))
+            .width(Size::fill())
+            .cross_align(Alignment::Center)
+            .spacing(LOCK_SPACING)
+            .opacity(login)
+            .child(avatar(picture.read().clone().flatten(), &name))
+            .child(
+                Text::new(name.clone())
+                    .font(TITLE_2)
+                    .color(theme::color(LOCK_INK)),
+            )
+            .child(field_view)
+            .child(
+                Text::new(error.unwrap_or_else(|| " ".to_string()))
+                    .font(BODY)
+                    .color(theme::color(LOCK_INK)),
+            );
 
-        let notices = lock_notices();
-        let login = VStack::new()
+        let mut root = rect()
             .width(Size::fill())
             .height(Size::fill())
-            .background(background)
-            .main_align(Alignment::Center)
-            .cross_align(Alignment::Center)
-            .spacing(LOCK_LABEL_OFFSET as f32)
-            .on_global_key_down(move |event: Event<KeyboardEventData>| {
-                let secret = field.write().handle_key(&event.key, event.modifiers);
-                if let Some(secret) = secret {
-                    start_attempt(&attempt, &events, &user);
-                    if let Some(attempt) = attempt.borrow().as_ref() {
-                        attempt.answer(secret);
-                    }
-                }
-            })
+            .on_global_key_down(on_key)
+            .child(header)
+            .child(login_view)
+            .child(row);
+        if *self.power_menu.read() {
+            root = root.child(power_options(self.power_menu));
+        }
+        for family in ctdesign::SANS_FAMILIES {
+            root = root.font_family(family);
+        }
+        root
+    }
+}
+
+fn avatar(picture: Option<String>, name: &str) -> Element {
+    let size = LOCK_AVATAR_SIZE;
+    let frame = rect()
+        .width(Size::px(size))
+        .height(Size::px(size))
+        .corner_radius(size / 2.0)
+        .overflow(Overflow::Clip);
+    match picture.map(PathBuf::from).filter(|path| path.exists()) {
+        Some(path) => frame
             .child(
-                Text::new(tr!("lock-title"))
-                    .font_size(LOCK_FONT_SIZE * LOCK_TITLE_SCALE)
-                    .color(ink),
+                ImageViewer::new(path)
+                    .width(Size::fill())
+                    .height(Size::fill())
+                    .aspect_ratio(AspectRatio::Max)
+                    .image_cover(ImageCover::Center),
             )
+            .into_element(),
+        None => frame
+            .background(theme::color(LOCK_FIELD_FILL_OPAQUE))
+            .center()
             .child(
-                Text::new(self.label.read().clone())
-                    .font_size(LOCK_LABEL_FONT_SIZE)
-                    .color(muted),
+                Text::new(initial(name))
+                    .font(TITLE_2)
+                    .font_size(size / 2.0)
+                    .color(theme::color(LOCK_INK)),
             )
-            .child(
-                rect()
-                    .width(Size::px(LOCK_FIELD_WIDTH as f32))
-                    .height(Size::px(LOCK_FIELD_HEIGHT as f32))
-                    .center()
-                    .background(if error.is_some() { danger } else { accent })
-                    .corner_radius((LOCK_FIELD_HEIGHT / 4) as f32)
-                    .child(
-                        Text::new(if masked.is_empty() {
-                            tr!("lock-password").to_string()
-                        } else {
-                            masked
-                        })
-                        .font_size(LOCK_MASK_FONT_SIZE)
-                        .color(background),
-                    ),
-            )
-            .child(match error {
-                Some(text) => Text::new(text).color(danger),
-                None => Text::new(" ").color(muted),
-            });
+            .into_element(),
+    }
+}
+
+fn initial(name: &str) -> String {
+    name.chars()
+        .next()
+        .map(|first| first.to_uppercase().collect())
+        .unwrap_or_default()
+}
+
+fn power_options(mut open: State<bool>) -> Element {
+    let resolved = theme::resolved();
+    let palette = theme::menu_palette(&resolved, theme::SurfaceKind::LayerShell);
+    let item = |label: String, action: fn()| {
         rect()
             .width(Size::fill())
-            .height(Size::fill())
-            .child(login)
+            .height(Size::px(palette.item_height))
+            .padding(Gaps::new(
+                0.0,
+                palette.item_padding_x,
+                0.0,
+                palette.item_padding_x,
+            ))
+            .corner_radius(palette.item_radius)
+            .main_align(Alignment::Center)
+            .on_press(move |_| {
+                open.set(false);
+                action();
+            })
             .child(
-                VStack::new()
-                    .position(
-                        Position::new_absolute()
-                            .top(NOTIFICATION_GAP)
-                            .right(NOTIFICATION_MARGIN as f32),
-                    )
-                    .spacing(NOTIFICATION_GAP)
-                    .children(
-                        notices
-                            .iter()
-                            .take(LOCK_NOTICES)
-                            .map(|(notification, hidden)| {
-                                crate::notifications::lock_card(notification, *hidden)
-                            }),
-                    ),
+                Text::new(label)
+                    .font_size(palette.font_size)
+                    .color(theme::color(palette.fg)),
             )
+    };
+    bk::style::panel_edges(
+        rect()
+            .width(Size::px(palette.min_width))
+            .padding(palette.padding)
+            .child(item(tr!("system-sleep").to_string(), power::suspend))
+            .child(item(tr!("power-restart-button").to_string(), || {
+                power::run(power::PowerAction::Restart)
+            }))
+            .child(item(tr!("power-shut-down-button").to_string(), || {
+                power::run(power::PowerAction::ShutDown)
+            })),
+        palette.bar_title_open_radius.max(palette.item_radius * 2.0),
+        palette.bg,
+    )
+    .position(
+        Position::new_absolute()
+            .top(MENUBAR_HEIGHT as f32)
+            .right(ctdesign::MENUBAR_MARGIN_RIGHT as f32),
+    )
+    .into_element()
+}
+
+fn long_date(today: chrono::NaiveDate) -> String {
+    tr!(
+        "lock-date",
+        weekday = weekday_name(today.weekday()),
+        day = today.day(),
+        month = crate::notifications::month_name(today.month())
+    )
+    .to_string()
+}
+
+fn weekday_name(weekday: chrono::Weekday) -> &'static str {
+    match weekday {
+        chrono::Weekday::Mon => tr!("weekday-1"),
+        chrono::Weekday::Tue => tr!("weekday-2"),
+        chrono::Weekday::Wed => tr!("weekday-3"),
+        chrono::Weekday::Thu => tr!("weekday-4"),
+        chrono::Weekday::Fri => tr!("weekday-5"),
+        chrono::Weekday::Sat => tr!("weekday-6"),
+        chrono::Weekday::Sun => tr!("weekday-7"),
     }
+}
+
+fn progress(elapsed: f32, start: u64, length: u64) -> f32 {
+    if length == 0 {
+        return if elapsed >= start as f32 { 1.0 } else { 0.0 };
+    }
+    ((elapsed - start as f32) / length as f32).clamp(0.0, 1.0)
+}
+
+fn ease_out(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(3)
 }
 
 const LOCK_NOTICES: usize = 4;
@@ -207,6 +444,9 @@ pub fn run() -> anyhow::Result<()> {
         received,
         attempt,
         user,
+        clock: State::create_global(chrono::Local::now().format("%H:%M").to_string()),
+        leaving: State::create_global(false),
+        power_menu: State::create_global(false),
     });
     run_lock(app).map_err(|error| anyhow::anyhow!("{error}"))
 }

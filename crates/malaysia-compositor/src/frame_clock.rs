@@ -21,6 +21,8 @@ use smithay::wayland::compositor::{
     SurfaceAttributes, SurfaceData, TraversalAction, with_surface_tree_downward,
 };
 
+use smithay::wayland::shell::wlr_layer::Layer;
+
 use crate::session::{PendingFrameRelease, Session};
 use crate::state::State;
 
@@ -60,7 +62,12 @@ pub(crate) fn collect_drawn_buffers(state: &State) -> Vec<Buffer> {
                 collect_tree_buffers(&mut buffers, lock_surface.wl_surface());
             }
         }
-        return buffers;
+        if state.lock_transition.shown() {
+            for entry in state.layers.on_layer(Layer::Background) {
+                collect_tree_buffers(&mut buffers, entry.surface.wl_surface());
+            }
+            return buffers;
+        }
     }
     for window in state.windows.iter() {
         if window.is_mapped() {
@@ -136,7 +143,13 @@ pub(crate) fn for_each_frame_surface(state: &State, mut visit: impl FnMut(&WlSur
         for surface in state.lock_surfaces.iter().filter(|surface| surface.alive()) {
             visit(surface.wl_surface(), true);
         }
-        return;
+        // ADR 0074: the wallpaper stays under the lock screen; the rest only while it fades.
+        if state.lock_transition.shown() {
+            for entry in state.layers.on_layer(Layer::Background) {
+                visit(entry.surface.wl_surface(), false);
+            }
+            return;
+        }
     }
     for surface in state.windows.surfaces() {
         visit(surface, !state.windows.is_placed(surface));

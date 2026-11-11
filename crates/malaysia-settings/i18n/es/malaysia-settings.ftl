@@ -83,6 +83,17 @@ differentiate-without-color = Diferenciar sin color
 display-contrast = Contraste de la pantalla
 display-contrast-normal = Normal
 display-contrast-maximum = Máximo
+blur = Desenfoque
+blur-behind = Desenfocar detrás de
+blur-behind-mixed = Mixto
+blur-behind-mixed-help = Menús, diálogos, el Dock y las notificaciones muestran lo que tienen detrás; el resto, solo el fondo de pantalla.
+blur-behind-wallpaper = Solo el fondo de pantalla
+blur-behind-wallpaper-help = Nunca se ven las ventanas de detrás. Es el que menos energía gasta.
+blur-behind-windows = Ventanas
+blur-behind-windows-help = Puede aumentar el consumo de energía y de GPU: cada ventana se vuelve a desenfocar cada vez que cambia lo que tiene detrás.
+blur-all-windows = Desenfocar todas las ventanas
+blur-all-windows-help = También las ventanas translúcidas que no lo piden, como las de GTK y Qt, solo con el fondo de pantalla. Gasta más GPU.
+blur-reduced-help = Desactiva «Reducir transparencia» para usar el desenfoque.
 step-blank = {""}
 text = Texto
 text-size = Tamaño del texto
@@ -315,3 +326,114 @@ still-synced-help = Las apps los leen del portal de freedesktop, también con te
 back-to-malaysia = Volver a los temas de Malaysia
 back-to-malaysia-help = Vuelve a los temas predeterminados de GTK y Qt y sincroniza otra vez el acento y el tinte. Tu hoja gtk.css se queda.
 managed-file = { $path } lo gestiona tu configuración de Nix (es un enlace simbólico); Ajustes no lo cambia.
+
+wallpaper = Fondo de pantalla
+wallpaper-scale = Ajuste a la pantalla
+wallpaper-fill = Rellenar pantalla
+wallpaper-fit = Ajustar a la pantalla
+wallpaper-stretch = Estirar para llenar la pantalla
+wallpaper-center = Centrar
+wallpaper-custom = Encuadre personalizado…
+wallpaper-images = Imágenes
+wallpaper-colors = Colores
+crop-title = Encuadre personalizado
+crop-zoom = Zoom
+crop-reset = Restablecer
+crop-apply = Aplicar
+crop-title-named = Encuadre personalizado · { $name }
+crop-help = Elige qué parte se ve. Arrastra el marco, tira de una esquina para acercar o haz clic donde quieras centrarlo.
+crop-help-dynamic = Elige qué parte se ve. Arrastra el marco, tira de una esquina para acercar o haz clic donde quieras centrarlo. El encuadre vale para todas las imágenes del fondo.
+crop-help-video = Elige qué parte se ve. Arrastra el marco, tira de una esquina para acercar o haz clic donde quieras centrarlo. El encuadre vale para todos los fotogramas del vídeo.
+crop-pixels-image = { $width } × { $height } px de la imagen
+crop-pixels-video = { $width } × { $height } px del vídeo
+crop-zoom-out = Alejar
+crop-zoom-in = Acercar
+crop-review = Revisar en
+crop-now = Ahora
+crop-light = Claro
+crop-dark = Oscuro
+crop-preview = Vista previa
+crop-sharp = Nítida: la imagen tiene más píxeles de los que muestra la pantalla.
+crop-soft = Se amplía al { $percent } %; se verá algo suave.
+crop-blurry = Se amplía al { $percent } %: se verá borrosa. Aleja el zoom o usa una imagen más grande.
+crop-built-in = Integrada
+crop-external = Externa
+crop-all-displays = Igual en todas las pantallas
+crop-all-displays-help = Mismo centro y zoom; el marco se adapta a la forma de cada una.
+crop-each-display-help = Cada pantalla guarda su propio encuadre.
+crop-guides = Guías de tercios
+crop-chrome = Barra de menús y Dock
+crop-chrome-help = Para ver qué tapan.
+collection-new = Nueva colección
+collection-edit-title = Editar colección
+collection-help = Junta carpetas completas e imágenes sueltas. Una carpeta sola también es una colección: si añades fotos a la carpeta, aparecen aquí solas.
+collection-name-help = Opcional. Si lo dejas vacío, usa el de la primera carpeta.
+collection-add-folder = Agregar carpeta…
+collection-add-images = Agregar imágenes…
+collection-create = Crear
+collection-folder-detail = { $path } · { $count ->
+    [one] { $count } imagen
+   *[other] { $count } imágenes
+} · se actualiza sola
+collection-image-detail = Imagen suelta
+collection-count = { $count ->
+    [one] { $count } imagen
+   *[other] { $count } imágenes
+}
+wallpaper-dynamic = Dinámicos
+wallpaper-animated = Animados
+wallpaper-mode = Modo
+wallpaper-automatic = Automático
+wallpaper-light = Claro (fijo)
+wallpaper-dark = Oscuro (fijo)
+wallpaper-change = Cambiar
+wallpaper-at-login = Al iniciar sesión
+wallpaper-hourly = Cada hora
+wallpaper-daily = Cada día
+wallpaper-all-desktops = Mostrar en todos los escritorios
+wallpaper-only-on = Solo en Escritorio { $desktop }
+wallpaper-play = Reproducir
+wallpaper-show-all = Mostrar todos ({ $count })
+wallpaper-show-less = Mostrar menos
+wallpaper-clear-filter = Quitar el filtro
+wallpaper-folders = { $count ->
+    [one] { $count } carpeta
+   *[other] { $count } carpetas
+}
+wallpaper-collections = { $count ->
+    [one] { $count } colección
+   *[other] { $count } colecciones
+}
+wallpaper-shuffle = Mezclar
+wallpaper-shuffle-colors = Mezclar colores
+wallpaper-random-colors = Colores al azar
+wallpaper-random = { $collection } al azar
+wallpaper-custom-color = Color personalizado
+wallpaper-add-color = Añadir color
+wallpaper-remove-color = Eliminar color
+wallpaper-library = Fondos
+wallpaper-add = Añadir…
+wallpaper-add-folder = Carpeta…
+wallpaper-add-images = Imágenes…
+wallpaper-add-empty = Colección vacía…
+wallpaper-filter = Filtrar
+wallpaper-filter-scope = Buscar en
+wallpaper-filter-all = Todo
+wallpaper-filter-kind = Tipo
+wallpaper-filter-collections = Colecciones
+wallpaper-results = Resultados
+wallpaper-no-match = Ningún fondo coincide
+wallpaper-no-match-help = Prueba con otra palabra o busca en «Todo».
+wallpaper-video = vídeo
+wallpaper-shader = shader
+collection = Colección
+collection-name = Nombre
+collection-contents = Contenido
+collection-contents-help = Agrega una carpeta completa o imágenes sueltas.
+collection-remove = Quitar
+collection-delete = Eliminar colección
+collection-save = Guardar
+collection-edit = Editar…
+collection-empty = Esta colección está vacía.
+}
+crop-display = Pantalla

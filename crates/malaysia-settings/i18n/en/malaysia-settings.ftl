@@ -83,6 +83,17 @@ differentiate-without-color = Differentiate without color
 display-contrast = Display contrast
 display-contrast-normal = Normal
 display-contrast-maximum = Maximum
+blur = Blur
+blur-behind = Blur behind
+blur-behind-mixed = Mixed
+blur-behind-mixed-help = Menus, dialogs, the Dock and notifications show what is behind them; everything else shows only the wallpaper.
+blur-behind-wallpaper = Wallpaper only
+blur-behind-wallpaper-help = Windows behind are never seen. Uses the least energy.
+blur-behind-windows = Windows
+blur-behind-windows-help = May increase energy and GPU use: each window is blurred again every time what is behind it changes.
+blur-all-windows = Blur all windows
+blur-all-windows-help = Also translucent windows that do not ask for it, such as GTK and Qt ones, with the wallpaper only. Uses more GPU.
+blur-reduced-help = Turn off Reduce transparency to use blur.
 step-blank = {""}
 text = Text
 text-size = Text size
@@ -315,3 +326,114 @@ still-synced-help = Apps read them from the freedesktop portal, also with your o
 back-to-malaysia = Go Back to Malaysia’s Themes
 back-to-malaysia-help = Goes back to the default GTK and Qt themes and syncs the accent and the tint again. Your gtk.css sheet stays.
 managed-file = Your Nix configuration manages { $path } (it is a symbolic link); Settings leaves it alone.
+
+wallpaper = Wallpaper
+wallpaper-scale = Scale to screen
+wallpaper-fill = Fill screen
+wallpaper-fit = Fit to screen
+wallpaper-stretch = Stretch to fill screen
+wallpaper-center = Center
+wallpaper-custom = Custom framing…
+wallpaper-images = Images
+wallpaper-colors = Colors
+crop-title = Custom framing
+crop-zoom = Zoom
+crop-reset = Reset
+crop-apply = Apply
+crop-title-named = Custom Framing · { $name }
+crop-help = Choose which part shows. Drag the frame, pull a corner to zoom in or click where you want it centered.
+crop-help-dynamic = Choose which part shows. Drag the frame, pull a corner to zoom in or click where you want it centered. The framing applies to every image of the wallpaper.
+crop-help-video = Choose which part shows. Drag the frame, pull a corner to zoom in or click where you want it centered. The framing applies to every frame of the video.
+crop-pixels-image = { $width } × { $height } px of the image
+crop-pixels-video = { $width } × { $height } px of the video
+crop-zoom-out = Zoom Out
+crop-zoom-in = Zoom In
+crop-review = Review in
+crop-now = Now
+crop-light = Light
+crop-dark = Dark
+crop-preview = Preview
+crop-sharp = Sharp: the image has more pixels than the display shows.
+crop-soft = Enlarged to { $percent } %; it will look a little soft.
+crop-blurry = Enlarged to { $percent } %: it will look blurry. Zoom out or use a larger image.
+crop-built-in = Built-in
+crop-external = External
+crop-all-displays = Same on all displays
+crop-all-displays-help = Same center and zoom; the frame adapts to the shape of each one.
+crop-each-display-help = Each display keeps its own framing.
+crop-guides = Rule of thirds guides
+crop-chrome = Menu bar and Dock
+crop-chrome-help = To see what they cover.
+collection-new = New Collection
+collection-edit-title = Edit Collection
+collection-help = Gather whole folders and single images. A folder alone is a collection too: add photos to the folder and they show up here by themselves.
+collection-name-help = Optional. If you leave it empty, it takes the name of the first folder.
+collection-add-folder = Add Folder…
+collection-add-images = Add Images…
+collection-create = Create
+collection-folder-detail = { $path } · { $count ->
+    [one] { $count } image
+   *[other] { $count } images
+} · updates by itself
+collection-image-detail = Single image
+collection-count = { $count ->
+    [one] { $count } image
+   *[other] { $count } images
+}
+wallpaper-dynamic = Dynamic
+wallpaper-animated = Animated
+wallpaper-mode = Mode
+wallpaper-automatic = Automatic
+wallpaper-light = Light (Still)
+wallpaper-dark = Dark (Still)
+wallpaper-change = Change Picture
+wallpaper-at-login = When Logging In
+wallpaper-hourly = Every Hour
+wallpaper-daily = Every Day
+wallpaper-all-desktops = Show on All Desktops
+wallpaper-only-on = Only on Desktop { $desktop }
+wallpaper-play = Play
+wallpaper-show-all = Show All ({ $count })
+wallpaper-show-less = Show Less
+wallpaper-clear-filter = Clear Filter
+wallpaper-folders = { $count ->
+    [one] { $count } folder
+   *[other] { $count } folders
+}
+wallpaper-collections = { $count ->
+    [one] { $count } collection
+   *[other] { $count } collections
+}
+wallpaper-shuffle = Shuffle
+wallpaper-shuffle-colors = Shuffle Colors
+wallpaper-random-colors = Colors at Random
+wallpaper-random = { $collection } at Random
+wallpaper-custom-color = Custom Color
+wallpaper-add-color = Add Color
+wallpaper-remove-color = Remove Color
+wallpaper-library = Wallpapers
+wallpaper-add = Add…
+wallpaper-add-folder = Folder…
+wallpaper-add-images = Images…
+wallpaper-add-empty = Empty Collection…
+wallpaper-filter = Filter
+wallpaper-filter-scope = Search In
+wallpaper-filter-all = All
+wallpaper-filter-kind = Kind
+wallpaper-filter-collections = Collections
+wallpaper-results = Results
+wallpaper-no-match = No wallpaper matches
+wallpaper-no-match-help = Try another word or search in All.
+wallpaper-video = video
+wallpaper-shader = shader
+collection = Collection
+collection-name = Name
+collection-contents = Contents
+collection-contents-help = Add a whole folder or single images.
+collection-remove = Remove
+collection-delete = Delete Collection
+collection-save = Save
+collection-edit = Edit…
+collection-empty = This collection is empty.
+}
+crop-display = Display

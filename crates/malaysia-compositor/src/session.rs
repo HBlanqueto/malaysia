@@ -256,6 +256,7 @@ pub fn run() -> Result<(), SessionError> {
     session.state.shadow = crate::effects::compile_shadow(renderer);
     session.state.border = crate::effects::compile_border(renderer);
     session.state.display_filter = crate::display_filter::compile(renderer);
+    session.state.blur = crate::blur::compile(renderer);
 
     session.backend.window().request_redraw();
 
@@ -530,6 +531,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         session
             .cursor
             .follow_pointer_size(session.state.config.appearance.pointer_size);
+        crate::blur::update(&mut session.state, renderer, capture_size);
         let elements = build_output_elements(&mut session.state, renderer, &session.cursor, true);
         let filtered = crate::display_filter::element(
             &mut session.state,
@@ -610,6 +612,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     }
 
     if damage.is_none() {
+        session.state.lock_frame_presented();
         feedback.discarded();
         send_frame_callbacks_for_state(&session.state, Duration::from(session.state.clock.now()));
         queue_estimated_vblank(session);
@@ -641,6 +644,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     if let Some(token) = session.estimated_vblank.take() {
         session.loop_handle.remove(token);
     }
+    session.state.lock_frame_presented();
     session.state.frame_callback_cycle = session.state.frame_callback_cycle.wrapping_add(1);
     send_frame_callbacks_for_state(&session.state, now);
     Ok(())

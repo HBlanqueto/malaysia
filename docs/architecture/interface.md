@@ -23,11 +23,11 @@ Bottom    layer-shell Bottom (future)
 Background wallpaper
 ```
 
-The exclusive zones of the menubar and the dock trim the workspace. The lock replaces everything: only its surfaces and the cursor are drawn.
+The exclusive zones of the menubar and the dock trim the workspace. The lock replaces everything but the wallpaper: only the wallpaper, the lock surfaces and the cursor are drawn (ADR 0074).
 
 ## Design
 
-Themes `light`/`dark`/`dark-tint`; radius 16, traffic lights 14 (radius 4), SSD titlebar 32 and CSD 44; Geist 13/600 and 13/400. `SHADOW`/`SHADOW_DARK` shadows by shader and clipping to radius 16. `appearance.window_color` (`neutral`/`accent`) and `traffic_lights` tint the titlebar; `window_tint_scope = "desktop"` tints the menubar and the dock; `wallpaper_tinting` tints each BarrierKit window with the wallpaper behind it (ADR 0065). Background blur is in the catalog, but is not drawn yet.
+Themes `light`/`dark`/`dark-tint`; radius 16, traffic lights 14 (radius 4), SSD titlebar 32 and CSD 44; Geist 13/600 and 13/400. `SHADOW`/`SHADOW_DARK` shadows by shader and clipping to radius 16. `appearance.window_color` (`neutral`/`accent`) and `traffic_lights` tint the titlebar; `window_tint_scope = "desktop"` tints the menubar and the dock; `wallpaper_tinting` tints each BarrierKit window with the wallpaper behind it (ADR 0065). With `reduce_transparency = false` the compositor blurs the wallpaper behind the region an app asks for with `ext-background-effect-v1` (ADR 0071).
 
 ## Shell
 

@@ -271,6 +271,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     state.shadow = crate::effects::compile_shadow(renderer);
     state.border = crate::effects::compile_border(renderer);
     state.display_filter = crate::display_filter::compile(renderer);
+    state.blur = crate::blur::compile(renderer);
     drop(multi);
 
     let cursor = Cursors::load(
@@ -726,9 +727,11 @@ impl Udev {
                 self.state.frame_callback_cycle = self.state.frame_callback_cycle.wrapping_add(1);
             }
             RenderResult::NoDamage => {
+                self.state.lock_frame_presented();
                 self.queue_estimated_vblank_timer();
             }
             RenderResult::Skipped => {
+                self.state.lock_frame_presented();
                 self.redraw_state = match std::mem::take(&mut self.redraw_state) {
                     RedrawState::WaitingForEstimatedVBlank(token)
                     | RedrawState::WaitingForEstimatedVBlankAndQueued(token) => {
@@ -820,6 +823,7 @@ impl Udev {
         if let Err(error) = self.compositor.frame_submitted() {
             warn!(%error, "frame submitted");
         }
+        self.state.lock_frame_presented();
         let (time, clock) = match metadata.map(|metadata| metadata.time) {
             Some(DrmEventTime::Monotonic(time)) => (time, wp_presentation_feedback::Kind::HwClock),
             _ => (
@@ -868,6 +872,9 @@ impl Udev {
             .output
             .current_mode()
             .map(|mode| smithay::utils::Size::from((mode.size.w, mode.size.h)));
+        if let Some(size) = size {
+            crate::blur::update(&mut self.state, renderer.as_mut(), size);
+        }
         let filtered = size.and_then(|size| {
             crate::display_filter::element(
                 &mut self.state,

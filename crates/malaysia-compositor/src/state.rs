@@ -119,6 +119,10 @@ pub struct State {
     pub idle_inhibitors: Vec<WlSurface>,
     pub(crate) lock_recovery_attempts: u32,
     pub(crate) lock_recovery_pending: bool,
+    pub(crate) lock_transition: crate::lock_transition::LockTransition,
+    pub(crate) session_notices: Vec<
+        infinity_protocol::server::session::infinity_session_v1::infinity_session_v1::InfinitySessionV1,
+    >,
     pub display_handle: DisplayHandle,
     pub output: Output,
     pub output_size: Size<i32, Physical>,
@@ -143,7 +147,7 @@ pub struct State {
     pub(crate) fullscreen: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     pub(crate) focus_desk: HashMap<WindowId, Rectangle<i32, Logical>>,
     pub(crate) infinity_managers: Vec<InfinityWindowManagerV1>,
-    pub(crate) wallpaper_grid: Option<ctappearance::tinting::WallpaperGrid>,
+    pub(crate) wallpaper: ctappearance::WallpaperState,
     pub(crate) focus_notices: Vec<
         infinity_protocol::server::focus::infinity_focus_v1::infinity_focus_surface_v1::InfinityFocusSurfaceV1,
     >,
@@ -163,6 +167,7 @@ pub struct State {
     pub(crate) shadow: Option<GlesPixelProgram>,
     pub(crate) border: Option<GlesPixelProgram>,
     pub(crate) display_filter: Option<GlesTexProgram>,
+    pub(crate) blur: Option<crate::blur::Blur>,
     pub(crate) chrome_pointer: Option<(WindowId, ctappearance::traffic::TrafficPointer)>,
     pub(crate) titlebar_click: Option<crate::input::TitlebarClick>,
     pub(crate) client_click: Option<crate::input::TitlebarClick>,
@@ -329,7 +334,9 @@ impl State {
         let _ = output.create_global::<Self>(display_handle);
 
         crate::infinity::InfinityGlobalData::create_global(display_handle);
+        smithay::wayland::background_effect::BackgroundEffectState::new::<Self>(display_handle);
         crate::focus_notice::FocusNoticeGlobalData::create_global(display_handle);
+        crate::session_notice::SessionNoticeGlobalData::create_global(display_handle);
         crate::window_style::WindowStyleGlobalData::create_global(display_handle);
         Ok(Self {
             loop_signal,
@@ -381,6 +388,8 @@ impl State {
             idle_inhibitors: Vec::new(),
             lock_recovery_attempts: 0,
             lock_recovery_pending: false,
+            lock_transition: crate::lock_transition::LockTransition::default(),
+            session_notices: Vec::new(),
             display_handle: display_handle.clone(),
             output,
             output_size: size,
@@ -392,7 +401,7 @@ impl State {
             appmenu: AppMenuState::new(display_handle),
             gtk: GtkShellState::new(display_handle),
             list_handles: Vec::new(),
-            wallpaper_grid: ctappearance::load_wallpaper_grid(),
+            wallpaper: ctappearance::load_wallpaper_state(),
             focus_notices: Vec::new(),
             minimized: std::collections::HashSet::new(),
             spaces: malaysia_scene::spaces::Spaces::new(),
@@ -419,6 +428,7 @@ impl State {
             popup_fades: Vec::new(),
             rounded_clip: None,
             display_filter: None,
+            blur: None,
             shadow: None,
             border: None,
             chrome_pointer: None,
@@ -434,7 +444,7 @@ impl State {
         self.config = Config::load();
         self.request_redraw();
         if restyled {
-            self.wallpaper_grid = ctappearance::load_wallpaper_grid();
+            self.wallpaper = ctappearance::load_wallpaper_state();
             self.chrome_theme = crate::chrome::ChromeTheme::from_config(&self.config);
             self.request_redraw();
         }
@@ -467,6 +477,7 @@ impl State {
             || !self.popup_fades.is_empty()
             || self.focus_reveal.animating(now)
             || self.theme_fade.is_some()
+            || self.lock_transition.animating(now)
     }
 
     pub(crate) fn init_capture_dma(

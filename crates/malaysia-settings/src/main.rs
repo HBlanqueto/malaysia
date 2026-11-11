@@ -1,6 +1,8 @@
 mod app;
 mod apps;
 mod bluetooth;
+mod collection;
+mod crop;
 mod energy;
 mod freedesktop;
 mod localize;
@@ -9,6 +11,7 @@ mod network;
 mod notifications;
 mod previews;
 mod state;
+mod wallpaper;
 mod wifi;
 
 use bk::app::{Instance, Launch, launch};

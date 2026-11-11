@@ -9,6 +9,7 @@ pub mod gtkmenus;
 pub mod help_topics;
 pub mod icons;
 pub mod live;
+pub mod lock_row;
 pub mod menu;
 pub mod recents;
 pub mod remote;

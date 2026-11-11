@@ -85,8 +85,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 bandura.jpg
 <ORIGEN Y LICENCIA: te lo paso yo>
 
+collapse.heic
+MIT License, Copyright (c) 2026 H. Blanqueto (made by the author, same
+license as Malaysia). Its previews `share/wallpapers/previews/collapse-light.png`
+and `collapse-dark.png` are derived from it.
+
 Ideas (sin código copiado)
 linux-wallpaperengine (wqLouis, GPL-3): caché de pipelines de mips por formato; implementación propia.
+Shadertoy: contrato de un solo pase (mainImage, iResolution, iTime) para los fondos GLSL; implementación propia.
 
 Electron
 MIT License

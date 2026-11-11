@@ -10,6 +10,7 @@ use ctdesign::{ACCENT_SWATCHES, MENUBAR_FADED_ALPHA, MENUBAR_MARGIN, Rgba, SYMBO
 use freya_components::svg_viewer::SvgViewer;
 use malaysia_services::bluez::{BlueZ, Bluetooth, BluetoothCommand, Device};
 use malaysia_services::bus::{Live, Remote, use_service};
+use malaysia_services::cups::Cups;
 use malaysia_services::networkmanager::{
     AskToJoin, ExternalVpn, LinkState, Network, NetworkCommand, NetworkManager, Security, Vpn,
     WIFI_DOMAIN, Wifi, WifiConfig, WifiNetwork, signal_svg,
@@ -31,6 +32,7 @@ pub struct Extras {
     bluetooth: Live<BlueZ>,
     power: Live<UPower>,
     profiles: Live<PowerProfiles>,
+    printer: Live<Cups>,
 }
 
 pub fn use_extras() -> Extras {
@@ -41,6 +43,7 @@ pub fn use_extras() -> Extras {
         bluetooth: use_service::<BlueZ>(),
         power: use_service::<UPower>(),
         profiles: use_service::<PowerProfiles>(),
+        printer: use_service::<Cups>(),
     }
 }
 
@@ -144,6 +147,9 @@ pub fn extra_titles(
             anchor("extra-bluetooth"),
         ));
     }
+    if let Some(jobs) = queued_jobs(extras, config) {
+        titles.push(printer_title(jobs, ink, anchor("extra-printer")));
+    }
     if config.show_wifi
         && let Some(wifi) = network.and_then(|network| network.wifi)
     {
@@ -167,6 +173,55 @@ pub fn extra_titles(
         ));
     }
     titles
+}
+
+// ADR 0074: the lock screen's status row; same order as the bar, without menus.
+pub fn lock_icons(extras: &Extras, config: &MenubarConfig, ink: Rgba) -> Vec<Element> {
+    let mut icons = Vec::new();
+    if config.show_bluetooth
+        && extras
+            .bluetooth
+            .snapshot
+            .read()
+            .clone()
+            .flatten()
+            .is_some_and(|adapter| adapter.powered)
+    {
+        icons.push(symbol_icon(Symbol::Bluetooth, ink));
+    }
+    if queued_jobs(extras, config).is_some() {
+        icons.push(symbol_icon(Symbol::Printer, ink));
+    }
+    if config.show_wifi
+        && let Some(wifi) = extras
+            .network
+            .snapshot
+            .read()
+            .clone()
+            .and_then(|network| network.wifi)
+    {
+        icons.push(wifi_icon(&wifi, ink));
+    }
+    if config.show_battery
+        && let Some(battery) = extras.power.snapshot.read().flatten()
+    {
+        icons.push(battery_icon(&battery, config.show_battery_percentage, ink));
+    }
+    icons
+}
+
+fn queued_jobs(extras: &Extras, config: &MenubarConfig) -> Option<usize> {
+    (*extras.printer.snapshot.read()).filter(|&jobs| config.show_printer && jobs > 0)
+}
+
+fn printer_title(jobs: usize, ink: Rgba, anchor: Rc<Cell<(f32, f32)>>) -> MenuTitleSpec {
+    title(
+        tr!("printer"),
+        symbol_icon(Symbol::Printer, ink),
+        vec![MenuItem::placeholder(tr!("printer-jobs", count = jobs))],
+        |_| {},
+        anchor,
+    )
 }
 
 fn title(
@@ -231,15 +286,7 @@ fn wifi_title(
     anchor: Rc<Cell<(f32, f32)>>,
 ) -> MenuTitleSpec {
     let palette = Palette::current();
-    let bars = wifi
-        .networks
-        .iter()
-        .find(|network| network.current && wifi.state == LinkState::Connected)
-        .map_or(0, |network| network.bars);
-    let icon = svg_icon(
-        signal_svg(bars, ink, faded(ink)),
-        (SYMBOL.grid, SYMBOL.grid),
-    );
+    let icon = wifi_icon(&wifi, ink);
     let toggle = if wifi.enabled {
         tr!("wifi-turn-off")
     } else {
@@ -296,6 +343,18 @@ fn wifi_title(
     );
     spec.on_open = Some(Rc::new(move || scan.send(NetworkCommand::Scan)));
     spec
+}
+
+fn wifi_icon(wifi: &Wifi, ink: Rgba) -> Element {
+    let bars = wifi
+        .networks
+        .iter()
+        .find(|network| network.current && wifi.state == LinkState::Connected)
+        .map_or(0, |network| network.bars);
+    svg_icon(
+        signal_svg(bars, ink, faded(ink)),
+        (SYMBOL.grid, SYMBOL.grid),
+    )
 }
 
 fn join(network: &WifiNetwork, remote: &Remote<NetworkCommand>) {
@@ -434,22 +493,9 @@ fn battery_title(
     ink: Rgba,
     anchor: Rc<Cell<(f32, f32)>>,
 ) -> MenuTitleSpec {
-    let palette = Palette::current();
     let charge = battery.charge();
-    let fill = match charge {
-        Charge::Charging(_) | Charge::Full => CHARGING,
-        Charge::Discharging(_) if battery.percent <= LOW_BATTERY => palette.destructive,
-        Charge::Discharging(_) => ink,
-    };
     let percent = format!("{:.0} %", battery.percent);
-    let icon = HStack::new()
-        .spacing(MENUBAR_MARGIN as f32 / 2.0)
-        .maybe_child(show_percentage.then(|| Text::new(percent.clone()).color(color(ink))))
-        .child(svg_icon(
-            battery_svg(battery.percent, ink, fill),
-            BATTERY_ICON,
-        ))
-        .into_element();
+    let icon = battery_icon(&battery, show_percentage, ink);
     let (source, state) = match charge {
         Charge::Full => (
             tr!("power-source-adapter"),
@@ -501,6 +547,25 @@ fn battery_title(
         },
         anchor,
     )
+}
+
+fn battery_icon(battery: &Battery, show_percentage: bool, ink: Rgba) -> Element {
+    let fill = match battery.charge() {
+        Charge::Charging(_) | Charge::Full => CHARGING,
+        Charge::Discharging(_) if battery.percent <= LOW_BATTERY => Palette::current().destructive,
+        Charge::Discharging(_) => ink,
+    };
+    HStack::new()
+        .spacing(MENUBAR_MARGIN as f32 / 2.0)
+        .maybe_child(
+            show_percentage
+                .then(|| Text::new(format!("{:.0} %", battery.percent)).color(color(ink))),
+        )
+        .child(svg_icon(
+            battery_svg(battery.percent, ink, fill),
+            BATTERY_ICON,
+        ))
+        .into_element()
 }
 
 fn battery_svg(percent: f64, outline: Rgba, fill: Rgba) -> String {
