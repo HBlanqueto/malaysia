@@ -96,10 +96,12 @@ compositor's background layer or the wallpaper files.
     a grid, and «Show Less» back. The header (bk `Section::header`) also
     carries a collection's folder, count and «Edit…». The gallery sections
     have no card; each tile shows its name centered and a badge for its kind
-    (video, shader or dynamic). The footer counts the folders and the
-    collections.
-12. **The filter.** The magnifier next to «Add…» opens a search field with a
-    scope (All, a kind or a collection) and a close button. It matches the
+    (video, shader or dynamic). A row fades at each edge with more
+    wallpapers past it (`SETTINGS.wallpaper.edge_fade`). The footer counts the
+    folders and the collections.
+12. **The filter.** The magnifier next to «Add…» opens one capsule with the
+    search field, the scope (All, a kind under «Kind» or a collection under
+    «Collections») and a close button. It matches the
     name, the kind, the collection and the file name; while it filters, the
     sections merge into one grid of results with «Clear Filter».
 13. **Each desktop tints its windows.** `wallpaper.state` keeps a grid per

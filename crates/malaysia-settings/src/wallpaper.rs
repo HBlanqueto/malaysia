@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use bk::buttons::MenuButton;
+use bk::buttons::{LabelStyle, MenuButton};
 use bk::color_picker::{ColorPicker, hex};
 use bk::compact::IconButton;
 use bk::image_well::is_image;
@@ -59,6 +59,7 @@ pub struct Wallpaper {
     expanded: State<std::collections::BTreeSet<String>>,
     filter: State<String>,
     filtering: State<bool>,
+    filter_focused: State<bool>,
     scope: State<usize>,
 }
 
@@ -77,6 +78,7 @@ pub fn use_wallpaper() -> Wallpaper {
         expanded: use_state(Default::default),
         filter: use_state(String::new),
         filtering: use_state(|| false),
+        filter_focused: use_state(|| false),
         scope: use_state(|| 0),
     }
 }
@@ -305,10 +307,11 @@ pub fn wallpaper_pane(wallpaper: Wallpaper, dark: bool, error: State<Option<Stri
         .appearance_for(desktop)
         .unwrap_or(appearance(dark));
 
-    let [_, _, header_bottom, _] = LIST_GROUP.header_padding;
+    let [_, right, _, left] = LIST_GROUP.header_padding;
     let form = Form::new()
         .style(move |style| FormStyle {
-            section_spacing: SPACE_4 - header_bottom,
+            section_spacing: SPACE_4,
+            header_padding: [0.0, right, 0.0, left],
             ..style
         })
         .section(hero(wallpaper, &selection, &items, dark, error))
@@ -731,8 +734,9 @@ fn toolbar(wallpaper: Wallpaper, collections: &WallpaperConfig) -> Section {
     let mut scope = wallpaper.scope;
     let mut filter = wallpaper.filter;
     let mut filtering = wallpaper.filtering;
-    let add = MenuButton::new(
+    let add = MenuButton::system_image(
         tr!("wallpaper-add"),
+        Symbol::Plus,
         vec![
             MenuItem::action("folder", tr!("wallpaper-add-folder")),
             MenuItem::action("images", tr!("wallpaper-add-images")),
@@ -740,35 +744,102 @@ fn toolbar(wallpaper: Wallpaper, collections: &WallpaperConfig) -> Section {
             MenuItem::action("empty", tr!("wallpaper-add-empty")),
         ],
     )
+    .label_style(LabelStyle::TitleAndIcon)
     .on_activate(move |action: String| crate::collection::add(wallpaper, &action));
     let search = if *filtering.read() {
+        let metrics = SETTINGS.wallpaper;
+        let palette = Palette::current();
+        let mut focused = wallpaper.filter_focused;
+        let scoped = *wallpaper.scope.read() != 0;
         let scope_button = scopes(collections)
             .iter()
             .fold(
                 PopUpButton::new(tr!("wallpaper-filter-scope")),
                 |button, group| {
+                    let button = match group {
+                        Some(Group::Dynamic) => button.section_header(tr!("wallpaper-filter-kind")),
+                        Some(Group::Collection(0)) => {
+                            button.section_header(tr!("wallpaper-filter-collections"))
+                        }
+                        _ => button,
+                    };
                     button.item(group.map_or(tr!("wallpaper-filter-all"), |group| {
                         group_label(group, collections)
                     }))
                 },
             )
+            .style(move |style| PopUpButtonStyle {
+                height: metrics.filter_control,
+                indicator_size: metrics.filter_chevron,
+                indicator: StateValue::new(ShapeStyle::Clear),
+                indicator_border: None,
+                indicator_shadows: Vec::new(),
+                font: CALLOUT,
+                ..style
+            })
             .selected(*wallpaper.scope.read())
             .on_change(move |index| scope.set(index));
+        let pill = if scoped {
+            palette
+                .window_background
+                .mix(palette.accent, metrics.filter_scope_tint)
+        } else {
+            palette.window_background
+        };
         HStack::new()
-            .spacing(SPACE_1)
+            .width(Size::px(metrics.filter_width as f32))
+            .height(Size::px(ctdesign::TEXT_FIELD.height))
+            .content(Content::flex())
             .cross_align(Alignment::Center)
+            .spacing(SETTINGS.search_gap as f32)
+            .padding(Gaps::new(
+                0.0,
+                metrics.filter_inset,
+                0.0,
+                SETTINGS.search_padding_x as f32,
+            ))
+            .corner_radius(ctdesign::TEXT_FIELD.height / 2.0)
+            .background(color(palette.control_background))
+            .maybe(*focused.read(), |field| {
+                field.border(
+                    Border::new()
+                        .fill(color(bk::theme::resolved().focus_ring))
+                        .width(FOCUS_RING.width)
+                        .alignment(BorderAlignment::Outer),
+                )
+            })
             .child(
                 SearchField::new(wallpaper.filter, tr!("wallpaper-filter"))
-                    .width(Size::px(SETTINGS.wallpaper.filter_width as f32))
-                    .auto_focus(true),
+                    .width(Size::flex(1.0))
+                    .style(|style| SearchFieldStyle {
+                        background: StateValue::new(ShapeStyle::Clear),
+                        border: StateValue::new(ShapeStyle::Clear),
+                        ..style
+                    })
+                    .auto_focus(true)
+                    .on_focus_change(move |now: bool| focused.set(now)),
             )
-            .child(scope_button)
             .child(
-                IconButton::new(Symbol::XMark, tr!("wallpaper-clear-filter")).on_press(move |()| {
-                    filter.set(String::new());
-                    scope.set(0);
-                    filtering.set(false);
-                }),
+                rect()
+                    .height(Size::px(metrics.filter_control))
+                    .padding(Gaps::new(0.0, metrics.filter_inset, 0.0, SPACE_2))
+                    .corner_radius(metrics.filter_control / 2.0)
+                    .center()
+                    .background(color(pill))
+                    .child(scope_button),
+            )
+            .child(
+                IconButton::new(Symbol::XMark, tr!("wallpaper-clear-filter"))
+                    .style(move |style| IconButtonStyle {
+                        size: metrics.filter_control,
+                        icon_size: metrics.filter_close_icon,
+                        ..style
+                    })
+                    .on_press(move |()| {
+                        filter.set(String::new());
+                        scope.set(0);
+                        filtering.set(false);
+                    }),
             )
             .into_element()
     } else {
@@ -976,30 +1047,48 @@ fn ring_room() -> f32 {
     FOCUS_RING.width + SETTINGS.swatch_ring_gap as f32
 }
 
-fn strip(items: impl Iterator<Item = Element>, content_height: f32) -> ScrollView {
-    let gap = SETTINGS.card_gap as f32;
+fn ring_padding() -> Gaps {
+    let [_, right, _, left] = LIST_GROUP.header_padding;
     let room = ring_room();
-    ScrollView::new()
-        .direction(Direction::Horizontal)
-        .scroll_bar(false)
-        .width(Size::fill())
-        .height(Size::px(content_height + 2.0 * room))
-        .child(
-            rect()
-                .direction(Direction::Horizontal)
-                .padding(Gaps::new_all(room))
-                .spacing(gap)
-                .children(items),
-        )
+    Gaps::new(room, right, room, left)
+}
+
+fn bleed() -> Gaps {
+    let [_, right, _, left] = LIST_GROUP.header_padding;
+    let room = ring_room();
+    Gaps::new(-room, -right, -room, -left)
+}
+
+fn strip(items: impl Iterator<Item = Element>, content_height: f32) -> Rect {
+    rect().width(Size::fill()).margin(bleed()).child(
+        ScrollView::new()
+            .direction(Direction::Horizontal)
+            .scroll_bar(false)
+            .edge_effect(true)
+            .style(|style| ScrollViewStyle {
+                edge_height: SETTINGS.wallpaper.edge_fade,
+                ..style
+            })
+            .width(Size::fill())
+            .height(Size::px(content_height + 2.0 * ring_room()))
+            .child(
+                rect()
+                    .direction(Direction::Horizontal)
+                    .padding(ring_padding())
+                    .spacing(SETTINGS.card_gap as f32)
+                    .children(items),
+            ),
+    )
 }
 
 fn grid(items: Vec<Element>) -> Rect {
     let gap = SETTINGS.card_gap as f32;
     rect()
         .width(Size::fill())
+        .margin(bleed())
         .direction(Direction::Horizontal)
         .content(Content::wrap_spacing(gap))
-        .padding(Gaps::new_all(ring_room()))
+        .padding(ring_padding())
         .spacing(gap)
         .children(items)
 }
