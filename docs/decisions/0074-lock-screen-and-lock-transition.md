@@ -142,7 +142,8 @@ The approved mock-up, «Del escritorio al bloqueo»:
       rules are unchanged (`on_lock_screen`, `ShowPreviews`). They appear
       together with the user and the password field.
    6. **The field** shows the PAM prompt while it is empty («Contraseña»
-      until PAM asks), grows as the user types and shows `•` per character.
+      until PAM asks) and shows `•` per character. Its width is fixed, as in
+      macOS; the dots that do not fit are clipped.
       On an error it turns `LOCK_FIELD_ERROR` and the error appears below
       it. There is no separate prompt label, so «Contraseña» no longer
       appears twice.
@@ -247,8 +248,7 @@ The approved mock-up, «Del escritorio al bloqueo»:
    | `LOCK_BOTTOM_MARGIN` (to the error line), `LOCK_SPACING` | 55, 12 |
    | `LOCK_AVATAR_SIZE` | 52 |
    | `LOCK_KEYBOARD_WIDTH` | 128 |
-   | `LOCK_FIELD_HEIGHT` | 30 (was 44) |
-   | `LOCK_FIELD_MIN_WIDTH`, `LOCK_FIELD_MAX_WIDTH` | 160, 200 |
+   | `LOCK_FIELD_WIDTH`, `LOCK_FIELD_HEIGHT` | 120, 22 (was 360 × 44) |
    | `LOCK_MASK_FONT_SIZE` | 18 |
    | `LOCK_INK`, `LOCK_FIELD_INK` | `#ffffff`, `#ffffffbf` |
    | `LOCK_FIELD_FILL`, `LOCK_FIELD_ERROR` | `#ffffff4d`, `#ff6b6b73` |

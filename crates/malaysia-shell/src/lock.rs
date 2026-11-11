@@ -14,10 +14,10 @@ use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
     BODY, DURATION_FAST_MS, LOCK_AVATAR_FILL, LOCK_AVATAR_SIZE, LOCK_BOTTOM_MARGIN,
     LOCK_CLOCK_FONT_SIZE, LOCK_DATE_FONT_SIZE, LOCK_FIELD_ERROR, LOCK_FIELD_FILL,
-    LOCK_FIELD_HEIGHT, LOCK_FIELD_INK, LOCK_FIELD_MAX_WIDTH, LOCK_FIELD_MIN_WIDTH, LOCK_INK,
-    LOCK_KEYBOARD_WIDTH, LOCK_LOGIN_MS, LOCK_MASK_FONT_SIZE, LOCK_RISE_MS, LOCK_RISE_OFFSET,
-    LOCK_SPACING, LOCK_TOP_PERCENT, MENUBAR_TITLE_PADDING_X, NOTIFICATION_GAP, NOTIFICATION_WIDTH,
-    SYMBOL, TITLE_2,
+    LOCK_FIELD_HEIGHT, LOCK_FIELD_INK, LOCK_FIELD_WIDTH, LOCK_INK, LOCK_KEYBOARD_WIDTH,
+    LOCK_LOGIN_MS, LOCK_MASK_FONT_SIZE, LOCK_RISE_MS, LOCK_RISE_OFFSET, LOCK_SPACING,
+    LOCK_TOP_PERCENT, MENUBAR_TITLE_PADDING_X, NOTIFICATION_GAP, NOTIFICATION_WIDTH, SYMBOL,
+    TITLE_2,
 };
 use freya_animation::prelude::{AnimNum, Function, OnChange, use_animation_with_dependencies};
 use freya_components::image_viewer::ImageViewer;
@@ -246,12 +246,9 @@ impl App for LockApp {
             LOCK_FIELD_FILL
         };
         let field_view = rect()
-            .width(Size::px(if typing {
-                LOCK_FIELD_MAX_WIDTH
-            } else {
-                LOCK_FIELD_MIN_WIDTH
-            }))
+            .width(Size::px(LOCK_FIELD_WIDTH))
             .height(Size::px(LOCK_FIELD_HEIGHT))
+            .overflow(Overflow::Clip)
             .corner_radius(LOCK_FIELD_HEIGHT / 2.0)
             .background(theme::color(fill))
             .main_align(Alignment::Center)
