@@ -196,7 +196,9 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
 ) -> Vec<OutputRenderElement<R>> {
     let mut elements: Vec<OutputRenderElement<R>> = Vec::new();
     let scale = state.scale.fractional_scale();
-    if state.locked {
+    let now = Instant::now();
+    state.update_lock_transition(now);
+    if state.locked && state.lock_transition.shown() {
         reset_dead_cursor(state);
         if include_cursor {
             append_cursor(renderer, &mut elements, state, cursor);
@@ -217,49 +219,20 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
                 .into_iter()
                 .map(|e| e.into()),
             );
+            elements.extend(crate::blur::capsules(
+                state,
+                lock_surface.wl_surface(),
+                scale,
+            ));
         }
-    } else {
-        crate::popup_fade::start_requested(state, renderer.gles(), scale);
+        crate::lock_transition::append_wallpaper(state, renderer, 1.0, &mut elements);
+        state.lock_frame_built();
+        return elements;
+    }
+    if let Some(cover) = state.lock_cover(now) {
         reset_dead_cursor(state);
         if include_cursor {
             append_cursor(renderer, &mut elements, state, cursor);
-        }
-        append_theme_fade(state, &mut elements);
-        append_screenshot_overlay(state, &mut elements);
-        let now = Instant::now();
-        let focus_frame = state.focus_transition_frame(now);
-        let slide = state.space_frame(now);
-        let moving = focus_frame.map(|frame| frame.window);
-        if let Some(frame) = focus_frame {
-            append_focus_transition(state, renderer, frame, scale, &mut elements);
-        }
-        let chrome_hidden = slide.is_none() && state.layers.chrome_hidden();
-        let reveal = state.reveal_frame(now);
-        let reveal_drop = reveal.map(|frame| {
-            let travel = frame.bar
-                + if frame.titlebar {
-                    ctdesign::TITLEBAR.thickness as i32
-                } else {
-                    0
-                };
-            ((frame.progress - 1.0) * f64::from(travel)).round() as i32
-        });
-        if let (Some(frame), Some(drop)) = (reveal, reveal_drop) {
-            append_layers(
-                state,
-                renderer,
-                &mut elements,
-                LayerSide::Front,
-                Point::from((0, drop)),
-                |entry| entry.is_desktop_bar(),
-            );
-            append_solid(
-                Point::from((0, drop)),
-                Size::from((state.logical_output_size().w, frame.bar)),
-                ctdesign::SPACE_GAP_COLOR.premultiplied(),
-                scale,
-                &mut elements,
-            );
         }
         append_layers(
             state,
@@ -267,80 +240,151 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
             &mut elements,
             LayerSide::Front,
             Point::from((0, 0)),
-            |entry| {
-                (slide.is_none() || !entry.is_desktop_bar())
-                    && !(chrome_hidden && entry.is_shell_chrome())
-            },
+            is_menubar,
         );
-        crate::popup_fade::append(state, Instant::now(), &mut elements);
-        append_ime_popups(state, renderer, scale, &mut elements);
-        append_popups(state, renderer, scale, &mut elements, |_| true);
-        if let (Some(frame), Some(drop)) = (reveal, reveal_drop)
-            && frame.titlebar
-        {
-            append_revealed_titlebar(
+        crate::lock_transition::append_wallpaper(state, renderer, cover, &mut elements);
+        append_desktop(state, renderer, cursor, false, false, &mut elements);
+        return elements;
+    }
+    append_desktop(state, renderer, cursor, include_cursor, true, &mut elements);
+    elements
+}
+
+fn is_menubar(entry: &crate::layers::LayerEntry) -> bool {
+    crate::lock_transition::kept(entry.surface.wl_surface())
+        == Some(crate::lock_transition::Kept::Menubar)
+}
+
+fn append_desktop<R: MalaysiaRenderer>(
+    state: &mut State,
+    renderer: &mut R,
+    cursor: &Cursors,
+    include_cursor: bool,
+    with_bar: bool,
+    elements: &mut Vec<OutputRenderElement<R>>,
+) {
+    let scale = state.scale.fractional_scale();
+    crate::popup_fade::start_requested(state, renderer.gles(), scale);
+    reset_dead_cursor(state);
+    if include_cursor {
+        append_cursor(renderer, elements, state, cursor);
+    }
+    append_theme_fade(state, elements);
+    append_screenshot_overlay(state, elements);
+    let now = Instant::now();
+    let focus_frame = state.focus_transition_frame(now);
+    let slide = state.space_frame(now);
+    let moving = focus_frame.map(|frame| frame.window);
+    if let Some(frame) = focus_frame {
+        append_focus_transition(state, renderer, frame, scale, elements);
+    }
+    let chrome_hidden = slide.is_none() && state.layers.chrome_hidden();
+    let reveal = state.reveal_frame(now);
+    let reveal_drop = reveal.map(|frame| {
+        let travel = frame.bar
+            + if frame.titlebar {
+                ctdesign::TITLEBAR.thickness as i32
+            } else {
+                0
+            };
+        ((frame.progress - 1.0) * f64::from(travel)).round() as i32
+    });
+    if let (Some(frame), Some(drop)) = (reveal, reveal_drop) {
+        append_layers(
+            state,
+            renderer,
+            elements,
+            LayerSide::Front,
+            Point::from((0, drop)),
+            |entry| entry.is_desktop_bar(),
+        );
+        append_solid(
+            Point::from((0, drop)),
+            Size::from((state.logical_output_size().w, frame.bar)),
+            ctdesign::SPACE_GAP_COLOR.premultiplied(),
+            scale,
+            elements,
+        );
+    }
+    append_layers(
+        state,
+        renderer,
+        elements,
+        LayerSide::Front,
+        Point::from((0, 0)),
+        |entry| {
+            (slide.is_none() || !entry.is_desktop_bar())
+                && !(chrome_hidden && entry.is_shell_chrome())
+                && (with_bar || !is_menubar(entry))
+        },
+    );
+    crate::popup_fade::append(state, Instant::now(), elements);
+    append_ime_popups(state, renderer, scale, elements);
+    append_popups(state, renderer, scale, elements, |_| true);
+    if let (Some(frame), Some(drop)) = (reveal, reveal_drop)
+        && frame.titlebar
+    {
+        append_revealed_titlebar(
+            state,
+            renderer,
+            frame.owner,
+            drop + frame.bar,
+            scale,
+            elements,
+        );
+    }
+    if let Some(position) = slide {
+        append_sliding_spaces(state, renderer, position, scale, moving, elements);
+    } else {
+        let focused = state.focused_window();
+        let window_ids: Vec<_> = state
+            .windows
+            .iter_visible(&state.minimized)
+            .rev()
+            .map(|window| window.id())
+            .filter(|id| Some(*id) != moving)
+            .collect();
+        for id in window_ids {
+            let offset = match reveal {
+                Some(frame) if frame.owner == id && frame.slides => {
+                    let scene_y = state
+                        .windows
+                        .outer(id)
+                        .map_or(0, |outer| outer.y().round() as i32);
+                    let drawn = (frame.progress * f64::from(frame.bar)).round() as i32;
+                    Point::from((0, drawn - scene_y))
+                }
+                _ => Point::from((0, 0)),
+            };
+            append_window_frame(state, renderer, id, focused, scale, offset, elements);
+        }
+        let focus_space = matches!(
+            state.spaces.current().kind,
+            malaysia_scene::spaces::SpaceKind::Focus { .. }
+        );
+        if focus_space {
+            let size = state.logical_output_size();
+            append_buffer(
+                &mut state.focus_backdrop,
+                Point::from((0, 0)),
+                size,
+                ctdesign::SPACE_GAP_COLOR.premultiplied(),
+                scale,
+                elements,
+            );
+        } else {
+            let desktop = state.spaces.desktop_number(state.spaces.current().id);
+            let shows = background_of(state, desktop);
+            append_layers(
                 state,
                 renderer,
-                frame.owner,
-                drop + frame.bar,
-                scale,
-                &mut elements,
+                elements,
+                LayerSide::Back,
+                Point::from((0, 0)),
+                shows,
             );
-        }
-        if let Some(position) = slide {
-            append_sliding_spaces(state, renderer, position, scale, moving, &mut elements);
-        } else {
-            let focused = state.focused_window();
-            let window_ids: Vec<_> = state
-                .windows
-                .iter_visible(&state.minimized)
-                .rev()
-                .map(|window| window.id())
-                .filter(|id| Some(*id) != moving)
-                .collect();
-            for id in window_ids {
-                let offset = match reveal {
-                    Some(frame) if frame.owner == id && frame.slides => {
-                        let scene_y = state
-                            .windows
-                            .outer(id)
-                            .map_or(0, |outer| outer.y().round() as i32);
-                        let drawn = (frame.progress * f64::from(frame.bar)).round() as i32;
-                        Point::from((0, drawn - scene_y))
-                    }
-                    _ => Point::from((0, 0)),
-                };
-                append_window_frame(state, renderer, id, focused, scale, offset, &mut elements);
-            }
-            let focus_space = matches!(
-                state.spaces.current().kind,
-                malaysia_scene::spaces::SpaceKind::Focus { .. }
-            );
-            if focus_space {
-                let size = state.logical_output_size();
-                append_buffer(
-                    &mut state.focus_backdrop,
-                    Point::from((0, 0)),
-                    size,
-                    ctdesign::SPACE_GAP_COLOR.premultiplied(),
-                    scale,
-                    &mut elements,
-                );
-            } else {
-                let desktop = state.spaces.desktop_number(state.spaces.current().id);
-                let shows = background_of(state, desktop);
-                append_layers(
-                    state,
-                    renderer,
-                    &mut elements,
-                    LayerSide::Back,
-                    Point::from((0, 0)),
-                    shows,
-                );
-            }
         }
     }
-    elements
 }
 
 // ADR 0072: a desktop shows its own background surface, or the ones given no desktop.

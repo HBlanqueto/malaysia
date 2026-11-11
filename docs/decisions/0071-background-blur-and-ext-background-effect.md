@@ -248,9 +248,10 @@ Read at `7f81a7f7` (2026-11-10):
    handler (`handlers.rs`); the committed region read from the cached state
    (`blur.rs`); the tokens in barrierkit; the shaders in `grade-graphics`;
    the wallpaper cache. Windows, alert layers and plain layer surfaces get
-   it; every surface draws `"wallpaper"` until phase 3. Pending: the
-   upstream Smithay PR to resend `capabilities`, lock surfaces and pop-ups
-   (phase 3). Test: `./dev.sh run` with foot `colors-dark.blur=yes` and
+   it; every surface draws `"wallpaper"` until phase 3. Lock surfaces got it
+   with ADR 0074: their rectangles are drawn as capsules, the shape of the
+   password field. Pending: the upstream Smithay PR to resend
+   `capabilities`, and pop-ups (phase 3). Test: `./dev.sh run` with foot `colors-dark.blur=yes` and
    `alpha=0.6`, or kitty `background_blur 1`, and
    `reduce_transparency = false` in `~/.config/malaysia/appearance.domain`.
 2. **The shell, the kit and general blur.** The shell and the kit send

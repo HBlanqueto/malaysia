@@ -664,6 +664,25 @@ impl WlrLayerShellHandler for State {
         if namespace == ctdesign::NOTIFICATIONS_LAYER_NAMESPACE {
             crate::notification_panel::mark(surface.wl_surface());
         }
+        if namespace == ctdesign::MENUBAR_LAYER_NAMESPACE {
+            crate::lock_transition::mark(
+                surface.wl_surface(),
+                crate::lock_transition::Kept::Menubar,
+            );
+        }
+        // ADR 0074: only the wallpaper of an unsandboxed client is drawn under the lock screen.
+        if namespace == ctdesign::WALLPAPER_LAYER_NAMESPACE
+            && layer == Layer::Background
+            && surface
+                .wl_surface()
+                .client()
+                .is_some_and(|client| crate::security::unrestricted(&client))
+        {
+            crate::lock_transition::mark(
+                surface.wl_surface(),
+                crate::lock_transition::Kept::Wallpaper,
+            );
+        }
         self.layers.add(surface);
         self.request_redraw();
     }

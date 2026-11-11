@@ -1,6 +1,6 @@
 # 0074 — Lock screen over the wallpaper and the lock transition
 
-Status: accepted (2026-11-11). Nothing is implemented yet; see «Plan».
+Status: accepted and implemented (2026-11-11); not yet tried on hardware.
 
 ## Goal and scope
 
@@ -91,22 +91,23 @@ The approved mock-up, «Del escritorio al bloqueo»:
    5. The lock surface paints no background. It draws only its content on a
       transparent buffer.
 2. **Only the password field is blurred.**
-   1. The lock surface requests a blur region equal to the field's rounded
-      rectangle, through `ext-background-effect-v1`.
+   1. The lock surface requests a blur region equal to the field's
+      rectangle, through `ext-background-effect-v1` (`bk::shell::set_blur_region`).
    2. ADR 0071 gives lock surfaces the `"wallpaper"` mode, so the field
-      samples the cached blurred wallpaper. This needs ADR 0071's pending
-      lock-surface item.
+      samples the cached blurred wallpaper. The compositor draws each
+      rectangle of a lock surface as a capsule (`blur::capsules`).
    3. With `appearance.reduce_transparency` on (the default), the
-      compositor draws no blur. The field then uses an opaque fill token.
+      compositor draws no blur. The field then uses `LOCK_FIELD_FILL_OPAQUE`.
 3. **What the lock screen shows.** All of it is drawn by
-   `malaysia-shell lock`. Text and icons are white with a soft shadow, so
-   they read over any wallpaper.
+   `malaysia-shell lock`. Text and icons are `LOCK_INK` (white).
    1. **Top right: the status row.** From right to left: the power button,
-      the battery (if the machine has one), Wi-Fi, Bluetooth (if it is on)
-      and the printer (if a job is active). They use the menubar's extras
-      and `menubar.show_*` switches, read-only: clicking them opens no menu.
-   2. **The power button** opens a menu with Suspend, Restart… and Shut
-      Down…. It uses `power.rs`; there is no Log Out while locked.
+      the battery (if the machine has one), Wi-Fi, the printer (while CUPS
+      has a queued job) and Bluetooth (if it is on), the bar's own order.
+      They use the menubar's extras and `menubar.show_*` switches,
+      read-only: clicking them opens no menu.
+   2. **The power button** opens Suspend, Restart and Shut Down, drawn
+      inside the lock surface because a lock surface has no pop-ups. Each
+      acts at once through `power.rs`; there is no Log Out while locked.
    3. **Top center:** the long date (for example «martes, 11 de noviembre»)
       and, below it, the time in large type, in the menubar clock's format
       (`%H:%M`).
@@ -118,11 +119,11 @@ The approved mock-up, «Del escritorio al bloqueo»:
    5. **Notifications** move from the top right to below the clock. The
       rules are unchanged (`on_lock_screen`, `ShowPreviews`). They appear
       together with the user and the password field.
-   6. **The field** reads «Contraseña» while it is empty, grows as the user
-      types and shows `•` per character. On an error it turns
-      `palette.danger` and the error appears below it. The PAM prompt shows
-      only when it is not the plain password prompt (for example «Código de
-      verificación»), so «Contraseña» no longer appears twice.
+   6. **The field** shows the PAM prompt while it is empty («Contraseña»
+      until PAM asks), grows as the user types and shows `•` per character.
+      On an error it turns `LOCK_FIELD_ERROR` and the error appears below
+      it. There is no separate prompt label, so «Contraseña» no longer
+      appears twice.
 4. **The lock transition.**
    1. **The phases.** The compositor's lock state becomes
       `Unlocked → Locking → Locked`.
@@ -156,13 +157,15 @@ The approved mock-up, «Del escritorio al bloqueo»:
       - The lock surface's first frame draws the status row at the
         menubar's final positions, without the power button. The swap is
         therefore invisible.
+      - The client starts its entry on `locked`
+        (`SessionUnlock::locked()`), the first moment it is on screen.
       - Then the power button fades in, the date and time rise from
         `LOCK_RISE_OFFSET` below their place in `LOCK_RISE`, and the user,
         the field and any notifications fade in in `LOCK_LOGIN`.
    6. **One layout for both.**
       - The menubar's final state and the lock screen's status row come from
-        one function in `malaysia-shell`, `menubar::lock_status_layout`, fed
-        by the same tokens.
+        the same functions in `malaysia-shell`, `menubar::lock_row::status_row`
+        and `extras::lock_icons`, fed by the same tokens.
       - The two processes never exchange positions.
    7. **The time limit.**
       - If any output has no lock surface buffer `LOCK_START_GRACE` (3 s)
@@ -176,8 +179,8 @@ The approved mock-up, «Del escritorio al bloqueo»:
    2. **Reduced motion.** With `appearance.reduced_motion` on, nothing slides
       or rises.
       - The fade and the swap remain, in `DURATION_BASE`.
-      - The menubar's kept items cross-fade to their new places instead of
-        sliding.
+      - The menubar's kept items move to their new places in one step once
+        the bar has faded, instead of sliding.
    3. **Defunct lock.** When the lock client dies, the compositor keeps the
       wallpaper and the last lock surfaces, and keeps the policy of
       `lock.md`.
@@ -192,7 +195,7 @@ The approved mock-up, «Del escritorio al bloqueo»:
 7. **The way back.** On a successful PAM answer, the lock client does three
    things, in order:
    1. It fades its date, time, user, field and notifications out in
-      `DURATION_FAST`.
+      `DURATION_FAST_MS`.
    2. It sends `unlock_and_destroy`. The status row stays on screen until
       then.
    3. The compositor then sends `unlocked`, and the menubar redraws in its
@@ -202,27 +205,31 @@ The approved mock-up, «Del escritorio al bloqueo»:
      `DURATION_BASE`.
    - The compositor fades the other surfaces in over the same time.
    - Input returns at once.
-8. **Tokens.** These go in `components.shell.lock` in `ctdesign`. The values
-   are the mock-up's and are tuned on hardware.
+8. **Tokens.** These are in `components.shell.lock` in `ctdesign`. The
+   values are the mock-up's and are tuned on hardware.
 
    | Token | Value |
    |---|---|
-   | `LOCK_FADE` | 1100 ms |
-   | `LOCK_SETTLE` | 600 ms |
-   | `LOCK_RISE` | 900 ms |
+   | `LOCK_FADE_MS` | 1100 |
+   | `LOCK_SETTLE_MS` | 600 |
+   | `LOCK_RISE_MS` | 900 |
    | `LOCK_RISE_OFFSET` | 120 |
-   | `LOCK_LOGIN` | 600 ms |
+   | `LOCK_LOGIN_MS` | 600 |
    | `LOCK_CLOCK_FONT_SIZE` | 108 |
    | `LOCK_DATE_FONT_SIZE` | 24 |
+   | `LOCK_TOP_MARGIN`, `LOCK_BOTTOM_MARGIN`, `LOCK_SPACING` | 72, 92, 12 |
    | `LOCK_AVATAR_SIZE` | 52 |
    | `LOCK_FIELD_HEIGHT` | 30 (was 44) |
-   | `LOCK_FIELD_MIN_WIDTH` | 108 |
-   | `LOCK_FIELD_MAX_WIDTH` | 200 |
-   | `LOCK_BOTTOM_MARGIN` | 92 |
+   | `LOCK_FIELD_MIN_WIDTH`, `LOCK_FIELD_MAX_WIDTH` | 108, 200 |
+   | `LOCK_MASK_FONT_SIZE` | 18 |
+   | `LOCK_INK`, `LOCK_FIELD_INK` | `#ffffff`, `#ffffffbf` |
+   | `LOCK_FIELD_FILL`, `LOCK_FIELD_FILL_OPAQUE`, `LOCK_FIELD_ERROR` | `#ffffff2e`, `#5c5d61`, `#ff6b6b73` |
 
-   The following tokens are removed with their code: `LOCK_TITLE_SCALE`,
-   `LOCK_FIELD_WIDTH` and the `lock-title` string. `lock_palette` stays only
-   for the defunct-lock fallback color.
+   `MENUBAR_LAYER_NAMESPACE` and `WALLPAPER_LAYER_NAMESPACE` name the two
+   layer surfaces the compositor keeps. The old `LOCK_FONT_SIZE`,
+   `LOCK_TITLE_SCALE`, `LOCK_FIELD_WIDTH`, `LOCK_LABEL_*`, `LOCK`,
+   `LockPalette`, `theme::lock_palette` and the `lock-title` string are
+   gone.
 
 ## Consequences
 
@@ -241,8 +248,9 @@ The approved mock-up, «Del escritorio al bloqueo»:
    - A sandboxed client cannot do it.
 4. An animated wallpaper keeps using the GPU while the screen is locked and
    on.
-5. The printer item needs a new menubar extra that reads CUPS jobs. Until
-   then the status row has no printer.
+5. The printer extra asks CUPS for unfinished jobs over
+   `/run/cups/cups.sock` (IPP Get-Jobs, RFC 8011) every 15 s, or sooner when
+   `org.cups.cupsd.Notifier` signals. A job shorter than that may never show.
 
 ## Rejected alternatives
 
@@ -265,16 +273,14 @@ The approved mock-up, «Del escritorio al bloqueo»:
 
 ## Plan
 
-1. **Phase 1: static lock screen.**
-   - Draw the wallpaper behind lock surfaces (decision 1).
-   - Send `locked` after the presented frame (decision 4.4).
-   - Ship the new layout in `malaysia-shell lock` (decision 3), without the
-     printer, plus the new tokens.
-   - Blur the field once ADR 0071's lock-surface item lands.
-2. **Phase 2: the transition.**
-   - The `Locking` phase and the fade.
-   - `infinity_session_v1` and the menubar's closing up.
-   - The entry animation of the lock screen.
-   - The sleep and reduced-motion exceptions.
-3. **Phase 3:** the way back (decision 7).
-4. **Phase 4:** the printer extra in the menubar and on the lock screen.
+All four phases landed together on 2026-11-11:
+
+1. The static lock screen over the wallpaper, with `locked` sent after the
+   presented frame and the blurred field.
+2. The transition: the `Locking` phase, `infinity_session_v1`, the menu
+   bar closing up, the entry animation and the two exceptions.
+3. The way back.
+4. The printer extra on the bar and on the lock screen.
+
+Still to do: try it on the ThinkPad and tune the tokens; the upstream
+Smithay PR to resend `capabilities` (ADR 0071).

@@ -19,7 +19,7 @@ use ctdesign::{
     MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT, SANS_FAMILIES,
 };
 use freya_core::integration::AppComponent;
-use torin::prelude::Gaps;
+use torin::prelude::{Gaps, Position};
 
 use crate::desktop::DesktopEntry;
 use crate::localize::tr;
@@ -29,7 +29,7 @@ use crate::menubar::gtkmenus;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
 use crate::menubar::{
-    appmenu, clock, extras, focused, live, resolve_app_name, shortcuts, status, system,
+    appmenu, clock, extras, focused, live, lock_row, resolve_app_name, shortcuts, status, system,
 };
 use bk::menu::{RevealRoots, SearchQuery};
 use bk::platform::MainMenuAddress;
@@ -360,11 +360,46 @@ impl App for BarApp {
             ));
         }
 
-        bar_root(bar).child(left).child(
-            right
-                .child(live::live_area(activities, text))
-                .child(clock::clock_label(now, text, focus)),
-        )
+        let mut tail_width = use_state(|| 0.0f32);
+        let tail = HStack::new()
+            .height(Size::fill())
+            .cross_align(Alignment::Start)
+            .spacing(0.0)
+            .on_sized(move |event: Event<SizedEventData>| {
+                tail_width.set_if_modified(event.data().area.width());
+            })
+            .child(live::live_area(activities, text))
+            .child(clock::clock_label(now, text, focus));
+        let bar_view = bar_root(bar).child(left).child(right.child(tail));
+        let progress = lock_row::use_lock_progress();
+        let locking = progress.is_some();
+        let closing_state = menu_state.clone();
+        use_side_effect_with_deps(&locking, move |locking| {
+            if *locking {
+                menu::close_root_menu(&closing_state);
+            }
+        });
+        let Some(progress) = progress else {
+            return bar_view.into_element();
+        };
+        let trailing =
+            *tail_width.read() + (lock_row::POWER_SLOT - *tail_width.read()) * progress.settle;
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .child(lock_row::status_row(
+                extras::lock_icons(&extras, &menubar_config.read(), ctdesign::LOCK_INK),
+                rect().width(Size::px(trailing)).into_element(),
+            ))
+            .child(
+                rect()
+                    .position(Position::new_absolute())
+                    .width(Size::fill())
+                    .height(Size::fill())
+                    .opacity(1.0 - progress.cover)
+                    .child(bar_view),
+            )
+            .into_element()
     }
 }
 
@@ -582,7 +617,7 @@ impl BarApp {
     }
 }
 
-fn bar_root(background: Color) -> HStack {
+pub(crate) fn bar_root(background: Color) -> HStack {
     let mut root = HStack::new()
         .cross_align(Alignment::Start)
         .spacing(0.0)
@@ -884,7 +919,7 @@ fn use_focus() -> Option<Focus> {
     *state.read()
 }
 
-fn schedule_next_minute(timers: Timers, clock: State<String>) {
+pub(crate) fn schedule_next_minute(timers: Timers, clock: State<String>) {
     let retry = timers.clone();
     let seconds = u64::from(60 - chrono::Timelike::second(&chrono::Local::now()));
     timers.after(Duration::from_secs(seconds), move || {
@@ -908,7 +943,7 @@ fn is_shell_dialog(app_id: &str) -> bool {
 
 fn surface_spec() -> LayerSpec {
     LayerSpec {
-        namespace: "malaysia-menubar".to_string(),
+        namespace: ctdesign::MENUBAR_LAYER_NAMESPACE.to_string(),
         layer: SurfaceLayer::Top,
         anchors: Anchors::TOP,
         exclusive_zone: MENUBAR_HEIGHT,

@@ -139,7 +139,8 @@ help-topic-decorations = Decoraciones y efectos
 launcher-search = Buscar aplicaciones
 launcher-no-results = Sin resultados
 
-lock-title = Sesión bloqueada
+lock-date = { $weekday }, { $day } de { $month }
+lock-power-menu = Opciones de energía
 lock-password = Contraseña
 lock-unknown-user = No se pudo identificar al usuario
 lock-invalid-user = Nombre de usuario no válido
@@ -936,6 +937,13 @@ widget-calendar = Calendario
 widget-batteries = Baterías
 widget-no-batteries = No hay baterías
 widget-this-computer = Este equipo
+weekday-1 = lunes
+weekday-2 = martes
+weekday-3 = miércoles
+weekday-4 = jueves
+weekday-5 = viernes
+weekday-6 = sábado
+weekday-7 = domingo
 month-1 = enero
 month-2 = febrero
 month-3 = marzo
@@ -970,6 +978,11 @@ battery-charging = Cargando
 battery-until-full = Carga completa en { $time }
 battery-until-empty = Queda { $time }
 low-power-mode = Modo de bajo consumo
+printer = Impresora
+printer-jobs = { $count ->
+    [one] Un trabajo en cola
+   *[other] { $count } trabajos en cola
+}
 battery = Batería
 battery-settings = Ajustes de Batería…
 wifi-networks-available = Redes Wi‑Fi disponibles

@@ -23,7 +23,7 @@ Bottom    layer-shell Bottom (future)
 Background wallpaper
 ```
 
-The exclusive zones of the menubar and the dock trim the workspace. The lock replaces everything: only its surfaces and the cursor are drawn.
+The exclusive zones of the menubar and the dock trim the workspace. The lock replaces everything but the wallpaper: only the wallpaper, the lock surfaces and the cursor are drawn (ADR 0074).
 
 ## Design
 

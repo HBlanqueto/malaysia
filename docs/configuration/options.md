@@ -425,6 +425,7 @@ compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhib
 | `menubar.show_battery` | bool | `true` | **active** | shell (Battery menu); System Settings › Battery writes it |
 | `menubar.show_battery_percentage` | bool | `true` | **active** | shell (percentage next to the battery); System Settings › Battery writes it |
 | `menubar.show_vpn` | bool | `true` | **active** | shell (VPN menu, only with a VPN profile); System Settings › VPN writes it |
+| `menubar.show_printer` | bool | `true` | **active** | shell (printer while CUPS has a queued job, on the bar and the lock screen; ADR 0074) |
 
 ## `wifi` — Wi-Fi (System Settings → Wi-Fi; ADR 0069)
 

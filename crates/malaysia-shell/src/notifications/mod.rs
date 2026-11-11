@@ -10,6 +10,7 @@ mod widgets;
 pub(crate) use live::{Activity, ActivityKind};
 pub(crate) use store::{Center, Notification};
 pub(crate) use view::lock_card;
+pub(crate) use widgets::month_name;
 
 use bk::prelude::Symbol;
 use bk::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, run_layer};

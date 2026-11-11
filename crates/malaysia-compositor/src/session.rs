@@ -612,6 +612,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     }
 
     if damage.is_none() {
+        session.state.lock_frame_presented();
         feedback.discarded();
         send_frame_callbacks_for_state(&session.state, Duration::from(session.state.clock.now()));
         queue_estimated_vblank(session);
@@ -643,6 +644,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     if let Some(token) = session.estimated_vblank.take() {
         session.loop_handle.remove(token);
     }
+    session.state.lock_frame_presented();
     session.state.frame_callback_cycle = session.state.frame_callback_cycle.wrapping_add(1);
     send_frame_callbacks_for_state(&session.state, now);
     Ok(())

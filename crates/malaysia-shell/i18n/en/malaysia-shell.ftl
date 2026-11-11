@@ -139,7 +139,8 @@ help-topic-decorations = Decorations and Effects
 launcher-search = Search Apps
 launcher-no-results = No Results
 
-lock-title = Session Locked
+lock-date = { $weekday }, { $month } { $day }
+lock-power-menu = Power options
 lock-password = Password
 lock-unknown-user = Couldn’t identify the user
 lock-invalid-user = Invalid user name
@@ -936,6 +937,13 @@ widget-calendar = Calendar
 widget-batteries = Batteries
 widget-no-batteries = No batteries
 widget-this-computer = This computer
+weekday-1 = Monday
+weekday-2 = Tuesday
+weekday-3 = Wednesday
+weekday-4 = Thursday
+weekday-5 = Friday
+weekday-6 = Saturday
+weekday-7 = Sunday
 month-1 = January
 month-2 = February
 month-3 = March
@@ -970,6 +978,11 @@ battery-charging = Charging
 battery-until-full = Full in { $time }
 battery-until-empty = { $time } remaining
 low-power-mode = Low Power Mode
+printer = Printer
+printer-jobs = { $count ->
+    [one] One job in the queue
+   *[other] { $count } jobs in the queue
+}
 battery = Battery
 battery-settings = Battery Settings…
 wifi-networks-available = Wi‑Fi networks available

@@ -89,6 +89,33 @@ pub(crate) fn backdrop<R: MalaysiaRenderer>(
     exponent: f32,
     scale: f64,
 ) -> Vec<OutputRenderElement<R>> {
+    sampled(state, surface, origin, scale, |dst| {
+        Some((dst.intersection(frame)?, frame, radius, exponent))
+    })
+}
+
+// ADR 0074: the lock screen's blur rectangles are its capsule-shaped fields.
+pub(crate) fn capsules<R: MalaysiaRenderer>(
+    state: &State,
+    surface: &WlSurface,
+    scale: f64,
+) -> Vec<OutputRenderElement<R>> {
+    sampled(state, surface, Point::default(), scale, |dst| {
+        Some((dst, dst, dst.size.w.min(dst.size.h) / 2, CIRCLE_EXPONENT))
+    })
+}
+
+const CIRCLE_EXPONENT: f32 = 2.0;
+
+fn sampled<R: MalaysiaRenderer>(
+    state: &State,
+    surface: &WlSurface,
+    origin: Point<i32, Logical>,
+    scale: f64,
+    shape: impl Fn(
+        Rectangle<i32, Physical>,
+    ) -> Option<(Rectangle<i32, Physical>, Rectangle<i32, Physical>, i32, f32)>,
+) -> Vec<OutputRenderElement<R>> {
     let (Some(wallpaper), Some(program)) = (
         state
             .blur
@@ -119,9 +146,11 @@ pub(crate) fn backdrop<R: MalaysiaRenderer>(
         .into_iter()
         .zip(ids)
         .filter_map(|(rect, id)| {
-            let dst = physical_rect(Rectangle::new(origin + rect.loc, rect.size), scale)
-                .intersection(frame)?
-                .intersection(output)?;
+            let (dst, frame, radius, exponent) = shape(physical_rect(
+                Rectangle::new(origin + rect.loc, rect.size),
+                scale,
+            ))?;
+            let dst = dst.intersection(output)?;
             let src = Rectangle::<f64, BufferCoords>::new(
                 (f64::from(dst.loc.x), f64::from(dst.loc.y)).into(),
                 (f64::from(dst.size.w), f64::from(dst.size.h)).into(),
@@ -181,6 +210,10 @@ fn requested(state: &State) -> bool {
             .into_iter()
             .flat_map(|layer| state.layers.on_layer(layer))
             .any(|entry| !blur_region(entry.surface.wl_surface()).is_empty())
+        || state
+            .lock_surfaces
+            .iter()
+            .any(|surface| !blur_region(surface.wl_surface()).is_empty())
 }
 
 impl Blur {
@@ -229,6 +262,10 @@ fn wallpaper_elements(
     scale: f64,
 ) -> Vec<OutputRenderElement<GlesRenderer>> {
     let mut elements = Vec::new();
+    if state.locked {
+        crate::lock_transition::append_wallpaper(state, renderer, 1.0, &mut elements);
+        return elements;
+    }
     let focus_space = matches!(
         state.spaces.current().kind,
         malaysia_scene::spaces::SpaceKind::Focus { .. }

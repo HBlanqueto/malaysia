@@ -140,7 +140,7 @@ fn calendar(today: NaiveDate) -> VStack {
         .children(weeks)
 }
 
-fn month_name(month: u32) -> &'static str {
+pub(crate) fn month_name(month: u32) -> &'static str {
     match month {
         1 => tr!("month-1"),
         2 => tr!("month-2"),

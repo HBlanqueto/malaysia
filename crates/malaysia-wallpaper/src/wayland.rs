@@ -64,7 +64,7 @@ use ctappearance::{
 use ctdesign::{BACKDROP, Rgba, WALLPAPER_FPS};
 use infinity_protocol::client::style::infinity_window_style_v1::infinity_window_style_v1::InfinityWindowStyleV1;
 
-const NAMESPACE: &str = "malaysia-wallpaper";
+const NAMESPACE: &str = ctdesign::WALLPAPER_LAYER_NAMESPACE;
 const SCALE_DENOMINATOR: f64 = 120.0;
 const WINDOW_STYLE_DESKTOPS: u32 = 5;
 const MINUTE: Duration = Duration::from_secs(60);

@@ -116,6 +116,8 @@ damage, cursor and the shell's viewporter. **Done and accepted** on the real pan
 PAM in the lock process, masked field, auto-lock via
 `ext-idle-notify-v1`, recovery with backoff and `Ctrl+Alt+L` (locks or
 relaunches, never unlocks). **Done and accepted** on the real panel on 2026-10-21.
+The lock screen over the wallpaper and the transition from the desktop
+(ADR 0074) are implemented (2026-11-11) and not yet tried on hardware.
 Pending: repeat the unlock with the ThinkPad's real credentials.
 
 ### 11 — Everyday protocols

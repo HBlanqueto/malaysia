@@ -160,12 +160,19 @@ impl IdleState {
     pub fn set_locked(&mut self, locked: bool) {
         self.locked = locked;
         if locked {
-            if let Some(sleep_lock) = self.sleep_lock.take() {
-                let _ = sleep_lock.send(());
-            }
             self.sink.remove(AUTO_ID);
         } else {
             self.arm_auto();
+        }
+    }
+
+    pub fn locking_for_sleep(&self) -> bool {
+        self.sleep_lock.is_some()
+    }
+
+    pub fn confirm_locked(&mut self) {
+        if let Some(sleep_lock) = self.sleep_lock.take() {
+            let _ = sleep_lock.send(());
         }
     }
 

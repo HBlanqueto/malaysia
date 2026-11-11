@@ -727,9 +727,11 @@ impl Udev {
                 self.state.frame_callback_cycle = self.state.frame_callback_cycle.wrapping_add(1);
             }
             RenderResult::NoDamage => {
+                self.state.lock_frame_presented();
                 self.queue_estimated_vblank_timer();
             }
             RenderResult::Skipped => {
+                self.state.lock_frame_presented();
                 self.redraw_state = match std::mem::take(&mut self.redraw_state) {
                     RedrawState::WaitingForEstimatedVBlank(token)
                     | RedrawState::WaitingForEstimatedVBlankAndQueued(token) => {
@@ -821,6 +823,7 @@ impl Udev {
         if let Err(error) = self.compositor.frame_submitted() {
             warn!(%error, "frame submitted");
         }
+        self.state.lock_frame_presented();
         let (time, clock) = match metadata.map(|metadata| metadata.time) {
             Some(DrmEventTime::Monotonic(time)) => (time, wp_presentation_feedback::Kind::HwClock),
             _ => (

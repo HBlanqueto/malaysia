@@ -13,7 +13,8 @@ use smithay::wayland::session_lock::{
 
 use crate::state::State;
 
-const LOCK_START_GRACE: Duration = Duration::from_secs(3);
+// ext-session-lock-v1 asks for a time limit when waiting for the lock surfaces.
+pub(crate) const LOCK_START_GRACE: Duration = Duration::from_secs(3);
 const LOCK_RECOVERY_MAX_ATTEMPTS: u32 = 5;
 
 fn lock_recovery_delay(attempts: u32) -> Duration {
@@ -33,7 +34,7 @@ impl SessionLockHandler for State {
         }
         self.lock_owner = Some(confirmation.ext_session_lock().clone());
         let already_locked = self.locked;
-        tracing::info!("session locked");
+        tracing::info!("session locking");
         self.locked = true;
         self.idle.set_locked(true);
         self.lock_surfaces.clear();
@@ -57,8 +58,8 @@ impl SessionLockHandler for State {
         }
         self.screenshot = None;
         self.cancel_screenshot();
+        self.start_locking(confirmation, already_locked);
         self.request_redraw();
-        confirmation.lock();
     }
 
     fn unlock(&mut self) {
@@ -69,6 +70,7 @@ impl SessionLockHandler for State {
         self.lock_surfaces.clear();
         self.cancel_lock_recovery();
         self.lock_recovery_attempts = 0;
+        self.start_unlocking();
         self.request_redraw();
     }
 

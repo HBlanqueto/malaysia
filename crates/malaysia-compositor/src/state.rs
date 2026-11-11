@@ -119,6 +119,10 @@ pub struct State {
     pub idle_inhibitors: Vec<WlSurface>,
     pub(crate) lock_recovery_attempts: u32,
     pub(crate) lock_recovery_pending: bool,
+    pub(crate) lock_transition: crate::lock_transition::LockTransition,
+    pub(crate) session_notices: Vec<
+        infinity_protocol::server::session::infinity_session_v1::infinity_session_v1::InfinitySessionV1,
+    >,
     pub display_handle: DisplayHandle,
     pub output: Output,
     pub output_size: Size<i32, Physical>,
@@ -332,6 +336,7 @@ impl State {
         crate::infinity::InfinityGlobalData::create_global(display_handle);
         smithay::wayland::background_effect::BackgroundEffectState::new::<Self>(display_handle);
         crate::focus_notice::FocusNoticeGlobalData::create_global(display_handle);
+        crate::session_notice::SessionNoticeGlobalData::create_global(display_handle);
         crate::window_style::WindowStyleGlobalData::create_global(display_handle);
         Ok(Self {
             loop_signal,
@@ -383,6 +388,8 @@ impl State {
             idle_inhibitors: Vec::new(),
             lock_recovery_attempts: 0,
             lock_recovery_pending: false,
+            lock_transition: crate::lock_transition::LockTransition::default(),
+            session_notices: Vec::new(),
             display_handle: display_handle.clone(),
             output,
             output_size: size,
@@ -470,6 +477,7 @@ impl State {
             || !self.popup_fades.is_empty()
             || self.focus_reveal.animating(now)
             || self.theme_fade.is_some()
+            || self.lock_transition.animating(now)
     }
 
     pub(crate) fn init_capture_dma(
