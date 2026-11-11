@@ -362,6 +362,7 @@ impl App for BarApp {
                 titles.clone(),
                 menu_state.clone(),
                 text,
+                look.selection,
             ));
         }
 
@@ -381,7 +382,13 @@ impl App for BarApp {
             others = others.child(if item.menu.is_empty() {
                 status::activate_only(item, &status_host)
             } else {
-                menu::menu_title(index, status_specs.clone(), menu_state.clone(), text)
+                menu::menu_title(
+                    index,
+                    status_specs.clone(),
+                    menu_state.clone(),
+                    text,
+                    look.selection,
+                )
             });
         }
 
@@ -403,6 +410,7 @@ impl App for BarApp {
                 extra_specs.clone(),
                 menu_state.clone(),
                 theme::color(extras_ink),
+                look.selection,
             ));
         }
 
@@ -806,6 +814,7 @@ fn tick_at(tick: State<u64>, deadline: Instant) {
 struct BarLook {
     background: Rgba,
     ink: Rgba,
+    selection: Rgba,
     blurred: bool,
 }
 
@@ -814,12 +823,13 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
         return BarLook {
             background: ctdesign::FOCUS_BAR_BACKGROUND,
             ink: ctdesign::FOCUS_BAR_TEXT,
+            selection: colors_over(ctdesign::FOCUS_BAR_BACKGROUND).selection,
             blurred: false,
         };
     }
     let resolved = theme::resolved();
     let solid = theme::surface_background(&resolved, theme::SurfaceKind::LayerShell);
-    let (ink, glass) = colors_over(under.unwrap_or(solid));
+    let over = colors_over(under.unwrap_or(solid));
     let style = if resolved.reduce_transparency {
         MenubarStyle::Solid
     } else {
@@ -829,16 +839,23 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
         MenubarStyle::Solid => BarLook {
             background: Rgba { a: 1.0, ..solid },
             ink: resolved.shell.text,
+            selection: theme::menu_palette(&resolved, theme::SurfaceKind::LayerShell)
+                .bar_title_open_bg,
             blurred: false,
         },
         MenubarStyle::Translucent => BarLook {
-            background: glass,
-            ink,
+            background: over.glass,
+            ink: over.ink,
+            selection: over.selection,
             blurred: true,
         },
         MenubarStyle::Floating => BarLook {
-            background: Rgba { a: 0.0, ..glass },
-            ink,
+            background: Rgba {
+                a: 0.0,
+                ..over.glass
+            },
+            ink: over.ink,
+            selection: over.selection,
             blurred: false,
         },
     }

@@ -82,7 +82,6 @@ impl MenuTitleSpec {
 pub struct MenuState {
     pub root_id: Rc<Cell<Option<PopupId>>>,
     pub open_label: State<Option<String>>,
-    pub hovered_label: State<Option<String>>,
 }
 
 impl MenuState {
@@ -90,7 +89,6 @@ impl MenuState {
         Self {
             root_id: use_hook(|| Rc::new(Cell::new(None))),
             open_label: use_state(|| None::<String>),
-            hovered_label: use_state(|| None::<String>),
         }
     }
 }
@@ -245,13 +243,13 @@ pub fn menu_title(
     titles: Rc<Vec<MenuTitleSpec>>,
     state: MenuState,
     fg: Color,
+    selection: Rgba,
 ) -> Element {
     let spec = &titles[title_index];
     let label_text = spec.label.clone();
     let enabled = spec.enabled;
     let anchor = spec.anchor.clone();
     let is_open = state.open_label.read().as_deref() == Some(&label_text);
-    let hovered = state.hovered_label.read().as_deref() == Some(&label_text);
 
     let resolved = bk::theme::resolved();
     let palette = bk::theme::menu_palette(&resolved, bk::theme::SurfaceKind::LayerShell);
@@ -273,9 +271,7 @@ pub fn menu_title(
         });
 
     if is_open {
-        title = title.child(title_pill(palette.bar_title_open_bg, palette));
-    } else if hovered {
-        title = title.child(title_pill(palette.bar_hover_bg, palette));
+        title = title.child(title_pill(selection, palette));
     }
 
     let content = if let Some(icon) = &spec.icon {
@@ -309,15 +305,6 @@ pub fn menu_title(
         toggle_menu(&titles_for_click, title_index, &state_for_click);
     });
 
-    let mut hovered_label = state.hovered_label;
-    let label_for_leave = label_text.clone();
-    container = container.on_pointer_leave(move |_: Event<PointerEventData>| {
-        if hovered_label.read().as_deref() == Some(&label_for_leave) {
-            hovered_label.set(None);
-        }
-    });
-
-    let mut hovered_label = state.hovered_label;
     let open_label_for_hover = state.open_label;
     let titles_for_hover = titles.clone();
     let state_for_hover = state.clone();
@@ -327,7 +314,6 @@ pub fn menu_title(
         if let Some(callback) = &on_hover_title {
             callback();
         }
-        hovered_label.set(Some(label_for_hover.clone()));
         let current = open_label_for_hover.read().clone();
         if current.is_some_and(|current| current != label_for_hover) {
             open_root_menu(&titles_for_hover, title_index, &state_for_hover);

@@ -163,11 +163,17 @@ pub fn menubar_preview(
     };
     let bar_height = SETTINGS.preview_bar_h as f32 * config.height() as f32 / MENUBAR_HEIGHT as f32;
     let solid = surface_background(resolved, SurfaceKind::LayerShell);
-    let (ink, glass) = colors_over(resolved.accent);
+    let over = colors_over(resolved.accent);
     let (background, ink) = match style {
         MenubarStyle::Solid => (Rgba { a: 1.0, ..solid }, resolved.shell.text),
-        MenubarStyle::Translucent => (glass, ink),
-        MenubarStyle::Floating => (Rgba { a: 0.0, ..glass }, ink),
+        MenubarStyle::Translucent => (over.glass, over.ink),
+        MenubarStyle::Floating => (
+            Rgba {
+                a: 0.0,
+                ..over.glass
+            },
+            over.ink,
+        ),
     };
     let padding = SETTINGS.preview_bar_padding as f32;
     let inset = SETTINGS.preview_app_inset as f32;

@@ -57,6 +57,10 @@ wallpaper alone and shows it behind any surface that asks for it with
   `infinity_window_manager_v1`), and the bar reads its grid from
   `wallpaper.state` with `grid_for`; a desktop without its own wallpaper, or
   a focus space, uses the shared grid.
+- The pill behind an open menu title follows the ink too:
+  `MenubarColors::selection` is a translucent dark pill over a light
+  wallpaper and a light one over a dark wallpaper. Titles get no pill on
+  hover, as in macOS Big Sur.
 - Windows do not move when the height changes; the compositor applies the new
   exclusive zone as with any layer.
 
