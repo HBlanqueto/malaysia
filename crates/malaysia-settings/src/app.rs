@@ -8,9 +8,9 @@ use bk::styles::{Axis, RadioGroupStyle};
 use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
-    AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick, ScrollBars,
-    TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle, WindowColorMode,
-    WindowTintScope, lights_for, load_appearance, palette,
+    AppearanceConfig, BlurBehind, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick,
+    ScrollBars, TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle,
+    WindowColorMode, WindowTintScope, lights_for, load_appearance, palette,
 };
 use ctdesign::{
     ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, MENU_POPOVER, POINTER_SIZES, Rgba,
@@ -57,6 +57,11 @@ const COLOR_FILTERS: [ColorFilter; 4] = [
     ColorFilter::RedGreen,
     ColorFilter::GreenRed,
     ColorFilter::BlueYellow,
+];
+const BLUR_BEHIND: [BlurBehind; 3] = [
+    BlurBehind::Mixed,
+    BlurBehind::Wallpaper,
+    BlurBehind::Windows,
 ];
 pub(crate) const ACCESSIBILITY_TINT: Rgba = ACCENT_SWATCHES[0].1;
 const COLOR_FILTER_PENCILS: &[u8] = include_bytes!("../assets/color-filters.svg");
@@ -542,6 +547,7 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                     )),
                 ),
         )
+        .section(blur(config, error))
         .section(
             Section::titled(tr!("text"))
                 .row(Row::page(tr!("text-size"), "text-size").detail(tr!("text-size-help")))
@@ -725,6 +731,59 @@ fn text_size_names() -> &'static [&'static str] {
             )
             .collect()
     })
+}
+
+const BLUR_BEHIND_NAMES: [Text; 3] = [
+    || tr!("blur-behind-mixed"),
+    || tr!("blur-behind-wallpaper"),
+    || tr!("blur-behind-windows"),
+];
+
+const BLUR_BEHIND_HELP: [Text; 3] = [
+    || tr!("blur-behind-mixed-help"),
+    || tr!("blur-behind-wallpaper-help"),
+    || tr!("blur-behind-windows-help"),
+];
+
+fn blur(config: &AppearanceConfig, error: State<Option<String>>) -> Section {
+    let reduced = config.transparency_reduced();
+    let selected = position(&BLUR_BEHIND, config.blur_behind);
+    let help = |text: &'static str| {
+        if reduced {
+            tr!("blur-reduced-help")
+        } else {
+            text
+        }
+    };
+    Section::titled(tr!("blur"))
+        .row(
+            Row::new(tr!("blur-behind"))
+                .detail(help(BLUR_BEHIND_HELP[selected]()))
+                .control(
+                    BLUR_BEHIND_NAMES
+                        .iter()
+                        .fold(PopUpButton::new(tr!("blur-behind")), |popup, name| {
+                            popup.item(name())
+                        })
+                        .selected(selected)
+                        .disabled(reduced)
+                        .on_change(edit(error, |config, index: usize| {
+                            config.blur_behind = BLUR_BEHIND[index];
+                        })),
+                ),
+        )
+        .row(
+            Row::new(tr!("blur-all-windows"))
+                .detail(help(tr!("blur-all-windows-help")))
+                .control(
+                    Switch::new(tr!("blur-all-windows"))
+                        .on(config.blur_all_windows)
+                        .disabled(reduced)
+                        .on_toggle(edit(error, |config, on: bool| {
+                            config.blur_all_windows = on;
+                        })),
+                ),
+        )
 }
 
 const COLOR_FILTER_NAMES: [Text; 4] = [

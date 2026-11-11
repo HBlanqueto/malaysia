@@ -3,6 +3,7 @@
 mod app_shortcuts;
 mod appmenu;
 mod blockers;
+mod blur;
 mod capture;
 mod chrome;
 mod config;

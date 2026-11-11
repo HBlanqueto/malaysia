@@ -707,10 +707,20 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         1.0,
         kind,
     );
+    let backdrop = crate::blur::backdrop(
+        state,
+        &data.surface,
+        data.location + data.surface_location,
+        frame_rect_physical,
+        radius_physical,
+        exponent,
+        scale,
+    );
     append_frame(
         state,
         content,
         surface_elements,
+        backdrop,
         Frame {
             owner: crate::chrome::FrameOwner::Window(id),
             rect: frame_rect_physical,
@@ -843,6 +853,7 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             state,
             Vec::new(),
             surface_elements,
+            Vec::new(),
             Frame {
                 owner: crate::chrome::FrameOwner::Popup(id),
                 rect: physical_rect(frame, scale),
@@ -865,6 +876,7 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
     state: &mut State,
     mut content: Vec<OutputRenderElement<R>>,
     surface_elements: Vec<WaylandSurfaceRenderElement<R>>,
+    backdrop: Vec<OutputRenderElement<R>>,
     frame: Frame,
     scale: f64,
     elements: &mut Vec<OutputRenderElement<R>>,
@@ -889,6 +901,7 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
     } else {
         content.extend(surface_elements.into_iter().map(|e| e.into()));
     }
+    content.extend(backdrop);
 
     let (outer, inner, shadow) = frame_decorations(state, &frame, scale);
     elements.extend(frame_order(outer, inner, content, shadow));
@@ -1103,18 +1116,38 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
             }
             let Some(alert) = crate::window_style::alert_layer(&surface) else {
                 elements.extend(surface_elements.into_iter().map(|e| e.into()));
+                elements.extend(crate::blur::backdrop(
+                    state,
+                    &surface,
+                    rect.loc,
+                    physical_rect(rect, scale),
+                    0,
+                    ctdesign::WINDOW_CORNER.exponent,
+                    scale,
+                ));
                 continue;
             };
+            let radius = (crate::window_style::corner_extent(ctdesign::DIALOG.corner_radius)
+                * scale)
+                .round() as i32;
+            let backdrop = crate::blur::backdrop(
+                state,
+                &surface,
+                rect.loc,
+                physical_rect(rect, scale),
+                radius,
+                ctdesign::DIALOG.superellipse_exponent,
+                scale,
+            );
             append_frame(
                 state,
                 Vec::new(),
                 surface_elements,
+                backdrop,
                 Frame {
                     owner: crate::chrome::FrameOwner::Alert(alert),
                     rect: physical_rect(rect, scale),
-                    radius: (crate::window_style::corner_extent(ctdesign::DIALOG.corner_radius)
-                        * scale)
-                        .round() as i32,
+                    radius,
                     exponent: ctdesign::DIALOG.superellipse_exponent,
                     focused: true,
                     panel: true,

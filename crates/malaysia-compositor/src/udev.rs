@@ -271,6 +271,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     state.shadow = crate::effects::compile_shadow(renderer);
     state.border = crate::effects::compile_border(renderer);
     state.display_filter = crate::display_filter::compile(renderer);
+    state.blur = crate::blur::compile(renderer);
     drop(multi);
 
     let cursor = Cursors::load(
@@ -868,6 +869,9 @@ impl Udev {
             .output
             .current_mode()
             .map(|mode| smithay::utils::Size::from((mode.size.w, mode.size.h)));
+        if let Some(size) = size {
+            crate::blur::update(&mut self.state, renderer.as_mut(), size);
+        }
         let filtered = size.and_then(|size| {
             crate::display_filter::element(
                 &mut self.state,

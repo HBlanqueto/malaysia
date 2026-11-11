@@ -12,6 +12,18 @@ pub mod shaders {
         include_str!("display_filter.frag"),
     );
 
+    pub const BLUR_DOWN: &str = concat!(
+        "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
+        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
+        include_str!("blur_down.frag"),
+    );
+
+    pub const BLUR_UP: &str = concat!(
+        "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
+        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
+        include_str!("blur_up.frag"),
+    );
+
     pub const SHADOW: &str = concat!(
         "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
         include_str!("window_shape.glsl"),

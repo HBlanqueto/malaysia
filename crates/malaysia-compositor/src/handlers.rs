@@ -700,6 +700,16 @@ impl smithay::wayland::fractional_scale::FractionalScaleHandler for State {
 
 impl smithay::wayland::shell::xdg::dialog::XdgDialogHandler for State {}
 
+impl smithay::wayland::background_effect::ExtBackgroundEffectHandler for State {
+    fn capabilities(&self) -> smithay::wayland::background_effect::Capability {
+        if crate::blur::drawn(self) {
+            smithay::wayland::background_effect::Capability::Blur
+        } else {
+            smithay::wayland::background_effect::Capability::empty()
+        }
+    }
+}
+
 impl XdgShellHandler for State {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
         &mut self.xdg_shell_state

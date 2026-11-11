@@ -107,7 +107,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
 | `appearance.scroll_bars` | `"automatic"` \| `"when_scrolling"` \| `"always"` | `"automatic"` | **active** | the kit's `ScrollView`: always after a mouse wheel and only while scrolling after a touchpad, only while scrolling, or always, **System Settings** |
 | `appearance.scroll_bar_click` | `"next_page"` \| `"clicked_spot"` | `"next_page"` | **active** | a click on the scroll bar track pages toward it or jumps there, **System Settings** |
-| `appearance.reduce_transparency` | bool | `true` | **active** | shell and kit: solid backgrounds; `false` will enable the compositor blur (ADR 0038) |
+| `appearance.reduce_transparency` | bool | `true` | **active** | shell and kit: solid backgrounds; `false` enables the compositor blur (ADR 0038, 0071) |
 | `appearance.window_color` | `"neutral"` \| `"accent"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings**; an old `"wallpaper"` reads as `"neutral"` |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints the menu bar and the Dock with the accent tint, **System Settings** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` | `"auto"` | **active** | titlebar traffic lights; an old `"wallpaper"` reads as `"accent"`, **System Settings** |
@@ -129,6 +129,8 @@ They are not domain options; they are fixed and documented here:
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
 | `appearance.color_filter` | `"grayscale"` \| `"red_green"` \| `"green_red"` \| `"blue_yellow"` | `"grayscale"` | **active** | compositor: grayscale or a color-blindness filter (ADR 0066) |
 | `appearance.color_filter_intensity` | a value of `COLOR_FILTER_INTENSITY` | `1.0` | **active** | compositor: blends the filter with the original colors |
+| `appearance.blur_behind` | `"mixed"`, `"wallpaper"`, `"windows"` | `"mixed"` | pending | compositor: what the blur behind a surface shows (ADR 0071); today every surface shows only the wallpaper. **System Settings › Accessibility › Display › Blur** |
+| `appearance.blur_all_windows` | bool | `false` | pending | compositor: also blur windows that do not ask for it (ADR 0071). **System Settings › Accessibility › Display › Blur** |
 | `appearance.qt_bridge` | bool | `true` | **active** | portal: writes `qt6ct.conf` and `qt5ct.conf` in `~/.config/qt6ct` and `~/.config/qt5ct` (Fusion, the Malaysia palette in `malaysia-colors.conf`, Breeze or Breeze Dark icons unless another theme is set, the Qt text size); other keys stay (ADR 0067). Off, the portal removes its palette. Settings sets it with `gtk_bridge` (Accessibility › freedesktop Options, ADR 0070) |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Settings sets it with `qt_bridge` (Accessibility › freedesktop Options, ADR 0070) |
 
@@ -441,11 +443,9 @@ They apply to **every** window, client- or server-decorated.
 | `effects.shadow.radius` | float (px) | `24.0` | pending | same |
 | `effects.shadow.offset` | `[x,y]` (px) | `[0,6]` | pending | same |
 | `effects.shadow.opacity` | float `[0,1]` | `0.35` | pending | same |
-| `effects.blur.enabled` | bool | `false` | pending | blur render |
-| `effects.blur.radius` | float (px) | `20.0` | pending | same |
 
-Once a **transparent theme** exists, the app paints with alpha and `effects.blur.*`
-makes the compositor blur what is behind (macOS-style vibrancy).
+Blur is not an `effects` key: an app asks for it with `ext-background-effect-v1`,
+and `appearance.reduce_transparency` turns it on (ADR 0071).
 
 ## `debug` — development
 
@@ -486,13 +486,13 @@ domain domains
 Examples (same syntax as `defaults`):
 
 ```
-domain write effects.blur.enabled -bool true        # or "read effects.blur.enabled"
+domain write effects.shadow.enabled -bool true      # or "read effects.shadow.enabled"
 domain write appearance.color_scheme -string dark
 domain write dock.autohide -bool true
 domain write window.decorations -string force_server
 domain read  effects.shadow.radius
-domain delete effects.blur.enabled                  # back to the default
-domain find  blur
+domain delete effects.shadow.enabled                # back to the default
+domain find  shadow
 ```
 
 ## Example files (`.domain` extension, one file per domain)
@@ -506,7 +506,7 @@ accent_color = [0.208, 0.518, 0.894]
 wallpaper_accent = false        # the «Wallpaper» accent swatch
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
-reduce_transparency = true      # Reduce transparency (solid backgrounds; false = future blur)
+reduce_transparency = true      # Reduce transparency (solid backgrounds; false = compositor blur)
 scroll_bars = "automatic"       # automatic | when_scrolling | always
 scroll_bar_click = "next_page"  # next_page | clicked_spot
 window_color = "neutral"        # neutral | accent
@@ -528,6 +528,8 @@ pointer_size = 1.0
 color_filters = false
 color_filter = "grayscale"
 color_filter_intensity = 1.0
+blur_behind = "mixed"           # mixed | wallpaper | windows
+blur_all_windows = false
 
 [text_sizes]                    # optional; a missing key uses text_size
 qt = 1.3                        # barrierkit | gtk | qt
@@ -628,9 +630,6 @@ enabled = true
 radius = 24.0
 offset = [0.0, 6.0]
 opacity = 0.35
-[blur]
-enabled = false
-radius = 20.0
 ```
 
 ```toml

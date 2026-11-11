@@ -163,6 +163,7 @@ pub struct State {
     pub(crate) shadow: Option<GlesPixelProgram>,
     pub(crate) border: Option<GlesPixelProgram>,
     pub(crate) display_filter: Option<GlesTexProgram>,
+    pub(crate) blur: Option<crate::blur::Blur>,
     pub(crate) chrome_pointer: Option<(WindowId, ctappearance::traffic::TrafficPointer)>,
     pub(crate) titlebar_click: Option<crate::input::TitlebarClick>,
     pub(crate) client_click: Option<crate::input::TitlebarClick>,
@@ -329,6 +330,7 @@ impl State {
         let _ = output.create_global::<Self>(display_handle);
 
         crate::infinity::InfinityGlobalData::create_global(display_handle);
+        smithay::wayland::background_effect::BackgroundEffectState::new::<Self>(display_handle);
         crate::focus_notice::FocusNoticeGlobalData::create_global(display_handle);
         crate::window_style::WindowStyleGlobalData::create_global(display_handle);
         Ok(Self {
@@ -419,6 +421,7 @@ impl State {
             popup_fades: Vec::new(),
             rounded_clip: None,
             display_filter: None,
+            blur: None,
             shadow: None,
             border: None,
             chrome_pointer: None,

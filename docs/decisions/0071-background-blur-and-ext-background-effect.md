@@ -1,6 +1,7 @@
 # 0071 — Background blur and ext-background-effect-v1
 
-Status: accepted (2026-11-11). Not implemented; the phases are in «Plan».
+Status: accepted (2026-11-11). Phase 1 and the Settings control are
+implemented (2026-11-11); the rest is in «Plan».
 
 ## Goal and scope
 
@@ -163,10 +164,11 @@ Read at `7f81a7f7` (2026-11-10):
       | Lock screen | `ext_session_lock_surface_v1` | `"wallpaper"` |
       | Any other layer surface | layer-shell | `"wallpaper"` |
 
-   4. `effects.blur.mode` is `"mixed"` (default), which applies the table.
-      `"wallpaper"` turns every row into `"wallpaper"`: the cheapest blur,
-      for a weak GPU or for battery. With no blit support (step 7.2) the
-      compositor behaves as `"wallpaper"`.
+   4. `appearance.blur_behind` is `"mixed"` (default), which applies the
+      table. `"wallpaper"` turns every row into `"wallpaper"`: the cheapest
+      blur, for a weak GPU or for battery. `"windows"` turns every row into
+      `"behind"`. With no blit support (step 7.2) the compositor behaves as
+      `"wallpaper"`.
 2. **The protocol is the standard way in.** The compositor exposes
    `ext_background_effect_manager_v1` through Smithay's module, version 1.
    Toplevels, layer surfaces, pop-ups and lock surfaces take the region.
@@ -183,7 +185,7 @@ Read at `7f81a7f7` (2026-11-10):
    it sends through the protocol, and the mode decides whether that region
    shows true transparency (`"behind"`) or only the wallpaper. By default a
    window that sends nothing gets no blur, even if its buffer has alpha.
-   1. **General blur, off by default.** `effects.blur.all_windows` (default
+   1. **General blur, off by default.** `appearance.blur_all_windows` (default
       `false`) blurs every toplevel that sends no region: behind its
       geometry, clipped to its frame radius (ADR 0059), minus the opaque
       region it declares. Those windows are not kit clients, so they get
@@ -224,35 +226,41 @@ Read at `7f81a7f7` (2026-11-10):
    4. A screencast or capture that renders across frames keeps its damage
       tracker, because the capture cache lives in the tracker.
 8. **One algorithm, in `grade-graphics`.** Dual Kawase in GLES 2 shaders
-   (`blur_down.frag`, `blur_up.frag`), with saturation, noise and the
-   rounded clip (`window_shape.glsl`) applied when the blur is sampled. The
+   (`blur_down.frag`, `blur_up.frag`), with the rounded clip
+   (`window_shape.glsl`) applied when the blur is sampled. Saturation and
+   noise come with the calibration of phase 4. The
    blur is drawn at full alpha below the surface. The window's own alpha
    does not fade it.
-9. **Strength is a design value.** Passes, offset, noise and saturation are
-   one `ctdesign` token, `BLUR`, not user options; `effects.blur.radius`
-   goes away. The first values are niri's defaults (3, 3, 0.02, 1.5) until
+9. **Strength is a design value.** `ctdesign::BACKGROUND_BLUR_PASSES` and
+   `BACKGROUND_BLUR_OFFSET` set it, not user options; `effects.blur.radius`
+   goes away. The first values are 3 and 3, like niri's defaults, until
    they are measured against macOS 26 (phase 4). Light and dark share them.
-10. **Configuration.** `effects.blur.mode` and `effects.blur.all_windows`
-    are the only new keys. They are read live, like `appearance.domain`.
-    System Settings shows both under Accessibility › Display, below «Reduce
-    transparency», and dims them while that switch is on.
+10. **Configuration.** `blur_behind` and `blur_all_windows` are the only
+    new keys. They live in `appearance.domain` (`ctappearance::AppearanceConfig`),
+    like the other Accessibility › Display options (ADR 0066), and are read
+    live. System Settings shows both in a «Blur» section below the first one
+    of Accessibility › Display, and dims them while «Reduce transparency»
+    is on.
 
 ## Plan
 
-1. **Protocol and `"wallpaper"`.** Smithay global and handler; the region
-   read from the cached state after commit; the `BLUR` token in barrierkit;
-   the shaders in `grade-graphics`; the per-output wallpaper cache. Upstream
-   Smithay PR to resend `capabilities`. Test: `./dev.sh run` with foot
-   `colors-dark.blur=yes` and `alpha=0.6`, and with kitty
-   `background_blur 1`, and `reduce_transparency = false` in
-   `~/.config/malaysia/appearance.domain`.
+1. **Protocol and `"wallpaper"`. Done (2026-11-11).** Smithay global and
+   handler (`handlers.rs`); the committed region read from the cached state
+   (`blur.rs`); the tokens in barrierkit; the shaders in `grade-graphics`;
+   the wallpaper cache. Windows, alert layers and plain layer surfaces get
+   it; every surface draws `"wallpaper"` until phase 3. Pending: the
+   upstream Smithay PR to resend `capabilities`, lock surfaces and pop-ups
+   (phase 3). Test: `./dev.sh run` with foot `colors-dark.blur=yes` and
+   `alpha=0.6`, or kitty `background_blur 1`, and
+   `reduce_transparency = false` in `~/.config/malaysia/appearance.domain`.
 2. **The shell, the kit and general blur.** The shell and the kit send
-   their material regions (barrierkit change); `effects.blur.all_windows`
+   their material regions (barrierkit change); `appearance.blur_all_windows`
    (step 4.1 of «Decision»).
 3. **`"behind"` and pop-ups.** Framebuffer-effect elements, the blit
    fallback and the fades.
-4. **Settings and calibration.** The control of step 10; `options.md`; the
-   `BLUR` values measured on a Mac with a solid and a striped wallpaper.
+4. **Settings and calibration.** The control of step 10 is done
+   (2026-11-11). Left: the blur values, saturation and noise, measured on a
+   Mac with a solid and a striped wallpaper.
 
 Each phase updates [`options.md`](../configuration/options.md) and
 [`roadmap.md`](../roadmap.md) in its own commit.
