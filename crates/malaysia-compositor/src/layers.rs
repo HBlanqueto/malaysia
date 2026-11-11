@@ -347,6 +347,10 @@ impl<S: Clone + Eq> LayerFocus<S> {
     pub fn blocks_window_focus(&self) -> bool {
         !self.exclusive.is_empty()
     }
+
+    pub fn focus_window_after(&mut self, id: WindowId) {
+        self.previous_window = Some(id);
+    }
 }
 
 fn input_region_of(surface: &WlSurface) -> Option<smithay::wayland::compositor::RegionAttributes> {
@@ -508,6 +512,17 @@ mod tests {
         assert_eq!(focus.unmapped(&1), LayerUnfocus::Window(Some(window)));
         assert_eq!(focus.focused.as_ref(), None);
         assert!(!focus.blocks_window_focus());
+    }
+
+    #[test]
+    fn unmapping_focuses_the_window_that_asked_for_focus_while_blocked() {
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        focus.mapped(1, KeyboardInteractivity::Exclusive, Some(WindowId::new(5)));
+        focus.focus_window_after(WindowId::new(6));
+        assert_eq!(
+            focus.unmapped(&1),
+            LayerUnfocus::Window(Some(WindowId::new(6)))
+        );
     }
 
     #[test]

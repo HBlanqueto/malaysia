@@ -653,8 +653,9 @@ impl State {
         if self.layer_focus.blocks_window_focus() {
             tracing::info!(
                 window = id.get(),
-                "window focus ignored: an exclusive layer owns it"
+                "window focus deferred: an exclusive layer owns it"
             );
+            self.layer_focus.focus_window_after(id);
             return;
         }
         self.show_space_of(id);
