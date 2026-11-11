@@ -2,15 +2,17 @@ use std::time::Duration;
 
 use bk::prelude::*;
 use bk::shell::{ScreenLock, use_screen_lock};
-use ctdesign::{DURATION_BASE, LOCK_SETTLE_MS, MENUBAR_TITLE_PADDING_X, SYMBOL};
+use ctdesign::{
+    DURATION_BASE, LOCK_KEYBOARD_WIDTH, LOCK_SETTLE_MS, MENUBAR_TITLE_PADDING_X, SYMBOL,
+};
 use freya_animation::prelude::{AnimNum, Function, OnChange, use_animation_with_dependencies};
 use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::Gaps;
 
 const POWER_SVG: &[u8] = include_bytes!("power.svg");
 
-// ADR 0074: the bar keeps this slot free while locked, and the lock screen draws its power button in it.
-pub const POWER_SLOT: f32 = 2.0 * MENUBAR_TITLE_PADDING_X + SYMBOL.grid;
+// ADR 0074: the bar keeps this slot free while locked; the lock screen draws the keyboard layout and the power button in it.
+pub const LOCK_SLOT: f32 = 2.0 * MENUBAR_TITLE_PADDING_X + SYMBOL.grid + LOCK_KEYBOARD_WIDTH;
 
 pub struct LockProgress {
     pub cover: f32,

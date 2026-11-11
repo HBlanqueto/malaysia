@@ -27,16 +27,16 @@ lock() ──► input cut, menu bar closes up, desktop fades under the wallpape
 
 The surface is transparent: the compositor draws the wallpaper under it.
 
-- **Top right:** only the power button, in the slot the menu bar leaves free (`menubar::lock_row::status_row`). It opens Suspend, Restart and Shut Down, drawn inside the surface because a lock surface has no pop-ups. The status icons beside it are the menu bar's own.
-- **Top center:** the long date and the time, `LOCK_TOP_PERCENT` of the screen height from the top, updated every minute; notifications from `on_lock_screen` below them.
-- **Bottom center:** the AccountsService picture (or the initial), the GECOS name, the capsule field and the PAM error. The field shows the PAM prompt while empty and asks the compositor to blur behind it (`set_blur_region`). It is light in every theme; «Reduce transparency» only drops the blur.
+- **Top right:** the active keyboard layout (`SessionUnlock::keyboard_layout`, with a short Fluent name when one exists) and the power button, in the slot the menu bar leaves free (`menubar::lock_row::LOCK_SLOT`). It opens Suspend, Restart and Shut Down, drawn inside the surface because a lock surface has no pop-ups. The status icons beside it are the menu bar's own.
+- **Top center:** the short date («mié 11 de nov») and the time, `LOCK_TOP_PERCENT` of the screen height from the top, updated every minute; notifications from `on_lock_screen` below them.
+- **Bottom center:** the AccountsService picture (or the initial), the GECOS name, the capsule field, the «?» button when AccountsService has a `PasswordHint`, and the line below the field for the PAM error or the hint. The field shows the PAM prompt while empty and asks the compositor to blur behind it (`set_blur_region`). It is light in every theme; «Reduce transparency» only drops the blur.
 
 ## The menu bar
 
 The menu bar is the only bar on screen; it changes mode and is never replaced. It follows `use_screen_lock()`:
 
 1. On `locking` it fades out its background, its left side, other apps' status items and its clock.
-2. Its own extras slide right until they end at the power button's slot (`POWER_SLOT`), and their ink turns `LOCK_INK`.
+2. Its own extras slide right until they end at the lock screen's slot (`LOCK_SLOT`), and their ink turns `LOCK_INK`.
 3. The compositor keeps drawing it above the lock surfaces and sends it frame callbacks while locked. It gets no input: the power button belongs to the lock surface.
 4. On `unlocked` it plays this back in `DURATION_BASE`, while the compositor fades the desktop back in.
 

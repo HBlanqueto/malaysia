@@ -13,12 +13,18 @@ const USER: &str = "org.freedesktop.Accounts.User";
 #[derive(Default)]
 pub struct Accounts;
 
+#[derive(Clone, PartialEq)]
+pub struct Account {
+    pub picture: Option<String>,
+    pub password_hint: Option<String>,
+}
+
 impl Service for Accounts {
     const NAME: &'static str = ACCOUNTS;
-    type Snapshot = Option<String>;
+    type Snapshot = Account;
     type Command = Infallible;
 
-    fn read(&mut self, bus: &Connection) -> zbus::Result<Option<String>> {
+    fn read(&mut self, bus: &Connection) -> zbus::Result<Account> {
         let uid = std::fs::metadata("/proc/self")
             .map_err(|error| zbus::Error::Failure(error.to_string()))?
             .uid();
@@ -33,7 +39,12 @@ impl Service for Accounts {
             .body()
             .deserialize()?;
         let properties = get_all(bus, ACCOUNTS, user.as_ref(), USER)?;
-        Ok(property::<String>(&properties, "IconFile").filter(|path| !path.is_empty()))
+        let text =
+            |name: &str| property::<String>(&properties, name).filter(|value| !value.is_empty());
+        Ok(Account {
+            picture: text("IconFile"),
+            password_hint: text("PasswordHint"),
+        })
     }
 
     fn run(&mut self, _bus: &Connection, command: Infallible) -> zbus::Result<()> {

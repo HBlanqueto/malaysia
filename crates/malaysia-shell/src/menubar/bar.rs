@@ -368,7 +368,7 @@ impl App for BarApp {
             .cross_align(Alignment::Start)
             .spacing(0.0)
             .height(Size::fill())
-            .offset_x((*tail_width.read() - lock_row::POWER_SLOT) * settle);
+            .offset_x((*tail_width.read() - lock_row::LOCK_SLOT) * settle);
         for index in 0..extra_specs.len() {
             kept = kept.child(menu::menu_title(
                 index,

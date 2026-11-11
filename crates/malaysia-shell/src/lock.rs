@@ -14,8 +14,9 @@ use ctdesign::{
     BODY, DURATION_FAST_MS, LOCK_AVATAR_FILL, LOCK_AVATAR_SIZE, LOCK_BOTTOM_MARGIN,
     LOCK_CLOCK_FONT_SIZE, LOCK_DATE_FONT_SIZE, LOCK_FIELD_ERROR, LOCK_FIELD_FILL,
     LOCK_FIELD_HEIGHT, LOCK_FIELD_INK, LOCK_FIELD_MAX_WIDTH, LOCK_FIELD_MIN_WIDTH, LOCK_INK,
-    LOCK_LOGIN_MS, LOCK_MASK_FONT_SIZE, LOCK_RISE_MS, LOCK_RISE_OFFSET, LOCK_SPACING,
-    LOCK_TOP_PERCENT, MENUBAR_HEIGHT, NOTIFICATION_GAP, NOTIFICATION_WIDTH, TITLE_2,
+    LOCK_KEYBOARD_WIDTH, LOCK_LOGIN_MS, LOCK_MASK_FONT_SIZE, LOCK_RISE_MS, LOCK_RISE_OFFSET,
+    LOCK_SPACING, LOCK_TOP_PERCENT, MENUBAR_HEIGHT, MENUBAR_TITLE_PADDING_X, NOTIFICATION_GAP,
+    NOTIFICATION_WIDTH, SYMBOL, TITLE_2,
 };
 use freya_animation::prelude::{AnimNum, Function, OnChange, use_animation_with_dependencies};
 use freya_components::image_viewer::ImageViewer;
@@ -148,7 +149,9 @@ impl App for LockApp {
             (1.0 - rise) * LOCK_RISE_OFFSET
         };
 
-        let picture = use_service::<Accounts>().snapshot;
+        let account = use_service::<Accounts>().snapshot.read().clone().flatten();
+        let mut hint_shown = use_state(|| false);
+        let keyboard_layout = SessionUnlock::get().keyboard_layout();
         let name = use_hook(|| user_display_name().unwrap_or_else(|| self.user.clone()));
         let notices = lock_notices();
         let mut power_menu = self.power_menu;
@@ -176,7 +179,14 @@ impl App for LockApp {
             .position(Position::new_absolute())
             .width(Size::fill())
             .height(Size::px(MENUBAR_HEIGHT as f32))
-            .child(status_row(slot(power_button)));
+            .child(status_row(
+                HStack::new()
+                    .height(Size::fill())
+                    .spacing(0.0)
+                    .child(keyboard_indicator(keyboard_layout).opacity(power))
+                    .child(slot(power_button))
+                    .into_element(),
+            ));
 
         let header =
             VStack::new()
@@ -188,7 +198,7 @@ impl App for LockApp {
                 .opacity(rise * stay)
                 .child(rect().height(Size::percent(LOCK_TOP_PERCENT)))
                 .child(
-                    Text::new(long_date(chrono::Local::now().date_naive()))
+                    Text::new(short_date(chrono::Local::now().date_naive()))
                         .font(TITLE_2)
                         .font_size(LOCK_DATE_FONT_SIZE)
                         .color(theme::color(LOCK_INK)),
@@ -217,6 +227,9 @@ impl App for LockApp {
             FieldState::Error(message) => Some(message.clone()),
             _ => None,
         };
+        let hint = account
+            .as_ref()
+            .and_then(|account| account.password_hint.clone());
         let masked = view.masked();
         let typing = !masked.is_empty();
         let fill = if error.is_some() {
@@ -266,17 +279,33 @@ impl App for LockApp {
             .cross_align(Alignment::Center)
             .spacing(LOCK_SPACING)
             .opacity(login)
-            .child(avatar(picture.read().clone().flatten(), &name))
+            .child(avatar(
+                account.as_ref().and_then(|account| account.picture.clone()),
+                &name,
+            ))
             .child(
                 Text::new(name.clone())
                     .font(TITLE_2)
                     .color(theme::color(LOCK_INK)),
             )
-            .child(field_view)
+            .child(match &hint {
+                Some(_) => HStack::new()
+                    .cross_align(Alignment::Center)
+                    .spacing(LOCK_SPACING)
+                    .child(rect().width(Size::px(LOCK_FIELD_HEIGHT)))
+                    .child(field_view)
+                    .child(hint_button(hint_shown))
+                    .into_element(),
+                None => field_view.into_element(),
+            })
             .child(
-                Text::new(error.unwrap_or_else(|| " ".to_string()))
-                    .font(BODY)
-                    .color(theme::color(LOCK_INK)),
+                Text::new(
+                    error
+                        .or_else(|| hint.filter(|_| *hint_shown.read()))
+                        .unwrap_or_else(|| " ".to_string()),
+                )
+                .font(BODY)
+                .color(theme::color(LOCK_INK)),
             );
 
         let mut root = rect()
@@ -380,25 +409,102 @@ fn power_options(mut open: State<bool>) -> Element {
     .into_element()
 }
 
-fn long_date(today: chrono::NaiveDate) -> String {
+fn short_date(today: chrono::NaiveDate) -> String {
     tr!(
         "lock-date",
         weekday = weekday_name(today.weekday()),
         day = today.day(),
-        month = crate::notifications::month_name(today.month())
+        month = month_name(today.month())
     )
     .to_string()
 }
 
+fn month_name(month: u32) -> &'static str {
+    match month {
+        1 => tr!("month-short-1"),
+        2 => tr!("month-short-2"),
+        3 => tr!("month-short-3"),
+        4 => tr!("month-short-4"),
+        5 => tr!("month-short-5"),
+        6 => tr!("month-short-6"),
+        7 => tr!("month-short-7"),
+        8 => tr!("month-short-8"),
+        9 => tr!("month-short-9"),
+        10 => tr!("month-short-10"),
+        11 => tr!("month-short-11"),
+        _ => tr!("month-short-12"),
+    }
+}
+
+fn keyboard_indicator(layout: Option<String>) -> HStack {
+    let row = HStack::new()
+        .width(Size::px(LOCK_KEYBOARD_WIDTH))
+        .height(Size::fill())
+        .main_align(Alignment::End)
+        .cross_align(Alignment::Center)
+        .spacing(MENUBAR_TITLE_PADDING_X);
+    let Some(layout) = layout.filter(|layout| !layout.is_empty()) else {
+        return row;
+    };
+    let label = layout_label(&layout);
+    row.a11y_alt(tr!("lock-keyboard-layout", layout = label.clone()))
+        .child(
+            Text::new(label)
+                .font(BODY)
+                .line_limit(1)
+                .color(theme::color(LOCK_INK)),
+        )
+        .child(Element::from(
+            Image::system(Symbol::Keyboard)
+                .size(SYMBOL.grid)
+                .color(LOCK_INK),
+        ))
+}
+
+fn layout_label(layout: &str) -> String {
+    let slug = layout
+        .to_lowercase()
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let id = format!("keyboard-layout-{slug}");
+    if crate::localize::LOADER.has(&id) {
+        crate::localize::LOADER.get(&id)
+    } else {
+        layout.to_string()
+    }
+}
+
+fn hint_button(mut shown: State<bool>) -> Element {
+    rect()
+        .width(Size::px(LOCK_FIELD_HEIGHT))
+        .height(Size::px(LOCK_FIELD_HEIGHT))
+        .corner_radius(LOCK_FIELD_HEIGHT / 2.0)
+        .background(theme::color(LOCK_FIELD_FILL))
+        .center()
+        .a11y_alt(tr!("lock-password-hint"))
+        .on_press(move |_| {
+            let open = *shown.read();
+            shown.set(!open);
+        })
+        .child(Element::from(
+            Image::system(Symbol::QuestionMark)
+                .size(SYMBOL.grid)
+                .color(LOCK_INK),
+        ))
+        .into_element()
+}
+
 fn weekday_name(weekday: chrono::Weekday) -> &'static str {
     match weekday {
-        chrono::Weekday::Mon => tr!("weekday-1"),
-        chrono::Weekday::Tue => tr!("weekday-2"),
-        chrono::Weekday::Wed => tr!("weekday-3"),
-        chrono::Weekday::Thu => tr!("weekday-4"),
-        chrono::Weekday::Fri => tr!("weekday-5"),
-        chrono::Weekday::Sat => tr!("weekday-6"),
-        chrono::Weekday::Sun => tr!("weekday-7"),
+        chrono::Weekday::Mon => tr!("weekday-short-1"),
+        chrono::Weekday::Tue => tr!("weekday-short-2"),
+        chrono::Weekday::Wed => tr!("weekday-short-3"),
+        chrono::Weekday::Thu => tr!("weekday-short-4"),
+        chrono::Weekday::Fri => tr!("weekday-short-5"),
+        chrono::Weekday::Sat => tr!("weekday-short-6"),
+        chrono::Weekday::Sun => tr!("weekday-short-7"),
     }
 }
 

@@ -110,15 +110,23 @@ The approved mock-up, «Del escritorio al bloqueo»:
 3. **What the lock screen shows.** All of it is drawn by
    `malaysia-shell lock`. Text and icons are `LOCK_INK` (white).
    1. **Top right: the status row.** From right to left: the power button,
-      then the menu bar's own extras in the bar's order and under its
-      `menubar.show_*` switches. Only the power button belongs to the lock
-      surface; the extras are the menu bar itself (decision 4.3), and
-      clicking them opens no menu because the bar gets no input.
+      the active keyboard layout, then the menu bar's own extras in the
+      bar's order and under its `menubar.show_*` switches. The power button
+      and the layout belong to the lock surface; the extras are the menu bar
+      itself (decision 4.3), and clicking them opens no menu because the bar
+      gets no input.
+      - The layout is the name of the active layout in the compositor's
+        keymap (`SessionUnlock::keyboard_layout`), followed by the keyboard
+        symbol, as macOS shows its input source. Fluent gives a short name
+        for known layouts (`keyboard-layout-*`, for example «Latinoamericano»);
+        any other shows the keymap's own name.
+      - It sits right-aligned in a slot of `LOCK_KEYBOARD_WIDTH`, so the bar
+        knows where to stop without asking the lock client.
    2. **The power button** opens Suspend, Restart and Shut Down, drawn
       inside the lock surface because a lock surface has no pop-ups. Each
       acts at once through `power.rs`; there is no Log Out while locked.
-   3. **Top center:** the long date (for example «martes, 11 de noviembre»)
-      and, below it, the time in large type, in the menubar clock's format
+   3. **Top center:** the short date, as macOS shows it (for example
+      «mié 11 de nov»), and, below it, the time in large type, in the menubar clock's format
       (`%H:%M`). The block starts `LOCK_TOP_PERCENT` of the screen height
       from the top, so it keeps its place on any screen size.
    4. **Bottom center:** the user's picture, then their display name, the
@@ -126,6 +134,10 @@ The approved mock-up, «Del escritorio al bloqueo»:
       - The picture is AccountsService's `IconFile`. Without one, it is a
         circle with the user's initial.
       - The display name comes from `system.rs` (`user_display_name`).
+      - When AccountsService has a `PasswordHint` for the user, a round
+        «?» button sits right of the field, outside its centering. Pressing
+        it shows the hint on the line below the field; an error takes that
+        line first. Without a hint there is no button.
    5. **Notifications** move from the top right to below the clock. The
       rules are unchanged (`on_lock_screen`, `ShowPreviews`). They appear
       together with the user and the password field.
@@ -174,9 +186,10 @@ The approved mock-up, «Del escritorio al bloqueo»:
    6. **One bar.**
       - The status icons are drawn only by the menubar, on the desktop and
         while locked; the lock surface draws no copy of them.
-      - The power button's slot, `menubar::lock_row::POWER_SLOT`, is the one
-        position both processes share. The menubar leaves it free and the
-        lock surface draws the button there (`lock_row::status_row`).
+      - The slot `menubar::lock_row::LOCK_SLOT` (the keyboard layout and the
+        power button) is the one position both processes share. The menubar
+        leaves it free and the lock surface draws there
+        (`lock_row::status_row`).
    7. **The time limit.**
       - If any output has no lock surface buffer `LOCK_START_GRACE` (3 s)
         after `lock`, the compositor stops waiting. It presents the wallpaper
@@ -231,6 +244,7 @@ The approved mock-up, «Del escritorio al bloqueo»:
    | `LOCK_TOP_PERCENT` (of the screen height) | 9 |
    | `LOCK_BOTTOM_MARGIN` (to the error line), `LOCK_SPACING` | 55, 12 |
    | `LOCK_AVATAR_SIZE` | 52 |
+   | `LOCK_KEYBOARD_WIDTH` | 128 |
    | `LOCK_FIELD_HEIGHT` | 30 (was 44) |
    | `LOCK_FIELD_MIN_WIDTH`, `LOCK_FIELD_MAX_WIDTH` | 160, 200 |
    | `LOCK_MASK_FONT_SIZE` | 18 |
