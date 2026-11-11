@@ -74,5 +74,6 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0071](0071-background-blur-and-ext-background-effect.md) | Background blur and ext-background-effect-v1 | accepted |
 | [0072](0072-wallpaper-settings.md) | Wallpaper in System Settings | accepted |
 | [0073](0073-wallpaper-desktops-collections-dynamic-animated.md) | Wallpaper per desktop and display, collections, dynamic and animated wallpapers | accepted |
+| [0074](0074-lock-screen-and-lock-transition.md) | Lock screen over the wallpaper and the lock transition | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.

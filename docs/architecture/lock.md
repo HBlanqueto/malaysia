@@ -1,6 +1,6 @@
 # The lock (`malaysia-shell lock`)
 
-> Overview map: [`interface.md`](interface.md).
+> Overview map: [`interface.md`](interface.md). The redesign over the wallpaper and the lock transition: ADR [0074](../decisions/0074-lock-screen-and-lock-transition.md).
 
 Native component (ADR 0023) on `ext-session-lock-v1`. Guarantee: **if the client dies while the session is locked, the session does not unlock**.
 
