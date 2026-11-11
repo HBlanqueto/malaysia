@@ -139,6 +139,12 @@ opt-level = 2
 [profile.dev.package.zune-jpeg]
 opt-level = 2
 
+[profile.dev.package.malaysia-wallpaper]
+opt-level = 2
+
+[profile.dev.package.ctdesign]
+opt-level = 2
+
 [profile.dev.package.freya-core]
 opt-level = 2
 

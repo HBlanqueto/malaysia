@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::Path;
 
 use ctappearance::tinting::WallpaperGrid;
@@ -161,12 +162,10 @@ pub fn decode_heif(bytes: &[u8], image: Option<usize>) -> anyhow::Result<Decoded
         .interleaved
         .ok_or_else(|| anyhow::anyhow!("the HEIF image has no interleaved RGBA plane"))?;
     let row = plane.width as usize * 4;
-    let rgba = plane
-        .data
-        .chunks(plane.stride)
-        .flat_map(|line| &line[..row])
-        .copied()
-        .collect();
+    let mut rgba = Vec::with_capacity(row * plane.height as usize);
+    for line in plane.data.chunks(plane.stride) {
+        rgba.extend_from_slice(&line[..row]);
+    }
     Ok(DecodedImage {
         size: (plane.width, plane.height),
         pixels: Pixels::Srgb8(rgba),
@@ -186,18 +185,11 @@ impl DecodedImage {
         }
     }
 
-    pub fn downscale_to_fit(&self, max: u32) -> Self {
-        let (mut width, mut height) = self.size;
-        if width <= max && height <= max {
-            return self.clone();
-        }
-        let mut current = self.clone();
-        while width > max || height > max {
-            let new_w = (width / 2).max(1);
-            let new_h = (height / 2).max(1);
-            current = current.downscale_2x2(new_w, new_h);
-            width = new_w;
-            height = new_h;
+    pub fn downscale_to_fit(&self, max: u32) -> Cow<'_, Self> {
+        let mut current = Cow::Borrowed(self);
+        while current.size.0 > max || current.size.1 > max {
+            let (width, height) = current.size;
+            current = Cow::Owned(current.downscale_2x2((width / 2).max(1), (height / 2).max(1)));
         }
         current
     }
@@ -205,15 +197,23 @@ impl DecodedImage {
     fn downscale_2x2(&self, new_w: u32, new_h: u32) -> Self {
         let pixels = match &self.pixels {
             Pixels::Srgb8(pixels) => {
-                Pixels::Srgb8(average_2x2(pixels, self.size, (new_w, new_h), 255.0, |v| {
-                    v as u8
-                }))
+                let linear: [f32; 256] =
+                    std::array::from_fn(|value| decode_srgb(value as f32 / 255.0));
+                Pixels::Srgb8(average_2x2(
+                    pixels,
+                    self.size,
+                    (new_w, new_h),
+                    255.0,
+                    |value| linear[usize::from(value)],
+                    |v| v as u8,
+                ))
             }
             Pixels::Srgb16(pixels) => Pixels::Srgb16(average_2x2(
                 pixels,
                 self.size,
                 (new_w, new_h),
                 65535.0,
+                |value| decode_srgb(f32::from(value) / 65535.0),
                 |v| v as u16,
             )),
         };
@@ -224,11 +224,21 @@ impl DecodedImage {
     }
 }
 
+fn decode_srgb(channel: f32) -> f32 {
+    Rgba {
+        r: channel,
+        ..Rgba::TRANSPARENT
+    }
+    .to_linear()
+    .r
+}
+
 fn average_2x2<T: Copy + Into<f32>>(
     pixels: &[T],
     (old_w, old_h): (u32, u32),
     (new_w, new_h): (u32, u32),
     max: f32,
+    to_linear: impl Fn(T) -> f32,
     from: impl Fn(f32) -> T,
 ) -> Vec<T> {
     let mut out = Vec::with_capacity((new_w * new_h * 4) as usize);
@@ -239,13 +249,10 @@ fn average_2x2<T: Copy + Into<f32>>(
                 let sx = (x * 2 + dx).min(old_w - 1);
                 let sy = (y * 2 + dy).min(old_h - 1);
                 let offset = ((sy * old_w + sx) * 4) as usize;
-                let [r, g, b, a] =
-                    [0, 1, 2, 3].map(|channel| pixels[offset + channel].into() / max);
-                let linear = Rgba { r, g, b, a }.to_linear();
-                sum.r += linear.r;
-                sum.g += linear.g;
-                sum.b += linear.b;
-                sum.a += linear.a;
+                sum.r += to_linear(pixels[offset]);
+                sum.g += to_linear(pixels[offset + 1]);
+                sum.b += to_linear(pixels[offset + 2]);
+                sum.a += pixels[offset + 3].into() / max;
             }
             let mean = Rgba::from_linear(Rgba {
                 r: sum.r / 4.0,

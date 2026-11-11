@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
@@ -285,8 +286,8 @@ impl RenderContext {
         });
 
         let (bytes_per_row, data) = match &image.pixels {
-            Pixels::Srgb8(pixels) => (width * 4, pixels.clone()),
-            Pixels::Srgb16(pixels) => (width * 8, srgb16_to_linear_f16(pixels)),
+            Pixels::Srgb8(pixels) => (width * 4, Cow::Borrowed(pixels.as_slice())),
+            Pixels::Srgb16(pixels) => (width * 8, Cow::Owned(srgb16_to_linear_f16(pixels))),
         };
 
         let upload_start = std::time::Instant::now();
