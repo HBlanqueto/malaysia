@@ -1,6 +1,6 @@
 # 0020 — Design and unification policy: separate chrome, effects for all
 
-Status: accepted. Complements ADR 0019 and supersedes its exclusion of shadows on self-decorated windows.
+Status: accepted. Complements ADR 0019 and supersedes its exclusion of shadows on self-decorated windows. ADR 0071 narrows blur to the regions clients request.
 
 ## Context
 

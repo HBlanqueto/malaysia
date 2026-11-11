@@ -20,7 +20,7 @@ wiki or release notes, [I] inferred from code, not documented upstream.
 ### What Malaysia has today
 
 1. The compositor draws no blur. ADR 0020 asks for blur on every window, CSD
-   or SSD, and ADR 0038 leaves it to the compositor once
+   or SSD; this ADR narrows it to the regions clients request. ADR 0038 leaves it to the compositor once
    `appearance.reduce_transparency` is `false`. That switch defaults to
    `true`, so the desktop is opaque.
 2. `effects.blur.enabled` and `effects.blur.radius` appear in
@@ -163,13 +163,10 @@ Read at `7f81a7f7` (2026-11-10):
       a change applies to new binds only.
    3. Clients that already set a region keep it. The compositor stops drawing
       it, as the spec requires.
-4. **Windows that do not ask still get blur (ADR 0020 step 2).** A toplevel
-   with no protocol region gets blur behind its geometry, clipped to its
-   frame radius (ADR 0059), minus its opaque region. An opaque app costs
-   nothing: its opaque region covers the geometry and no blur is drawn. A
-   translucent theme (ADR 0050 bridge, a terminal with opacity) gets the
-   compositor's blur, as `AGENTS.md` design policy 3 asks. The protocol
-   region, when present, replaces the geometry.
+4. **Only what a client asks for.** A surface gets blur only in the region
+   it sends through the protocol, and the mode decides whether that region
+   shows true transparency (`"behind"`) or only the wallpaper. A window that
+   sends nothing gets no blur, even if its buffer has alpha.
 5. **The shell and the kit use the protocol too.** With reduced
    transparency off, `malaysia-shell` (menubar, dock, menus, notifications)
    and BarrierKit windows draw their translucent material tokens and send
@@ -221,8 +218,8 @@ Read at `7f81a7f7` (2026-11-10):
    `colors-dark.blur=yes` and `alpha=0.6`, and with kitty
    `background_blur 1`, and `reduce_transparency = false` in
    `~/.config/malaysia/appearance.domain`.
-2. **Implicit blur and the shell.** Step 4 of «Decision» for toplevels; the
-   shell and the kit send their material regions (barrierkit change).
+2. **The shell and the kit.** They send their material regions (barrierkit
+   change).
 3. **`"behind"` and pop-ups.** Framebuffer-effect elements, the blit
    fallback and the fades.
 4. **Settings and calibration.** The control of step 10; `options.md`; the
@@ -244,8 +241,8 @@ Each phase updates [`options.md`](../configuration/options.md) and
   that switches mode during an animation loses what was behind it at once
   [S].
 - Stacked surfaces in `"behind"` compound their blur [I].
-- Implicit blur relies on apps declaring opaque regions; an app with an
-  opaque look and no opaque region pays for a blur nobody sees.
+- GTK and Qt apps with a translucent theme are not blurred until their
+  toolkit speaks the protocol.
 - Capabilities do not change for clients already bound until the Smithay
   change lands.
 
@@ -256,8 +253,10 @@ Each phase updates [`options.md`](../configuration/options.md) and
   offscreen animations. niri keeps it experimental for those reasons.
 - **Only `"wallpaper"`.** Menus over windows would show the wallpaper, and
   users who want real transparency would have no way to get it.
-- **Protocol only, no implicit blur.** It leaves GTK and Qt, which do not
-  speak the protocol yet, without the blur that ADR 0020 promises them.
+- **Implicit blur behind every window, minus its opaque region.** It would
+  reach GTK and Qt today, but an app that looks opaque and declares no
+  opaque region pays for a blur nobody sees, and an app that is translucent
+  on purpose gets a blur it did not ask for.
 - **KDE's `org_kde_kwin_blur`.** It is the predecessor: no capabilities, no
   errors and its own commit request. KWin is moving to the standard
   protocol, and niri implemented the KDE one but did not merge it.
