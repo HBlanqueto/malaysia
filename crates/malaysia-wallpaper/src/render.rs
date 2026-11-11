@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use ctdesign::Rgba;
+use ctdesign::{DESKTOP_CLEAR, Rgba};
 use half::f16;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use wgpu::util::DeviceExt;
 
+use crate::framing::{Framing, uv_window};
 use crate::image::{DecodedImage, Pixels};
 
 pub struct RenderContext {
@@ -30,9 +31,9 @@ pub struct WallpaperTexture {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
-    surface_size: [f32; 2],
-    image_size: [f32; 2],
-    _pad: [f32; 2],
+    origin: [f32; 2],
+    size: [f32; 2],
+    background: [f32; 4],
 }
 
 const SHADER: &str = concat!(
@@ -182,11 +183,7 @@ impl RenderContext {
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wallpaper uniforms"),
-            contents: bytemuck::cast_slice(&[Uniforms {
-                surface_size: [1.0, 1.0],
-                image_size: [1.0, 1.0],
-                _pad: [0.0; 2],
-            }]),
+            contents: bytemuck::cast_slice(&[uniforms(Framing::default(), (1, 1), (1, 1))]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -354,15 +351,11 @@ impl RenderContext {
         }
     }
 
-    pub fn set_uniforms(&self, surface_width: u32, surface_height: u32, image: (u32, u32)) {
+    pub fn set_uniforms(&self, framing: Framing, surface: (u32, u32), image: (u32, u32)) {
         self.queue.write_buffer(
             &self.uniform_buffer,
             0,
-            bytemuck::cast_slice(&[Uniforms {
-                surface_size: [surface_width as f32, surface_height as f32],
-                image_size: [image.0 as f32, image.1 as f32],
-                _pad: [0.0; 2],
-            }]),
+            bytemuck::cast_slice(&[uniforms(framing, image, surface)]),
         );
     }
 
@@ -428,6 +421,16 @@ impl RenderContext {
         self.draw(&view, format, texture);
         self.queue.present(output);
         Ok(())
+    }
+}
+
+fn uniforms(framing: Framing, image: (u32, u32), surface: (u32, u32)) -> Uniforms {
+    let (origin, size) = uv_window(framing, image, surface);
+    let clear = DESKTOP_CLEAR.to_linear();
+    Uniforms {
+        origin,
+        size,
+        background: [clear.r, clear.g, clear.b, 1.0],
     }
 }
 
@@ -595,6 +598,7 @@ fn generate_mipmaps(
 mod tests {
     use futures_lite::future::block_on;
 
+    use crate::framing::Framing;
     use crate::image::{
         DEFAULT_WALLPAPER_BYTES, DecodedImage, Pixels, decode_image_bytes, decode_png,
     };
@@ -629,7 +633,7 @@ mod tests {
             view_formats: &[],
         });
         let view = output.create_view(&wgpu::TextureViewDescriptor::default());
-        ctx.set_uniforms(width, height, texture.size);
+        ctx.set_uniforms(Framing::default(), (width, height), texture.size);
         ctx.draw(&view, format, texture);
 
         let bytes_per_row = padded_bytes_per_row(width);
@@ -723,10 +727,27 @@ mod tests {
         decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap()
     }
 
+    fn quadrants() -> DecodedImage {
+        let (width, height) = (1280u32, 800u32);
+        let colors = [[220, 40, 40], [40, 200, 60], [40, 70, 220], [230, 210, 40]];
+        let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+        for y in 0..height {
+            for x in 0..width {
+                let q = usize::from(x >= width / 2) + 2 * usize::from(y >= height / 2);
+                rgba.extend_from_slice(&colors[q]);
+                rgba.push(255);
+            }
+        }
+        DecodedImage {
+            size: (width, height),
+            pixels: Pixels::Srgb8(rgba),
+        }
+    }
+
     #[test]
     fn cover_matches_reference_at_1280x800() {
         let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
-        let image = decode_default();
+        let image = quadrants();
         let texture = ctx.upload_texture(&image);
 
         let points: [(u32, u32); 9] = [
@@ -828,7 +849,7 @@ mod tests {
     #[test]
     fn minified_quadrants_keep_orientation() {
         let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
-        let image = decode_default();
+        let image = quadrants();
         let texture = ctx.upload_texture(&image);
         let (w, h) = (270, 152);
         let data = draw_offscreen(

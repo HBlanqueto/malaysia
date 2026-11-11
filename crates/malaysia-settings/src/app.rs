@@ -20,12 +20,14 @@ use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::Gaps;
 
 use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_busy_device, use_pairing_prompt};
+use crate::crop::{CropDraft, crop_sheet};
 use crate::energy::energy_pane;
 use crate::freedesktop::{Themes, confirm, freedesktop, own_themes};
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
 use crate::previews::theme_preview;
 use crate::state::{account_name, initials, save_config};
+use crate::wallpaper::{use_selection, wallpaper_pane};
 use crate::wifi::{WifiDialog, wifi_dialog, wifi_pane};
 use bk::app::use_menu_action;
 use malaysia_services::SETTINGS_PANE_ACTION as PANE_ACTION;
@@ -97,6 +99,8 @@ pub fn settings_window(
         }
     });
     let wifi_shown = use_state(|| None::<WifiDialog>);
+    let wallpaper = use_selection();
+    let cropping = use_state(|| None::<CropDraft>);
     let busy_device = use_busy_device(&bluetooth);
     let confirming_own_themes = use_state(|| false);
     let themes_changed = use_state(|| 0u32);
@@ -169,6 +173,7 @@ pub fn settings_window(
                 SETTINGS.section_icon_bg,
                 appearance(config, dominant, resolved, error),
             ))
+            .pane(wallpaper_pane(wallpaper, cropping, error))
             .pane(crate::notifications::notifications_pane(error))
             .pane(crate::notifications::focus_pane(error)),
     );
@@ -190,6 +195,7 @@ pub fn settings_window(
         }))
         .maybe_child(wifi_dialog(wifi_shown, &network))
         .maybe_child(pairing_sheet(pairing))
+        .maybe_child(crop_sheet(cropping, wallpaper, error))
         .maybe_child(confirm(confirming_own_themes, error))
         .children(failures.into_iter().filter_map(failure_alert))
 }

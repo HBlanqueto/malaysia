@@ -1,11 +1,14 @@
 use std::path::{Path, PathBuf};
 
+use ctappearance::ALL_DESKTOPS;
 use ctappearance::tinting::WallpaperGrid;
 use ctdesign::Rgba;
 
+use crate::framing::Framing;
+
 pub const DEFAULT_WALLPAPER_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../share/wallpapers/malaysia-dream.heic"
+    "/../../share/wallpapers/collapse.heic"
 ));
 
 #[derive(Clone, PartialEq)]
@@ -22,12 +25,13 @@ pub struct DecodedImage {
 
 #[derive(Clone, Default, PartialEq)]
 pub struct Wallpaper {
-    pub selection: Option<(PathBuf, String)>,
+    pub selection: Option<PathBuf>,
+    pub framing: Framing,
     pub image: Option<DecodedImage>,
 }
 
 pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wallpaper {
-    let selection = match load_wallpaper(store_path) {
+    let (selection, framing) = match load_wallpaper(store_path) {
         Ok(selection) => selection,
         Err(error) => {
             tracing::error!(%error, "cannot read wallpaper store");
@@ -36,20 +40,16 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
     };
 
     let (selection, decoded) = match selection {
-        Some((path, scale)) => {
-            if current
-                .selection
-                .as_ref()
-                .is_some_and(|(old_path, old_scale)| old_path == &path && old_scale == &scale)
-            {
-                return current.clone();
-            }
-            if !scale.is_empty() && scale != "fill" {
-                tracing::warn!(scale, "scale is not implemented yet; using 'fill'");
+        Some(path) => {
+            if current.selection.as_ref() == Some(&path) {
+                return Wallpaper {
+                    framing,
+                    ..current.clone()
+                };
             }
             tracing::info!(?path, "loading wallpaper");
             match decode_image(&path) {
-                Ok(decoded) => (Some((path, scale)), decoded),
+                Ok(decoded) => (Some(path), decoded),
                 Err(error) => {
                     tracing::error!(?path, %error, "failed to decode wallpaper");
                     if current.selection.is_some() {
@@ -72,10 +72,11 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
     Wallpaper {
         image: Some(decoded),
         selection,
+        framing,
     }
 }
 
-fn load_default_image() -> (Option<(PathBuf, String)>, DecodedImage) {
+fn load_default_image() -> (Option<PathBuf>, DecodedImage) {
     match decode_image_bytes(DEFAULT_WALLPAPER_BYTES) {
         Ok(decoded) => (None, decoded),
         Err(error) => {
@@ -84,31 +85,17 @@ fn load_default_image() -> (Option<(PathBuf, String)>, DecodedImage) {
     }
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
-struct WallpaperStore {
-    #[serde(default)]
-    scale: String,
-    #[serde(default)]
-    desktops: Desktops,
-}
-
-#[derive(Debug, Default, serde::Deserialize)]
-struct Desktops {
-    #[serde(default)]
-    default: Option<String>,
-}
-
-pub fn load_wallpaper(store_path: &Path) -> anyhow::Result<Option<(PathBuf, String)>> {
-    let store: WallpaperStore = match std::fs::read_to_string(store_path) {
-        Ok(text) => toml::from_str(&text)?,
-        Err(_) => WallpaperStore::default(),
-    };
-    Ok(store
+pub fn load_wallpaper(store_path: &Path) -> anyhow::Result<(Option<PathBuf>, Framing)> {
+    let selection = ctappearance::read_wallpaper_selection(store_path)?;
+    let path = selection
         .desktops
-        .default
-        .as_ref()
-        .and_then(|url| file_url_to_path(url))
-        .map(|path| (path, store.scale)))
+        .get(ALL_DESKTOPS)
+        .and_then(|url| file_url_to_path(url));
+    let framing = Framing {
+        scale: selection.scale,
+        crop: selection.crop.get(ALL_DESKTOPS).copied(),
+    };
+    Ok((path, framing))
 }
 
 fn file_url_to_path(url: &str) -> Option<PathBuf> {
@@ -443,8 +430,8 @@ mod tests {
             ),
         )
         .unwrap();
-        let (path, _) = load_wallpaper(&store).unwrap().unwrap();
-        assert_eq!(path, mint);
+        let (path, _) = load_wallpaper(&store).unwrap();
+        assert_eq!(path, Some(mint));
     }
 
     #[test]
@@ -503,10 +490,7 @@ mod tests {
         )
         .unwrap();
         let first = reload(&Wallpaper::default(), &store, &state);
-        assert_eq!(
-            first.selection.as_ref().map(|(path, _)| path),
-            Some(&orange)
-        );
+        assert_eq!(first.selection.as_ref(), Some(&orange));
         assert!(first.image.is_some());
 
         let second = dir.join("second.png");
@@ -520,14 +504,8 @@ mod tests {
         )
         .unwrap();
         let reloaded = reload(&first, &store, &state);
-        assert_eq!(
-            reloaded.selection.as_ref().map(|(path, _)| path),
-            Some(&second)
-        );
-        assert_eq!(
-            reloaded.selection.as_ref().map(|(_, scale)| scale.as_str()),
-            Some("fit")
-        );
+        assert_eq!(reloaded.selection.as_ref(), Some(&second));
+        assert_eq!(reloaded.framing.scale, ctappearance::WallpaperScale::Fit);
         assert!(reloaded.image.is_some());
     }
 
@@ -628,19 +606,18 @@ mod tests {
     }
 
     #[test]
-    fn the_embedded_default_is_a_6016x6016_salmon_heic() {
+    fn the_embedded_default_is_the_6016x6016_collapse_heic() {
         let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
         assert_eq!(image.size, (6016, 6016));
-        assert_eq!(image.rgba8_at(0), [0xe1, 0x6e, 0x79, 0xff]);
+        let [r, _, b, a] = image.rgba8_at(0);
+        assert!(b > r && a == 0xff, "Collapse is blue");
     }
 
     #[test]
     fn the_embedded_default_has_a_dominant_colour() {
         let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
         let color = dominant(&image).expect("the default should have a dominant colour");
-        assert!((color.r - 0.879878).abs() < 0.001);
-        assert!((color.g - 0.420122).abs() < 0.001);
-        assert!((color.b - 0.464189).abs() < 0.001);
+        assert!(color.b > color.r, "expected blue, got {color:?}");
     }
 
     #[test]

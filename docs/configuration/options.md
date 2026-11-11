@@ -299,7 +299,6 @@ include the pointer. The clipboard is `image/png` and the compositor serves it; 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
 | `wallpaper.dir` | string (path) | `/run/current-system/sw/share/wallpapers/solid-colors` | pending | `malaysia-wallpaper`, settings app |
-| `wallpaper.scale` | `"fill"` \| `"stretch"` \| `"fit"` \| `"center"` | `"fill"` | pending | `malaysia-wallpaper` |
 | `wallpaper.shuffle` | bool | `false` | pending | `malaysia-wallpaper` |
 
 **Malaysia's wallpapers live in the project itself** (`share/wallpapers/solid-colors/`,
@@ -310,13 +309,18 @@ development setup can point it at the repo or another folder. The
 **`malaysia-wallpaper`** component draws the wallpaper on the `Background` layer with the
 images from that folder (ADR 0049; **Vulkan**/wgpu render presented through dmabuf).
 
-**The default wallpaper is `malaysia-dream.heic`**: a square 6016×6016
-lossless HEIC of a single salmon colour (`#e16e79`), embedded in the
-`malaysia-wallpaper` binary. A HEIC can hold several images; future colours go
-in that same file. `malaysia-wallpaper` decodes PNG, JPEG and HEIF (libheif).
-It is the one shown when the store picks none, does not exist yet, or the
-selection points to a file that does not exist or does not decode. If `wallpaper.dir`
-points to another folder and there is no selection, `malaysia-dream.heic` still shows.
+**The default wallpaper is `collapse.heic`**: a square 6016×6016 HEIC with a
+light and a dark image, embedded in the `malaysia-wallpaper` binary (it shows
+the light one; following the appearance is block 16c). `malaysia-wallpaper`
+decodes PNG, JPEG and HEIF (libheif). It is the one shown when the store picks
+none, does not exist yet, or the selection points to a file that does not exist
+or does not decode. If `wallpaper.dir` points to another folder and there is no
+selection, `collapse.heic` still shows.
+
+`malaysia-dream.heic` (one salmon color, `#e16e79`) is an installed wallpaper
+like the others. System Settings cannot decode HEIC, so each HEIC in
+`share/wallpapers/` has a JPEG of the same name in `previews/`, and so does the
+embedded default (`previews/collapse.jpg`).
 
 **Like macOS, the current selection lives in a separate store**:
 `~/.local/share/malaysia/wallpaper-selection.state` (the equivalent of `~/Library/Application
@@ -325,12 +329,27 @@ to the image:
 
 ```toml
 # ~/.local/share/malaysia/wallpaper-selection.state  (current selection, per desktop)
+scale = "custom"   # "fill" (default), "fit", "stretch", "center" or "custom"
+
 [desktops]
-default = "file:///home/.../Solid Colors/Solid Mint.png"   # optional; without this line, malaysia-dream.heic
+default = "file:///home/.../Solid Colors/Solid Mint.png"   # optional; without this line, collapse.heic
+
+[crop]
+default = [0.2, 0.15, 0.55, 0.62]   # with "custom": x, y, width, height of the image (0–1)
 ```
 
+| Key | Type | Default | Status | Consumed by |
+|---|---|---|---|---|
+| `scale` | `"fill"` \| `"fit"` \| `"stretch"` \| `"center"` \| `"custom"` | `"fill"` | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Scale to screen») |
+| `desktops.default` | `file://` URI | none (Malaysia Dream) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** |
+| `crop.default` | `[x, y, width, height]`, fractions of the image | none | **active** | `malaysia-wallpaper` with `custom`, **System Settings › Wallpaper** («Custom framing…») |
+
+`ctappearance::WallpaperSelection` reads and writes this file for both
+(ADR 0072). With `custom`, the crop covers the screen like `fill`. Choosing
+another wallpaper removes the crop and turns `custom` into `fill`.
+
 Editing that file changes the wallpaper **live** (`malaysia-wallpaper` watches the
-store and repaints). The preferences above (`dir`, `scale`, `shuffle`) go in
+store and repaints). The preferences above (`dir`, `shuffle`) go in
 `~/.config/malaysia/wallpaper.domain` once they are read; the catalog is in the
 system (`share/wallpapers/`). On a wallpaper change, the client writes the dominant
 color to `wallpaper.state` (`dominant = [r, g, b]`) for the window tint

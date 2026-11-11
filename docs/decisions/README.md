@@ -72,5 +72,6 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0069](0069-network-bluetooth-and-energy-settings.md) | Network, Bluetooth and energy settings | accepted |
 | [0070](0070-freedesktop-options.md) | Your own themes for GTK and Qt | accepted |
 | [0071](0071-background-blur-and-ext-background-effect.md) | Background blur and ext-background-effect-v1 | accepted |
+| [0072](0072-wallpaper-settings.md) | Wallpaper in System Settings | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.

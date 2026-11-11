@@ -17,7 +17,7 @@ The desktop needs a preferences app.
 
 ## Consequences
 
-Panes: Wi-Fi, Bluetooth, Network, VPN and Energy (ADR 0069), Accessibility, Appearance, Notifications and Focus (ADR 0068). More domains arrive with the catalog and the configuration D-Bus (ADR 0021).
+Panes: Wi-Fi, Bluetooth, Network, VPN and Energy (ADR 0069), Accessibility, Appearance, Wallpaper (ADR 0072), Notifications and Focus (ADR 0068). More domains arrive with the catalog and the configuration D-Bus (ADR 0021).
 
 ## Rejected alternatives
 

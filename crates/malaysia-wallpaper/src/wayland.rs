@@ -43,7 +43,6 @@ use wayland_protocols::wp::viewporter::client::{
 
 use crate::image::{Wallpaper, reload};
 use crate::render::{RenderContext, WallpaperTexture};
-use ctappearance::data_dir;
 use ctappearance::watch::{AppearanceEvent, AppearanceWatch};
 
 const NAMESPACE: &str = "malaysia-wallpaper";
@@ -93,7 +92,7 @@ impl Drop for OutputSurface {
 
 impl App {
     pub fn new() -> anyhow::Result<(Self, EventQueue<Self>)> {
-        let store_path = data_dir().join("wallpaper-selection.state");
+        let store_path = ctappearance::wallpaper_selection_path();
         let state_path = ctappearance::wallpaper_state_path();
         let wallpaper = reload(&Wallpaper::default(), &store_path, &state_path);
 
@@ -208,11 +207,12 @@ impl App {
 
     fn reload_wallpaper(&mut self) {
         let next = reload(&self.wallpaper, &self.store_path, &self.state_path);
-        if next.selection == self.wallpaper.selection {
+        let new_image = next.selection != self.wallpaper.selection;
+        if !new_image && next.framing == self.wallpaper.framing {
             return;
         }
         self.wallpaper = next;
-        if let Some(decoded) = self.wallpaper.image.take() {
+        if new_image && let Some(decoded) = self.wallpaper.image.take() {
             self.texture = Some(self.render.upload_texture(&decoded));
         }
         self.schedule_redraw_all();
@@ -467,7 +467,7 @@ impl App {
         let (format, render_result) = {
             let output = self.outputs.get(&output_id).expect("output exists");
             self.render
-                .set_uniforms(output.logical_size.0, output.logical_size.1, texture.size);
+                .set_uniforms(self.wallpaper.framing, output.logical_size, texture.size);
             let format = output.surface_format;
             (
                 format,

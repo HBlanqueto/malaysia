@@ -18,8 +18,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 calloop = { workspace = true }
 calloop-wayland-source = "0.4"
 futures-lite.workspace = true
-serde.workspace = true
-toml.workspace = true
 png.workspace = true
 zune-jpeg.workspace = true
 libheif-rs.workspace = true

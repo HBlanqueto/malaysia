@@ -1,3 +1,4 @@
+mod framing;
 mod image;
 mod render;
 mod wayland;
