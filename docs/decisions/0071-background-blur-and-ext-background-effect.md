@@ -165,8 +165,17 @@ Read at `7f81a7f7` (2026-11-10):
       it, as the spec requires.
 4. **Only what a client asks for.** A surface gets blur only in the region
    it sends through the protocol, and the mode decides whether that region
-   shows true transparency (`"behind"`) or only the wallpaper. A window that
-   sends nothing gets no blur, even if its buffer has alpha.
+   shows true transparency (`"behind"`) or only the wallpaper. By default a
+   window that sends nothing gets no blur, even if its buffer has alpha.
+   1. **General blur, off by default.** `effects.blur.all_windows` (default
+      `false`) blurs every toplevel that sends no region: behind its
+      geometry, clipped to its frame radius (ADR 0059), minus the opaque
+      region it declares. It uses the same `effects.blur.mode`. It reaches
+      GTK and Qt apps with a translucent theme before their toolkits speak
+      the protocol.
+   2. It is off by default because it costs GPU on every window: an app
+      that looks opaque but declares no opaque region pays for a blur nobody
+      sees, and an app translucent on purpose gets a blur it did not ask for.
 5. **The shell and the kit use the protocol too.** With reduced
    transparency off, `malaysia-shell` (menubar, dock, menus, notifications)
    and BarrierKit windows draw their translucent material tokens and send
@@ -204,10 +213,10 @@ Read at `7f81a7f7` (2026-11-10):
    one `ctdesign` token, `BLUR`, not user options; `effects.blur.radius`
    goes away. The first values are niri's defaults (3, 3, 0.02, 1.5) until
    they are measured against macOS 26 (phase 4). Light and dark share them.
-10. **Configuration.** `effects.blur.mode` is the only new key. It is read
-    live, like `appearance.domain`. System Settings shows it under
-    Accessibility › Display, below «Reduce transparency», and dims it while
-    that switch is on.
+10. **Configuration.** `effects.blur.mode` and `effects.blur.all_windows`
+    are the only new keys. They are read live, like `appearance.domain`.
+    System Settings shows both under Accessibility › Display, below «Reduce
+    transparency», and dims them while that switch is on.
 
 ## Plan
 
@@ -218,8 +227,9 @@ Read at `7f81a7f7` (2026-11-10):
    `colors-dark.blur=yes` and `alpha=0.6`, and with kitty
    `background_blur 1`, and `reduce_transparency = false` in
    `~/.config/malaysia/appearance.domain`.
-2. **The shell and the kit.** They send their material regions (barrierkit
-   change).
+2. **The shell, the kit and general blur.** The shell and the kit send
+   their material regions (barrierkit change); `effects.blur.all_windows`
+   (step 4.1 of «Decision»).
 3. **`"behind"` and pop-ups.** Framebuffer-effect elements, the blit
    fallback and the fades.
 4. **Settings and calibration.** The control of step 10; `options.md`; the
@@ -242,7 +252,7 @@ Each phase updates [`options.md`](../configuration/options.md) and
   [S].
 - Stacked surfaces in `"behind"` compound their blur [I].
 - GTK and Qt apps with a translucent theme are not blurred until their
-  toolkit speaks the protocol.
+  toolkit speaks the protocol, unless the user turns on general blur.
 - Capabilities do not change for clients already bound until the Smithay
   change lands.
 
@@ -253,10 +263,8 @@ Each phase updates [`options.md`](../configuration/options.md) and
   offscreen animations. niri keeps it experimental for those reasons.
 - **Only `"wallpaper"`.** Menus over windows would show the wallpaper, and
   users who want real transparency would have no way to get it.
-- **Implicit blur behind every window, minus its opaque region.** It would
-  reach GTK and Qt today, but an app that looks opaque and declares no
-  opaque region pays for a blur nobody sees, and an app that is translucent
-  on purpose gets a blur it did not ask for.
+- **General blur on by default.** It would reach GTK and Qt today, but it
+  costs GPU on every window, for the reasons in step 4.2 of «Decision».
 - **KDE's `org_kde_kwin_blur`.** It is the predecessor: no capabilities, no
   errors and its own commit request. KWin is moving to the standard
   protocol, and niri implemented the KDE one but did not merge it.

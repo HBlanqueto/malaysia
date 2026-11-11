@@ -46,7 +46,8 @@ Aplica a decoraciones, chrome, sombras, blur, bordes, temas y shell.
    controles server-side).
 3. **Efectos para TODAS las ventanas**, CSD o SSD: inner border estilo macOS,
    sombra (también en CSD; supera la exclusión del ADR 0019) y blur/vibrancy.
-   Un tema transparente usa el blur del compositor.
+   El blur cubre la región que la app pide con `ext-background-effect-v1`;
+   el desenfoque general, apagado por defecto, lo extiende al resto (ADR 0071).
 4. **Efectos compositor-side**, no por app (mecanismo tipo
    `otto-surface-style`). El interior de la app es suyo; lo que la rodea es del
    compositor.
