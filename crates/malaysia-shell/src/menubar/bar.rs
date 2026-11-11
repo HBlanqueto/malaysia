@@ -820,16 +820,16 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
     let resolved = theme::resolved();
     let solid = theme::surface_background(&resolved, theme::SurfaceKind::LayerShell);
     let (ink, glass) = colors_over(under.unwrap_or(solid));
+    let style = if resolved.reduce_transparency {
+        MenubarStyle::Solid
+    } else {
+        style
+    };
     match style {
-        _ if resolved.reduce_transparency => BarLook {
-            background: solid,
+        MenubarStyle::Solid => BarLook {
+            background: Rgba { a: 1.0, ..solid },
             ink: resolved.shell.text,
             blurred: false,
-        },
-        MenubarStyle::Solid => BarLook {
-            background: solid,
-            ink: resolved.shell.text,
-            blurred: true,
         },
         MenubarStyle::Translucent => BarLook {
             background: glass,

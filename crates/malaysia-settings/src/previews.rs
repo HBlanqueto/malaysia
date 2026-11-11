@@ -165,7 +165,7 @@ pub fn menubar_preview(
     let solid = surface_background(resolved, SurfaceKind::LayerShell);
     let (ink, glass) = colors_over(resolved.accent);
     let (background, ink) = match style {
-        MenubarStyle::Solid => (solid, resolved.shell.text),
+        MenubarStyle::Solid => (Rgba { a: 1.0, ..solid }, resolved.shell.text),
         MenubarStyle::Translucent => (glass, ink),
         MenubarStyle::Floating => (Rgba { a: 0.0, ..glass }, ink),
     };

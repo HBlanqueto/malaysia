@@ -24,8 +24,9 @@ wallpaper alone and shows it behind any surface that asks for it with
    menus, Dock and sidebar use their translucent tokens, and the compositor
    draws the blur.
 2. `menubar.style` chooses the background:
-   - `solid`: the theme's `shell-bar` over the blurred wallpaper, as in macOS
-     Catalina. The text follows the color scheme.
+   - `solid` (Classic in System Settings): the theme's `shell-bar`, opaque
+     and without blur, as in macOS Catalina: white or gray. The text follows
+     the color scheme.
    - `translucent`: a light or dark glass over the blurred wallpaper. The
      shell reads the color of the wallpaper under the bar from the wallpaper
      grid in `wallpaper.state`, and `ctappearance::menubar::colors_over` picks
@@ -33,6 +34,8 @@ wallpaper alone and shows it behind any surface that asks for it with
      over a dark one, whatever the color scheme.
    - `floating` (default): the same ink as `translucent`, with no glass and
      no blur.
+
+   Only `translucent` asks for the blur.
 3. The blur shows only the wallpaper, never the windows: the bar asks for it
    over its whole surface with `set_blur_region`, and stops asking while the
    screen locks.
