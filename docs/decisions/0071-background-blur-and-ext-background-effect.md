@@ -137,24 +137,40 @@ Read at `7f81a7f7` (2026-11-10):
 
 ## Decision
 
-1. **Two modes, one switch each.**
+1. **Two modes, mixed by default.**
    1. Blur is drawn only when `appearance.reduce_transparency` is `false`
       and `appearance.contrast` is `false` (ADR 0038, 0066). There is no
       separate on/off key: `effects.blur.enabled` goes away.
-   2. `effects.blur.mode` picks the mode for windows and layer surfaces:
-      - `"wallpaper"` (default): blur only the wallpaper behind the surface,
-        like niri's xray. Windows behind are not seen. This is cheap,
-        because the wallpaper is blurred once and every window reuses it.
+   2. There are two modes:
+      - `"wallpaper"`: blur only the wallpaper behind the surface, like
+        niri's xray. Windows behind are not seen. This is cheap, because the
+        wallpaper is blurred once and every surface reuses it.
       - `"behind"`: blur everything already drawn below the surface,
         windows included. This is true transparency, and it costs one
         capture and one blur per surface each time something below changes.
-   3. Pop-ups (`xdg_popup`, menus) always use `"behind"`. A menu over a
-      window that showed the wallpaper would look wrong, and pop-ups are
-      small and short-lived (ADR 0024: dual Kawase only on small surfaces).
+   3. The compositor picks the mode for each surface by its role; the client
+      never picks it, because the protocol has no mode. `"behind"` goes only
+      where a surface usually opens over a window:
+
+      | Surface | How the compositor knows it | Mode |
+      |---|---|---|
+      | Pop-up of any client (menus, popovers) | `xdg_popup` | `"behind"` |
+      | BarrierKit dialog, sheet or alert | `is_kit_client` (ADR 0035) and a parent or `xdg_dialog_v1` | `"behind"` |
+      | BarrierKit window | `is_kit_client`, no parent | `"wallpaper"` |
+      | Any other toplevel, dialogs included (GTK, Qt, foot…) | not a kit client | `"wallpaper"` |
+      | Dock and notifications | layer namespace `malaysia-dock`, `malaysia-notifications` | `"behind"` |
+      | Menu bar | layer namespace `malaysia-menubar` | `"wallpaper"` |
+      | Lock screen | `ext_session_lock_surface_v1` | `"wallpaper"` |
+      | Any other layer surface | layer-shell | `"wallpaper"` |
+
+   4. `effects.blur.mode` is `"mixed"` (default), which applies the table.
+      `"wallpaper"` turns every row into `"wallpaper"`: the cheapest blur,
+      for a weak GPU or for battery. With no blit support (step 7.2) the
+      compositor behaves as `"wallpaper"`.
 2. **The protocol is the standard way in.** The compositor exposes
    `ext_background_effect_manager_v1` through Smithay's module, version 1.
-   Toplevels, layer surfaces and pop-ups take the region. Subsurfaces, lock
-   surfaces, the cursor and drag icons do not, like niri. The protocol
+   Toplevels, layer surfaces, pop-ups and lock surfaces take the region.
+   Subsurfaces, the cursor and drag icons do not, like niri. The protocol
    region keeps its exact shape, clipped to the window geometry.
 3. **Capabilities tell the truth.**
    1. `capabilities` sends `blur` only while blur is drawn (step 1.1).
@@ -170,7 +186,8 @@ Read at `7f81a7f7` (2026-11-10):
    1. **General blur, off by default.** `effects.blur.all_windows` (default
       `false`) blurs every toplevel that sends no region: behind its
       geometry, clipped to its frame radius (ADR 0059), minus the opaque
-      region it declares. It uses the same `effects.blur.mode`. It reaches
+      region it declares. Those windows are not kit clients, so they get
+      `"wallpaper"` (step 1.3). It reaches
       GTK and Qt apps with a translucent theme before their toolkits speak
       the protocol.
    2. It is off by default because it costs GPU on every window: an app
@@ -193,6 +210,8 @@ Read at `7f81a7f7` (2026-11-10):
       samples that color.
    4. The `Bottom` layer is not part of it.
    5. Nothing is rendered or blurred while no visible surface needs it.
+   6. While the session is locked the back layers are not drawn, but the
+      lock screen samples the same cache.
 7. **What `"behind"` does.**
    1. It uses Smithay's framebuffer-effect elements: `capture_framebuffer`
       blits the pixels below the element, blurs them, and draws them under
@@ -243,9 +262,10 @@ Each phase updates [`options.md`](../configuration/options.md) and
 - Any app that asks for blur, whatever its toolkit, gets it in Malaysia: KDE
   apps, foot, kitty and Quickshell-based shells today, GTK and Qt once they
   adopt the protocol.
-- The default mode costs about one blur per wallpaper change per output.
-  `"behind"` costs one blur per blurred surface for every frame in which
-  something below it changes.
+- Most surfaces use `"wallpaper"`, which costs about one blur per wallpaper
+  change per output. `"behind"` costs one blur per blurred surface for every
+  frame in which something below it changes, so it stays on pop-ups, kit
+  dialogs, the dock and notifications.
 - In `"wallpaper"` mode a translucent window shows the wallpaper, not the
   windows between, which is what macOS shows for window backgrounds. A window
   that switches mode during an animation loses what was behind it at once
@@ -258,6 +278,9 @@ Each phase updates [`options.md`](../configuration/options.md) and
 
 ## Rejected alternatives
 
+- **One mode for every surface, chosen by the user.** A menu or a dialog over
+  a window needs `"behind"`; making every window pay for it to get that is
+  the cost the mixed table avoids.
 - **Only `"behind"`.** It is the true transparency, but it costs a capture
   and a blur per window on every change below, and it breaks during
   offscreen animations. niri keeps it experimental for those reasons.
@@ -271,4 +294,8 @@ Each phase updates [`options.md`](../configuration/options.md) and
 - **Blur strength set by the client or the user.** The protocol leaves it to
   the compositor, and design values live in `ctdesign` (ADR 0011).
 - **A blur request in Infinity.** Our clients would need a private path for
-  something every toolkit can already ask for in the standard way.
+  something every toolkit can already ask for in the standard way. The
+  role and `is_kit_client` already give the kit both modes.
+- **Letting GTK and Qt dialogs use `"behind"`.** Third-party apps get the
+  cheap mode; only pop-ups, which always open over something, are the
+  exception.
