@@ -191,6 +191,19 @@ fn encode_png(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u
     Ok(bytes)
 }
 
+// PNG stores straight alpha; the renderer blends premultiplied colour.
+fn unpremultiply(rgba: &mut [u8]) {
+    for [red, green, blue, alpha] in rgba.as_chunks_mut::<4>().0 {
+        let alpha = u32::from(*alpha);
+        if alpha == 0 || alpha == 255 {
+            continue;
+        }
+        for channel in [red, green, blue] {
+            *channel = ((u32::from(*channel) * 255 + alpha / 2) / alpha).min(255) as u8;
+        }
+    }
+}
+
 fn write_png(path: &Path, png: &[u8]) -> std::io::Result<()> {
     fs::write(path, png)
 }
@@ -597,14 +610,16 @@ pub(crate) fn capture_window_png(
         .ok_or_else(|| std::io::Error::other("screenshot: the window has no rect"))?;
     let size = rect.size.to_f64().to_physical(scale).to_i32_round();
     let elements = build_window_elements(renderer, &surface, scale);
-    crate::capture::screenshot_png(
+    let (width, height, mut rgba) = render_and_read(
         renderer,
         &elements,
         size,
         transform,
         scale,
         [0.0, 0.0, 0.0, 0.0],
-    )
+    )?;
+    unpremultiply(&mut rgba);
+    encode_png(width, height, &rgba)
 }
 
 pub(crate) fn capture_output_png(
@@ -636,7 +651,7 @@ pub(crate) fn log_screenshot(result: std::io::Result<ScreenshotOutcome>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{copy_into_shm_pool, crop_region, group_modifiers};
+    use super::{copy_into_shm_pool, crop_region, group_modifiers, unpremultiply};
     use smithay::backend::allocator::{Format, Fourcc, Modifier};
     use smithay::utils::{Logical, Point, Rectangle, Size};
 
@@ -724,6 +739,20 @@ mod tests {
     fn negative_offset_fails() {
         let result = copy_into_shm_pool(&mut [0; 16], -1, 2, 1, 8, &src(8), 2, 1);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn unpremultiply_divides_colour_by_alpha_and_keeps_opaque_and_clear_pixels() {
+        let mut rgba = [64, 32, 0, 128, 10, 20, 30, 255, 0, 0, 0, 0, 200, 9, 9, 100];
+
+        unpremultiply(&mut rgba);
+
+        assert_eq!(
+            rgba,
+            [
+                128, 64, 0, 128, 10, 20, 30, 255, 0, 0, 0, 0, 255, 23, 23, 100
+            ]
+        );
     }
 
     #[test]

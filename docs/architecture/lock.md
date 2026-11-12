@@ -61,6 +61,6 @@ Authentication lives in the lock process (FFI to `libpam`, `malaysia-pam` thread
 - `SessionLockHandler::lock()` sets `State::locked`, clears the keyboard focus and starts `lock_transition`. While locking, the scene is the cursor, the menu bar, the wallpaper drawn over the desktop with a growing alpha, and the desktop.
 - Once shown, the scene is the cursor, the lock surfaces with their blurred field and the wallpaper. Only `Background` surfaces of `malaysia-wallpaper` from an unsandboxed client are drawn; without one, `DESKTOP_CLEAR`. Frame callbacks go to the lock surfaces and the wallpaper.
 - Keys go straight to the lock surface, bypassing an input method's grab, so it cannot read the password.
-- `new_surface()` configures it to the output size, adds it to `lock_surfaces` and gives keyboard focus to the first one.
-- `unlock()` only arrives through `unlock_and_destroy`; never through the client's death. It sends `infinity_session_v1.unlocked` and fades the desktop back in.
+- `new_surface()` configures it to the output size, adds it to `lock_surfaces`, gives keyboard focus to the first one and moves the pointer focus onto the lock.
+- `unlock()` only arrives through `unlock_and_destroy`; never through the client's death. It gives keyboard focus back to the topmost visible window, sends `infinity_session_v1.unlocked` and fades the desktop back in.
 - With the session locked, `pointer_press` ignores windows/popups, `focus_window` does not yield focus and the dock's `activate_window` is ignored. Authentication belongs to the client; the compositor does not know PAM.

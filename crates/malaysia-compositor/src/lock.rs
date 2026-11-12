@@ -70,17 +70,16 @@ impl SessionLockHandler for State {
         self.lock_surfaces.clear();
         self.cancel_lock_recovery();
         self.lock_recovery_attempts = 0;
+        if let Some(id) = self.focus_fallback(None) {
+            self.focus_window(id);
+        }
         self.start_unlocking();
         self.request_redraw();
     }
 
     fn new_surface(&mut self, surface: LockSurface, output: WlOutput) {
         tracing::info!(output = ?output.id(), "new session lock surface");
-        let size = self.logical_output_size();
-        surface.with_pending_state(|state| {
-            state.size = Some(Size::from((size.w as u32, size.h as u32)));
-        });
-        surface.send_configure();
+        self.fit_lock_surface(&surface);
         if self.lock_surfaces.is_empty() {
             self.focus_lock_surface(&surface);
         }
@@ -89,6 +88,13 @@ impl SessionLockHandler for State {
             state.lock_surface_destroyed(surface);
         });
         self.lock_surfaces.push(surface);
+        if let Some(location) = self
+            .seat
+            .get_pointer()
+            .map(|pointer| pointer.current_location())
+        {
+            self.pointer_motion(location, InputTime::from_millis(0));
+        }
         self.request_redraw();
     }
 }
@@ -154,6 +160,13 @@ impl State {
             "lock recovery launched a new lock client"
         );
         self.arm_lock_recovery(lock_recovery_delay(self.lock_recovery_attempts));
+    }
+
+    pub(crate) fn fit_lock_surface(&self, surface: &LockSurface) {
+        let size = self.logical_output_size();
+        surface.with_pending_state(|state| {
+            state.size = Some(Size::from((size.w as u32, size.h as u32)));
+        });
     }
 
     fn focus_lock_surface(&mut self, surface: &LockSurface) {

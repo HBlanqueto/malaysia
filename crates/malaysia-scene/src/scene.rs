@@ -274,21 +274,16 @@ pub fn edge_at(
         return Some(Edge::BottomRight);
     }
 
-    let top = point.y >= outer.y() - side && point.y <= outer.y() + CORNER_INSET;
-    let bottom = point.y >= outer.bottom() - CORNER_INSET && point.y <= outer.bottom() + side;
-    let left = point.x >= outer.x() - side && point.x <= outer.x() + CORNER_INSET;
-    let right = point.x >= outer.right() - CORNER_INSET && point.x <= outer.right() + side;
-
-    if top && point.x >= outer.x() + corner && point.x <= outer.right() - corner {
+    if top_arm && point.x >= outer.x() + corner && point.x <= outer.right() - corner {
         return Some(Edge::Top);
     }
-    if bottom && point.x >= outer.x() + corner && point.x <= outer.right() - corner {
+    if bottom_arm && point.x >= outer.x() + corner && point.x <= outer.right() - corner {
         return Some(Edge::Bottom);
     }
-    if left && point.y >= outer.y() + corner && point.y <= outer.bottom() - corner {
+    if left_arm && point.y >= outer.y() + corner && point.y <= outer.bottom() - corner {
         return Some(Edge::Left);
     }
-    if right && point.y >= outer.y() + corner && point.y <= outer.bottom() - corner {
+    if right_arm && point.y >= outer.y() + corner && point.y <= outer.bottom() - corner {
         return Some(Edge::Right);
     }
     None

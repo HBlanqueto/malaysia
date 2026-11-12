@@ -1,8 +1,8 @@
 use ctappearance::{AppearanceConfig, ColorFilter};
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::damage::OutputDamageTracker;
-use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
+use smithay::backend::renderer::element::{Kind, RenderElementStates};
 use smithay::backend::renderer::gles::element::TextureShaderElement;
 use smithay::backend::renderer::gles::{
     GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType, UniformValue,
@@ -133,13 +133,19 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
         .ok()
 }
 
+pub(crate) struct FilterTarget {
+    texture: GlesTexture,
+    tracker: OutputDamageTracker,
+    scale: f64,
+}
+
 pub(crate) fn element<R: MalaysiaRenderer>(
     state: &mut State,
     renderer: &mut GlesRenderer,
     cursor: &Cursors,
     output_size: Size<i32, Physical>,
-    target: &mut Option<GlesTexture>,
-) -> Option<OutputRenderElement<R>> {
+    target: &mut Option<FilterTarget>,
+) -> Option<(OutputRenderElement<R>, RenderElementStates)> {
     let filter = DisplayFilter::from_appearance(&state.config.appearance)?;
     let program = state.display_filter.clone()?;
     let scale = state.scale.fractional_scale();
@@ -147,25 +153,37 @@ pub(crate) fn element<R: MalaysiaRenderer>(
     let buffer_size = Size::<i32, BufferCoord>::from((output_size.w, output_size.h));
     if target
         .as_ref()
-        .is_none_or(|texture| texture.size() != buffer_size)
+        .is_none_or(|target| target.texture.size() != buffer_size || target.scale != scale)
     {
-        *target =
-            Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, buffer_size).ok();
+        *target = Some(FilterTarget {
+            texture: Offscreen::<GlesTexture>::create_buffer(
+                renderer,
+                Fourcc::Abgr8888,
+                buffer_size,
+            )
+            .ok()?,
+            tracker: OutputDamageTracker::new(output_size, Scale::from(scale), Transform::Normal),
+            scale,
+        });
     }
-    let mut texture = target.clone()?;
-    {
-        let mut framebuffer = renderer.bind(&mut texture).ok()?;
-        OutputDamageTracker::new(output_size, Scale::from(scale), Transform::Normal)
+    let FilterTarget {
+        texture, tracker, ..
+    } = target.as_mut()?;
+    let age = if state.theme_fade.is_some() { 0 } else { 1 };
+    let states = {
+        let mut framebuffer = renderer.bind(texture).ok()?;
+        tracker
             .render_output(
                 renderer,
                 &mut framebuffer,
-                0,
+                age,
                 &elements,
                 ctdesign::DESKTOP_CLEAR.premultiplied(),
             )
-            .ok()?;
-    }
-    let buffer = TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
+            .ok()?
+            .states
+    };
+    let buffer = TextureBuffer::from_texture(renderer, texture.clone(), 1, Transform::Normal, None);
     let shown = TextureRenderElement::from_texture_buffer(
         Point::from((0.0, 0.0)),
         &buffer,
@@ -174,7 +192,10 @@ pub(crate) fn element<R: MalaysiaRenderer>(
         None,
         Kind::Unspecified,
     );
-    Some(PrimaryGpu(TextureShaderElement::new(shown, program, filter.uniforms())).into())
+    Some((
+        PrimaryGpu(TextureShaderElement::new(shown, program, filter.uniforms())).into(),
+        states,
+    ))
 }
 
 #[cfg(test)]

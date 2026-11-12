@@ -17,9 +17,6 @@ use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER, Serial, Size};
 use smithay::wayland::pointer_constraints::{PointerConstraint, with_pointer_constraint};
-use smithay::wayland::selection::data_device::set_data_device_focus;
-use smithay::wayland::selection::primary_selection::set_primary_focus;
-use smithay::wayland::shell::wlr_layer::LayerSurface;
 use xkbcommon::xkb::{self, Keycode, keysyms};
 
 use crate::infinity::protocol::infinity_window_manager_v1::{Layout, PairLayout};
@@ -35,20 +32,6 @@ pub(crate) fn parse_ms(value: Option<&str>, default: Duration) -> Duration {
         Some(0) => Duration::from_millis(1),
         Some(ms) => Duration::from_millis(ms),
         None => default,
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DesktopClick {
-    CloseMenu,
-    ClearFocus,
-}
-
-fn desktop_click(menu_open: bool) -> DesktopClick {
-    if menu_open {
-        DesktopClick::CloseMenu
-    } else {
-        DesktopClick::ClearFocus
     }
 }
 
@@ -202,7 +185,12 @@ impl State {
                             }
                         }
                     }
-                    return FilterResult::Intercept(());
+                    // The client saw the shortcut's modifiers go down, so it must see them released.
+                    return if pressed {
+                        FilterResult::Intercept(())
+                    } else {
+                        FilterResult::Forward
+                    };
                 }
                 match compositor_shortcut(
                     mods.ctrl,
@@ -380,13 +368,15 @@ impl State {
         self.pointer_motion(location, time);
         self.close_notification_panel_outside(location);
         let layer_under = self.layers.surface_under(location);
+        if self.popup_surface_under(location).is_some()
+            && (layer_under.is_none() || self.layer_popup_under(location))
+        {
+            tracing::info!(?location, "press landed on a popup");
+            return;
+        }
         if layer_under.is_some() && self.windows.topmost_popup().is_some() {
             tracing::info!(?location, "press outside the popups dismissed them");
             self.dismiss_all_popups();
-        }
-        if layer_under.is_none() && self.popup_surface_under(location).is_some() {
-            tracing::info!(?location, "press landed on a popup");
-            return;
         }
 
         if let Some((surface, _)) = layer_under {
@@ -434,16 +424,13 @@ impl State {
         }
 
         let Some(id) = under else {
-            match desktop_click(self.windows.topmost_popup().is_some()) {
-                DesktopClick::CloseMenu => {
-                    tracing::info!(?location, "press outside the popups dismissed them");
-                    self.dismiss_all_popups();
-                }
-                DesktopClick::ClearFocus => {
-                    tracing::info!(?location, "press landed on the desktop; focus cleared");
-                    self.clear_keyboard_focus();
-                    self.request_redraw();
-                }
+            if self.windows.topmost_popup().is_some() {
+                tracing::info!(?location, "press outside the popups dismissed them");
+                self.dismiss_all_popups();
+            } else {
+                tracing::info!(?location, "press landed on the desktop; focus cleared");
+                self.clear_keyboard_focus();
+                self.request_redraw();
             }
             return;
         };
@@ -614,87 +601,7 @@ impl State {
         id: WindowId,
         outer: SceneRect<f64, malaysia_scene::geometry::Logical>,
     ) -> SceneRect<f64, malaysia_scene::geometry::Logical> {
-        let fixed_width = self
-            .windows
-            .client_size_bounds(id)
-            .is_some_and(|(min, max)| is_fixed_width(min, max));
-        maximize_target_rect(fixed_width, self.workspace(), outer)
-    }
-
-    fn log_focus_stack(&self, focused: Option<WindowId>) {
-        if !tracing::enabled!(tracing::Level::DEBUG) {
-            return;
-        }
-        let mut lines = Vec::new();
-        for window in self.windows.iter() {
-            let id = window.id();
-            let minimized = self.minimized.contains(&id);
-            lines.push(format!(
-                "app_id={:?} mapped={} hidden={} minimized={} rect={:?} focused={}",
-                window.app_id(),
-                window.is_mapped(),
-                window.is_hidden(),
-                minimized,
-                window.outer(),
-                focused == Some(id),
-            ));
-        }
-        tracing::debug!(focused = ?focused, "focus stack (back-to-front):\n{}", lines.join("\n"));
-    }
-
-    pub(crate) fn focus_window(&mut self, id: WindowId) {
-        if self.locked {
-            return;
-        }
-        // A window with a modal dialog hands its focus to the dialog, like an AppKit sheet.
-        if let Some(dialog) = self.windows.modal_child(id) {
-            return self.focus_window(dialog);
-        }
-        if self.layer_focus.blocks_window_focus() {
-            tracing::info!(
-                window = id.get(),
-                "window focus deferred: an exclusive layer owns it"
-            );
-            self.layer_focus.focus_window_after(id);
-            return;
-        }
-        self.show_space_of(id);
-        if !self.windows.is_visible(id, &self.minimized) {
-            tracing::info!(
-                window = id.get(),
-                "window focus ignored: the window is not visible"
-            );
-            return;
-        }
-        let Some(surface) = self.windows.surface_of(id).cloned() else {
-            return;
-        };
-        self.windows.raise(id);
-        let previous = self.focused_window();
-        let changed = self.active_window.set(Some(id));
-        let serial = SERIAL_COUNTER.next_serial();
-        match self.seat.get_keyboard() {
-            Some(keyboard) => {
-                tracing::info!("giving keyboard focus to a window");
-                let client = surface.client();
-                keyboard.set_focus(self, Some(surface), serial);
-                set_data_device_focus(&self.display_handle, &self.seat, client.clone());
-                set_primary_focus(&self.display_handle, &self.seat, client);
-            }
-            None => tracing::warn!("a window was focused but the seat has no keyboard"),
-        }
-        if changed {
-            let shown_before = self.shown_active_for(previous);
-            self.sync_panels();
-            let shown = self.shown_active();
-            for window in [previous, shown_before, Some(id), shown]
-                .into_iter()
-                .flatten()
-            {
-                self.foreign_state_changed(window);
-            }
-        }
-        self.log_focus_stack(Some(id));
+        maximize_target_rect(self.has_fixed_width(id), self.workspace(), outer)
     }
 
     pub(crate) fn toggle_launcher(&mut self) {
@@ -910,222 +817,6 @@ impl State {
         state.last_input_serial()
     }
 
-    pub(crate) fn focus_popup_surface(&mut self, surface: &WlSurface, serial: Serial) {
-        if self.locked {
-            return;
-        }
-        if let Some(keyboard) = self.seat.get_keyboard() {
-            let previous_focus = keyboard.current_focus();
-            let previous_window = previous_focus
-                .as_ref()
-                .and_then(|focus| self.windows.id_of(focus));
-            let root_layer = previous_focus.as_ref().and_then(|focus| {
-                if let Some(entry) = self.layers.entry_of(focus) {
-                    Some((focus.clone(), entry.keyboard_interactivity))
-                } else if self.popups.is_popup_surface(focus) {
-                    self.popups.current_root_layer()
-                } else {
-                    None
-                }
-            });
-            self.popups.push_focus_frame(
-                surface.clone(),
-                serial,
-                root_layer,
-                previous_focus.clone(),
-                previous_window,
-            );
-            keyboard.set_focus(self, Some(surface.clone()), serial);
-            if let Some(client) = surface.client() {
-                set_data_device_focus(&self.display_handle, &self.seat, Some(client.clone()));
-                set_primary_focus(&self.display_handle, &self.seat, Some(client));
-            }
-        }
-    }
-
-    pub(crate) fn apply_focus_restore(&mut self, restore: crate::popup::FocusRestore) {
-        if self.locked {
-            return;
-        }
-        let serial = SERIAL_COUNTER.next_serial();
-        match restore {
-            crate::popup::FocusRestore::Popup(surface) => {
-                if let Some(keyboard) = self.seat.get_keyboard() {
-                    keyboard.set_focus(self, Some(surface), serial);
-                }
-            }
-            crate::popup::FocusRestore::Layer(surface) => {
-                self.focus_layer_surface(&surface);
-            }
-            crate::popup::FocusRestore::Previous(surface, window) => {
-                let target = self
-                    .focused_window()
-                    .or(window)
-                    .filter(|id| self.windows.surface_of(*id).is_some());
-                if let Some(id) = target {
-                    self.focus_window(id);
-                } else if let Some(surface) =
-                    surface.filter(|surface| self.surface_still_exists(surface))
-                {
-                    tracing::info!(
-                        surface = ?surface.id(),
-                        "giving keyboard focus back to a surface"
-                    );
-                    if let Some(keyboard) = self.seat.get_keyboard() {
-                        keyboard.set_focus(self, Some(surface.clone()), serial);
-                        if let Some(client) = surface.client() {
-                            set_data_device_focus(
-                                &self.display_handle,
-                                &self.seat,
-                                Some(client.clone()),
-                            );
-                            set_primary_focus(&self.display_handle, &self.seat, Some(client));
-                        }
-                    }
-                } else {
-                    self.clear_keyboard_focus();
-                }
-            }
-        }
-    }
-
-    fn surface_still_exists(&self, surface: &WlSurface) -> bool {
-        self.windows.id_of(surface).is_some()
-            || self.popups.id_of(surface).is_some()
-            || self.layers.entry_of(surface).is_some()
-    }
-
-    fn focus_layer_surface(&mut self, surface: &WlSurface) {
-        if self.locked {
-            return;
-        }
-        let serial = SERIAL_COUNTER.next_serial();
-        if let Some(keyboard) = self.seat.get_keyboard() {
-            tracing::info!(surface = ?surface.id(), "giving keyboard focus to a layer surface");
-            let client = surface.client();
-            keyboard.set_focus(self, Some(surface.clone()), serial);
-            set_data_device_focus(&self.display_handle, &self.seat, client.clone());
-            set_primary_focus(&self.display_handle, &self.seat, client);
-        }
-    }
-
-    pub(crate) fn layer_surface_mapped(&mut self, layer: &LayerSurface) {
-        let surface = layer.wl_surface().clone();
-        let Some(entry) = self.layers.entry_of(&surface) else {
-            return;
-        };
-        if !matches!(
-            entry.layer,
-            smithay::wayland::shell::wlr_layer::Layer::Top
-                | smithay::wayland::shell::wlr_layer::Layer::Overlay
-        ) {
-            return;
-        }
-        let focused_window = self
-            .seat
-            .get_keyboard()
-            .and_then(|keyboard| keyboard.current_focus())
-            .and_then(|focused| self.windows.id_of(&focused));
-        let mode = entry.keyboard_interactivity;
-        if self
-            .layer_focus
-            .mapped(surface.clone(), mode, focused_window)
-        {
-            self.focus_layer_surface(&surface);
-        }
-    }
-
-    pub(crate) fn layer_surface_destroyed(&mut self, surface: &WlSurface) {
-        use crate::layers::LayerUnfocus;
-        match self.layer_focus.unmapped(surface) {
-            LayerUnfocus::None => {}
-            LayerUnfocus::Layer(next) => self.focus_layer_surface(&next),
-            LayerUnfocus::Window(Some(id)) => {
-                if self.windows.surface_of(id).is_some() {
-                    self.focus_window(id);
-                } else {
-                    self.clear_keyboard_focus();
-                }
-            }
-            LayerUnfocus::Window(None) => self.clear_keyboard_focus(),
-        }
-    }
-
-    #[track_caller]
-    pub(crate) fn clear_keyboard_focus(&mut self) {
-        let location = std::panic::Location::caller();
-        let shown_before = self.shown_active();
-        let previous = self.active_window.clear();
-        if previous.is_some() {
-            tracing::info!(
-                previous = previous.map(|id| id.get()),
-                origin = format!("{}:{}", location.file(), location.line()),
-                space = self.spaces.current_index(),
-                bar_revealed = self.focus_reveal.is_shown(),
-                "active window cleared"
-            );
-        }
-        let serial = SERIAL_COUNTER.next_serial();
-        if let Some(keyboard) = self.seat.get_keyboard() {
-            keyboard.set_focus(self, None, serial);
-            set_data_device_focus(&self.display_handle, &self.seat, None);
-            set_primary_focus(&self.display_handle, &self.seat, None);
-        }
-        if let Some(previous) = previous {
-            self.sync_panels();
-            for window in [Some(previous), shown_before].into_iter().flatten() {
-                self.foreign_state_changed(window);
-            }
-        }
-        self.log_focus_stack(None);
-    }
-
-    pub(crate) fn forget_window(&mut self, surface: &WlSurface) {
-        let active = self.focused_window();
-        let next = self.focus_fallback(self.windows.id_of(surface));
-        let Some(id) = self.windows.remove(surface) else {
-            return;
-        };
-        if self
-            .chrome_pointer
-            .as_ref()
-            .is_some_and(|(held, _)| *held == id)
-        {
-            self.chrome_pointer = None;
-        }
-        if self
-            .titlebar_click
-            .as_ref()
-            .is_some_and(|(held, ..)| *held == id)
-        {
-            self.titlebar_click = None;
-        }
-        self.foreign_window_destroyed(id);
-        self.space_window_removed(id);
-        self.maximized.remove(&id);
-        self.arranged.remove(&id);
-        self.minimized.remove(&id);
-        self.chrome.remove(crate::chrome::FrameOwner::Window(id));
-        if self.grab.and_then(Grab::window) == Some(id) {
-            self.grab = None;
-        }
-        tracing::info!(
-            windows = self.windows.len(),
-            topmost = ?self.windows.topmost(),
-            "window removed"
-        );
-        if active == Some(id) {
-            match next.filter(|next| self.windows.surface_of(*next).is_some()) {
-                Some(next) => self.focus_window(next),
-                None => self.clear_keyboard_focus(),
-            }
-        }
-        if self.windows.is_empty() {
-            tracing::info!("scene empty");
-        }
-        self.request_redraw();
-    }
-
     pub(crate) fn held_grab(&self, serial: Serial) -> Option<GrabStartData<State>> {
         let pointer = self.seat.get_pointer()?;
         if !pointer.has_grab(serial) {
@@ -1271,128 +962,133 @@ impl State {
             return;
         }
 
-        self.update_edge_cursor(location);
-        self.update_focus_reveal(location);
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+        let current = pointer.current_location();
+        let delta = location - current;
+        let (relative, relative_unaccel) = raw_delta.unwrap_or((delta, delta));
+        let relative = RelativeMotionEvent {
+            delta: relative,
+            delta_unaccel: relative_unaccel,
+            time,
+        };
 
+        if let Some((surface, local)) = self.pointer_target(current).surface {
+            let origin = current - local;
+            let mut locked = false;
+            let mut confined = None;
+            with_pointer_constraint(&surface, &pointer, |constraint| {
+                let Some(constraint) = constraint.filter(|constraint| {
+                    constraint.is_active()
+                        && constraint
+                            .region()
+                            .is_none_or(|region| region.contains(local.to_i32_round()))
+                }) else {
+                    return;
+                };
+                match &*constraint {
+                    PointerConstraint::Locked(_) => locked = true,
+                    PointerConstraint::Confined(confine) => {
+                        confined = Some(confine.region().cloned());
+                    }
+                }
+            });
+            if locked {
+                pointer.relative_motion(self, Some((surface, origin)), &relative);
+                pointer.frame(self);
+                return;
+            }
+            if let Some(region) = confined {
+                location = confined_step(current, location, |point| {
+                    region
+                        .as_ref()
+                        .is_none_or(|region| region.contains((point - origin).to_i32_round()))
+                        && self
+                            .pointer_target(point)
+                            .surface
+                            .is_some_and(|(under, _)| under == surface)
+                });
+            }
+        }
+
+        self.update_focus_reveal(location);
+        let target = self.pointer_target(location);
+        self.update_edge_cursor(target.edge);
+        if self.update_chrome_pointer(location, target.window, target.overlay) {
+            self.request_redraw();
+        }
+
+        let focus = target.surface.clone().map(|(surface, local)| {
+            let origin = Point::new(location.x - local.x, location.y - local.y);
+            (surface, origin)
+        });
+        pointer.relative_motion(self, focus.clone(), &relative);
+        pointer.motion(
+            self,
+            focus,
+            &MotionEvent {
+                location,
+                serial: SERIAL_COUNTER.next_serial(),
+                time,
+            },
+        );
+        pointer.frame(self);
+
+        if let Some((surface, local)) = target.surface {
+            with_pointer_constraint(&surface, &pointer, |constraint| {
+                if let Some(constraint) = constraint
+                    && constraint
+                        .region()
+                        .is_none_or(|region| region.contains(local.to_i32_round()))
+                {
+                    constraint.activate();
+                }
+            });
+        }
+    }
+
+    fn pointer_target(&self, location: Point<f64, Logical>) -> PointerTarget {
         let side = f64::from(self.config.window.resize_border);
         let corner = f64::from(self.config.window.resize_corner);
         let popup_under = self.popup_surface_under(location);
         let layer_under = self.layers.surface_under(location);
-        let overlay_under = popup_under.is_some() || layer_under.is_some();
-        let edge = if overlay_under {
+        let overlay = popup_under.is_some() || layer_under.is_some();
+        let edge = if overlay {
             None
         } else {
             self.windows
                 .edge_under(location, side, corner, &self.minimized)
         };
-        let under_window = self.windows.window_under(location, &self.minimized);
-        if self.update_chrome_pointer(location, under_window, overlay_under) {
-            self.request_redraw();
-        }
+        let window = self.windows.window_under(location, &self.minimized);
         let over_revealed_titlebar = layer_under.is_none()
-            && under_window.is_some_and(|id| {
+            && window.is_some_and(|id| {
                 self.titlebar_point(id, location).is_some() && self.revealed_titlebar(id).is_some()
             });
         let blocked = over_revealed_titlebar
-            || pointer_focus_blocked(overlay_under, edge.map(|(id, _)| id), under_window);
-        let under = if blocked {
+            || pointer_focus_blocked(overlay, edge.map(|(id, _)| id), window);
+        let surface = if blocked {
             None
         } else {
-            let layer_popup = self
-                .windows
-                .popup_under(location)
-                .is_some_and(|id| self.windows.popup_on_layer(id));
-            if layer_popup {
+            if self.layer_popup_under(location) {
                 popup_under.or(layer_under)
             } else {
                 layer_under.or(popup_under)
             }
             .or_else(|| self.windows.surface_under(location, &self.minimized))
         };
-
-        let serial = SERIAL_COUNTER.next_serial();
-        let focus = under.clone().map(|(surface, local)| {
-            let origin = Point::new(location.x - local.x, location.y - local.y);
-            (surface, origin)
-        });
-        let Some(pointer) = self.seat.get_pointer() else {
-            return;
-        };
-        let delta = location - pointer.current_location();
-        let (relative, relative_unaccel) = raw_delta.unwrap_or((delta, delta));
-
-        let mut locked = false;
-        let mut confined = None;
-        if let Some((surface, local)) = &under {
-            with_pointer_constraint(surface, &pointer, |constraint| {
-                let Some(constraint) = constraint else {
-                    return;
-                };
-                let point = local.to_i32_round();
-                if !constraint
-                    .region()
-                    .is_none_or(|region| region.contains(point))
-                {
-                    return;
-                }
-                if !constraint.is_active() {
-                    constraint.activate();
-                }
-                match &*constraint {
-                    PointerConstraint::Locked(_) => locked = true,
-                    PointerConstraint::Confined(confine) => {
-                        confined = confine.region().cloned();
-                    }
-                }
-            });
+        PointerTarget {
+            surface,
+            window,
+            overlay,
+            edge: edge.map(|(_, edge)| edge),
         }
-        if locked {
-            pointer.relative_motion(
-                self,
-                focus,
-                &RelativeMotionEvent {
-                    delta: relative,
-                    delta_unaccel: relative_unaccel,
-                    time,
-                },
-            );
-            pointer.frame(self);
-            return;
-        }
-        if let (Some(region), Some((_, local))) = (confined, &under) {
-            let origin = location - *local;
-            let old = location - delta;
-            let mut clamped = old;
-            let candidate = Point::new(old.x + delta.x, old.y);
-            if region.contains((candidate - origin).to_i32_round()) {
-                clamped.x = candidate.x;
-            }
-            let candidate = Point::new(clamped.x, old.y + delta.y);
-            if region.contains((candidate - origin).to_i32_round()) {
-                clamped.y = candidate.y;
-            }
-            location = clamped;
-        }
+    }
 
-        pointer.relative_motion(
-            self,
-            focus.clone(),
-            &RelativeMotionEvent {
-                delta: relative,
-                delta_unaccel: relative_unaccel,
-                time,
-            },
-        );
-        pointer.motion(
-            self,
-            focus,
-            &MotionEvent {
-                location,
-                serial,
-                time,
-            },
-        );
-        pointer.frame(self);
+    fn layer_popup_under(&self, location: Point<f64, Logical>) -> bool {
+        self.windows
+            .popup_under(location)
+            .is_some_and(|id| self.windows.popup_on_layer(id))
     }
 
     fn popup_surface_under(
@@ -1485,19 +1181,9 @@ impl State {
         Some(offset)
     }
 
-    fn update_edge_cursor(&mut self, location: Point<f64, Logical>) {
-        let side = f64::from(self.config.window.resize_border);
-        let corner = f64::from(self.config.window.resize_corner);
-        let overlay_under = self.popup_surface_under(location).is_some()
-            || self.layers.surface_under(location).is_some();
-        let edge = if overlay_under {
-            None
-        } else {
-            self.windows
-                .edge_under(location, side, corner, &self.minimized)
-        };
+    fn update_edge_cursor(&mut self, edge: Option<Edge>) {
         match edge {
-            Some((_, edge)) => {
+            Some(edge) => {
                 if matches!(self.client_cursor, CursorImageStatus::Named(_)) {
                     self.cursor_status = CursorImageStatus::Named(edge_cursor(edge));
                 }
@@ -1541,7 +1227,7 @@ impl State {
             }
         }
 
-        if source == AxisSource::Finger {
+        if source == AxisSource::Finger && !self.locked {
             self.follow_edge_swipe(horizontal, event.amount(Axis::Horizontal) == Some(0.0));
         }
         if let Some(pointer) = self.seat.get_pointer() {
@@ -1620,6 +1306,30 @@ fn restored_under_pointer(
     )
 }
 
+struct PointerTarget {
+    surface: Option<(WlSurface, Point<f64, Logical>)>,
+    window: Option<WindowId>,
+    overlay: bool,
+    edge: Option<Edge>,
+}
+
+fn confined_step(
+    from: Point<f64, Logical>,
+    to: Point<f64, Logical>,
+    allowed: impl Fn(Point<f64, Logical>) -> bool,
+) -> Point<f64, Logical> {
+    let mut step = from;
+    let candidate = Point::new(to.x, from.y);
+    if allowed(candidate) {
+        step.x = candidate.x;
+    }
+    let candidate = Point::new(step.x, to.y);
+    if allowed(candidate) {
+        step.y = candidate.y;
+    }
+    step
+}
+
 fn pointer_focus_blocked(
     layer_under: bool,
     edge_window: Option<WindowId>,
@@ -1629,7 +1339,6 @@ fn pointer_focus_blocked(
 }
 
 fn edge_cursor(edge: Edge) -> CursorIcon {
-    use Edge;
     match edge {
         Edge::Top | Edge::Bottom => CursorIcon::NsResize,
         Edge::Left | Edge::Right => CursorIcon::EwResize,

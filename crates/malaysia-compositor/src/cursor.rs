@@ -71,14 +71,19 @@ const SHAPES: [CursorIcon; 35] = [
 impl Cursors {
     pub fn load(scale: i32, pointer_size: f32) -> Self {
         let target = (cursor_target(scale) as f32 * pointer_size).round() as u32;
-        let fallback = load_icon(CursorIcon::Default, scale, target, None).unwrap_or_else(|| {
-            tracing::warn!("no usable Xcursor theme; drawing the built-in pointer");
-            builtin_cursor(scale, None)
-        });
+        let themes: Vec<CursorTheme> = theme_names()
+            .iter()
+            .map(|name| CursorTheme::load(name))
+            .collect();
+        let fallback =
+            load_icon(&themes, CursorIcon::Default, scale, target, None).unwrap_or_else(|| {
+                tracing::warn!("no usable Xcursor theme; drawing the built-in pointer");
+                builtin_cursor(scale, None)
+            });
 
         let mut icons = Vec::new();
         for icon in SHAPES {
-            if let Some(cursor) = load_icon(icon, scale, target, None) {
+            if let Some(cursor) = load_icon(&themes, icon, scale, target, None) {
                 icons.push((icon, cursor));
             }
         }
@@ -86,6 +91,7 @@ impl Cursors {
         let boost = ctdesign::CURSOR_SHAKE_SCALE.ceil() as u32;
         let boosted_target = target.saturating_mul(boost);
         let boosted_fallback = load_icon(
+            &themes,
             CursorIcon::Default,
             scale,
             boosted_target,
@@ -99,7 +105,8 @@ impl Cursors {
                     .iter()
                     .find(|(name, _)| *name == icon)
                     .map_or_else(|| fallback.size(), |(_, cursor)| cursor.size());
-                load_icon(icon, scale, boosted_target, Some(nominal)).map(|cursor| (icon, cursor))
+                load_icon(&themes, icon, scale, boosted_target, Some(nominal))
+                    .map(|cursor| (icon, cursor))
             })
             .collect();
 
@@ -175,9 +182,8 @@ struct ImageData {
     hot_y: i32,
 }
 
-fn theme_image(name: &str, target: u32) -> Option<ImageData> {
-    for theme_name in theme_names() {
-        let theme = CursorTheme::load(&theme_name);
+fn theme_image(themes: &[CursorTheme], name: &str, target: u32) -> Option<ImageData> {
+    for theme in themes {
         let Some(path) = theme.load_icon(name) else {
             continue;
         };
@@ -231,6 +237,7 @@ fn cursor_target(scale: i32) -> u32 {
 }
 
 fn load_icon(
+    themes: &[CursorTheme],
     icon: CursorIcon,
     scale: i32,
     target: u32,
@@ -238,7 +245,7 @@ fn load_icon(
 ) -> Option<LoadedCursor> {
     let data = std::iter::once(icon.name())
         .chain(icon.alt_names().iter().copied())
-        .find_map(|name| theme_image(name, target))?;
+        .find_map(|name| theme_image(themes, name, target))?;
     Some(loaded_cursor(&data, scale, nominal))
 }
 

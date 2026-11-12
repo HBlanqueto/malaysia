@@ -324,17 +324,6 @@ fn a_left_resize_keeps_the_right_edge_fixed_after_a_move() {
 }
 
 #[test]
-fn restoring_hidden_uses_the_saved_rect_not_the_placement_origin() {
-    use malaysia_scene::geometry::{Logical, Point as ScenePoint, Rect as SceneRect};
-
-    let saved = SceneRect::new(ScenePoint::new(123.0, 456.0), SceneSize::new(640.0, 420.0));
-    let mut hidden_rect: Option<SceneRect<f64, Logical>> = Some(saved);
-    let restored = hidden_rect.take().unwrap();
-    assert_eq!(restored.x(), 123.0);
-    assert_eq!(restored.y(), 456.0);
-}
-
-#[test]
 fn usable_rect_location_fits_inside_the_workspace() {
     let workspace_height = 100.0;
     let menubar = 24.0;

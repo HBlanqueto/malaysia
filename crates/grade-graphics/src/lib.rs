@@ -1,44 +1,27 @@
 pub mod shaders {
-    pub const ROUNDED_CLIP: &str = concat!(
-        "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
-        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
-        include_str!("window_shape.glsl"),
-        include_str!("rounded_clip.frag"),
-    );
+    macro_rules! pixel_shader {
+        ($($file:literal),+) => {
+            concat!(
+                "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
+                $(include_str!($file)),+
+            )
+        };
+    }
 
-    pub const DISPLAY_FILTER: &str = concat!(
-        "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
-        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
-        include_str!("display_filter.frag"),
-    );
+    macro_rules! texture_shader {
+        ($($file:literal),+) => {
+            concat!(
+                "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
+                pixel_shader!($($file),+)
+            )
+        };
+    }
 
-    pub const MINIMIZE: &str = concat!(
-        "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
-        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
-        include_str!("minimize.frag"),
-    );
-
-    pub const BLUR_DOWN: &str = concat!(
-        "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
-        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
-        include_str!("blur_down.frag"),
-    );
-
-    pub const BLUR_UP: &str = concat!(
-        "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",
-        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
-        include_str!("blur_up.frag"),
-    );
-
-    pub const SHADOW: &str = concat!(
-        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
-        include_str!("window_shape.glsl"),
-        include_str!("shadow.frag"),
-    );
-
-    pub const BORDER: &str = concat!(
-        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n",
-        include_str!("window_shape.glsl"),
-        include_str!("border.frag"),
-    );
+    pub const ROUNDED_CLIP: &str = texture_shader!("window_shape.glsl", "rounded_clip.frag");
+    pub const DISPLAY_FILTER: &str = texture_shader!("display_filter.frag");
+    pub const MINIMIZE: &str = texture_shader!("minimize.frag");
+    pub const BLUR_DOWN: &str = texture_shader!("blur_down.frag");
+    pub const BLUR_UP: &str = texture_shader!("blur_up.frag");
+    pub const SHADOW: &str = pixel_shader!("window_shape.glsl", "shadow.frag");
+    pub const BORDER: &str = pixel_shader!("window_shape.glsl", "border.frag");
 }

@@ -481,12 +481,14 @@ impl State {
     }
 
     pub(crate) fn animating(&self, now: Instant) -> bool {
-        self.space_slide.is_some()
-            || self.focus_transition.is_some()
-            || !self.popup_fades.is_empty()
-            || !self.minimizing.is_empty()
-            || !self.minimize_requests.is_empty()
-            || self.focus_reveal.animating(now)
+        let desktop_drawn = !(self.locked && self.lock_transition.shown());
+        desktop_drawn
+            && (self.space_slide.is_some()
+                || self.focus_transition.is_some()
+                || !self.popup_fades.is_empty()
+                || !self.minimizing.is_empty()
+                || !self.minimize_requests.is_empty()
+                || self.focus_reveal.animating(now))
             || self.theme_fade.is_some()
             || self.lock_transition.animating(now)
     }
@@ -697,7 +699,7 @@ impl State {
         };
         let recent = self
             .shake
-            .last_shake()
+            .last_shake
             .is_some_and(|last| now.duration_since(last) <= CURSOR_SHAKE_ACTIVE_WINDOW);
         let grown =
             now.duration_since(started) >= Duration::from_millis(ctdesign::CURSOR_SHAKE_GROW_MS);

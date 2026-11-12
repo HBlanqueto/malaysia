@@ -213,6 +213,18 @@ impl WindowData {
         Insets::for_window(self.role(), self.state(), decoration, &TITLEBAR)
     }
 
+    // A configure sizes the client for the state it announces, not for the one the client last acked.
+    fn configured_insets(&self, decoration: Decoration) -> Insets {
+        let state = if self.fullscreen && !self.focus_titlebar {
+            WindowState::Fullscreen
+        } else if self.maximized || self.fullscreen {
+            WindowState::Maximized
+        } else {
+            WindowState::Normal
+        };
+        Insets::for_window(self.role(), state, decoration, &TITLEBAR)
+    }
+
     fn is_hidden(&self) -> bool {
         self.hidden || self.off_space || self.deactivated
     }
@@ -374,6 +386,15 @@ impl Windows {
     ) -> Option<WindowId> {
         let index = self.index_of(surface)?;
         let decoration = self.decoration_of(self.windows[index].id);
+        // xdg-shell: a toplevel unmapped by a null buffer starts over; the configure answers its next commit.
+        if !self.windows[index].toplevel.is_initial_configure_sent() {
+            if self.windows[index].acked {
+                self.windows[index].acked = false;
+                self.windows[index].pending_configure = None;
+            } else {
+                self.send_configure(index);
+            }
+        }
         if surface_has_damage(surface) {
             self.windows[index].damaged = true;
         }
@@ -416,7 +437,6 @@ impl Windows {
         };
         if let Some((id, outer_size)) = should_resize {
             let current_origin = self
-                .scene
                 .outer(id)
                 .map(|outer| Point::from((round(outer.x()), round(outer.y()))))
                 .unwrap_or(self.windows[index].placement_origin);
@@ -430,7 +450,7 @@ impl Windows {
                 ScenePoint::new(f64::from(origin.x), f64::from(origin.y)),
                 SceneSize::new(f64::from(outer_size.w), f64::from(outer_size.h)),
             );
-            if self.scene.set_outer(id, outer) {
+            if self.set_outer(index, outer) {
                 self.windows[index].outer_size = outer_size;
                 tracing::debug!(
                     window = id.get(),
@@ -457,7 +477,7 @@ impl Windows {
             self.windows[index].resizing,
             self.windows[index].outer_size,
             self.windows[index].configured,
-            self.windows[index].insets(decoration),
+            self.windows[index].configured_insets(decoration),
         ) {
             self.send_configure(index);
         }
@@ -524,10 +544,13 @@ impl Windows {
         }
     }
 
-    pub fn remove(&mut self, surface: &WlSurface) -> Option<WindowId> {
+    pub fn forget_decoration(&mut self, surface: &WlSurface) {
         let object = surface.id();
         self.pending_decorations
             .retain(|(pending, _)| *pending != object);
+    }
+
+    pub fn remove(&mut self, surface: &WlSurface) -> Option<WindowId> {
         let index = self.index_of(surface)?;
         let id = self.windows.remove(index).id;
         self.scene.remove(id);
@@ -682,6 +705,7 @@ impl Windows {
             };
             let drawable = data.mapped
                 && !data.hidden
+                && !data.deactivated
                 && !minimized.contains(&id)
                 && surface_has_buffer(data.toplevel.wl_surface())
                 && data.damaged
@@ -815,8 +839,8 @@ impl Windows {
             .filter_map(|id| Some((id, self.dialog_parent(id)?)))
             .collect();
         for (dialog, parent) in dialogs {
-            let (Some(outer), Some(parent_outer)) =
-                (self.scene.outer(dialog), self.scene.outer(parent))
+            let (Some(outer), Some(parent_outer), Some(index)) =
+                (self.outer(dialog), self.outer(parent), self.index(dialog))
             else {
                 continue;
             };
@@ -828,7 +852,7 @@ impl Windows {
                 outer.size(),
             );
             if centered != outer {
-                self.scene.set_outer(dialog, centered);
+                self.set_outer(index, centered);
             }
         }
     }
@@ -951,7 +975,7 @@ impl Windows {
         };
         let state_changed = self.windows[index].maximized != maximized;
         self.windows[index].maximized = maximized;
-        self.scene.set_outer(id, outer);
+        self.set_outer(index, outer);
         self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
         self.send_configure(index);
         state_changed
@@ -968,11 +992,7 @@ impl Windows {
         };
         let state_changed = self.windows[index].fullscreen != fullscreen;
         self.windows[index].fullscreen = fullscreen;
-        if self.windows[index].is_hidden() {
-            self.windows[index].hidden_rect = Some(outer);
-        } else {
-            self.scene.set_outer(id, outer);
-        }
+        self.set_outer(index, outer);
         self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
         self.send_configure(index);
         state_changed
@@ -1018,13 +1038,26 @@ impl Windows {
         let Some(index) = self.index(id) else {
             return;
         };
-        self.scene.set_outer(id, outer);
+        self.set_outer(index, outer);
         self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
         self.send_configure(index);
     }
 
     pub fn outer(&self, id: WindowId) -> Option<SceneRect<f64, SceneLogical>> {
-        self.scene.outer(id)
+        let index = self.index(id)?;
+        self.windows[index]
+            .hidden_rect
+            .or_else(|| self.scene.outer(id))
+    }
+
+    fn set_outer(&mut self, index: usize, outer: SceneRect<f64, SceneLogical>) -> bool {
+        let data = &mut self.windows[index];
+        if data.is_hidden() {
+            data.hidden_rect = Some(outer);
+            true
+        } else {
+            self.scene.set_outer(data.id, outer)
+        }
     }
 
     pub fn usable_rect(&self, id: WindowId) -> Option<Rectangle<i32, Logical>> {
@@ -1095,6 +1128,9 @@ impl Windows {
         let object = surface.id();
         if let Some(index) = self.index_of(surface) {
             self.windows[index].requested = Some(requested);
+            return;
+        }
+        if !surface.is_alive() {
             return;
         }
         match self
@@ -1170,11 +1206,7 @@ impl Windows {
         self.scene.decoration(id).unwrap_or(Decoration::Client)
     }
 
-    pub(crate) fn parent_of(&self, id: WindowId) -> Option<WindowId> {
-        self.dialog_parent(id)
-    }
-
-    fn dialog_parent(&self, id: WindowId) -> Option<WindowId> {
+    pub(crate) fn dialog_parent(&self, id: WindowId) -> Option<WindowId> {
         let index = self.index(id)?;
         let parent = self.windows[index].toplevel.parent()?;
         self.id_of(&parent)
@@ -1184,7 +1216,11 @@ impl Windows {
         let id = self.windows[index].id;
         let decoration = self.decoration_of(id);
         let data = &mut self.windows[index];
-        let configured = configure_size(data.placed, data.outer_size, data.insets(decoration));
+        let configured = configure_size(
+            data.placed,
+            data.outer_size,
+            data.configured_insets(decoration),
+        );
         let resizing = data.resizing;
         data.toplevel.with_pending_state(|state| {
             state.size = Some(configured);

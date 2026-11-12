@@ -114,10 +114,8 @@ fn explicit_sync_wins_over_the_implicit_fence() {
 #[test]
 fn a_child_popup_uses_its_parent_grab_serial_or_a_later_one_it_received() {
     let chain = Serial::from(10u32);
-    assert!(child_grab_serial_ok(true, true, chain, chain, None));
+    assert!(child_grab_serial_ok(chain, chain, None));
     assert!(child_grab_serial_ok(
-        true,
-        true,
         chain,
         Serial::from(12u32),
         Some(Serial::from(12u32))
@@ -125,37 +123,14 @@ fn a_child_popup_uses_its_parent_grab_serial_or_a_later_one_it_received() {
 }
 
 #[test]
-fn a_child_without_a_grabbed_parent_is_rejected() {
+fn a_child_serial_the_client_never_received_or_older_than_the_chain_is_rejected() {
     let chain = Serial::from(10u32);
     assert!(!child_grab_serial_ok(
-        false,
-        true,
-        chain,
-        chain,
-        Some(chain)
-    ));
-}
-
-#[test]
-fn a_child_serial_from_another_client_is_rejected() {
-    let chain = Serial::from(10u32);
-    assert!(!child_grab_serial_ok(
-        true,
-        false,
-        chain,
-        chain,
-        Some(chain)
-    ));
-    assert!(!child_grab_serial_ok(
-        true,
-        true,
         chain,
         Serial::from(20u32),
         Some(Serial::from(12u32))
     ));
     assert!(!child_grab_serial_ok(
-        true,
-        true,
         chain,
         Serial::from(9u32),
         Some(Serial::from(12u32))

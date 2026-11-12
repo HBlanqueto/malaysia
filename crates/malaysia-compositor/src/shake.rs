@@ -68,14 +68,9 @@ impl ShakeDetector {
             self.reversals = 0;
             self.started = None;
             self.last_reversal = None;
-            self.last_shake = Some(now);
             return true;
         }
         false
-    }
-
-    pub(crate) fn last_shake(&self) -> Option<Instant> {
-        self.last_shake
     }
 
     fn start(&mut self, direction: i8, swing: f64, now: Instant) {
@@ -84,5 +79,50 @@ impl ShakeDetector {
         self.reversals = 0;
         self.started = Some(now);
         self.last_reversal = Some(now);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ShakeDetector;
+
+    #[test]
+    fn a_rapid_side_to_side_shake_triggers_the_locate_growth() {
+        let mut shake = ShakeDetector::default();
+        let start = std::time::Instant::now();
+        let mut fired = false;
+        for (index, x) in [0.0, 100.0, 0.0, 100.0, 0.0].into_iter().enumerate() {
+            fired |= shake.observe(
+                x,
+                start + std::time::Duration::from_millis(index as u64 * 20),
+            );
+        }
+        assert!(fired, "left-right-left-right should trigger");
+    }
+
+    #[test]
+    fn a_slow_reversal_does_not_trigger_the_locate_growth() {
+        let mut shake = ShakeDetector::default();
+        let start = std::time::Instant::now();
+        let mut fired = false;
+        for (index, x) in [0.0, 100.0, 0.0, 100.0, 0.0].into_iter().enumerate() {
+            let elapsed = std::time::Duration::from_millis(index as u64 * 400);
+            fired |= shake.observe(x, start + elapsed);
+        }
+        assert!(!fired, "one swing per few hundred ms is not a shake");
+    }
+
+    #[test]
+    fn tiny_jitter_does_not_trigger_the_locate_growth() {
+        let mut shake = ShakeDetector::default();
+        let start = std::time::Instant::now();
+        let mut fired = false;
+        for (index, x) in [0.0, 1.0, 0.0, 1.0, 0.0].into_iter().enumerate() {
+            fired |= shake.observe(
+                x,
+                start + std::time::Duration::from_millis(index as u64 * 10),
+            );
+        }
+        assert!(!fired, "sub-pixel jitter is not a deliberate shake");
     }
 }

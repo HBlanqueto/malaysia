@@ -165,22 +165,6 @@ impl Dispatch<GtkShell1, (), State> for GtkShellState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Gesture {
-    Double,
-    Right,
-    Middle,
-}
-
-fn decode_gesture(value: u32) -> Option<Gesture> {
-    match value {
-        1 => Some(Gesture::Double),
-        2 => Some(Gesture::Right),
-        3 => Some(Gesture::Middle),
-        _ => None,
-    }
-}
-
 impl Dispatch<GtkSurface1, WlSurface, State> for GtkShellState {
     fn request(
         state: &mut State,
@@ -244,27 +228,23 @@ impl Dispatch<GtkSurface1, WlSurface, State> for GtkShellState {
                 let Some(id) = state.windows.id_of(surface) else {
                     return;
                 };
-                let gesture: u32 = gesture.into();
-                let Some(gesture) = decode_gesture(gesture) else {
-                    resource.post_error(
-                        protocol::gtk_surface1::Error::InvalidGesture,
-                        "invalid titlebar gesture",
-                    );
-                    return;
-                };
-                match gesture {
-                    Gesture::Double => {
+                match gesture.into_result() {
+                    Ok(protocol::gtk_surface1::Gesture::DoubleClick) => {
                         info!(window = id.get(), "gtk_surface titlebar double_click");
                         state.apply_titlebar_double_click(id);
                     }
                     // macOS titlebars have no right- or middle-click action; GTK delegates them here (v5).
-                    Gesture::Right | Gesture::Middle => {
+                    Ok(gesture) => {
                         debug!(
                             window = id.get(),
                             ?gesture,
                             "gtk_surface titlebar gesture ignored"
                         );
                     }
+                    Err(_) => resource.post_error(
+                        protocol::gtk_surface1::Error::InvalidGesture,
+                        "invalid titlebar gesture",
+                    ),
                 }
             }
             protocol::gtk_surface1::Request::SetA11yProperties {
@@ -427,7 +407,7 @@ mod tests {
 
     use smithay::wayland::xdg_activation::XdgActivationTokenData;
 
-    use super::{Gesture, GtkDbusProperties, capabilities, decode_gesture};
+    use super::{GtkDbusProperties, capabilities};
 
     #[test]
     fn capabilities_follow_the_bar_app_menus() {
@@ -587,20 +567,6 @@ mod tests {
         p.menubar_path.clear();
         p.app_menu_path.clear();
         assert!(p.is_empty());
-    }
-
-    #[test]
-    fn known_gesture_values_decode() {
-        assert_eq!(decode_gesture(1), Some(Gesture::Double));
-        assert_eq!(decode_gesture(2), Some(Gesture::Right));
-        assert_eq!(decode_gesture(3), Some(Gesture::Middle));
-    }
-
-    #[test]
-    fn unknown_gesture_value_is_rejected() {
-        assert_eq!(decode_gesture(0), None);
-        assert_eq!(decode_gesture(4), None);
-        assert_eq!(decode_gesture(u32::MAX), None);
     }
 
     #[test]

@@ -509,7 +509,7 @@ impl State {
     }
 
     pub(crate) fn space_window_mapped(&mut self, id: WindowId) {
-        let parent = self.windows.parent_of(id);
+        let parent = self.windows.dialog_parent(id);
         let assigned = self.spaces.assign(id, parent);
         if assigned.needs_switch
             && let Some(index) = self.spaces.index_of(assigned.space)

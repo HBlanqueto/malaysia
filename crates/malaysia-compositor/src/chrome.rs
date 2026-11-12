@@ -111,6 +111,9 @@ pub(crate) const OUTER_BORDER_SLOT: u8 = 0;
 pub(crate) const INNER_BORDER_SLOT: u8 = 1;
 const SHADOW_SLOT: u8 = 2;
 
+// The client picks the window width: past a GL texture side the titlebar's byte count overflows i32.
+const MAX_TITLEBAR_WIDTH: i32 = 16384;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum FrameOwner {
     Window(WindowId),
@@ -229,11 +232,7 @@ impl ChromeCache {
         };
         let mut elements = Vec::with_capacity(2);
         for (slot, layer) in (SHADOW_SLOT..).zip(style.layers(focused)) {
-            let Some((area, mut uniforms)) =
-                shadow_layer(window_rect, radius, exponent, scale, layer)
-            else {
-                continue;
-            };
+            let (area, mut uniforms) = shadow_layer(window_rect, radius, exponent, scale, layer);
             uniforms.extend(arrow.uniforms(1.0));
             elements.push(
                 PrimaryGpu(self.shader((owner, slot), program, area, layer.opacity, uniforms))
@@ -261,6 +260,9 @@ impl ChromeCache {
         exponent: f32,
     ) -> Option<crate::effects::RoundedTextureElement<R>> {
         use smithay::backend::renderer::ImportMem;
+        if f64::from(width) * scale > f64::from(MAX_TITLEBAR_WIDTH) {
+            return None;
+        }
         let key = Key {
             focused,
             group_hovered: input.group_hovered,
@@ -310,7 +312,10 @@ impl ChromeCache {
         let entry = self.entries.get(&id)?;
         let (w, h) = entry.size;
         let src = Rectangle::from_size(Size::from((f64::from(w), f64::from(h))));
-        let dst = Rectangle::new(physical_point(location, scale), Size::from((w, h)));
+        let dst = Rectangle::new(
+            crate::session::physical_point(location, scale),
+            Size::from((w, h)),
+        );
         Some(crate::effects::RoundedTextureElement::from_texture(
             entry.texture.clone(),
             entry.id.clone(),
@@ -331,11 +336,8 @@ fn shadow_layer(
     exponent: f32,
     scale: f64,
     layer: ctdesign::ShadowLayer,
-) -> Option<(Rectangle<i32, Logical>, Vec<Uniform<'static>>)> {
+) -> (Rectangle<i32, Logical>, Vec<Uniform<'static>>) {
     let margin = (f64::from(shadow_margin(layer)) * scale).ceil() as i32 + 1;
-    if margin <= 0 {
-        return None;
-    }
     let area = crate::effects::shader_area(window_rect, margin, scale);
     let area_physical: Rectangle<i32, Physical> = area.to_physical_precise_round(scale);
     let rect = [
@@ -354,7 +356,7 @@ fn shadow_layer(
         Uniform::new("exponent", exponent),
         Uniform::new("color", color.premultiplied()),
     ];
-    Some((area, uniforms))
+    (area, uniforms)
 }
 
 fn shadow_margin(layer: ctdesign::ShadowLayer) -> i32 {
@@ -394,10 +396,6 @@ pub(crate) fn button_at(
         return None;
     }
     traffic::hit((location.x - outer.x(), location.y - outer.y()))
-}
-
-fn physical_point(point: Point<i32, Logical>, scale: f64) -> Point<i32, Physical> {
-    point.to_f64().to_physical(scale).to_i32_round()
 }
 
 struct TextEngine {
@@ -883,16 +881,26 @@ fn blit_glyph(
             if px < 0 || px >= width {
                 continue;
             }
-            let coverage = if data.len() == (w * h * 4) as usize {
-                f32::from(data[((row * w + col) * 4 + 3) as usize]) / 255.0
+            let (source, coverage) = if data.len() == (w * h * 4) as usize {
+                let texel = &data[((row * w + col) * 4) as usize..][..4];
+                let own_color = ctdesign::Rgba {
+                    r: f32::from(texel[0]) / 255.0,
+                    g: f32::from(texel[1]) / 255.0,
+                    b: f32::from(texel[2]) / 255.0,
+                    ..alpha_color
+                };
+                (own_color, f32::from(texel[3]) / 255.0)
             } else {
-                f32::from(data[(row * w + col) as usize]) / 255.0
+                (
+                    alpha_color,
+                    f32::from(data[(row * w + col) as usize]) / 255.0,
+                )
             };
             if coverage == 0.0 {
                 continue;
             }
             let index = (py * width + px) as usize * 4;
-            blend(&mut pixels[index..index + 4], alpha_color, coverage);
+            blend(&mut pixels[index..index + 4], source, coverage);
         }
     }
 }

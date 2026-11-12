@@ -1139,10 +1139,11 @@ pub(crate) fn build_window_elements<R: MalaysiaRenderer>(
     surface: &WlSurface,
     scale: f64,
 ) -> Vec<OutputRenderElement<R>> {
+    let geometry = crate::window::window_geometry(surface).unwrap_or_default();
     render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
         renderer,
         surface,
-        Point::from((0, 0)),
+        physical_point(Point::from((0, 0)) - geometry.loc, scale),
         scale,
         1.0,
         Kind::Unspecified,

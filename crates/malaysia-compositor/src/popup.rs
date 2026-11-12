@@ -380,11 +380,10 @@ impl State {
     }
 
     pub(crate) fn dismiss_all_popups(&mut self) {
-        let Some(topmost) = self.windows.topmost_popup() else {
-            return;
-        };
-        let ancestors = self.windows.popup_ancestors(topmost);
-        self.dismiss_popups(popup_root(topmost, &ancestors));
+        while let Some(topmost) = self.windows.topmost_popup() {
+            let ancestors = self.windows.popup_ancestors(topmost);
+            self.dismiss_popups(popup_root(topmost, &ancestors));
+        }
     }
 
     pub(crate) fn dismiss_topmost_popup(&mut self) {

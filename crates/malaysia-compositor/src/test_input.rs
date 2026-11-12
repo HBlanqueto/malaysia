@@ -388,9 +388,6 @@ impl State {
                 outer.y() + outer.height() * fy,
             )
         };
-        if self.windows.outer(id).is_none() {
-            return;
-        }
         let time = InputTime::from_millis(0);
         self.pointer_motion(location, time);
         self.pointer_press(BUTTON_LEFT, location, time);
@@ -529,5 +526,41 @@ impl State {
         for (x, y) in test_hover_points() {
             self.pointer_motion(Point::new(x, y), InputTime::from_millis(0));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TEST_KEY_HOLD, TestKey, TestPointer, TestPointerAction};
+    use xkbcommon::xkb::Keycode;
+
+    #[test]
+    fn scripted_text_keys_map_to_ascii_keycodes() {
+        assert_eq!(TestKey::from_name("w").unwrap().code(), Keycode::new(25));
+        assert_eq!(TestKey::from_name("7").unwrap().code(), Keycode::new(16));
+        assert!(TestKey::from_name("ocul").is_none());
+    }
+
+    #[test]
+    fn scripted_modifiers_press_in_order_and_release_in_reverse() {
+        let pointer = TestPointer::parse("key:ctrl+shift+s").unwrap();
+        let actions: Vec<_> = pointer.actions.into_iter().collect();
+        assert_eq!(
+            actions,
+            vec![
+                TestPointerAction::KeyDown(TestKey::Ctrl),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyDown(TestKey::Shift),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyDown(TestKey::Char('s')),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyUp(TestKey::Char('s')),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyUp(TestKey::Shift),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyUp(TestKey::Ctrl),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+            ]
+        );
     }
 }

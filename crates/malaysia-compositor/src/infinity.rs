@@ -270,6 +270,14 @@ impl State {
             tracing::warn!(window = id.get(), pid, "force quit refused");
             return;
         }
+        if u32::try_from(pid).ok() == Some(crate::xwayland::satellite_pid()) {
+            tracing::warn!(
+                window = id.get(),
+                "force quit: an X11 window is asked to close, its client is xwayland-satellite"
+            );
+            self.windows.send_close(id);
+            return;
+        }
         match nix::sys::signal::kill(
             nix::unistd::Pid::from_raw(pid),
             nix::sys::signal::Signal::SIGKILL,
@@ -281,9 +289,17 @@ impl State {
 
     pub(crate) fn infinity_arrange(&mut self, id: WindowId, layout: Layout) {
         info!(window = id.get(), ?layout, "infinity arrange");
-        let Some(outer) = self.windows.outer(id) else {
-            return;
-        };
+        let workspace = self.workspace_rect();
+        self.arrange_to(id, |current_size| {
+            arranged_rect(workspace, layout, current_size)
+        });
+    }
+
+    fn arrange_to(
+        &mut self,
+        id: WindowId,
+        target: impl FnOnce(Size<i32, Logical>) -> SceneRect<f64, SceneLogical>,
+    ) {
         if self.in_focus_mode(id) {
             info!(
                 window = id.get(),
@@ -294,11 +310,12 @@ impl State {
         if self.maximized.contains_key(&id) {
             self.set_maximized(id, false);
         }
-        self.arranged.entry(id).or_insert_with(|| outer);
-        let workspace = self.workspace_rect();
+        let Some(outer) = self.windows.outer(id) else {
+            return;
+        };
+        self.arranged.entry(id).or_insert(outer);
         let current_size = Size::from((round(outer.width()), round(outer.height())));
-        let target = arranged_rect(workspace, layout, current_size);
-        self.apply_infinity_geometry(id, target);
+        self.apply_infinity_geometry(id, target(current_size));
         self.send_restorable(id);
     }
 
@@ -316,10 +333,8 @@ impl State {
         let previous = visible[visible.len() - 2];
         let workspace = self.workspace_rect();
         let [first, second] = pair_rects(workspace, layout);
-        self.infinity_arrange(active, Layout::Fill);
-        self.apply_infinity_geometry(active, first);
-        self.infinity_arrange(previous, Layout::Fill);
-        self.apply_infinity_geometry(previous, second);
+        self.arrange_to(active, |_| first);
+        self.arrange_to(previous, |_| second);
     }
 
     pub(crate) fn infinity_arrange_quarters(&mut self) {
@@ -337,8 +352,7 @@ impl State {
         let workspace = self.workspace_rect();
         let rects = quarter_rects(workspace);
         for (id, rect) in visible.iter().zip(rects.iter()) {
-            self.infinity_arrange(*id, Layout::Fill);
-            self.apply_infinity_geometry(*id, *rect);
+            self.arrange_to(*id, |_| *rect);
         }
     }
 

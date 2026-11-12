@@ -19,7 +19,9 @@ use smithay::wayland::shell::wlr_layer::Layer;
 use crate::cursor::OutputRenderElement;
 use crate::effects::RoundedTextureElement;
 use crate::renderer::MalaysiaRenderer;
-use crate::scene_elements::{LayerSide, append_layers, append_solid, background_of, physical_rect};
+use crate::scene_elements::{
+    LayerSide, append_buffer, append_layers, background_of, physical_rect,
+};
 use crate::state::State;
 
 // ADR 0071: dual Kawase (Bjørge, SIGGRAPH 2015) over the wallpaper, blurred again only when it changes.
@@ -291,9 +293,11 @@ fn wallpaper_elements(
         malaysia_scene::spaces::SpaceKind::Focus { .. }
     );
     if focus_space {
-        append_solid(
+        let size = state.logical_output_size();
+        append_buffer(
+            &mut state.focus_backdrop,
             Point::default(),
-            state.logical_output_size(),
+            size,
             ctdesign::SPACE_GAP_COLOR.premultiplied(),
             scale,
             &mut elements,

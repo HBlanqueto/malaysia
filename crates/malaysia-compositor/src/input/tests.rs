@@ -10,135 +10,14 @@ use smithay::backend::input::{
 use smithay::input::pointer::{ButtonEvent, CursorIcon};
 use smithay::reexports::wayland_server::Display;
 use smithay::utils::{Point, SERIAL_COUNTER, Serial, Size};
-use xkbcommon::xkb::{self, Keycode, keysyms};
 
 use super::{
-    BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, clamp_pointer, compositor_shortcut,
-    desktop_click, double_click, edge_cursor, parse_ms, pointer_focus_blocked,
+    BUTTON_LEFT, Edge, clamp_pointer, confined_step, double_click, edge_cursor, parse_ms,
+    pointer_focus_blocked,
 };
-use crate::shake::ShakeDetector;
 use crate::state::State;
-use crate::test_input::{
-    TEST_KEY_HOLD, TEST_POINTER_STEP_DEFAULT, TestKey, TestPointer, TestPointerAction,
-};
+use crate::test_input::TEST_POINTER_STEP_DEFAULT;
 use malaysia_scene::scene::WindowId;
-
-#[test]
-fn super_letters_are_the_app_menu_shortcuts_only_when_unlocked() {
-    let key = |sym: u32| [xkb::Keysym::from(sym)];
-    let shortcut = |alt: bool, sym: u32, locked: bool| {
-        compositor_shortcut(false, alt, false, true, &key(sym), locked)
-    };
-    assert_eq!(
-        shortcut(false, keysyms::KEY_h, false),
-        CompositorShortcut::HideApp
-    );
-    assert_eq!(
-        shortcut(true, keysyms::KEY_h, false),
-        CompositorShortcut::HideOtherApps
-    );
-    assert_eq!(
-        shortcut(false, keysyms::KEY_q, false),
-        CompositorShortcut::QuitApp
-    );
-    assert_eq!(
-        shortcut(false, keysyms::KEY_m, false),
-        CompositorShortcut::MinimizeWindow
-    );
-    assert_eq!(
-        shortcut(false, keysyms::KEY_w, false),
-        CompositorShortcut::CloseWindow
-    );
-    assert_eq!(
-        shortcut(true, keysyms::KEY_q, false),
-        CompositorShortcut::None
-    );
-    assert_eq!(
-        shortcut(false, keysyms::KEY_q, true),
-        CompositorShortcut::None
-    );
-    assert_eq!(
-        compositor_shortcut(true, false, false, true, &key(keysyms::KEY_q), false),
-        CompositorShortcut::None
-    );
-}
-
-#[test]
-fn ctrl_alt_backspace_quits_only_when_unlocked() {
-    let backspace = [keysyms::KEY_BackSpace.into()];
-    assert_eq!(
-        compositor_shortcut(true, true, false, false, &backspace, false),
-        CompositorShortcut::Quit
-    );
-    assert_eq!(
-        compositor_shortcut(true, true, false, false, &backspace, true),
-        CompositorShortcut::Blocked
-    );
-}
-
-#[test]
-fn alt_super_escape_opens_force_quit_when_unlocked() {
-    let escape = [keysyms::KEY_Escape.into()];
-    assert_eq!(
-        compositor_shortcut(false, true, false, true, &escape, false),
-        CompositorShortcut::ForceQuit
-    );
-    assert_eq!(
-        compositor_shortcut(false, true, false, true, &escape, true),
-        CompositorShortcut::None
-    );
-    assert_eq!(
-        compositor_shortcut(true, true, false, true, &escape, false),
-        CompositorShortcut::None
-    );
-}
-
-#[test]
-fn ctrl_super_arrange_shortcuts_are_ignored_while_locked() {
-    let left = [keysyms::KEY_Left.into()];
-    assert_eq!(
-        compositor_shortcut(true, false, false, true, &left, false),
-        CompositorShortcut::ArrangeLeft
-    );
-    assert_eq!(
-        compositor_shortcut(true, false, true, true, &left, true),
-        CompositorShortcut::None
-    );
-}
-
-#[test]
-fn ctrl_alt_l_locks_or_relaunches() {
-    let l = [keysyms::KEY_L.into()];
-    assert_eq!(
-        compositor_shortcut(true, true, false, false, &l, false),
-        CompositorShortcut::Relock
-    );
-    assert_eq!(
-        compositor_shortcut(true, true, false, false, &l, true),
-        CompositorShortcut::Relock
-    );
-    assert_eq!(
-        compositor_shortcut(false, true, false, false, &l, false),
-        CompositorShortcut::None
-    );
-}
-
-#[test]
-fn ctrl_alt_f_keys_request_their_vt() {
-    let f2 = [keysyms::KEY_F2.into()];
-    assert_eq!(
-        compositor_shortcut(true, true, false, false, &f2, false),
-        CompositorShortcut::Vt(2)
-    );
-    assert_eq!(
-        compositor_shortcut(true, true, false, false, &f2, true),
-        CompositorShortcut::Vt(2)
-    );
-    assert_eq!(
-        compositor_shortcut(false, true, false, false, &f2, false),
-        CompositorShortcut::None
-    );
-}
 
 #[test]
 fn relative_motion_is_clamped_to_the_output_on_all_four_edges() {
@@ -187,152 +66,6 @@ fn a_shake_starts_the_pointer_animation() {
 }
 
 #[test]
-fn super_space_toggles_the_launcher_unless_locked() {
-    let space = [xkb::Keysym::new(0x20)];
-    assert_eq!(
-        compositor_shortcut(false, false, false, true, &space, false),
-        CompositorShortcut::Launcher
-    );
-    assert_eq!(
-        compositor_shortcut(false, false, false, true, &space, true),
-        CompositorShortcut::None
-    );
-    assert_eq!(
-        compositor_shortcut(false, false, true, true, &space, false),
-        CompositorShortcut::None
-    );
-}
-
-#[test]
-fn print_screen_maps_to_the_screenshot_shortcut() {
-    let print = xkb::Keysym::new(keysyms::KEY_Print);
-    assert!(matches!(
-        compositor_shortcut(false, false, false, false, &[print], false),
-        CompositorShortcut::Screenshot
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, false, &[print], false),
-        CompositorShortcut::Screenshot
-    ));
-    let l = xkb::Keysym::new(keysyms::KEY_L);
-    assert!(matches!(
-        compositor_shortcut(true, true, false, false, &[l], false),
-        CompositorShortcut::Relock
-    ));
-}
-
-#[test]
-fn macos_shift_super_keys_map_to_the_screenshot_modes() {
-    let three = xkb::Keysym::new(0x33);
-    let four = xkb::Keysym::new(0x34);
-    assert!(matches!(
-        compositor_shortcut(false, false, true, true, &[three], false),
-        CompositorShortcut::ScreenshotFull
-    ));
-    assert!(matches!(
-        compositor_shortcut(false, false, true, true, &[four], false),
-        CompositorShortcut::ScreenshotRegion
-    ));
-    assert!(matches!(
-        compositor_shortcut(false, false, true, false, &[three], false),
-        CompositorShortcut::None
-    ));
-}
-
-#[test]
-fn ctrl_super_keys_map_to_infinity_arrange_shortcuts() {
-    let left = xkb::Keysym::new(keysyms::KEY_Left);
-    let right = xkb::Keysym::new(keysyms::KEY_Right);
-    let up = xkb::Keysym::new(keysyms::KEY_Up);
-    let down = xkb::Keysym::new(keysyms::KEY_Down);
-    let ret = xkb::Keysym::new(keysyms::KEY_Return);
-    let c = xkb::Keysym::new(keysyms::KEY_c);
-    let r = xkb::Keysym::new(keysyms::KEY_r);
-    let f = xkb::Keysym::new(keysyms::KEY_f);
-
-    assert!(matches!(
-        compositor_shortcut(true, false, false, true, &[left], false),
-        CompositorShortcut::ArrangeLeft
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, true, &[right], false),
-        CompositorShortcut::ArrangeRight
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, true, &[up], false),
-        CompositorShortcut::ArrangeUp
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, true, &[down], false),
-        CompositorShortcut::ArrangeDown
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, true, true, &[left], false),
-        CompositorShortcut::ArrangePairLeft
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, true, true, &[right], false),
-        CompositorShortcut::ArrangePairRight
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, true, true, &[up], false),
-        CompositorShortcut::ArrangePairUp
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, true, true, &[down], false),
-        CompositorShortcut::ArrangePairDown
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, true, &[ret], false),
-        CompositorShortcut::ArrangeFill
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, true, &[c], false),
-        CompositorShortcut::ArrangeCenter
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, true, &[r], false),
-        CompositorShortcut::ArrangeRestore
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, true, &[f], false),
-        CompositorShortcut::ToggleFullscreen
-    ));
-
-    assert!(matches!(
-        compositor_shortcut(true, true, false, true, &[left], false),
-        CompositorShortcut::None
-    ));
-}
-
-#[test]
-fn ctrl_alt_arrows_switch_spaces_and_ctrl_alt_n_adds_a_desktop() {
-    let left = xkb::Keysym::from(keysyms::KEY_Left);
-    let right = xkb::Keysym::from(keysyms::KEY_Right);
-    let n = xkb::Keysym::from(keysyms::KEY_n);
-    assert!(matches!(
-        compositor_shortcut(true, true, false, false, &[left], false),
-        CompositorShortcut::PreviousSpace
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, true, false, false, &[right], false),
-        CompositorShortcut::NextSpace
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, true, false, false, &[n], false),
-        CompositorShortcut::AddDesktop
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, false, false, false, &[left], false),
-        CompositorShortcut::None
-    ));
-    assert!(matches!(
-        compositor_shortcut(true, true, false, false, &[right], true),
-        CompositorShortcut::None
-    ));
-}
-
-#[test]
 fn the_pointer_grows_before_the_shake_holds_it() {
     let (_display, mut state) = test_state((1280, 720));
     let now = std::time::Instant::now();
@@ -344,46 +77,6 @@ fn the_pointer_grows_before_the_shake_holds_it() {
         scale < 1.5,
         "the growth was skipped: the pointer jumped to {scale}"
     );
-}
-
-#[test]
-fn a_rapid_side_to_side_shake_triggers_the_locate_growth() {
-    let mut shake = ShakeDetector::default();
-    let start = std::time::Instant::now();
-    let mut fired = false;
-    for (index, x) in [0.0, 100.0, 0.0, 100.0, 0.0].into_iter().enumerate() {
-        fired |= shake.observe(
-            x,
-            start + std::time::Duration::from_millis(index as u64 * 20),
-        );
-    }
-    assert!(fired, "left-right-left-right should trigger");
-}
-
-#[test]
-fn a_slow_reversal_does_not_trigger_the_locate_growth() {
-    let mut shake = ShakeDetector::default();
-    let start = std::time::Instant::now();
-    let mut fired = false;
-    for (index, x) in [0.0, 100.0, 0.0, 100.0, 0.0].into_iter().enumerate() {
-        let elapsed = std::time::Duration::from_millis(index as u64 * 400);
-        fired |= shake.observe(x, start + elapsed);
-    }
-    assert!(!fired, "one swing per few hundred ms is not a shake");
-}
-
-#[test]
-fn tiny_jitter_does_not_trigger_the_locate_growth() {
-    let mut shake = ShakeDetector::default();
-    let start = std::time::Instant::now();
-    let mut fired = false;
-    for (index, x) in [0.0, 1.0, 0.0, 1.0, 0.0].into_iter().enumerate() {
-        fired |= shake.observe(
-            x,
-            start + std::time::Duration::from_millis(index as u64 * 10),
-        );
-    }
-    assert!(!fired, "sub-pixel jitter is not a deliberate shake");
 }
 
 #[test]
@@ -688,9 +381,18 @@ fn pressing_and_releasing_the_same_titlebar_button_fires_it() {
 }
 
 #[test]
-fn a_click_on_the_desktop_clears_the_keyboard_focus() {
-    assert_eq!(desktop_click(false), DesktopClick::ClearFocus);
-    assert_eq!(desktop_click(true), DesktopClick::CloseMenu);
+fn a_confined_pointer_slides_along_the_edge_it_cannot_cross() {
+    let inside = |point: Point<f64, _>| point.x < 10.0 && point.y < 10.0;
+    let from = Point::new(8.0, 8.0);
+    assert_eq!(
+        confined_step(from, Point::new(12.0, 9.0), inside),
+        Point::new(8.0, 9.0)
+    );
+    assert_eq!(
+        confined_step(from, Point::new(9.0, 12.0), inside),
+        Point::new(9.0, 8.0)
+    );
+    assert_eq!(confined_step(from, Point::new(12.0, 12.0), inside), from);
 }
 
 #[test]
@@ -700,13 +402,6 @@ fn the_traffic_lights_are_not_the_double_click_title_area() {
         ctappearance::traffic::hit((x + size / 2.0, y + size / 2.0)),
         Some(ctdesign::ButtonKind::Close)
     );
-}
-
-#[test]
-fn scripted_text_keys_map_to_ascii_keycodes() {
-    assert_eq!(TestKey::from_name("w").unwrap().code(), Keycode::new(25));
-    assert_eq!(TestKey::from_name("7").unwrap().code(), Keycode::new(16));
-    assert!(TestKey::from_name("ocul").is_none());
 }
 
 #[test]
@@ -750,29 +445,6 @@ fn fixed_width_needs_equal_nonzero_min_and_max_widths() {
         Size::from((760, 620)),
         Size::from((0, 0))
     ));
-}
-
-#[test]
-fn scripted_modifiers_press_in_order_and_release_in_reverse() {
-    let pointer = TestPointer::parse("key:ctrl+shift+s").unwrap();
-    let actions: Vec<_> = pointer.actions.into_iter().collect();
-    assert_eq!(
-        actions,
-        vec![
-            TestPointerAction::KeyDown(TestKey::Ctrl),
-            TestPointerAction::Wait(TEST_KEY_HOLD),
-            TestPointerAction::KeyDown(TestKey::Shift),
-            TestPointerAction::Wait(TEST_KEY_HOLD),
-            TestPointerAction::KeyDown(TestKey::Char('s')),
-            TestPointerAction::Wait(TEST_KEY_HOLD),
-            TestPointerAction::KeyUp(TestKey::Char('s')),
-            TestPointerAction::Wait(TEST_KEY_HOLD),
-            TestPointerAction::KeyUp(TestKey::Shift),
-            TestPointerAction::Wait(TEST_KEY_HOLD),
-            TestPointerAction::KeyUp(TestKey::Ctrl),
-            TestPointerAction::Wait(TEST_KEY_HOLD),
-        ]
-    );
 }
 
 #[test]

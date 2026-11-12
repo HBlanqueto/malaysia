@@ -159,9 +159,14 @@ impl CompositorHandler for State {
             }
         });
         on_commit_buffer_handler::<Self>(surface);
+        let keyboard_before = self
+            .layers
+            .entry_of(surface)
+            .map(|entry| entry.keyboard_interactivity);
         if let Some(layer) = self.layers.commit(surface, self.logical_output_size()) {
             self.layer_surface_mapped(&layer);
         }
+        self.layer_keyboard_mode_committed(surface, keyboard_before);
         let workspace = {
             let (origin, size) = self.workspace();
             Rectangle::new(origin, size)
@@ -191,6 +196,7 @@ impl CompositorHandler for State {
     }
 
     fn destroyed(&mut self, surface: &WlSurface) {
+        self.windows.forget_decoration(surface);
         self.clear_surface_appmenu(surface);
         self.clear_surface_gtk_menus(surface);
     }
@@ -346,6 +352,15 @@ impl ImageCopyCaptureHandler for State {
             frame.fail(CaptureFailureReason::Unknown);
             return;
         };
+        let (CaptureTarget::Output { size } | CaptureTarget::Window { size, .. }) = target;
+        let advertised = session.current_constraints().map(|current| current.size);
+        if advertised != Some(Size::from((size.w, size.h)))
+            && let Some(constraints) = self.capture_constraints(&session.source())
+        {
+            session.update_constraints(constraints);
+            frame.fail(CaptureFailureReason::BufferConstraints);
+            return;
+        }
         self.pending_captures.push(crate::capture::PendingCapture {
             frame,
             target,
@@ -929,8 +944,7 @@ impl XdgShellHandler for State {
                 );
                 return;
             };
-            let same_client = parent.id().same_client_as(&wl_surface.id());
-            if !same_client {
+            if !parent.id().same_client_as(&wl_surface.id()) {
                 tracing::info!(
                     popup = ?wl_surface.id(),
                     "rejected popup grab: the parent and child are different clients"
@@ -938,7 +952,7 @@ impl XdgShellHandler for State {
                 return;
             }
             let last_delivered = self.client_last_input_serial(&wl_surface);
-            if !child_grab_serial_ok(true, same_client, chain_serial, serial, last_delivered) {
+            if !child_grab_serial_ok(chain_serial, serial, last_delivered) {
                 tracing::info!(
                     serial = ?serial,
                     chain = ?chain_serial,
@@ -997,18 +1011,9 @@ impl XdgShellHandler for State {
     }
 }
 
-fn child_grab_serial_ok(
-    parent_grabbed: bool,
-    same_client: bool,
-    chain: Serial,
-    serial: Serial,
-    last_delivered: Option<Serial>,
-) -> bool {
-    parent_grabbed
-        && same_client
-        && (serial == chain
-            || (serial.is_no_older_than(&chain)
-                && last_delivered.is_some_and(|last| serial <= last)))
+fn child_grab_serial_ok(chain: Serial, serial: Serial, last_delivered: Option<Serial>) -> bool {
+    serial == chain
+        || (serial.is_no_older_than(&chain) && last_delivered.is_some_and(|last| serial <= last))
 }
 
 fn decoration_for_xdg_mode(mode: Mode) -> Decoration {
@@ -1026,12 +1031,31 @@ fn decoration_for_kde_mode(mode: KdeMode) -> Decoration {
 }
 
 impl State {
-    fn apply_requested_decoration(&mut self, surface: &WlSurface, requested: Option<Decoration>) {
+    fn apply_requested_decoration(
+        &mut self,
+        surface: &WlSurface,
+        requested: Option<Decoration>,
+    ) -> Decoration {
         if let Some(requested) = requested {
             self.windows.set_requested_decoration(surface, requested);
         }
         let effective = self.effective_decoration(surface, requested);
         self.windows.set_decoration(surface, effective);
+        effective
+    }
+
+    fn apply_kde_decoration(
+        &mut self,
+        surface: &WlSurface,
+        decoration: &OrgKdeKwinServerDecoration,
+        requested: Decoration,
+    ) {
+        decoration.mode(
+            match self.apply_requested_decoration(surface, Some(requested)) {
+                Decoration::Server => KdeMode::Server,
+                Decoration::Client => KdeMode::Client,
+            },
+        );
     }
 
     fn apply_initial_decoration(&mut self, surface: &WlSurface) {
@@ -1078,8 +1102,7 @@ impl KdeDecorationHandler for State {
     }
 
     fn new_decoration(&mut self, surface: &WlSurface, decoration: &OrgKdeKwinServerDecoration) {
-        decoration.mode(KdeMode::Server);
-        self.apply_requested_decoration(surface, Some(Decoration::Server));
+        self.apply_kde_decoration(surface, decoration, Decoration::Server);
     }
 
     fn request_mode(
@@ -1091,8 +1114,7 @@ impl KdeDecorationHandler for State {
         let WEnum::Value(mode) = mode else {
             return;
         };
-        decoration.mode(mode);
-        self.apply_requested_decoration(surface, Some(decoration_for_kde_mode(mode)));
+        self.apply_kde_decoration(surface, decoration, decoration_for_kde_mode(mode));
     }
 
     fn release(&mut self, _decoration: &OrgKdeKwinServerDecoration, surface: &WlSurface) {

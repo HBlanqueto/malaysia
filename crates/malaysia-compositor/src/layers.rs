@@ -38,6 +38,25 @@ impl LayerEntry {
                     || self.anchors.contains(Anchor::BOTTOM)
                         && !self.anchors.contains(Anchor::TOP)))
     }
+
+    fn reconfigure(&mut self, output_size: Size<i32, Logical>, reserved: (i32, i32)) {
+        let state = cached_state_of(self.surface.wl_surface());
+        let mut geometry = geometry_of(&state, output_size, reserved);
+        if self.moved {
+            geometry.loc = self.geometry.loc;
+        }
+        let exclusive_zone = exclusive_zone_of(&state);
+        self.anchors = state.anchor;
+        self.keyboard_interactivity = state.keyboard_interactivity;
+        if geometry != self.geometry || exclusive_zone != self.exclusive_zone {
+            self.surface.with_pending_state(|pending| {
+                pending.size = Some(geometry.size);
+            });
+            self.surface.send_pending_configure();
+            self.geometry = geometry;
+            self.exclusive_zone = exclusive_zone;
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -88,24 +107,17 @@ impl Layers {
             .iter_mut()
             .find(|e| e.surface.wl_surface() == surface)
         {
-            let state = cached_state_of(surface);
-            let mut geometry = geometry_of(&state, output_size, reserved);
-            if entry.moved {
-                geometry.loc = entry.geometry.loc;
-            }
-            let exclusive_zone = exclusive_zone_of(&state);
-            entry.anchors = state.anchor;
-            entry.keyboard_interactivity = state.keyboard_interactivity;
-            if geometry != entry.geometry || exclusive_zone != entry.exclusive_zone {
-                entry.surface.with_pending_state(|pending| {
-                    pending.size = Some(geometry.size);
-                });
-                entry.surface.send_pending_configure();
-                entry.geometry = geometry;
-                entry.exclusive_zone = exclusive_zone;
-            }
+            entry.reconfigure(output_size, reserved);
         }
         None
+    }
+
+    pub fn output_resized(&mut self, output_size: Size<i32, Logical>) {
+        self.mapped.retain(|e| e.surface.wl_surface().alive());
+        let reserved = self.reserved();
+        for entry in &mut self.mapped {
+            entry.reconfigure(output_size, reserved);
+        }
     }
 
     pub fn entry_of(&self, surface: &WlSurface) -> Option<&LayerEntry> {
@@ -191,12 +203,14 @@ impl Layers {
             .map(|entry| entry.geometry)
     }
 
+    // wlr-layer-shell: a surface anchored to two opposite edges reserves on the edge between them.
     pub fn exclusive_top(&self) -> i32 {
         self.mapped
             .iter()
             .filter(|entry| {
                 matches!(entry.layer, Layer::Top | Layer::Overlay)
                     && entry.anchors.contains(Anchor::TOP)
+                    && !entry.anchors.contains(Anchor::BOTTOM)
             })
             .map(|entry| entry.exclusive_zone)
             .sum()
@@ -208,6 +222,7 @@ impl Layers {
             .filter(|entry| {
                 matches!(entry.layer, Layer::Top | Layer::Overlay)
                     && entry.anchors.contains(Anchor::BOTTOM)
+                    && !entry.anchors.contains(Anchor::TOP)
             })
             .map(|entry| entry.exclusive_zone)
             .sum()

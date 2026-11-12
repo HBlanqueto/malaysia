@@ -214,7 +214,7 @@ impl IdleState {
                     notification.idle = false;
                 }
                 self.sink.remove(id);
-            } else if !idle && (ignore || !inhibited) {
+            } else if !idle && !ignore {
                 self.sink.insert(id, timeout);
             }
         }

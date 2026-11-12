@@ -9,6 +9,7 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use nix::fcntl::{FcntlArg, FdFlag, fcntl};
@@ -25,6 +26,12 @@ static DISPLAY: OnceLock<String> = OnceLock::new();
 
 pub fn display() -> Option<&'static str> {
     DISPLAY.get().map(String::as_str)
+}
+
+static SATELLITE_PID: AtomicU32 = AtomicU32::new(0);
+
+pub fn satellite_pid() -> u32 {
+    SATELLITE_PID.load(Ordering::Relaxed)
 }
 
 pub struct Xwayland {
@@ -79,7 +86,7 @@ fn ensure_socket_dir() -> io::Result<()> {
     match fs::create_dir(SOCKET_DIR) {
         Ok(()) => fs::set_permissions(SOCKET_DIR, fs::Permissions::from_mode(0o1777)),
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-            let owner = fs::metadata(SOCKET_DIR)?.uid();
+            let owner = fs::symlink_metadata(SOCKET_DIR)?.uid();
             if owner == 0 || owner == nix::unistd::getuid().as_raw() {
                 Ok(())
             } else {
@@ -144,7 +151,9 @@ fn spawn_satellite(
             Ok(())
         });
     }
-    crate::spawn::spawn(command, &Config::default())
+    let child = crate::spawn::spawn(command, &Config::default())?;
+    SATELLITE_PID.store(child.id(), Ordering::Relaxed);
+    Ok(child)
 }
 
 fn supervise(mut child: Child, display: &str, wayland_display: &str, listeners: &[UnixListener]) {

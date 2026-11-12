@@ -223,7 +223,8 @@ fb02921^:docs/bloques/14-menu-global.md`) and the cited code.
   - Force Quit… (⌥❖Esc, no longer in the ❄ menu): `malaysia-shell force-quit` lists
     one row per `zwlr_foreign_toplevel` app with its icon; the button requests
     `force_quit` (Infinity v4, barrierkit `8b96ae7`) and the compositor sends
-    SIGKILL to the pid from the socket credentials.
+    SIGKILL to the pid from the socket credentials. An X11 window is asked to
+    close instead: that pid is `xwayland-satellite`, shared by every X11 app.
   - About This PC: `malaysia-shell about`, a fixed window with traffic lights
     like «About This Mac». Model from DMI (Lenovo stores «ThinkPad …» in
     `product_version`); drawing `about/thinkpad.svg` for ThinkPad and

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use smithay::reexports::wayland_server::backend::GlobalId;
+use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
 use smithay::wayland::{Dispatch2, GlobalDispatch2};
 
@@ -46,6 +46,11 @@ impl Dispatch2<InfinitySessionV1, State> for SessionNoticeGlobalData {
         _dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State>,
     ) {
+    }
+
+    fn destroyed(&self, state: &mut State, _client: ClientId, resource: &InfinitySessionV1) {
+        let id = resource.id();
+        state.session_notices.retain(|notice| notice.id() != id);
     }
 }
 

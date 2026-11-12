@@ -20,7 +20,10 @@ pub struct ForeignState {
 impl ForeignState {
     pub fn new(display: &DisplayHandle) -> Self {
         Self {
-            list: ForeignToplevelListState::new::<State>(display),
+            list: ForeignToplevelListState::new_with_filter::<State>(
+                display,
+                crate::security::unrestricted,
+            ),
             management: ForeignManagement::new(display),
         }
     }
@@ -81,6 +84,10 @@ pub(crate) fn toplevel_states(
 }
 
 fn advertise_to_manager(state: &mut State, id: WindowId, manager: &ZwlrForeignToplevelManagerV1) {
+    // A modal dialog is part of its window, like an AppKit sheet: the Dock never lists it.
+    if state.windows.is_modal(id) {
+        return;
+    }
     let Some((title, app_id)) = state.windows.active_info(id) else {
         return;
     };
@@ -101,7 +108,7 @@ fn advertise_to_manager(state: &mut State, id: WindowId, manager: &ZwlrForeignTo
         handle.output_enter(&output);
     }
     if handle.version() >= 3
-        && let Some(parent) = state.windows.parent_of(id)
+        && let Some(parent) = state.windows.dialog_parent(id)
         && let Some(parent) = state
             .foreign
             .management
@@ -174,6 +181,9 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
             return;
         }
         let id = *data;
+        if state.windows.surface_of(id).is_none() {
+            return;
+        }
         match request {
             zwlr_foreign_toplevel_handle_v1::Request::Activate { seat: _ } => {
                 state.activate_window(id);
@@ -219,7 +229,6 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
 
 impl State {
     pub(crate) fn foreign_window_mapped(&mut self, id: WindowId) {
-        // A modal dialog is part of its window, like an AppKit sheet: the Dock never lists it.
         if self.windows.is_modal(id) {
             return;
         }
@@ -246,7 +255,12 @@ impl State {
     pub(crate) fn foreign_window_destroyed(&mut self, id: WindowId) {
         self.minimize_hints.remove(&id);
         self.minimizing.retain(|effect| effect.window != id);
-        self.list_handles.retain(|(wid, _)| *wid != id);
+        self.list_handles.retain(|(wid, handle)| {
+            if *wid == id {
+                self.foreign.list.remove_toplevel(handle);
+            }
+            *wid != id
+        });
         self.foreign.management.handles.retain(|(wid, handle)| {
             if *wid == id {
                 if handle.is_alive() {

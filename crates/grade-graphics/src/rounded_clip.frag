@@ -18,5 +18,8 @@ void main() {
     float coverage = window_coverage(dist);
 
     vec4 color = texture2D(tex, v_coords);
+#if defined(NO_ALPHA)
+    color = vec4(color.rgb, 1.0);
+#endif
     gl_FragColor = color * (coverage * alpha);
 }

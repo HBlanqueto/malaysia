@@ -78,7 +78,7 @@ pub(crate) struct Session {
     pub(crate) last_frame_duration: Option<Duration>,
     pub(crate) estimated_vblank: Option<RegistrationToken>,
     appearance_watch: Option<AppearanceWatch>,
-    filter_target: Option<smithay::backend::renderer::gles::GlesTexture>,
+    filter_target: Option<crate::display_filter::FilterTarget>,
 }
 
 pub(crate) struct PendingFrameRelease {
@@ -483,6 +483,14 @@ fn handle_event(event: WinitEvent, session: &mut Session) {
         WinitEvent::Redraw => redraw(session),
         WinitEvent::Resized { size, .. } => {
             session.state.output_size = size;
+            session
+                .state
+                .layers
+                .output_resized(session.state.logical_output_size());
+            for surface in &session.state.lock_surfaces {
+                session.state.fit_lock_surface(surface);
+                surface.send_configure();
+            }
             session.state.output.change_current_state(
                 Some(OutputMode {
                     size,
@@ -534,13 +542,14 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             .follow_pointer_size(session.state.config.appearance.pointer_size);
         crate::blur::update(&mut session.state, renderer, capture_size);
         let elements = build_output_elements(&mut session.state, renderer, &session.cursor, true);
-        let filtered = crate::display_filter::element(
+        let (filtered, filter_states) = crate::display_filter::element(
             &mut session.state,
             renderer,
             &session.cursor,
             capture_size,
             &mut session.filter_target,
-        );
+        )
+        .unzip();
 
         session.state.init_capture_dma(renderer);
 
@@ -582,8 +591,9 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             )
             .map_err(DrawError::Output)?;
 
-        update_primary_scanout_outputs(&session.state, &result.states);
-        let feedback = take_presentation_feedback(&session.state, &result.states);
+        let states = filter_states.as_ref().unwrap_or(&result.states);
+        update_primary_scanout_outputs(&session.state, states);
+        let feedback = take_presentation_feedback(&session.state, states);
         let mut damage = result.damage.cloned();
         let sync = result.sync.clone();
         drop(result);
