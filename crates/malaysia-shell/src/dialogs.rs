@@ -203,11 +203,26 @@ impl App for ConfirmApp {
 }
 
 fn confirm_view(action: PowerAction, seconds: u32) -> VStack {
-    let confirm = move || {
-        power::run(action);
-        close();
-    };
     let text = confirm_text(action);
+    confirm_panel(
+        text.glyph,
+        text.question,
+        countdown_text(action, seconds),
+        text.button,
+        move || {
+            power::run(action);
+            close();
+        },
+    )
+}
+
+fn confirm_panel(
+    glyph: &'static str,
+    question: &'static str,
+    detail: String,
+    button: &'static str,
+    confirm: impl Fn() + Copy + 'static,
+) -> VStack {
     let palette = Palette::current();
     panel()
         .spacing(0.0)
@@ -217,9 +232,9 @@ fn confirm_view(action: PowerAction, seconds: u32) -> VStack {
             Key::Named(NamedKey::Enter) => confirm(),
             _ => {}
         })
-        .child(power_badge(text.glyph))
+        .child(power_badge(glyph))
         .child(
-            Text::new(text.question)
+            Text::new(question)
                 .width(Size::fill())
                 .padding(Gaps::new(14.0, 0.0, SPACE_2, 0.0))
                 .font_size(BODY.size as f32)
@@ -227,7 +242,7 @@ fn confirm_view(action: PowerAction, seconds: u32) -> VStack {
                 .color(theme::color(palette.label)),
         )
         .child(
-            Text::new(countdown_text(action, seconds))
+            Text::new(detail)
                 .width(Size::fill())
                 .font_size(CALLOUT.size as f32)
                 .color(theme::color(palette.label)),
@@ -238,7 +253,32 @@ fn confirm_view(action: PowerAction, seconds: u32) -> VStack {
                 .height(Size::flex(1.0))
                 .min_height(Size::px(18.0)),
         )
-        .child(wide_buttons(text.button, confirm))
+        .child(wide_buttons(button, confirm))
+}
+
+const TRASH_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><path d=\"M7 9h18M13 9V6h6v3M9.5 9l1.2 16.5h10.6L22.5 9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+
+struct EmptyTrashApp;
+
+impl App for EmptyTrashApp {
+    fn render(&self) -> impl IntoElement {
+        bk::theme::use_shell_theme();
+        confirm_panel(
+            TRASH_SVG,
+            tr!("trash-empty-question"),
+            tr!("trash-empty-detail").to_string(),
+            tr!("trash-empty"),
+            || {
+                crate::trash::empty();
+                close();
+            },
+        )
+    }
+}
+
+pub fn run_empty_trash() -> anyhow::Result<()> {
+    run_layer(AppComponent::new(EmptyTrashApp), spec(CONFIRM_SIZE))
+        .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
 pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {

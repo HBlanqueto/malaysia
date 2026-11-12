@@ -70,7 +70,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    it, toward the screen (`pop_up_menu`): above it on a bottom Dock. The Dock
    stays up and magnified until the menu closes. On an app it lists the
    windows (a diamond marks a minimized one), Options › Keep in Dock, and
-   Hide and Quit (or Open). On Downloads and the Trash it has Open. On the
+   Hide and Quit (or Open). On Downloads and the Trash it has Open; the Trash adds Empty Trash, which
+   asks first (`malaysia-shell empty-trash`) and erases the home trash
+   (`$XDG_DATA_HOME/Trash`), not the trash of other volumes. On the
    separator it turns hiding and magnification on or off, sets the position
    and the minimize effect, and opens Dock Settings; these write
    `dock.domain`.

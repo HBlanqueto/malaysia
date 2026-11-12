@@ -45,7 +45,7 @@ use crate::launcher::{ICON_SIZES, IconData, app_icon, forget_icons, launch, load
 use crate::launcher_entry::{self, Entries, Entry};
 use crate::localize::tr;
 use crate::menubar::{find_entry, resolve_app_name};
-use crate::spawn::{open_settings, xdg_open};
+use crate::spawn::{open_settings, spawn_component, xdg_open};
 use geometry::Slot;
 use items::{AppTile, Item};
 
@@ -816,7 +816,20 @@ impl App for DockApp {
                             .on_press(move |_| xdg_open(TRASH))
                             .on_secondary_down({
                                 let anchor = menu.anchor(slot.start, slot.length, slot.size);
-                                move |_| menu.open(open_menu(), anchor, |_: String| xdg_open(TRASH))
+                                move |_| {
+                                    let mut items = open_menu();
+                                    items.push(
+                                        MenuItem::action("empty", tr!("trash-empty"))
+                                            .with_enabled(!crate::trash::is_empty()),
+                                    );
+                                    menu.open(items, anchor, |command: String| {
+                                        if command == "empty" {
+                                            spawn_component("empty-trash")
+                                        } else {
+                                            xdg_open(TRASH)
+                                        }
+                                    })
+                                }
                             })
                             .into_element(),
                     );

@@ -12,6 +12,7 @@ mod notifications;
 mod pam;
 mod power;
 mod spawn;
+mod trash;
 
 use std::io::IsTerminal;
 use std::process::ExitCode;
@@ -28,6 +29,7 @@ components:
               the notification server, banners and Notification Center
   power <restart|shutdown|logout>
               confirm a power action (MALAYSIA_POWER_DRY_RUN=1 only logs it)
+  empty-trash confirm emptying the Trash
   force-quit  the Force Quit list of running apps
   about       About This Computer
   about-app <app_id>
@@ -46,6 +48,7 @@ fn main() -> ExitCode {
         Some("launcher") => launcher::run(),
         Some("notifications") => notifications::run(),
         Some("power") => dialogs::run_confirm(std::env::args().nth(2).as_deref()),
+        Some("empty-trash") => dialogs::run_empty_trash(),
         Some("force-quit") => dialogs::run_force_quit(),
         Some("about") => dialogs::run_about(),
         Some("about-app") => dialogs::run_about_app(std::env::args().nth(2).as_deref()),
