@@ -50,6 +50,7 @@ use geometry::Slot;
 use items::{AppTile, Item};
 
 const DOMAIN: &str = "dock";
+const TRASH: &str = "trash:///";
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
@@ -398,7 +399,16 @@ impl App for DockApp {
             });
             AnimNum::new(0.0, 1.0).time(DOCK_BOUNCE_MS)
         });
-        let bouncing = !launching.read().is_empty();
+        // macOS: an app that asks for attention bounces until one of its windows is active.
+        let attention: Vec<String> = running
+            .iter()
+            .filter(|(id, windows)| {
+                !windows.iter().any(|window| window.active)
+                    && launcher_entry(&launcher_entries, id).is_some_and(|entry| entry.urgent())
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        let bouncing = !(launching.read().is_empty() && attention.is_empty());
         use_side_effect_with_deps(&bouncing, move |bouncing: &bool| {
             if *bouncing {
                 bounce.start();
@@ -633,7 +643,7 @@ impl App for DockApp {
                     if app.kept && drag_now.as_ref().is_none_or(|drag| drag.id != app.id) {
                         drop_targets.push((app.id.clone(), center));
                     }
-                    let lift = if launching_now.contains(&app.id) {
+                    let lift = if launching_now.contains(&app.id) || attention.contains(&app.id) {
                         (PI * phase).sin() * tile * DOCK_BOUNCE_HEIGHT
                     } else {
                         0.0
@@ -779,7 +789,19 @@ impl App for DockApp {
                                 tr!("dock-downloads"),
                                 slot.size,
                             ))
-                            .on_press(move |_| xdg_open(&folder))
+                            .on_press({
+                                let folder = folder.clone();
+                                move |_| xdg_open(&folder)
+                            })
+                            .on_secondary_down({
+                                let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                                move |_| {
+                                    let folder = folder.clone();
+                                    menu.open(open_menu(), anchor, move |_: String| {
+                                        xdg_open(&folder)
+                                    })
+                                }
+                            })
                             .into_element(),
                     );
                 }
@@ -791,7 +813,11 @@ impl App for DockApp {
                                 tr!("dock-trash"),
                                 slot.size,
                             ))
-                            .on_press(move |_| xdg_open("trash:///"))
+                            .on_press(move |_| xdg_open(TRASH))
+                            .on_secondary_down({
+                                let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                                move |_| menu.open(open_menu(), anchor, |_: String| xdg_open(TRASH))
+                            })
                             .into_element(),
                     );
                 }
@@ -1057,13 +1083,22 @@ fn progress_bar(size: f32, progress: f64, track: Color, fill: Color) -> Rect {
         )
 }
 
+fn open_menu() -> Vec<MenuItem> {
+    vec![MenuItem::action("open", tr!("dock-open"))]
+}
+
 fn app_menu(app: &AppTile) -> Vec<MenuItem> {
     let mut menu: Vec<MenuItem> = app
         .windows
         .iter()
         .map(|window| {
-            MenuItem::action(format!("window:{}", window.id), window_title(window))
-                .with_check(CheckState::Checkbox(window.active))
+            MenuItem::action(format!("window:{}", window.id), window_title(window)).with_check(
+                if window.minimized {
+                    CheckState::Minimized
+                } else {
+                    CheckState::Checkbox(window.active)
+                },
+            )
         })
         .collect();
     if !menu.is_empty() {

@@ -17,6 +17,7 @@ pub(crate) struct Entry {
     count_visible: bool,
     progress: Option<f64>,
     progress_visible: bool,
+    urgent: bool,
     sender: String,
 }
 
@@ -29,6 +30,10 @@ impl Entry {
         self.progress
             .filter(|_| self.progress_visible)
             .map(|progress| progress.clamp(0.0, 1.0))
+    }
+
+    pub(crate) fn urgent(&self) -> bool {
+        self.urgent
     }
 }
 
@@ -53,6 +58,7 @@ fn update(
             "count-visible" => entry.count_visible = bool::try_from(value).unwrap_or(false),
             "progress" => entry.progress = f64::try_from(value).ok(),
             "progress-visible" => entry.progress_visible = bool::try_from(value).unwrap_or(false),
+            "urgent" => entry.urgent = bool::try_from(value).unwrap_or(false),
             _ => {}
         }
     }

@@ -62,13 +62,15 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 7. **Clicks.** A click on an open app activates its first visible window, or
    restores a minimized one. On a closed app it launches the `.desktop`
    entry with an activation token; with `launchanim` the icon bounces until a
-   window of the app appears or `DOCK_LAUNCH_TIMEOUT_MS` passes. A minimized
+   window of the app appears or `DOCK_LAUNCH_TIMEOUT_MS` passes. An app whose
+   `LauncherEntry` is `urgent` bounces until one of its windows is active. A minimized
    window tile restores that window. Downloads and Trash open in the file
    manager (`xdg-open`).
 8. **Menus.** A secondary click opens the menu beside the icon, centred on
    it, toward the screen (`pop_up_menu`): above it on a bottom Dock. The Dock
    stays up and magnified until the menu closes. On an app it lists the
-   windows, Options › Keep in Dock, and Hide and Quit (or Open). On the
+   windows (a diamond marks a minimized one), Options › Keep in Dock, and
+   Hide and Quit (or Open). On Downloads and the Trash it has Open. On the
    separator it turns hiding and magnification on or off, sets the position
    and the minimize effect, and opens Dock Settings; these write
    `dock.domain`.
