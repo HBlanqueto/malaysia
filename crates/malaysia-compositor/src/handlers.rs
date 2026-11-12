@@ -1077,7 +1077,12 @@ impl State {
                 "native app without a decoration mode"
             );
         }
-        crate::decoration::effective_decoration(self.config.window.decorations, requested, native)
+        let draws_own_chrome = native || crate::window_style::is_gtk_client(surface);
+        crate::decoration::effective_decoration(
+            self.config.window.decorations,
+            requested,
+            draws_own_chrome,
+        )
     }
 }
 

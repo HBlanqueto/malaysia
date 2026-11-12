@@ -883,6 +883,7 @@ pub struct ClientState {
     pub trusted_shell: bool,
     pub restricted: bool,
     pub kit_client: AtomicBool,
+    pub gtk_client: AtomicBool,
 }
 
 impl ClientState {
@@ -899,6 +900,7 @@ impl ClientState {
             trusted_shell,
             restricted: false,
             kit_client: AtomicBool::new(false),
+            gtk_client: AtomicBool::new(false),
         }
     }
 

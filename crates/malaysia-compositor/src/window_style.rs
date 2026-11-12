@@ -245,6 +245,15 @@ pub(crate) fn is_kit_client(surface: &WlSurface) -> bool {
     })
 }
 
+// GTK and libadwaita draw their own titlebar and never bind xdg-decoration.
+pub(crate) fn is_gtk_client(surface: &WlSurface) -> bool {
+    surface.client().is_some_and(|client| {
+        client
+            .get_data::<ClientState>()
+            .is_some_and(|state| state.gtk_client.load(Ordering::Relaxed))
+    })
+}
+
 pub(crate) fn is_popover(surface: &WlSurface) -> bool {
     with_states(surface, |states| states.data_map.get::<Popover>().is_some())
 }

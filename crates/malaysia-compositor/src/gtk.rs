@@ -125,11 +125,16 @@ impl GlobalDispatch<GtkShell1, (), State> for GtkShellState {
     fn bind(
         state: &mut State,
         _handle: &DisplayHandle,
-        _client: &Client,
+        client: &Client,
         resource: New<GtkShell1>,
         _global_data: &(),
         data_init: &mut DataInit<'_, State>,
     ) {
+        if let Some(client_state) = client.get_data::<crate::state::ClientState>() {
+            client_state
+                .gtk_client
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         let shell = data_init.init(resource, ());
         shell.capabilities(capabilities(state.config.menubar.app_menus));
     }
