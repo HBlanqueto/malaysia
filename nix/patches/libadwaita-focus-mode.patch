@@ -40,10 +40,10 @@ index 0000000..bbfb857
 +G_END_DECLS
 diff --git a/src/adw-focus-mode.c b/src/adw-focus-mode.c
 new file mode 100644
-index 0000000..3be3ba2
+index 0000000..60ef185
 --- /dev/null
 +++ b/src/adw-focus-mode.c
-@@ -0,0 +1,631 @@
+@@ -0,0 +1,775 @@
 +/*
 + * Copyright (C) 2026 Malaysia contributors
 + *
@@ -90,14 +90,23 @@ index 0000000..3be3ba2
 + *
 + * Only taken views are restored (to visible, which they were) when
 + * fullscreen ends, when the global goes away, or when they leave the window.
++ *
++ * Wallpaper tinting (version 3 of the global, Malaysia ADR 0065): the
++ * compositor sends the average colour of the wallpaper behind the window.
++ * The window sets it as the CSS variable `--malaysia-behind`, which the
++ * Malaysia portal's live stylesheet (ADR 0055) turns into the tinted
++ * backgrounds, as BarrierKit windows do. A new colour fades in over
++ * BEHIND_FADE_US, unless animations are off.
 + */
 +
 +#include "config.h"
 +
 +#include "adw-focus-mode-private.h"
 +
++#include <math.h>
 +#include <string.h>
 +
++#include "adw-animation-util.h"
 +#include "adw-dialog.h"
 +#include "adw-toolbar-view-private.h"
 +
@@ -109,6 +118,9 @@ index 0000000..3be3ba2
 +
 +#define WINDOW_KEY "adw-focus-mode-window"
 +#define DISPLAY_KEY "adw-focus-mode-display"
++
++/* Tengen DURATION_BASE */
++#define BEHIND_FADE_US (220 * G_TIME_SPAN_MILLISECOND)
 +
 +typedef struct {
 +  AdwToolbarView *view;
@@ -139,6 +151,15 @@ index 0000000..3be3ba2
 +  DisplayState *display;
 +  struct infinity_focus_surface_v1 *notice;
 +#endif
++
++  /* The wallpaper behind the window: shown now, fading from and to */
++  GtkCssProvider *behind;
++  gboolean has_behind;
++  float behind_now[3];
++  float behind_from[3];
++  float behind_to[3];
++  gint64 fade_start;
++  guint fade_id;
 +} WindowState;
 +
 +static gboolean
@@ -293,6 +314,106 @@ index 0000000..3be3ba2
 +
 +#ifdef HAVE_INFINITY_FOCUS
 +
++static void
++show_behind (WindowState *state)
++{
++  char *css;
++
++  if (!state->behind) {
++    state->behind = gtk_css_provider_new ();
++G_GNUC_BEGIN_IGNORE_DEPRECATIONS
++    gtk_style_context_add_provider (gtk_widget_get_style_context (GTK_WIDGET (state->window)),
++                                    GTK_STYLE_PROVIDER (state->behind),
++                                    GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
++G_GNUC_END_IGNORE_DEPRECATIONS
++  }
++
++  /* Only the window's own node: the variable reaches its children by
++   * inheritance */
++  css = g_strdup_printf ("* { --malaysia-behind: rgb(%d, %d, %d); }",
++                         (int) roundf (state->behind_now[0] * 255),
++                         (int) roundf (state->behind_now[1] * 255),
++                         (int) roundf (state->behind_now[2] * 255));
++  gtk_css_provider_load_from_string (state->behind, css);
++  g_free (css);
++}
++
++static gboolean
++fade_behind_cb (GtkWidget     *widget,
++                GdkFrameClock *clock,
++                gpointer       data)
++{
++  WindowState *state = data;
++  float t = (float) (gdk_frame_clock_get_frame_time (clock) - state->fade_start) /
++            BEHIND_FADE_US;
++  float eased;
++  int i;
++
++  t = CLAMP (t, 0, 1);
++  eased = t * t * (3 - 2 * t);
++
++  for (i = 0; i < 3; i++)
++    state->behind_now[i] = state->behind_from[i] +
++                           (state->behind_to[i] - state->behind_from[i]) * eased;
++
++  show_behind (state);
++
++  if (t < 1)
++    return G_SOURCE_CONTINUE;
++
++  state->fade_id = 0;
++  return G_SOURCE_REMOVE;
++}
++
++static void
++set_behind (WindowState *state,
++            float        red,
++            float        green,
++            float        blue)
++{
++  GtkWidget *widget = GTK_WIDGET (state->window);
++  int i;
++
++  state->behind_to[0] = red;
++  state->behind_to[1] = green;
++  state->behind_to[2] = blue;
++
++  if (!state->has_behind || !adw_get_enable_animations (widget) ||
++      !gtk_widget_get_mapped (widget)) {
++    if (state->fade_id)
++      gtk_widget_remove_tick_callback (widget, state->fade_id);
++    state->fade_id = 0;
++    state->has_behind = TRUE;
++    memcpy (state->behind_now, state->behind_to, sizeof state->behind_now);
++    show_behind (state);
++    return;
++  }
++
++  for (i = 0; i < 3; i++)
++    state->behind_from[i] = state->behind_now[i];
++  state->fade_start = gdk_frame_clock_get_frame_time (gtk_widget_get_frame_clock (widget));
++
++  if (!state->fade_id)
++    state->fade_id = gtk_widget_add_tick_callback (widget, fade_behind_cb, state, NULL);
++}
++
++static void
++clear_behind (WindowState *state)
++{
++  if (state->fade_id)
++    gtk_widget_remove_tick_callback (GTK_WIDGET (state->window), state->fade_id);
++  state->fade_id = 0;
++  state->has_behind = FALSE;
++
++  if (state->behind) {
++G_GNUC_BEGIN_IGNORE_DEPRECATIONS
++    gtk_style_context_remove_provider (gtk_widget_get_style_context (GTK_WIDGET (state->window)),
++                                       GTK_STYLE_PROVIDER (state->behind));
++G_GNUC_END_IGNORE_DEPRECATIONS
++    g_clear_object (&state->behind);
++  }
++}
++
 +struct _DisplayState {
 +  struct wl_registry *registry;
 +  struct infinity_focus_manager_v1 *manager;
@@ -325,9 +446,31 @@ index 0000000..3be3ba2
 +  state->overlay_offset = (int) MIN (height, G_MAXINT);
 +}
 +
++static void
++notice_wallpaper_cb (void                             *data,
++                     struct infinity_focus_surface_v1 *notice,
++                     uint32_t                          rgb)
++{
++  WindowState *state = data;
++
++  set_behind (state,
++              ((rgb >> 16) & 0xff) / 255.f,
++              ((rgb >> 8) & 0xff) / 255.f,
++              (rgb & 0xff) / 255.f);
++}
++
++static void
++notice_desktop_cb (void                             *data,
++                   struct infinity_focus_surface_v1 *notice,
++                   uint32_t                          desktop)
++{
++}
++
 +static const struct infinity_focus_surface_v1_listener notice_listener = {
 +  notice_bar_cb,
 +  notice_bar_height_cb,
++  notice_wallpaper_cb,
++  notice_desktop_cb,
 +};
 +
 +static void
@@ -375,6 +518,7 @@ index 0000000..3be3ba2
 +               gboolean     restore)
 +{
 +  g_clear_pointer (&state->notice, infinity_focus_surface_v1_destroy);
++  clear_behind (state);
 +
 +  state->active = FALSE;
 +  state->bar_revealed = FALSE;
@@ -400,7 +544,7 @@ index 0000000..3be3ba2
 +
 +  display->manager =
 +    wl_registry_bind (registry, name, &infinity_focus_manager_v1_interface,
-+                      MIN (version, 2));
++                      MIN (version, 3));
 +  display->manager_name = name;
 +
 +  for (l = display->windows; l; l = l->next)
@@ -705,7 +849,7 @@ index 0000000..1fd922e
 +
 +G_END_DECLS
 diff --git a/src/adw-toolbar-view.c b/src/adw-toolbar-view.c
-index 848fa0a..f735e3d 100644
+index 848fa0a..ea83bb4 100644
 --- a/src/adw-toolbar-view.c
 +++ b/src/adw-toolbar-view.c
 @@ -7,8 +7,9 @@
@@ -921,7 +1065,7 @@ index 848fa0a..f735e3d 100644
 +  return self->focus_overlay;
 +}
 diff --git a/src/meson.build b/src/meson.build
-index 1a6a63f..7787e5f 100644
+index 1a6a63f..5a5b12e 100644
 --- a/src/meson.build
 +++ b/src/meson.build
 @@ -301,6 +301,7 @@ libadwaita_private_sources += files([
@@ -967,15 +1111,15 @@ index 1a6a63f..7787e5f 100644
    libadwaita_public_sources,
 diff --git a/src/protocols/infinity-focus-v1.xml b/src/protocols/infinity-focus-v1.xml
 new file mode 100644
-index 0000000..3cb8b7e
+index 0000000..5c5ef16
 --- /dev/null
 +++ b/src/protocols/infinity-focus-v1.xml
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,132 @@
 +<?xml version="1.0" encoding="UTF-8"?>
 +<!--
 +  Copied verbatim (below this comment) from Malaysia' barrierkit:
 +  https://github.com/HBlanqueto/barrierkit, file
-+  crates/infinity-protocol/protocols/infinity-focus-v1.xml, revision 3841a09.
++  crates/infinity-protocol/protocols/infinity-focus-v1.xml, revision cc58a12.
 +  It is MIT-licensed (notice in <copyright>); keep both copies in step.
 +-->
 +<protocol name="infinity_focus_v1">
@@ -1002,7 +1146,7 @@ index 0000000..3cb8b7e
 +    DEALINGS IN THE SOFTWARE.
 +  </copyright>
 +
-+  <interface name="infinity_focus_manager_v1" version="2">
++  <interface name="infinity_focus_manager_v1" version="4">
 +    <description summary="focus mode notices for applications">
 +      Malaysia focus mode (ADR 0051): a maximized window gets a space of
 +      its own and the xdg fullscreen state. In that space, the pointer at the
@@ -1017,6 +1161,13 @@ index 0000000..3cb8b7e
 +      so its own titlebar stays visible under it. With set_overlay (version
 +      2) the window stays put and the client draws its titlebar over its
 +      content, below the bar (Malaysia ADR 0054).
++
++      From version 3 every object also reports the colour of the wallpaper
++      behind its toplevel, so the client can tint its window background as
++      macOS does (Malaysia ADR 0065).
++
++      From version 4 every object also reports the desktop its toplevel is
++      on, so an app such as System Settings can act on that desktop alone.
 +    </description>
 +
 +    <request name="destroy" type="destructor">
@@ -1035,7 +1186,7 @@ index 0000000..3cb8b7e
 +    </request>
 +  </interface>
 +
-+  <interface name="infinity_focus_surface_v1" version="2">
++  <interface name="infinity_focus_surface_v1" version="4">
 +    <description summary="focus mode notices for one toplevel"/>
 +
 +    <request name="destroy" type="destructor">
@@ -1074,6 +1225,25 @@ index 0000000..3cb8b7e
 +        of the window. The titlebar goes right below it.
 +      </description>
 +      <arg name="height" type="uint"/>
++    </event>
++
++    <event name="wallpaper" since="3">
++      <description summary="the colour of the wallpaper behind the window">
++        The average colour of the part of the wallpaper behind the toplevel,
++        as 0xRRGGBB in sRGB. Sent once the toplevel is mapped and again
++        whenever that colour changes: the window moved or was resized, or the
++        wallpaper changed. It is not sent while no wallpaper is known.
++      </description>
++      <arg name="rgb" type="uint"/>
++    </event>
++
++    <event name="desktop" since="4">
++      <description summary="the desktop the window is on">
++        The number of the desktop the toplevel is on, counted from 1, or 0
++        while it is in a focus space. Sent once the toplevel is mapped and
++        again whenever it moves to another desktop.
++      </description>
++      <arg name="desktop" type="uint"/>
 +    </event>
 +  </interface>
 +</protocol>

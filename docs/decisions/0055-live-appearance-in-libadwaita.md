@@ -67,6 +67,10 @@ work, and forcing a reload of `gtk.css` by toggling high contrast flickers
 
 ## Consequences
 
+- With the wallpaper as tint color (ADR 0065, step 12), the tinted
+  backgrounds in `gtk4-css` read `var(--malaysia-behind)`, which the
+  focus-mode patch sets per window.
+
 - System libadwaita apps change accent, tint and light/dark
   live, together with barrierkit apps and inside the cross-fade of ADR 0044.
 - Flatpak apps use the libadwaita of their runtime, without the patch: rounded

@@ -1,7 +1,7 @@
 # 0065 — Wallpaper tinting per window
 
 Status: accepted (2026-11-08), amended 2026-11-11 (steps 8 to 10) and
-2026-11-12 (step 11, amounts measured on macOS 26).
+2026-11-12 (steps 11 and 12: amounts measured on macOS 26, and libadwaita).
 
 ## Context
 
@@ -80,6 +80,18 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
     as much (`WALLPAPER_TINTING_SIDEBAR` 2.0). When the compositor sends a
     new color the kit fades to it over `DURATION_BASE`, unless Reduce
     motion is on.
+12. **libadwaita windows too (2026-11-12).** The focus-mode patch of
+    libadwaita (`nix/patches/libadwaita-focus-mode.patch`) binds
+    `infinity_focus_surface_v1` version 3 for each window with an
+    `AdwToolbarView` and sets the `wallpaper` color as the CSS variable
+    `--malaysia-behind` on that window, with the same fade (off without
+    animations). The portal's live stylesheet (ADR 0055) gives each tinted
+    Adwaita background the same chroma mix in GTK CSS:
+    `oklab(from var(--malaysia-behind, <gray>) L calc(a * k ± c) calc(b * k ± c))`,
+    with the gray's own lightness and `k` from `tint_parts`,
+    `WALLPAPER_TINTING` and `WALLPAPER_TINTING_SIDEBAR`. GTK 4.16 and later
+    read relative colors and `var()`. Without the patch the variable is
+    missing and the fallback gray leaves the window neutral.
 
 ## Calibration
 
@@ -96,8 +108,8 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
 
 ## Consequences
 
-Only BarrierKit windows show the tint; the compositor's server-side titlebars
-and GTK apps do not. The grid covers the one output Malaysia draws today.
+BarrierKit windows and libadwaita windows with the patched library show the
+tint; the compositor's server-side titlebars, GTK 3 and Flatpak apps do not. The grid covers the one output Malaysia draws today.
 
 ## Rejected alternatives
 

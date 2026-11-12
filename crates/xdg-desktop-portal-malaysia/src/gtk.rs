@@ -5,12 +5,13 @@ use std::path::{Path, PathBuf};
 use ctappearance::backdrop::Oklab;
 use ctappearance::traffic::{ButtonVisual, TrafficInput, glyph_svg, inset, visual};
 use ctappearance::{
-    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, ini, palette,
-    resolve,
+    AppearanceConfig, ColorScheme, Resolved, TintParts, TrafficLightShape, TrafficLightStyle, ini,
+    palette, resolve,
 };
 use ctdesign::{
     ButtonKind, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba, TITLEBAR,
     TITLEBAR_CLIENT_HEIGHT, TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH, TrafficRim,
+    WALLPAPER_TINTING_SIDEBAR,
 };
 
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
@@ -65,8 +66,12 @@ const ADWAITA_DARK: AdwaitaBase = AdwaitaBase {
 struct SchemeColors {
     dark: bool,
     colors: Vec<(&'static str, Rgba)>,
+    behind: Vec<(&'static str, String)>,
     traffic: Traffic,
 }
+
+// The libadwaita patch sets it on each window from infinity_focus_surface_v1.wallpaper (ADR 0065).
+const BEHIND: &str = "--malaysia-behind";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Traffic {
@@ -104,12 +109,15 @@ impl SchemeColors {
             ("accent_fg_color", on_accent),
             ("accent_color", standalone_accent(resolved.accent, dark)),
         ];
+        let mut behind = Vec::new();
         if !appearance.contrast {
             colors.extend(tinted_backgrounds(&resolved, appearance, dark));
+            behind = behind_backgrounds(&resolved, appearance, dark);
         }
         Self {
             dark,
             colors,
+            behind,
             traffic,
         }
     }
@@ -129,53 +137,88 @@ fn tinted_backgrounds(
     let Some((tint, factor)) = resolved.window_tint else {
         return Vec::new();
     };
-    let base = if dark { ADWAITA_DARK } else { ADWAITA_LIGHT };
-    let parts = appearance.tint_parts;
-    let mix = |color: Rgba, layer: f32| color.mix(tint, factor * layer);
-    let mut colors = Vec::new();
-    if parts.window {
-        colors.extend([
-            ("window_bg_color", mix(base.window, 1.0)),
-            ("headerbar_bg_color", mix(base.headerbar, 1.0)),
+    tint_layers(dark, appearance.tint_parts, LAYER_FACTOR_BG_SUNKEN)
+        .into_iter()
+        .map(|(name, color, layer)| (name, color.mix(tint, factor * layer)))
+        .collect()
+}
+
+// Like ctappearance::backdrop::take_chroma, in GTK CSS: the gray keeps its OKLab lightness and
+// takes this share of the chroma of the wallpaper behind the window.
+fn behind_backgrounds(
+    resolved: &Resolved,
+    appearance: &AppearanceConfig,
+    dark: bool,
+) -> Vec<(&'static str, String)> {
+    let Some(factor) = resolved
+        .wallpaper_tinting
+        .filter(|_| resolved.window_tint.is_none())
+    else {
+        return Vec::new();
+    };
+    tint_layers(dark, appearance.tint_parts, WALLPAPER_TINTING_SIDEBAR)
+        .into_iter()
+        .map(|(name, color, layer)| {
+            let gray = Oklab::from_rgba(color);
+            let k = (factor * layer).clamp(0.0, 1.0);
+            let channel = |name: &str, own: f32| {
+                let rest = own * (1.0 - k);
+                let sign = if rest < 0.0 { '-' } else { '+' };
+                format!("calc({name} * {k:.4} {sign} {:.4})", rest.abs())
+            };
             (
-                "headerbar_backdrop_color",
-                mix(base.headerbar_backdrop, 1.0),
-            ),
-            ("view_bg_color", mix(base.view, LAYER_FACTOR_SURFACE)),
+                name,
+                format!(
+                    "oklab(from var({BEHIND}, {}) {:.4} {} {})",
+                    css_color(color),
+                    gray.l,
+                    channel("a", gray.a),
+                    channel("b", gray.b)
+                ),
+            )
+        })
+        .collect()
+}
+
+fn tint_layers(dark: bool, parts: TintParts, sidebar: f32) -> Vec<(&'static str, Rgba, f32)> {
+    let base = if dark { ADWAITA_DARK } else { ADWAITA_LIGHT };
+    let mut layers = Vec::new();
+    if parts.window {
+        layers.extend([
+            ("window_bg_color", base.window, 1.0),
+            ("headerbar_bg_color", base.headerbar, 1.0),
+            ("headerbar_backdrop_color", base.headerbar_backdrop, 1.0),
+            ("view_bg_color", base.view, LAYER_FACTOR_SURFACE),
         ]);
     }
     if parts.sidebars {
-        colors.extend([
-            (
-                "sidebar_bg_color",
-                mix(base.sidebar, LAYER_FACTOR_BG_SUNKEN),
-            ),
-            (
-                "sidebar_backdrop_color",
-                mix(base.sidebar_backdrop, LAYER_FACTOR_BG_SUNKEN),
-            ),
+        layers.extend([
+            ("sidebar_bg_color", base.sidebar, sidebar),
+            ("sidebar_backdrop_color", base.sidebar_backdrop, sidebar),
             (
                 "secondary_sidebar_bg_color",
-                mix(base.secondary_sidebar, LAYER_FACTOR_BG_SUNKEN),
+                base.secondary_sidebar,
+                sidebar,
             ),
             (
                 "secondary_sidebar_backdrop_color",
-                mix(base.secondary_sidebar_backdrop, LAYER_FACTOR_BG_SUNKEN),
+                base.secondary_sidebar_backdrop,
+                sidebar,
             ),
         ]);
     }
     if parts.groups
         && let Some(card) = base.card
     {
-        colors.push(("card_bg_color", mix(card, LAYER_FACTOR_SURFACE)));
+        layers.push(("card_bg_color", card, LAYER_FACTOR_SURFACE));
     }
     if parts.menus {
-        colors.extend([
-            ("dialog_bg_color", mix(base.dialog, LAYER_FACTOR_RAISED)),
-            ("popover_bg_color", mix(base.popover, LAYER_FACTOR_RAISED)),
+        layers.extend([
+            ("dialog_bg_color", base.dialog, LAYER_FACTOR_RAISED),
+            ("popover_bg_color", base.popover, LAYER_FACTOR_RAISED),
         ]);
     }
-    colors
+    layers
 }
 
 const ADWAITA_STANDALONE_MAX_L_LIGHT: f32 = 0.5;
@@ -229,6 +272,10 @@ fn push_variables(out: &mut String, colors: &SchemeColors, indent: &str) {
         }
         let variable = name.replace('_', "-");
         out.push_str(&format!("{indent}  --{variable}: {};\n", css_color(*color)));
+    }
+    for (name, value) in &colors.behind {
+        let variable = name.replace('_', "-");
+        out.push_str(&format!("{indent}  --{variable}: {value};\n"));
     }
     out.push_str(&format!("{indent}}}\n"));
 }
@@ -678,6 +725,71 @@ mod tests {
         let dark = SchemeColors::new(&appearance, None, ColorScheme::Dark);
         assert!(dark.dark);
         assert!(dark.get("card_bg_color").is_none());
+    }
+
+    #[test]
+    fn the_wallpaper_source_gives_libadwaita_the_color_behind_each_window() {
+        let dark = AppearanceConfig {
+            color_scheme: ColorScheme::Dark,
+            ..AppearanceConfig::default()
+        };
+        let live = live_css(&dark, None);
+        let (light_block, dark_block) = live.split_once("prefers-color-scheme: dark").unwrap();
+        assert!(
+            dark_block.contains("--window-bg-color: oklab(from var(--malaysia-behind, #222226)")
+        );
+        assert!(dark_block.contains("--sidebar-bg-color: oklab(from var(--malaysia-behind"));
+        assert!(
+            !light_block.contains(BEHIND),
+            "light mode needs wallpaper_tinting_in_light"
+        );
+        let accent = AppearanceConfig {
+            window_color: WindowColorMode::Accent,
+            ..dark
+        };
+        assert!(!live_css(&accent, None).contains(BEHIND));
+    }
+
+    #[test]
+    fn the_css_behind_a_window_matches_the_barrierkit_mix() {
+        use ctappearance::backdrop::take_chroma;
+        let colors = SchemeColors::new(
+            &AppearanceConfig {
+                color_scheme: ColorScheme::Dark,
+                ..AppearanceConfig::default()
+            },
+            None,
+            ColorScheme::Dark,
+        );
+        let (_, css) = colors
+            .behind
+            .iter()
+            .find(|(name, _)| *name == "window_bg_color")
+            .unwrap();
+        let numbers: Vec<f32> = css
+            .split([' ', '(', ')'])
+            .filter_map(|token| token.parse().ok())
+            .collect();
+        let [l, ka, ca, kb, cb] = numbers[..] else {
+            panic!("unexpected expression {css}");
+        };
+        let sign = |channel: &str| {
+            if css.contains(&format!("{channel} * {ka:.4} -")) {
+                -1.0
+            } else {
+                1.0
+            }
+        };
+        let wall = Rgba::rgb8(146, 197, 41);
+        let w = Oklab::from_rgba(wall);
+        let expected = Oklab::from_rgba(take_chroma(
+            ADWAITA_DARK.window,
+            wall,
+            ctdesign::WALLPAPER_TINTING[1],
+        ));
+        assert!((l - expected.l).abs() < 0.002);
+        assert!((w.a * ka + sign("a") * ca - expected.a).abs() < 0.002);
+        assert!((w.b * kb + sign("b") * cb - expected.b).abs() < 0.002);
     }
 
     #[test]
