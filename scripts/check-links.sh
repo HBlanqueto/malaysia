@@ -15,7 +15,8 @@ anchors() {
         }' "$1"
 }
 
-broken=$(git ls-files '*.md' | while read -r file; do
+files=$(git ls-files '*.md')
+broken=$(printf '%s\n' "$files" | while read -r file; do
     awk '/^[[:space:]]*```/ { fenced = !fenced; next }
         !fenced {
             line = $0

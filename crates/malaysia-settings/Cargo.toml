@@ -20,7 +20,6 @@ async-channel.workspace = true
 async-io.workspace = true
 png.workspace = true
 freya-clipboard.workspace = true
-libc.workspace = true
 tracing.workspace = true
 zbus.workspace = true
 malaysia-services.workspace = true

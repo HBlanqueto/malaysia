@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use smithay_client_toolkit::{
+use sctk::{
     compositor::CompositorState,
     delegate_compositor, delegate_output, delegate_pointer, delegate_registry, delegate_seat,
     delegate_shm, delegate_xdg_shell, delegate_xdg_window,
@@ -202,7 +202,7 @@ impl PointerHandler for App {
     }
 }
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpRelativePointerManagerV1);
+sctk::reexports::client::delegate_noop!(App: ignore ZwpRelativePointerManagerV1);
 
 impl Dispatch<ZwpRelativePointerV1, ()> for App {
     fn event(

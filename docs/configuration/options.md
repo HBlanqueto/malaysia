@@ -638,13 +638,6 @@ autohide-time-modifier = 1.0
 ```
 
 ```toml
-# ~/.config/malaysia/wallpaper.domain  (pending: not read yet)
-dir = "/run/current-system/sw/share/wallpapers/solid-colors"
-scale = "fill"                  # fill | stretch | fit | center (macOS words)
-shuffle = false
-```
-
-```toml
 # ~/.local/share/malaysia/wallpaper-selection.state  (current selection per desktop, like com.apple.wallpaper)
 [desktops]
 default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Mint.png"
@@ -701,6 +694,9 @@ These options configure the system integration; they go in
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `programs.malaysia.enable` | bool | `false` | Enables Malaysia: installs the package, registers the Wayland session, PAM, units and the portal. |
+| `programs.malaysia.package` | package | this flake's `packages.default` | The Malaysia package to install. |
+| `programs.malaysia.shellComponents` | list of `"menubar"`, `"dock"`, `"notifications"` | all three | The `malaysia-shell` components started in `malaysia-session.target`. |
+| `programs.malaysia.wallpaper.enable` | bool | `true` | Starts the `malaysia-wallpaper` Vulkan client. |
 | `programs.malaysia.globalMenu.libadwaita.enable` | bool | `true` | Replaces the system libadwaita with a patched version that exports the primary menu as a global menubar (`org.gtk.Menus`). It uses `system.replaceDependencies`, so apps are not rebuilt (ADR 0052). |
 | `programs.malaysia.globalMenu.electron.enable` | bool | `false` | Replaces `electron_43` with a build carrying electron/electron#54629, which publishes Electron apps' menus on Wayland through `org_kde_kwin_appmenu`. It uses `system.replaceDependencies`; Electron builds from source (hours, no cache). |
 | `programs.malaysia.globalMenu.gtk3.enable` | bool | `true` | Installs `appmenu-gtk-module` and loads it with `GTK_MODULES`, so GTK 3 apps with an in-window `GtkMenuBar` publish their menu through `gtk_shell1`/`org.gtk.Menus`. |

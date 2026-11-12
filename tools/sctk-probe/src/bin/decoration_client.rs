@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use smithay_client_toolkit::reexports::client::protocol::{
+use sctk::reexports::client::protocol::{
     wl_output::{self, WlOutput},
     wl_shm,
     wl_surface::WlSurface,
 };
-use smithay_client_toolkit::{
+use sctk::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_output, delegate_registry, delegate_shm, delegate_xdg_shell,
     delegate_xdg_window,

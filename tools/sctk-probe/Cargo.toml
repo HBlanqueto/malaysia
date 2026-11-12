@@ -8,5 +8,5 @@ repository.workspace = true
 publish = false
 
 [dependencies]
-smithay-client-toolkit.workspace = true
+sctk.workspace = true
 libc.workspace = true

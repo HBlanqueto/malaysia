@@ -30,7 +30,7 @@ const JOBS_NAME: &str = "org.kde.JobViewServer";
 const UI_SERVER_NAME: &str = "org.kde.kuiserver";
 const JOBS_PATH: &str = "/JobViewServer";
 const CALL_CATEGORY: &str = "call.ongoing";
-const SCREENSHOT_APP: &str = "io.github.hblanqueto.malaysia.screenshot";
+const SCREENSHOT_APP: &str = "screenshot";
 const HANG_UP_PURPOSE: &str = "call.hang-up";
 pub(crate) const DEFAULT_ACTION: &str = "default";
 pub(crate) const CLOSED_DISMISSED: u32 = 2;
@@ -811,11 +811,12 @@ impl Control {
 
     fn screenshot_saved(&self, path: String) {
         let id = self.link.hub().center.allocate_id(0);
+        let app_id = bk::titlebar::app_id(SCREENSHOT_APP);
         let notification = Notification {
             id,
-            app_id: SCREENSHOT_APP.into(),
+            icon: app_id.clone(),
+            app_id,
             app_name: crate::localize::tr!("notifications-screenshot").to_string(),
-            icon: SCREENSHOT_APP.into(),
             image: Some(path.clone()),
             communication: false,
             summary: crate::localize::tr!("notifications-screenshot-saved").to_string(),

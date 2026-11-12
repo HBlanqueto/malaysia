@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use smithay_client_toolkit::{
+use sctk::{
     delegate_registry, delegate_shm,
     reexports::{
         calloop,
@@ -297,21 +297,21 @@ impl ShmHandler for App {
     }
 }
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore WlOutput);
+sctk::reexports::client::delegate_noop!(App: ignore WlOutput);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtOutputImageCaptureSourceManagerV1);
+sctk::reexports::client::delegate_noop!(App: ignore ExtOutputImageCaptureSourceManagerV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtImageCaptureSourceV1);
+sctk::reexports::client::delegate_noop!(App: ignore ExtImageCaptureSourceV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtImageCopyCaptureManagerV1);
+sctk::reexports::client::delegate_noop!(App: ignore ExtImageCopyCaptureManagerV1);
 
 sctk_probe::capture_session_and_frame!(App, "screencopy");
 
 delegate_registry!(App);
 delegate_shm!(App);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpLinuxDmabufV1);
+sctk::reexports::client::delegate_noop!(App: ignore ZwpLinuxDmabufV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpLinuxBufferParamsV1);
+sctk::reexports::client::delegate_noop!(App: ignore ZwpLinuxBufferParamsV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore WlBuffer);
+sctk::reexports::client::delegate_noop!(App: ignore WlBuffer);

@@ -85,7 +85,7 @@ pub fn create_desktop_folder() {
         }
     }
     if let Err(error) = std::fs::create_dir(&target) {
-        eprintln!("menubar: could not create desktop folder: {error}");
+        tracing::warn!(%error, "could not create desktop folder");
     }
 }
 

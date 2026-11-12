@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use smithay_client_toolkit::{
+use sctk::{
     compositor::CompositorState,
     delegate_compositor, delegate_output, delegate_registry, delegate_shm, delegate_xdg_shell,
     delegate_xdg_window,
@@ -184,7 +184,7 @@ sctk_probe::noop_output_handler!(App);
 
 sctk_probe::shm_and_registry!(App);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore WpPresentation);
+sctk::reexports::client::delegate_noop!(App: ignore WpPresentation);
 
 impl Dispatch<WpPresentationFeedback, u8> for App {
     fn event(

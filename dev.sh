@@ -265,10 +265,6 @@ watch() {
     parse_release "watch" "$@"
 
     set -- -w "$script_dir/crates" --ignore "$script_dir/target"
-    if [ -d "$script_dir/src" ]; then
-        set -- "$@" -w "$script_dir/src"
-    fi
-
     _cycle="$script_dir/dev.sh build"
     if [ -n "$_release" ]; then
         _cycle="$_cycle --release"

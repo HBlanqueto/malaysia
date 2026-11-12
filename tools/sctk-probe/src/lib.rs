@@ -1,7 +1,7 @@
 pub mod dmabuf;
 pub mod harness;
 
-use smithay_client_toolkit::reexports::{
+use sctk::reexports::{
     calloop,
     calloop_wayland_source::WaylandSource,
     client::{self as wayland_client, globals::GlobalList},
@@ -35,45 +35,45 @@ where
 #[macro_export]
 macro_rules! noop_compositor_handler {
     ($app:ty) => {
-        impl ::smithay_client_toolkit::compositor::CompositorHandler for $app {
+        impl ::sctk::compositor::CompositorHandler for $app {
             fn frame(
                 &mut self,
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
-                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
+                _: &::sctk::reexports::client::protocol::wl_surface::WlSurface,
                 _: u32,
             ) {
             }
             fn surface_enter(
                 &mut self,
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
-                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
-                _: &::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
+                _: &::sctk::reexports::client::protocol::wl_surface::WlSurface,
+                _: &::sctk::reexports::client::protocol::wl_output::WlOutput,
             ) {
             }
             fn surface_leave(
                 &mut self,
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
-                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
-                _: &::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
+                _: &::sctk::reexports::client::protocol::wl_surface::WlSurface,
+                _: &::sctk::reexports::client::protocol::wl_output::WlOutput,
             ) {
             }
             fn scale_factor_changed(
                 &mut self,
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
-                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
+                _: &::sctk::reexports::client::protocol::wl_surface::WlSurface,
                 _: i32,
             ) {
             }
             fn transform_changed(
                 &mut self,
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
-                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
-                _: ::smithay_client_toolkit::reexports::client::protocol::wl_output::Transform,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
+                _: &::sctk::reexports::client::protocol::wl_surface::WlSurface,
+                _: ::sctk::reexports::client::protocol::wl_output::Transform,
             ) {
             }
         }
@@ -83,29 +83,29 @@ macro_rules! noop_compositor_handler {
 #[macro_export]
 macro_rules! noop_output_handler {
     ($app:ty) => {
-        impl ::smithay_client_toolkit::output::OutputHandler for $app {
-            fn output_state(&mut self) -> &mut ::smithay_client_toolkit::output::OutputState {
+        impl ::sctk::output::OutputHandler for $app {
+            fn output_state(&mut self) -> &mut ::sctk::output::OutputState {
                 &mut self.output_state
             }
             fn new_output(
                 &mut self,
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
-                _: ::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
+                _: ::sctk::reexports::client::protocol::wl_output::WlOutput,
             ) {
             }
             fn update_output(
                 &mut self,
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
-                _: ::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
+                _: ::sctk::reexports::client::protocol::wl_output::WlOutput,
             ) {
             }
             fn output_destroyed(
                 &mut self,
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
-                _: ::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
+                _: ::sctk::reexports::client::protocol::wl_output::WlOutput,
             ) {
             }
         }
@@ -115,18 +115,16 @@ macro_rules! noop_output_handler {
 #[macro_export]
 macro_rules! shm_and_registry {
     ($app:ty) => {
-        impl ::smithay_client_toolkit::shm::ShmHandler for $app {
-            fn shm_state(&mut self) -> &mut ::smithay_client_toolkit::shm::Shm {
+        impl ::sctk::shm::ShmHandler for $app {
+            fn shm_state(&mut self) -> &mut ::sctk::shm::Shm {
                 &mut self.shm
             }
         }
-        impl ::smithay_client_toolkit::registry::ProvidesRegistryState for $app {
-            fn registry(&mut self) -> &mut ::smithay_client_toolkit::registry::RegistryState {
+        impl ::sctk::registry::ProvidesRegistryState for $app {
+            fn registry(&mut self) -> &mut ::sctk::registry::RegistryState {
                 &mut self.registry_state
             }
-            ::smithay_client_toolkit::registry_handlers![
-                ::smithay_client_toolkit::output::OutputState,
-            ];
+            ::sctk::registry_handlers![::sctk::output::OutputState,];
         }
     };
 }
@@ -138,21 +136,21 @@ pub fn is_linear_capture_format(format: u32) -> bool {
 #[macro_export]
 macro_rules! capture_session_and_frame {
     ($app:ty, $probe:literal) => {
-        impl ::smithay_client_toolkit::reexports::client::Dispatch<
-            ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1,
+        impl ::sctk::reexports::client::Dispatch<
+            ::sctk::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1,
             (),
         > for $app
         {
             fn event(
                 state: &mut Self,
-                _: &::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1,
-                event: ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::Event,
+                _: &::sctk::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1,
+                event: ::sctk::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::Event,
                 _: &(),
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                qh: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: &::sctk::reexports::client::Connection,
+                qh: &::sctk::reexports::client::QueueHandle<Self>,
             ) {
-                use ::smithay_client_toolkit::reexports::client::WEnum;
-                use ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::Event;
+                use ::sctk::reexports::client::WEnum;
+                use ::sctk::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::Event;
                 match event {
                     Event::BufferSize { width, height } => {
                         state.size = Some((width as i32, height as i32));
@@ -199,20 +197,20 @@ macro_rules! capture_session_and_frame {
             }
         }
 
-        impl ::smithay_client_toolkit::reexports::client::Dispatch<
-            ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1,
+        impl ::sctk::reexports::client::Dispatch<
+            ::sctk::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1,
             (),
         > for $app
         {
             fn event(
                 state: &mut Self,
-                _: &::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1,
-                event: ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::Event,
+                _: &::sctk::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1,
+                event: ::sctk::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::Event,
                 _: &(),
-                _: &::smithay_client_toolkit::reexports::client::Connection,
-                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: &::sctk::reexports::client::Connection,
+                _: &::sctk::reexports::client::QueueHandle<Self>,
             ) {
-                use ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::Event;
+                use ::sctk::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::Event;
                 match event {
                     Event::Ready => {
                         println!("{}: frame ready", $probe);

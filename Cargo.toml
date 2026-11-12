@@ -42,7 +42,7 @@ libc = "0.2"
 zeroize = "1"
 
 calloop = { version = "0.14", features = ["signals"] }
-nix = { version = "0.31", features = ["signal", "socket", "inotify", "poll", "fs", "user"] }
+nix = { version = "0.31", features = ["signal", "socket", "poll", "fs", "user"] }
 
 xcursor = "0.3"
 
@@ -51,7 +51,7 @@ toml = "0.8"
 
 xkbcommon = "0.9"
 
-zbus = { version = "5", features = ["p2p"] }
+zbus = "5"
 
 chrono = "0.4"
 
@@ -59,10 +59,10 @@ grade-graphics = { path = "crates/grade-graphics" }
 malaysia-scene = { path = "crates/malaysia-scene" }
 malaysia-services = { path = "crates/malaysia-services" }
 
-bk = { git = "https://github.com/HBlanqueto/barrierkit", rev = "8d5b98729298e77b24d8936ea6fc3f7833f52571" }
-ctdesign = { git = "https://github.com/HBlanqueto/barrierkit", rev = "8d5b98729298e77b24d8936ea6fc3f7833f52571" }
-ctappearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "8d5b98729298e77b24d8936ea6fc3f7833f52571" }
-infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "8d5b98729298e77b24d8936ea6fc3f7833f52571" }
+bk = { git = "https://github.com/HBlanqueto/barrierkit", rev = "09950c3005822faf4a1b9be9822ad3634edbaee4" }
+ctdesign = { git = "https://github.com/HBlanqueto/barrierkit", rev = "09950c3005822faf4a1b9be9822ad3634edbaee4" }
+ctappearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "09950c3005822faf4a1b9be9822ad3634edbaee4" }
+infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "09950c3005822faf4a1b9be9822ad3634edbaee4" }
 
 freya-animation = "=0.5.0"
 freya-core = "=0.5.0"
@@ -98,7 +98,6 @@ libheif-rs = { version = "3", default-features = false, features = ["v1_17"] }
 zune-jpeg = "0.5"
 half = { version = "2", features = ["bytemuck"] }
 
-smithay-client-toolkit = "0.20"
 sctk = { package = "smithay-client-toolkit", version = "0.20" }
 
 wgpu = { version = "30", default-features = false, features = ["std", "vulkan", "wgsl", "glsl"] }

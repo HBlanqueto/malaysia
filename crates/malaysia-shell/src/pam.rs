@@ -110,13 +110,11 @@ fn resolve_service(installed: impl Fn(&str) -> bool) -> CString {
         return CString::new(SERVICE).expect("no interior nul");
     }
     if installed(FALLBACK_SERVICE) {
-        eprintln!(
-            "lock: /etc/pam.d/{SERVICE} is not installed; falling back to {FALLBACK_SERVICE}"
-        );
+        tracing::warn!("/etc/pam.d/{SERVICE} is not installed; falling back to {FALLBACK_SERVICE}");
         return CString::new(FALLBACK_SERVICE).expect("no interior nul");
     }
-    eprintln!(
-        "lock: no PAM service found ({SERVICE} or {FALLBACK_SERVICE}); authentication will fail"
+    tracing::error!(
+        "no PAM service found ({SERVICE} or {FALLBACK_SERVICE}); authentication will fail"
     );
     CString::new(SERVICE).expect("no interior nul")
 }
@@ -164,10 +162,7 @@ fn authenticate(pamh: *mut PamHandle) -> (Outcome, c_int) {
     // SAFETY: `pamh` is a live handle from `pam_start`.
     let status = unsafe { pam_setcred(pamh, PAM_REFRESH_CRED) };
     if status != PAM_SUCCESS {
-        eprintln!(
-            "lock: could not refresh credentials: {}",
-            strerror(pamh, status)
-        );
+        tracing::warn!(error = %strerror(pamh, status), "could not refresh credentials");
     }
     (Outcome::Authenticated, status)
 }
@@ -308,22 +303,6 @@ unsafe extern "C" fn conversation(
         *resp = responses;
     }
     PAM_SUCCESS
-}
-
-pub fn current_user() -> Option<String> {
-    // SAFETY: `getuid` has no preconditions.
-    let uid = unsafe { libc::getuid() };
-    // SAFETY: the entry is process-wide static storage and no two calls overlap: the lock calls this before the PAM thread exists, the print watcher once behind a `OnceLock`.
-    let pw = unsafe { libc::getpwuid(uid) };
-    if pw.is_null() {
-        return None;
-    }
-    Some(
-        // SAFETY: `pw` was checked non-null and `pw_name` is NUL-terminated.
-        unsafe { CStr::from_ptr((*pw).pw_name) }
-            .to_string_lossy()
-            .into_owned(),
-    )
 }
 
 pub fn prompt_label(text: &str) -> String {

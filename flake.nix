@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/8d5b98729298e77b24d8936ea6fc3f7833f52571";
+      url = "github:HBlanqueto/barrierkit/09950c3005822faf4a1b9be9822ad3634edbaee4";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
@@ -80,8 +80,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca" =
               "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=8d5b98729298e77b24d8936ea6fc3f7833f52571#8d5b98729298e77b24d8936ea6fc3f7833f52571" =
-              "sha256-LNtUYyAz3M5uzieB/cB+yEnTm8DpaY2R3kOFGY31Llw=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=09950c3005822faf4a1b9be9822ad3634edbaee4#09950c3005822faf4a1b9be9822ad3634edbaee4" =
+              "sha256-4NIZZkd3jC7DfMnvlbwKyXOyRkCXjTvX1cHTuGE5b1A=";
           };
 
           env = {
@@ -306,7 +306,7 @@
             ${pkgs.lib.optionalString hasFreyaSkia ''
               export SKIA_BINARIES_URL="file://${skia}/skia-binaries.tar.gz"
             ''}
-            export LD_LIBRARY_PATH="${libadwaitaPatched}/lib:${pkgs.lib.makeLibraryPath (deps ++ videoDeps)}$LD_LIBRARY_PATH"
+            export LD_LIBRARY_PATH="${libadwaitaPatched}/lib:${pkgs.lib.makeLibraryPath (deps ++ videoDeps)}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
             export GST_PLUGIN_SYSTEM_PATH_1_0="${pkgs.lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" videoDeps}"
             # souphttpsrc needs a GIO TLS backend to open https:// sources.
             export GIO_EXTRA_MODULES="${pkgs.glib-networking}/lib/gio/modules"

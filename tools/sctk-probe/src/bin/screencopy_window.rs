@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use smithay_client_toolkit::{
+use sctk::{
     compositor::CompositorState,
     delegate_compositor, delegate_output, delegate_registry, delegate_shm, delegate_xdg_shell,
     delegate_xdg_window,
@@ -376,13 +376,13 @@ impl Dispatch<ExtForeignToplevelListV1, ()> for App {
     ]);
 }
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtForeignToplevelHandleV1);
+sctk::reexports::client::delegate_noop!(App: ignore ExtForeignToplevelHandleV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtImageCaptureSourceV1);
+sctk::reexports::client::delegate_noop!(App: ignore ExtImageCaptureSourceV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtForeignToplevelImageCaptureSourceManagerV1);
+sctk::reexports::client::delegate_noop!(App: ignore ExtForeignToplevelImageCaptureSourceManagerV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtImageCopyCaptureManagerV1);
+sctk::reexports::client::delegate_noop!(App: ignore ExtImageCopyCaptureManagerV1);
 
 sctk_probe::capture_session_and_frame!(App, "screencopy_window");
 
@@ -393,8 +393,8 @@ delegate_shm!(App);
 delegate_xdg_shell!(App);
 delegate_xdg_window!(App);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpLinuxDmabufV1);
+sctk::reexports::client::delegate_noop!(App: ignore ZwpLinuxDmabufV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpLinuxBufferParamsV1);
+sctk::reexports::client::delegate_noop!(App: ignore ZwpLinuxBufferParamsV1);
 
-smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore WlBuffer);
+sctk::reexports::client::delegate_noop!(App: ignore WlBuffer);

@@ -28,34 +28,11 @@ pub fn edit_defaults<C: DeserializeOwned + Default + Serialize, T: 'static>(
 }
 
 pub fn account_name() -> String {
-    full_account_name().unwrap_or_else(|| {
+    malaysia_services::accounts::full_name().unwrap_or_else(|| {
         std::env::var("USER")
             .or_else(|_| std::env::var("LOGNAME"))
             .unwrap_or_else(|_| tr!("default-user").into())
     })
-}
-
-fn full_account_name() -> Option<String> {
-    // SAFETY: `getpwuid` returns static libc data that is only read here.
-    let pw = unsafe { libc::getpwuid(libc::getuid()) };
-    if pw.is_null() {
-        return None;
-    }
-    // SAFETY: `pw` was checked non-null above.
-    let gecos = unsafe { (*pw).pw_gecos };
-    if gecos.is_null() {
-        return None;
-    }
-    // SAFETY: `pw_gecos` is a NUL-terminated `passwd` field, checked non-null.
-    let gecos = unsafe { std::ffi::CStr::from_ptr(gecos) };
-    gecos
-        .to_str()
-        .ok()?
-        .split(',')
-        .next()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from)
 }
 
 pub fn initials(name: &str) -> String {

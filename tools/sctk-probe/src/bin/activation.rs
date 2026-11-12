@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use smithay_client_toolkit::{
+use sctk::{
     compositor::CompositorState,
     delegate_compositor, delegate_output, delegate_pointer, delegate_registry, delegate_seat,
     delegate_shm, delegate_xdg_shell, delegate_xdg_window,
@@ -506,7 +506,7 @@ impl Dispatch<WlKeyboard, ()> for Parent {
     }
 }
 
-smithay_client_toolkit::reexports::client::delegate_noop!(Parent: ignore XdgActivationV1);
+sctk::reexports::client::delegate_noop!(Parent: ignore XdgActivationV1);
 
 impl Dispatch<XdgActivationTokenV1, String> for Parent {
     fn event(
@@ -784,7 +784,7 @@ impl Dispatch<WlKeyboard, ()> for ChildApp {
     }
 }
 
-smithay_client_toolkit::reexports::client::delegate_noop!(ChildApp: ignore XdgActivationV1);
+sctk::reexports::client::delegate_noop!(ChildApp: ignore XdgActivationV1);
 
 impl Dispatch<XdgActivationTokenV1, String> for ChildApp {
     fn event(

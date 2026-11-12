@@ -28,10 +28,10 @@ components:
               the notification server, banners and Notification Center
   power <restart|shutdown|logout>
               confirm a power action (MALAYSIA_POWER_DRY_RUN=1 only logs it)
-  force-quit  the «Forzar salida» list of running apps
-  about       «Acerca de este PC»
+  force-quit  the Force Quit list of running apps
+  about       About This Computer
   about-app <app_id>
-              «Acerca de» for an app that has none of its own
+              the About window for an app that has none of its own
   open-app <desktop_id>
               launch an installed app, for System Settings
 ";

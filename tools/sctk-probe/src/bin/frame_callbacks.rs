@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use smithay_client_toolkit::{
+use sctk::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_output, delegate_registry, delegate_shm, delegate_xdg_shell,
     delegate_xdg_window,

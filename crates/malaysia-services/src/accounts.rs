@@ -13,6 +13,23 @@ const USER: &str = "org.freedesktop.Accounts.User";
 #[derive(Default)]
 pub struct Accounts;
 
+fn passwd_entry() -> Option<nix::unistd::User> {
+    nix::unistd::User::from_uid(nix::unistd::Uid::current())
+        .ok()
+        .flatten()
+}
+
+pub fn login_name() -> Option<String> {
+    passwd_entry().map(|entry| entry.name)
+}
+
+pub fn full_name() -> Option<String> {
+    let gecos = passwd_entry()?.gecos;
+    let name = gecos.to_string_lossy();
+    let name = name.split(',').next()?.trim();
+    (!name.is_empty()).then(|| name.to_string())
+}
+
 #[derive(Clone, PartialEq)]
 pub struct Account {
     pub picture: Option<String>,

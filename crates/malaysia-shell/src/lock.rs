@@ -53,7 +53,7 @@ fn apply_pam_event(label: &mut String, field: &mut PasswordField, event: &pam::E
             Action::Continue
         }
         pam::Event::Said(pam::Message::Info(text)) => {
-            eprintln!("lock: PAM: {text}");
+            tracing::info!(%text, "PAM message");
             Action::Continue
         }
         pam::Event::Said(pam::Message::Error(text)) => {
@@ -62,7 +62,7 @@ fn apply_pam_event(label: &mut String, field: &mut PasswordField, event: &pam::E
         }
         pam::Event::Ended(pam::Outcome::Authenticated) => Action::Unlock,
         pam::Event::Ended(pam::Outcome::Denied(message)) => {
-            eprintln!("lock: PAM refused: {message}");
+            tracing::warn!(%message, "PAM refused");
             field.set_error(message.clone());
             Action::Continue
         }
@@ -558,7 +558,7 @@ fn poll_center(timers: Timers, center: State<Center>) {
 pub fn run() -> anyhow::Result<()> {
     let (events, received) = async_channel::unbounded();
     let attempt = Rc::new(RefCell::new(None));
-    let user = pam::current_user().unwrap_or_default();
+    let user = malaysia_services::accounts::login_name().unwrap_or_default();
     start_attempt(&attempt, &events, &user);
     let clock_face = ClockFace::load();
     let clock_family = clock_face.register();
@@ -583,13 +583,13 @@ fn start_attempt(attempt: &RefCell<Option<pam::Attempt>>, events: &Sender<pam::E
         return;
     }
     if user.is_empty() {
-        eprintln!("lock: cannot resolve the current user for PAM");
+        tracing::error!("cannot resolve the current user for PAM");
         let _ = events.try_send(pam::Event::Ended(pam::Outcome::Denied(
             tr!("lock-unknown-user").to_string(),
         )));
         return;
     }
-    eprintln!("lock: starting PAM for {user}");
+    tracing::debug!(user, "starting PAM");
     *attempt.borrow_mut() = Some(pam::Attempt::start(events.clone(), user.to_string()));
 }
 

@@ -33,8 +33,8 @@ gstreamer.workspace = true
 gstreamer-app.workspace = true
 gstreamer-video.workspace = true
 
-wayland-client = { workspace = true, features = ["system"] }
-wayland-protocols = { workspace = true, features = ["client", "staging"] }
+wayland-client.workspace = true
+wayland-protocols.workspace = true
 sctk = { workspace = true }
 
 wgpu.workspace = true

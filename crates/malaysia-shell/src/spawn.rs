@@ -141,7 +141,7 @@ fn forward_to_settings(pane: &str) -> zbus::Result<()> {
 
 fn spawn_kit(name: &str, mut command: Command) {
     if env::var_os("WAYLAND_DISPLAY").is_none() {
-        eprintln!("menubar: cannot spawn {name}: WAYLAND_DISPLAY not set");
+        tracing::warn!(name, "cannot spawn kit binary: WAYLAND_DISPLAY not set");
         return;
     }
     let log = kit_log_path(name);
@@ -166,8 +166,8 @@ pub(crate) fn xdg_open(path: impl AsRef<Path>) {
     let mut command = app_command("xdg-open", None);
     command.arg(path);
     match spawn_client(command) {
-        Ok(()) => eprintln!("menubar: xdg-open {}", path.display()),
-        Err(error) => eprintln!("menubar: could not open '{}': {error}", path.display()),
+        Ok(()) => tracing::debug!(path = %path.display(), "xdg-open"),
+        Err(error) => tracing::warn!(path = %path.display(), %error, "could not open"),
     }
 }
 
@@ -192,10 +192,7 @@ fn kit_log_path(name: &str) -> Option<PathBuf> {
     let runtime = env::var_os("XDG_RUNTIME_DIR")?;
     let dir = PathBuf::from(runtime).join("malaysia");
     if let Err(error) = std::fs::create_dir_all(&dir) {
-        eprintln!(
-            "menubar: could not create log dir {}: {error}",
-            dir.display()
-        );
+        tracing::warn!(dir = %dir.display(), %error, "could not create log dir");
         return None;
     }
     Some(dir.join(format!("{name}.log")))

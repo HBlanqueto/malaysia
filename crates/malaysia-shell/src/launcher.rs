@@ -516,7 +516,7 @@ pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
         command.env("DESKTOP_STARTUP_ID", token);
     }
     if let Err(error) = crate::spawn::spawn_client(command) {
-        eprintln!("launcher: could not launch {}: {error}", entry.name);
+        tracing::warn!(app = %entry.name, %error, "could not launch");
     }
 }
 

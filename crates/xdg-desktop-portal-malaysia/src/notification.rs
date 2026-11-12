@@ -120,6 +120,8 @@ fn strip_markup(markup: &str) -> String {
     }
     text.replace("&lt;", "<")
         .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
         .replace("&amp;", "&")
 }
 
