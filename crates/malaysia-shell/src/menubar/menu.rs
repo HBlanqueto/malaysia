@@ -18,15 +18,10 @@ use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use torin::prelude::{Gaps, Position, SizeFnContext};
 
-use crate::menubar::icons;
+use crate::menubar::{focused, icons};
 use bk::theme;
 
-pub struct SearchableLists {
-    pub menu: Vec<SearchableEntry>,
-    pub help: Vec<SearchableEntry>,
-}
-
-pub type SearchableItems = Rc<dyn Fn() -> SearchableLists>;
+pub type SearchableItems = Rc<dyn Fn() -> Vec<SearchableEntry>>;
 
 #[derive(Clone)]
 pub struct MenuTitleSpec {
@@ -147,12 +142,11 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
         let source = source.clone();
         view = view.with_submenu_source(move |id| source(id));
     }
-    if let Some(searchable_fn) = &spec.searchable {
-        let menu_source = searchable_fn.clone();
-        let help_source = searchable_fn.clone();
+    if let Some(searchable) = &spec.searchable {
+        let searchable = searchable.clone();
         view = view
-            .with_searchable(move || menu_source().menu)
-            .with_help_topics(move || help_source().help)
+            .with_searchable(move || searchable())
+            .with_help_topics(focused::help_search_topics)
             .with_search_icons(icons::MENU_ITEM, icons::HELP);
     }
     if let Some(query_state) = &spec.query_state {

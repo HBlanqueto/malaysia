@@ -13,6 +13,7 @@ use bk::theme;
 use ctdesign::{
     BODY, CAPTION, HEADLINE, LIVE_ACTIVITY_GAP, LIVE_ACTIVITY_HEIGHT, LIVE_ACTIVITY_RADIUS,
     LIVE_ACTIVITY_WIDTH, MENUBAR_FONT_SIZE, MENUBAR_MARGIN, NOTIFICATION_GAP, NOTIFICATION_PADDING,
+    Rgba,
 };
 use freya_core::integration::AppComponent;
 use torin::prelude::{Area, Gaps};
@@ -50,23 +51,21 @@ pub(crate) fn use_activities() -> State<Vec<Activity>> {
         .read()
         .iter()
         .any(|activity| activity.kind() == ActivityKind::Call && !activity.ended);
-    use_hook(move || keep_ticking(Timers::get(), tick));
+    let ticking = use_hook(|| Rc::new(Cell::new(false)));
     if calling {
         let _ = *tick.read();
+        if !ticking.replace(true) {
+            Timers::get().after(TICK, move || {
+                let mut tick = tick;
+                ticking.set(false);
+                *tick.write() += 1;
+            });
+        }
     }
     state
 }
 
-fn keep_ticking(timers: Timers, tick: State<u64>) {
-    let again = timers.clone();
-    timers.after(TICK, move || {
-        let mut tick = tick;
-        *tick.write() += 1;
-        keep_ticking(again.clone(), tick);
-    });
-}
-
-pub(crate) fn live_area(activities: State<Vec<Activity>>, color: Color, bar_height: i32) -> HStack {
+pub(crate) fn live_area(activities: State<Vec<Activity>>, ink: Rgba, bar_height: i32) -> HStack {
     let shown = activities.read().clone();
     HStack::new()
         .height(Size::fill())
@@ -75,7 +74,7 @@ pub(crate) fn live_area(activities: State<Vec<Activity>>, color: Color, bar_heig
         .children(
             shown
                 .into_iter()
-                .map(|activity| pill(activity, activities, color, bar_height)),
+                .map(|activity| pill(activity, activities, ink, bar_height)),
         )
 }
 
@@ -115,7 +114,7 @@ fn elapsed(started: i64) -> String {
 fn pill(
     activity: Activity,
     activities: State<Vec<Activity>>,
-    color: Color,
+    ink: Rgba,
     bar_height: i32,
 ) -> Element {
     let area = Rc::new(Cell::new(Area::default()));
@@ -132,9 +131,9 @@ fn pill(
         .child(
             Image::system(symbol(&activity))
                 .size(MENUBAR_FONT_SIZE)
-                .color(Palette::current().label),
+                .color(ink),
         )
-        .child(Text::new(compact(&activity)).color(color))
+        .child(Text::new(compact(&activity)).color(theme::color(ink)))
         .into_element()
 }
 

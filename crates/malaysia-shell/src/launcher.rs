@@ -1,4 +1,11 @@
-use std::{cell::Cell, env, path::PathBuf, rc::Rc, time::Duration};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    env,
+    path::PathBuf,
+    rc::Rc,
+    time::Duration,
+};
 
 use bk::animation::Spring;
 use bk::platform::Timers;
@@ -14,7 +21,7 @@ use ctdesign::{
     LAUNCHER_SUBTITLE_FONT_SIZE, LAUNCHER_WIDTH,
 };
 use freya_animation::prelude::{OnCreation, use_animation};
-use freya_components::image_viewer::ImageViewer;
+use freya_components::image_viewer::{DecodeMode, ImageViewer};
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use torin::prelude::Gaps;
@@ -26,7 +33,7 @@ use bk::theme;
 #[derive(Clone, PartialEq)]
 pub(crate) struct IconData {
     pub(crate) path: PathBuf,
-    pub(crate) svg: Option<Vec<u8>>,
+    pub(crate) svg: Option<Bytes>,
 }
 
 #[derive(Clone)]
@@ -207,28 +214,43 @@ pub(crate) fn launch(
     entry: DesktopEntry,
     launched: impl Fn() + 'static,
 ) {
-    let spawned = Cell::new(false);
-    let spawn = Rc::new(move |token: Option<String>| {
-        if !spawned.replace(true) {
-            spawn_entry(&entry, token.as_deref());
-            launched();
+    with_activation_token(activation, timers, move |token| {
+        spawn_entry(&entry, token.as_deref());
+        launched();
+    });
+}
+
+pub(crate) fn with_activation_token(
+    activation: &Activation,
+    timers: &Timers,
+    run: impl Fn(Option<String>) + 'static,
+) {
+    let done = Cell::new(false);
+    let run = Rc::new(move |token: Option<String>| {
+        if !done.replace(true) {
+            run(token);
         }
     });
-    let fallback = spawn.clone();
+    let fallback = run.clone();
     timers.after(Duration::from_millis(250), move || fallback(None));
-    activation.request(move |token| spawn(token));
+    activation.request(move |token| run(token));
 }
+
+// Freya keeps a raster per pixel size for an hour by default; the Dock's magnification draws every size.
+const ICON_RASTER_AGE: Duration = Duration::from_secs(10);
 
 pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
     match icon {
         Some(IconData {
             path,
             svg: Some(bytes),
-        }) => SvgViewer::new((path.clone(), Bytes::from(bytes.clone())))
+        }) => SvgViewer::new((path.clone(), bytes.clone()))
+            .asset_age(ICON_RASTER_AGE)
             .width(Size::px(size))
             .height(Size::px(size))
             .into_element(),
         Some(IconData { path, svg: None }) => ImageViewer::new(path.clone())
+            .decode_mode(DecodeMode::Source)
             .width(Size::px(size))
             .height(Size::px(size))
             .into_element(),
@@ -363,6 +385,15 @@ pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<Icon
     load_icon_in(icon, sizes, &["apps"])
 }
 
+thread_local! {
+    static THEMED_ICONS: RefCell<HashMap<(String, String, String), Option<IconData>>> =
+        RefCell::default();
+}
+
+pub(crate) fn forget_icons() {
+    THEMED_ICONS.with_borrow_mut(HashMap::clear);
+}
+
 pub(crate) fn load_icon_in(
     icon: Option<&str>,
     sizes: &[&str],
@@ -373,6 +404,15 @@ pub(crate) fn load_icon_in(
     if direct.is_absolute() && direct.is_file() {
         return icon_data(&direct);
     }
+    THEMED_ICONS.with_borrow_mut(|found| {
+        found
+            .entry((icon.to_string(), sizes.join(","), contexts.join(",")))
+            .or_insert_with(|| find_themed(icon, sizes, contexts))
+            .clone()
+    })
+}
+
+fn find_themed(icon: &str, sizes: &[&str], contexts: &[&str]) -> Option<IconData> {
     let data_dirs = crate::desktop::data_dirs();
     let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| "Malaysia".to_string());
     let mut themes = Vec::new();
@@ -430,7 +470,7 @@ fn lookup_order(theme: &str, data_dirs: &[PathBuf], order: &mut Vec<String>) {
 
 fn icon_data(path: &std::path::Path) -> Option<IconData> {
     let svg = if path.extension().is_some_and(|ext| ext == "svg") {
-        Some(std::fs::read(path).ok()?)
+        Some(Bytes::from(std::fs::read(path).ok()?))
     } else {
         None
     };

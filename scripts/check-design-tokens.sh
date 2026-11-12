@@ -31,7 +31,7 @@ fi
 
 if matches=$(production \
     crates/malaysia-shell/src/menubar \
-    crates/malaysia-shell/src/dock.rs \
+    crates/malaysia-shell/src/dock \
     crates/malaysia-shell/src/lock.rs |
     grep -E ':[0-9]+:[[:space:]]*const [A-Z0-9_]+: (i32|u32|f32) = [0-9]'); then
     report "UI measurements must live in ctdesign" "$matches"

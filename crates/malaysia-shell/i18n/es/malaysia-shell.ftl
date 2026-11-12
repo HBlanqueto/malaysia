@@ -1,4 +1,3 @@
-menubar-system = Sistema
 menubar-unavailable = No disponible
 
 system-settings = Ajustes del sistema…
@@ -997,12 +996,10 @@ wifi-turn-off = Desactivar Wi‑Fi
 wifi-known = Redes conocidas
 wifi-other = Otras redes
 wifi-settings = Ajustes de Wi‑Fi…
-bluetooth = Bluetooth
 bluetooth-turn-on = Activar Bluetooth
 bluetooth-turn-off = Desactivar Bluetooth
 bluetooth-devices = Dispositivos
 bluetooth-settings = Ajustes de Bluetooth…
-vpn = VPN
 vpn-settings = Ajustes de VPN…
 vpn-external = Otras apps de VPN
 power-source-adapter = Fuente de energía: adaptador de corriente
@@ -1012,7 +1009,6 @@ battery-charging = Cargando
 battery-until-full = Carga completa en { $time }
 battery-until-empty = Queda { $time }
 low-power-mode = Modo de bajo consumo
-printer = Impresora
 printer-jobs = { $count ->
     [one] Un trabajo en cola
    *[other] { $count } trabajos en cola

@@ -41,25 +41,42 @@ fn logout_label(name: Option<&str>) -> String {
 }
 
 pub(crate) fn user_display_name() -> Option<String> {
-    // SAFETY: the static entry is copied below before any other `getpw*` call on this thread.
-    let pw = unsafe { libc::getpwuid(libc::getuid()) };
-    if pw.is_null() {
+    let mut entry = std::mem::MaybeUninit::<libc::passwd>::uninit();
+    let mut strings: Vec<libc::c_char> = vec![0; 1024];
+    let mut found = std::ptr::null_mut();
+    loop {
+        // SAFETY: `entry`, `strings` and `found` outlive the call and `strings` is as long as stated.
+        let status = unsafe {
+            libc::getpwuid_r(
+                libc::getuid(),
+                entry.as_mut_ptr(),
+                strings.as_mut_ptr(),
+                strings.len(),
+                &mut found,
+            )
+        };
+        if status != libc::ERANGE {
+            break;
+        }
+        strings.resize(strings.len() * 2, 0);
+    }
+    if found.is_null() {
         return None;
     }
+    // SAFETY: a non-null `found` means `getpwuid_r` filled `entry`.
+    let entry = unsafe { entry.assume_init() };
     let read = |ptr: *const libc::c_char| {
         (!ptr.is_null()).then(|| {
-            // SAFETY: `read` only receives `passwd` fields, NUL-terminated and checked non-null.
+            // SAFETY: `read` only receives `entry` fields, NUL-terminated in the live `strings`.
             unsafe { std::ffi::CStr::from_ptr(ptr) }
                 .to_string_lossy()
                 .into_owned()
         })
     };
-    // SAFETY: `pw` was checked non-null above.
-    let gecos = read(unsafe { (*pw).pw_gecos })
+    let gecos = read(entry.pw_gecos)
         .and_then(|gecos| gecos.split(',').next().map(str::trim).map(str::to_string))
         .filter(|name| !name.is_empty());
-    // SAFETY: `pw` was checked non-null above.
-    gecos.or_else(|| read(unsafe { (*pw).pw_name }))
+    gecos.or_else(|| read(entry.pw_name))
 }
 
 pub fn on_system_action(id: String, toplevels: &[ToplevelInfo], entries: &[DesktopEntry]) {

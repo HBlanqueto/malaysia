@@ -237,12 +237,9 @@ impl App for BarApp {
                 *last = key;
             }
         }
-        let remote_menu = self
-            .menu_snapshot
-            .read()
-            .as_ref()
-            .filter(|menu| !menu.items.is_empty())
-            .cloned();
+        let answer = self.menu_snapshot.read().clone();
+        let answered_empty = answer.as_ref().is_some_and(|menu| menu.items.is_empty());
+        let remote_menu = answer.filter(|menu| !menu.items.is_empty());
         let choice = if focused && app_menus_enabled {
             let active_index = toplevels
                 .iter()
@@ -260,8 +257,12 @@ impl App for BarApp {
                 stored.remember(&app_id, title_labels(&menu.items));
                 None
             } else {
-                let decision =
-                    stored.decide(&app_id, address.as_ref(), newly_mapped, Instant::now());
+                let decision = stored.decide(
+                    &app_id,
+                    address.as_ref().filter(|_| !answered_empty),
+                    newly_mapped,
+                    Instant::now(),
+                );
                 if let Some(deadline) = decision.started {
                     tick_at(menu_tick, deadline);
                 }
@@ -431,8 +432,8 @@ impl App for BarApp {
             .on_sized(move |event: Event<SizedEventData>| {
                 tail_width.set_if_modified(event.data().area.width());
             })
-            .child(live::live_area(activities, text, height))
-            .child(clock::clock_label(now, text, focus));
+            .child(live::live_area(activities, look.ink, height))
+            .child(clock::clock_label(now, look.ink, focus));
         let tail_slot = rect()
             .width(if settle > 0.0 {
                 let natural = *tail_width.read();
@@ -646,10 +647,7 @@ impl BarApp {
                 });
                 let searchable: Option<SearchableItems> = is_help.then(|| {
                     let composition = composition.clone();
-                    Rc::new(move || menu::SearchableLists {
-                        menu: remote::searchable(&composition()),
-                        help: focused::help_search_topics(),
-                    }) as SearchableItems
+                    Rc::new(move || remote::searchable(&composition())) as SearchableItems
                 });
                 MenuTitleSpec {
                     bold: index == 0,
@@ -707,7 +705,7 @@ fn system_title(entries: Rc<Vec<DesktopEntry>>, anchor: TitleAnchor) -> MenuTitl
         glyph: Some(system::SNOWFLAKE_SVG),
         min_width: MENUBAR_SYSTEM_MENU_MIN_WIDTH,
         ..MenuTitleSpec::new(
-            tr!("menubar-system").to_string(),
+            "menubar-system".to_string(),
             Rc::new(items),
             Rc::new(move |id| {
                 let toplevels = Toplevels::get().list.read().clone();
@@ -904,10 +902,7 @@ fn title_specs(
     let help_index = titles.len() - 1;
     let searchable: SearchableItems = {
         let titles = titles.clone();
-        Rc::new(move || menu::SearchableLists {
-            menu: remote::searchable(&titles),
-            help: focused::help_search_topics(),
-        })
+        Rc::new(move || remote::searchable(&titles))
     };
     let reveal_roots: RevealRoots = {
         let titles = titles.clone();
@@ -958,14 +953,11 @@ fn schedule_snapshot_drain(
                     .map(|items| dbusmenu_map::menu_items(items));
                 match next.parent {
                     None => {
-                        let menu = mapped.map(|items| {
-                            Arc::new(RemoteMenu {
-                                generation: next.generation,
-                                address: next.address.clone(),
-                                items,
-                            })
-                        });
-                        snapshot.set(menu);
+                        snapshot.set(Some(Arc::new(RemoteMenu {
+                            generation: next.generation,
+                            address: next.address.clone(),
+                            items: mapped.unwrap_or_default(),
+                        })));
                     }
                     Some(id) => {
                         let Some(current) = snapshot.peek().as_ref().cloned() else {
@@ -1033,12 +1025,16 @@ fn use_focus() -> Option<Focus> {
     *state.read()
 }
 
+pub(crate) fn clock_text() -> String {
+    chrono::Local::now().format("%H:%M").to_string()
+}
+
 pub(crate) fn schedule_next_minute(timers: Timers, clock: State<String>) {
     let retry = timers.clone();
     let seconds = u64::from(60 - chrono::Timelike::second(&chrono::Local::now()));
     timers.after(Duration::from_secs(seconds), move || {
         let mut clock = clock;
-        clock.set(chrono::Local::now().format("%H:%M").to_string());
+        clock.set(clock_text());
         schedule_next_minute(retry.clone(), clock);
     });
 }
@@ -1078,7 +1074,7 @@ fn surface_spec(height: i32) -> LayerSpec {
 
 pub fn run() -> anyhow::Result<()> {
     let entries = Rc::new(crate::desktop::read_entries());
-    let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
+    let clock = State::create_global(clock_text());
     let config = load_defaults::<MenubarConfig>("menubar");
     let app_menus = State::create_global(config.app_menus);
     let menu_snapshot = State::create_global(None::<Arc<RemoteMenu>>);

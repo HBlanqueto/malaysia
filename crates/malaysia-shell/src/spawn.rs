@@ -111,9 +111,13 @@ pub(crate) fn open_settings(pane: &str) {
     }
 }
 
+pub(crate) fn application_path(app_id: &str) -> String {
+    format!("/{}", app_id.replace('.', "/").replace('-', "_"))
+}
+
 fn forward_to_settings(pane: &str) -> zbus::Result<()> {
     let app_id = bk::titlebar::app_id("settings");
-    let path = format!("/{}", app_id.replace('.', "/").replace('-', "_"));
+    let path = application_path(&app_id);
     let bus = zbus::blocking::Connection::session()?;
     let platform_data: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
     let action = format!("{}{pane}", malaysia_services::SETTINGS_PANE_ACTION);

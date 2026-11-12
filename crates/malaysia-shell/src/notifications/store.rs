@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 const STATE: &str = "notifications";
 // GNOME keeps 10 per source (messageTray.js); a desk-sized history still has to stay small.
 const KEPT_PER_APP: usize = 20;
+const KEPT: usize = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -205,7 +206,6 @@ impl Center {
     }
 
     pub(crate) fn save(&self) {
-        super::image::prune(&self.notifications);
         if let Err(error) = bk::app::save_restoration(STATE, self) {
             tracing::warn!(%error, "notifications: could not save the history");
         }
@@ -231,6 +231,7 @@ impl Center {
             seen += 1;
             seen <= KEPT_PER_APP
         });
+        self.notifications.truncate(KEPT);
     }
 
     pub(crate) fn remove(&mut self, id: u32) -> Option<Notification> {
@@ -449,6 +450,17 @@ mod tests {
             .count();
         assert_eq!(chatty, KEPT_PER_APP);
         assert_eq!(center.notifications.len(), KEPT_PER_APP + 1);
+    }
+
+    #[test]
+    fn the_history_keeps_only_its_newest_notifications_whatever_the_apps() {
+        let mut center = Center::default();
+        for _ in 0..KEPT + 3 {
+            let id = center.allocate_id(0);
+            center.keep(note(id, &format!("app-{id}")));
+        }
+        assert_eq!(center.notifications.len(), KEPT);
+        assert_eq!(center.notifications[0].id, center.next_id);
     }
 
     #[test]

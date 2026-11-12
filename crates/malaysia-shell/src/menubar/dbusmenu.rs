@@ -568,10 +568,10 @@ impl Worker {
                     full_invalidated,
                     "menubar: dbusmenu LayoutUpdated"
                 );
-                let refetch: Vec<i32> = dropped
-                    .into_iter()
-                    .filter(|id| *id == parent || *id == 0)
-                    .collect();
+                let mut refetch = dropped;
+                if !self.has_root(&address) {
+                    refetch.push(0);
+                }
                 if is_focused && !refetch.is_empty() {
                     self.focus.pending.subtrees.extend(refetch);
                     self.focus.pending.arm();
@@ -763,11 +763,7 @@ impl Worker {
         subtrees.dedup();
         for id in subtrees {
             if id == 0 {
-                if !self
-                    .caches
-                    .get(&address)
-                    .is_some_and(|cache| cache.subtrees.contains_key(&0))
-                {
+                if !self.has_root(&address) {
                     self.fetch_root(&address, generation).await;
                 }
                 self.send_cached_subtrees(&address, generation).await;
@@ -842,6 +838,9 @@ impl Worker {
         self.proxies.retain(|address, _| address.service != service);
         let cached_menus = self.caches.len();
         self.caches.retain(|address, _| address.service != service);
+        if let Ok(mut windows) = self.windows.lock() {
+            windows.retain(|_, (owner, _)| owner != service);
+        }
         let evicted = cached_menus != self.caches.len();
         if let Some((address, generation)) = self.focus.current.clone()
             && address.service == service
@@ -938,6 +937,12 @@ impl Worker {
                 None
             }
         }
+    }
+
+    fn has_root(&self, address: &MainMenuAddress) -> bool {
+        self.caches
+            .get(address)
+            .is_some_and(|cache| cache.subtrees.contains_key(&0))
     }
 
     fn has_full_tree(&self, address: &MainMenuAddress) -> bool {

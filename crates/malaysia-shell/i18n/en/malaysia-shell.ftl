@@ -1,4 +1,3 @@
-menubar-system = System
 menubar-unavailable = Not Available
 
 system-settings = System Settings…
@@ -997,12 +996,10 @@ wifi-turn-off = Turn Wi‑Fi Off
 wifi-known = Known Networks
 wifi-other = Other Networks
 wifi-settings = Wi‑Fi Settings…
-bluetooth = Bluetooth
 bluetooth-turn-on = Turn Bluetooth On
 bluetooth-turn-off = Turn Bluetooth Off
 bluetooth-devices = Devices
 bluetooth-settings = Bluetooth Settings…
-vpn = VPN
 vpn-settings = VPN Settings…
 vpn-external = Other VPN Apps
 power-source-adapter = Power Source: Power Adapter
@@ -1012,7 +1009,6 @@ battery-charging = Charging
 battery-until-full = Full in { $time }
 battery-until-empty = { $time } remaining
 low-power-mode = Low Power Mode
-printer = Printer
 printer-jobs = { $count ->
     [one] One job in the queue
    *[other] { $count } jobs in the queue

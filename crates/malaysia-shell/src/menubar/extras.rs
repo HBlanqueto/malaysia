@@ -181,7 +181,7 @@ fn queued_jobs(extras: &Extras, config: &MenubarConfig) -> Option<usize> {
 
 fn printer_title(jobs: usize, ink: Rgba, anchor: Rc<Cell<(f32, f32)>>) -> MenuTitleSpec {
     title(
-        tr!("printer"),
+        "extra-printer",
         symbol_icon(Symbol::Printer, ink),
         vec![MenuItem::placeholder(tr!("printer-jobs", count = jobs))],
         |_| {},
@@ -289,7 +289,7 @@ fn wifi_title(
     let enabled = wifi.enabled;
     let networks = wifi.networks;
     let mut spec = title(
-        tr!("wifi"),
+        "extra-wifi",
         icon,
         items,
         move |id| {
@@ -368,7 +368,7 @@ fn bluetooth_title(
     let remote = remote.clone();
     let powered = adapter.powered;
     title(
-        tr!("bluetooth"),
+        "extra-bluetooth",
         symbol_icon(Symbol::Bluetooth, ink),
         items,
         move |id| {
@@ -423,7 +423,7 @@ fn vpn_title(
     let active = !external.is_empty() || vpns.iter().any(|vpn| vpn.state == LinkState::Connected);
     let remote = remote.clone();
     title(
-        tr!("vpn"),
+        "extra-vpn",
         symbol_icon(Symbol::Lock, if active { ink } else { faded(ink) }),
         items,
         move |id| {
@@ -499,7 +499,7 @@ fn battery_title(
     let remote = remote.clone();
     let low_power = profiles.is_some_and(|profiles| profiles.low_power);
     title(
-        tr!("battery"),
+        "extra-battery",
         icon,
         items,
         move |id| {

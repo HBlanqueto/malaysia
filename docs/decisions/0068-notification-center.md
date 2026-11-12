@@ -265,7 +265,8 @@ Exact names from
    2. **Content image:** `image-data` (written as PNG), then `image-path`
       for fdo clients, and a `file` or `bytes` GIcon for GTK clients. It is
       stored in `~/.local/share/malaysia/notifications/<id>`; saving the
-      history deletes images no kept notification uses.
+      history deletes images that no kept notification and no banner on
+      screen uses.
    3. **People:** with category `im` or `im.*`, the image is the sender's
       photo and replaces the icon, with the app icon as a badge at the
       bottom right, like a Tahoe communication notification. Any other image

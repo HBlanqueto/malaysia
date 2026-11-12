@@ -13,6 +13,7 @@ use crate::menubar::dbusmenu_map::prop;
 pub const MENUS_INTERFACE: &str = "org.gtk.Menus";
 pub const ACTIONS_INTERFACE: &str = "org.gtk.Actions";
 const ADW_APP_MENU: &str = "x-adw-app-menu";
+const MAX_START_ROUNDS: usize = 16;
 
 type Attributes = HashMap<String, OwnedValue>;
 type StartEntry = (u32, u32, Vec<Attributes>);
@@ -168,6 +169,7 @@ impl Tree {
             app_name,
             next_id: 1,
             targets: HashMap::new(),
+            open: Vec::new(),
         };
         let mut items = Vec::new();
         let app_items = builder.menu(app_menu, 0, 0);
@@ -209,6 +211,7 @@ struct Builder<'a> {
     app_name: &'a str,
     next_id: i32,
     targets: HashMap<i32, Target>,
+    open: Vec<(u32, u32)>,
 }
 
 impl Builder<'_> {
@@ -219,6 +222,11 @@ impl Builder<'_> {
     }
 
     fn menu(&mut self, export: &Export, group: u32, menu: u32) -> Vec<RawItem> {
+        // The links come from the client: a menu that reaches itself would recurse forever.
+        if self.open.contains(&(group, menu)) {
+            return Vec::new();
+        }
+        self.open.push((group, menu));
         let mut out = Vec::new();
         for attributes in export.menu(group, menu) {
             if let Some((group, menu)) = attributes.get(":section").and_then(link) {
@@ -247,6 +255,7 @@ impl Builder<'_> {
                 out.push(item);
             }
         }
+        self.open.pop();
         out
     }
 
@@ -653,7 +662,8 @@ async fn subscribe(connection: &zbus::Connection, bus: &str, export: &mut Export
     if export.path.is_empty() {
         return;
     }
-    loop {
+    // One round per submenu level; the cap stops a client that keeps announcing new groups.
+    for _ in 0..MAX_START_ROUNDS {
         let groups = if export.subscribed.is_empty() {
             vec![0]
         } else {
@@ -997,6 +1007,25 @@ mod tests {
         assert_eq!(primary_slot("win.fullscreen"), PrimarySlot::Window);
         assert_eq!(primary_slot("app.shortcuts"), PrimarySlot::Help);
         assert_eq!(primary_slot("win.number-format"), PrimarySlot::Other);
+    }
+
+    #[test]
+    fn a_menu_that_links_to_itself_is_built_once() {
+        let mut export = Export::new("/menus/menubar");
+        export.started(
+            &[0],
+            vec![(
+                0,
+                0,
+                vec![
+                    attrs(&[(":section", pair(0, 0))]),
+                    attrs(&[("label", text("Again")), (":submenu", pair(0, 0))]),
+                ],
+            )],
+        );
+        let tree = Tree::build(&Export::default(), &export, &Actions::default(), "Demo");
+        assert_eq!(tree.items.len(), 3);
+        assert!(tree.items[2].children.is_empty());
     }
 
     #[test]

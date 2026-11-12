@@ -157,7 +157,7 @@ fn documents(cleared_at: i64) -> Vec<Document> {
 fn menu_icon(icon: Option<IconData>) -> Option<MenuIcon> {
     let icon = icon?;
     match icon.svg {
-        Some(svg) => String::from_utf8(svg).ok().map(MenuIcon::svg),
+        Some(svg) => std::str::from_utf8(&svg).ok().map(MenuIcon::svg),
         None => std::fs::read(&icon.path).ok().and_then(MenuIcon::image),
     }
 }

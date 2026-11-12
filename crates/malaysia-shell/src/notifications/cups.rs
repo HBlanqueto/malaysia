@@ -51,8 +51,9 @@ fn socket() -> PathBuf {
         .map_or_else(|| PathBuf::from("/run/cups/cups.sock"), PathBuf::from)
 }
 
-fn user() -> String {
-    crate::pam::current_user().unwrap_or_default()
+fn user() -> &'static str {
+    static USER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    USER.get_or_init(|| crate::pam::current_user().unwrap_or_default())
 }
 
 fn attribute(buffer: &mut Vec<u8>, tag: u8, name: &str, value: &[u8]) {
@@ -204,10 +205,9 @@ pub(crate) fn start(link: Link) {
     std::thread::Builder::new()
         .name("malaysia-print-jobs".to_string())
         .spawn(move || {
-            let user = user();
-            let mut known: HashMap<i32, i64> = HashMap::new();
+            let mut known: HashMap<i32, (i64, bool)> = HashMap::new();
             loop {
-                let jobs = exchange(&get_jobs_request(&user))
+                let jobs = exchange(&get_jobs_request(user()))
                     .ok()
                     .and_then(|reply| parse_jobs(&reply));
                 let Some(jobs) = jobs else {
@@ -216,12 +216,15 @@ pub(crate) fn start(link: Link) {
                 };
                 let now = chrono::Utc::now().timestamp();
                 for job in &jobs {
-                    let started = *known.entry(job.id).or_insert(now);
-                    live::upsert(&link, activity(job, started));
+                    let (started, ended) = *known.entry(job.id).or_insert((now, false));
+                    if !ended {
+                        live::upsert(&link, activity(job, started));
+                    }
                 }
-                known.retain(|id, started| {
+                known.retain(|id, (started, ended)| {
                     let present = jobs.iter().any(|job| job.id == *id);
-                    if !present || now - *started > live::LONGEST {
+                    if !*ended && (!present || now - *started > live::LONGEST) {
+                        *ended = true;
                         live::end(&link, &format!("print-{id}"));
                     }
                     present

@@ -140,6 +140,7 @@ pub(crate) fn upsert(link: &Link, activity: Activity) {
             .iter_mut()
             .find(|known| known.id == activity.id)
         {
+            Some(known) if *known == activity => return,
             Some(known) => *known = activity,
             None => hub.activities.push(activity),
         }

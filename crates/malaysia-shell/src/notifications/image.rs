@@ -79,7 +79,7 @@ fn save_pixels(id: u32, value: &OwnedValue) -> Option<String> {
     ) = value.try_clone().ok()?.try_into().ok()?;
     let row = usize::try_from(width).ok()? * usize::try_from(channels).ok()?;
     let rowstride = usize::try_from(rowstride).ok()?;
-    if bits != 8 || channels != if alpha { 4 } else { 3 } || row > rowstride {
+    if bits != 8 || channels != if alpha { 4 } else { 3 } || row == 0 || row > rowstride {
         return None;
     }
     let packed: Vec<u8> = data
@@ -112,17 +112,29 @@ fn save_pixels(id: u32, value: &OwnedValue) -> Option<String> {
     Some(path.to_string_lossy().into_owned())
 }
 
-pub(crate) fn prune(kept: &[Notification]) {
+pub(crate) fn prune<'a>(kept: impl Iterator<Item = &'a Notification> + Clone) {
     let Ok(entries) = std::fs::read_dir(dir()) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         let used = kept
-            .iter()
+            .clone()
             .any(|notification| notification.image.as_deref() == path.to_str());
         if !used {
             let _ = std::fs::remove_file(path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pixels_without_a_row_are_refused() {
+        let empty = Structure::from((0i32, 1i32, 0i32, false, 8i32, 3i32, Vec::<u8>::new()));
+        let value = OwnedValue::try_from(Value::from(empty)).unwrap();
+        assert_eq!(save_pixels(1, &value), None);
     }
 }

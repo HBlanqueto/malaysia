@@ -29,7 +29,10 @@ use torin::prelude::{Gaps, Position};
 use crate::clock_face::ClockFace;
 use crate::localize::tr;
 use crate::menubar::lock_row::{power_icon, slot, status_row};
-use crate::menubar::{bar::schedule_next_minute, system::user_display_name};
+use crate::menubar::{
+    bar::{clock_text, schedule_next_minute},
+    system::user_display_name,
+};
 use crate::notifications::{Center, Notification};
 use crate::{pam, power};
 use bk::theme;
@@ -102,9 +105,12 @@ impl App for LockApp {
         let minute_timers = timers.clone();
         use_hook(move || schedule_next_minute(minute_timers, clock));
 
+        let (retry_events, retry_user) = (events.clone(), user.clone());
         use_future(move || {
             let received = received.clone();
             let attempt = attempt_for_events.clone();
+            let events = retry_events.clone();
+            let user = retry_user.clone();
             let unlock = unlock.clone();
             let timers = timers.clone();
             let mut label = label_state;
@@ -112,9 +118,14 @@ impl App for LockApp {
             let mut leaving = leaving;
             async move {
                 while let Ok(event) = received.recv().await {
+                    let submitted = *field.peek().state() == FieldState::Verifying;
                     let action = apply_pam_event(&mut label.write(), &mut field.write(), &event);
                     if matches!(event, pam::Event::Ended(pam::Outcome::Denied(_))) {
                         *attempt.borrow_mut() = None;
+                        // The next prompt has to arrive before the next submit, or it reopens the field mid-check.
+                        if submitted {
+                            start_attempt(&attempt, &events, &user);
+                        }
                     }
                     if action == Action::Unlock {
                         leaving.set(true);
@@ -558,7 +569,7 @@ pub fn run() -> anyhow::Result<()> {
         received,
         attempt,
         user,
-        clock: State::create_global(chrono::Local::now().format("%H:%M").to_string()),
+        clock: State::create_global(clock_text()),
         clock_face,
         clock_family,
         leaving: State::create_global(false),

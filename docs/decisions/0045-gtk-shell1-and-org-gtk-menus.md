@@ -15,7 +15,7 @@ Block 14 already serves menus through `org_kde_kwin_appmenu` + dbusmenu. The bar
 5. **14f-2:** `org.gtk.Menus` client in the bar and drawing of the GTK menu.
    - It lives on the dbusmenu zbus thread (`menubar/gtkmenus.rs`). `Start(au)` for
      group 0 and then for each group linked by `:submenu`/`:section` until
-     all are closed (one call per round); `Changed` splices the stored
+     all are closed (one call per round, 16 rounds at most); `Changed` splices the stored
      menus; `End(au)` when the focus changes, when `app_menus` is disabled or when
      dbusmenu arrives.
    - The model is translated to `RawItem` with dbusmenu property names and

@@ -29,10 +29,9 @@ use torin::prelude::{Area, Content, Gaps, Position};
 use super::server::{self, Link, Reply};
 use super::store::{Notification, Origin, focus_name, parse_focus};
 use super::{focus_symbol, focus_title};
-use crate::launcher::{app_icon, load_icon, spawn_entry};
+use crate::launcher::{app_icon, load_icon, spawn_entry, with_activation_token};
 use crate::localize::tr;
 
-const ACTIVATION_WAIT: Duration = Duration::from_millis(250);
 const HOVER_GRACE: Duration = Duration::from_millis(2500);
 const SECONDS_PER_HOUR: i64 = 3600;
 const SECONDS_PER_DAY: i64 = 86_400;
@@ -48,7 +47,7 @@ fn close_room() -> f32 {
 #[derive(Clone, PartialEq)]
 struct Snapshot {
     notifications: Vec<Notification>,
-    banners: Vec<(u32, AlertStyle)>,
+    banners: Vec<(Notification, AlertStyle)>,
     panel_open: bool,
     focus: Option<Focus>,
     batteries: Vec<super::batteries::Battery>,
@@ -66,12 +65,8 @@ impl Snapshot {
         }
     }
 
-    fn banner(&self, id: u32) -> Option<&Notification> {
-        self.notifications.iter().find(|n| n.id == id)
-    }
-
     fn shows_banner(&self, id: u32) -> bool {
-        self.banners.iter().any(|(banner, _)| *banner == id)
+        self.banners.iter().any(|(banner, _)| banner.id == id)
     }
 }
 
@@ -95,7 +90,7 @@ impl Departures {
         let current = shown
             .banners
             .iter()
-            .filter_map(|(id, _)| shown.banner(*id).cloned())
+            .map(|(banner, _)| banner.clone())
             .collect();
         let previous = std::mem::replace(&mut this.banners, current);
         this.leaving
@@ -187,12 +182,13 @@ impl App for NotificationsApp {
             .find(|toplevel| toplevel.active)
             .map(|toplevel| toplevel.app_id.clone());
 
-        for (id, style) in &shown.banners {
-            if *style == AlertStyle::Temporary && timed.borrow_mut().insert(*id) {
+        timed.borrow_mut().retain(|id| shown.shows_banner(*id));
+        for (banner, style) in &shown.banners {
+            if *style == AlertStyle::Temporary && timed.borrow_mut().insert(banner.id) {
                 schedule_expiry(
                     &link,
                     &timers,
-                    *id,
+                    banner.id,
                     [hovered, hovered_close, replying],
                     snapshot,
                     Duration::from_millis(NOTIFICATION_BANNER_MS),
@@ -237,7 +233,11 @@ impl App for NotificationsApp {
                 keyboard: KeyboardInteractivity::None,
             }
         };
-        let geometry = if replying.read().is_some() {
+        let replying_shown = replying.read().is_some_and(|id| {
+            shown.shows_banner(id)
+                || shown.panel_open && shown.notifications.iter().any(|kept| kept.id == id)
+        });
+        let geometry = if replying_shown {
             LayerGeometry {
                 keyboard: KeyboardInteractivity::Exclusive,
                 ..geometry
@@ -335,11 +335,11 @@ struct Context {
 // ADR 0068: the compositor gives each card the window frame; only cards fully on the surface count.
 // A sliding card is drawn `offset_x` from its laid-out area, so its frame moves with it.
 fn card_frames(context: &Context, surface: Area) -> CardFrames {
-    let frames = context.frames.borrow();
+    let rendered = context.rendered.borrow();
+    let mut frames = context.frames.borrow_mut();
+    frames.retain(|id, _| rendered.contains(id));
     let shifts = context.shifts.read();
-    let cards = context
-        .rendered
-        .borrow()
+    let cards = rendered
         .iter()
         .filter_map(|id| {
             let shift = shifts
@@ -484,8 +484,7 @@ fn banners(
             shown
                 .banners
                 .iter()
-                .filter_map(|(id, _)| shown.banner(*id))
-                .map(|notification| (notification, false))
+                .map(|(notification, _)| (notification, false))
                 .chain(leaving.iter().map(|notification| (notification, true)))
                 .map(|(notification, leaving)| Slide {
                     key: u64::from(notification.id),
@@ -932,9 +931,10 @@ fn answer(context: &Context, notification: &Notification, text: String) {
     }
     {
         let mut hub = context.link.hub();
-        hub.banners.retain(|(banner, _)| *banner != notification.id);
+        hub.banners
+            .retain(|(banner, _)| banner.id != notification.id);
         hub.center.remove(notification.id);
-        hub.center.save();
+        hub.save();
     }
     let mut replying = context.replying;
     replying.set(None);
@@ -1095,21 +1095,11 @@ fn mute(context: &Context, app_id: &str, command: &str) {
 }
 
 fn open(context: &Context, notification: &Notification, action: Option<String>) {
-    let activation = Activation::get();
-    let timers = Timers::get();
-    let done = Rc::new(Cell::new(false));
-    let go = {
-        let context = context.clone();
-        let notification = notification.clone();
-        Rc::new(move |token: Option<String>| {
-            if !done.replace(true) {
-                invoke(&context, &notification, action.clone(), token);
-            }
-        })
-    };
-    let fallback = go.clone();
-    timers.after(ACTIVATION_WAIT, move || fallback(None));
-    activation.request(move |token| go(token));
+    let context = context.clone();
+    let notification = notification.clone();
+    with_activation_token(&Activation::get(), &Timers::get(), move |token| {
+        invoke(&context, &notification, action.clone(), token)
+    });
 }
 
 fn invoke(
@@ -1120,10 +1110,11 @@ fn invoke(
 ) {
     {
         let mut hub = context.link.hub();
-        hub.banners.retain(|(banner, _)| *banner != notification.id);
+        hub.banners
+            .retain(|(banner, _)| banner.id != notification.id);
         hub.panel_open = false;
         hub.center.remove(notification.id);
-        hub.center.save();
+        hub.save();
     }
     if let Origin::Shell { open } = &notification.origin {
         crate::spawn::xdg_open(open);

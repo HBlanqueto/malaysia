@@ -38,7 +38,7 @@ impl MenuSources {
         let mut window_remote = None;
         let mut help_remote = None;
         let app_name = normalize_query(&self.app_name);
-        let mut seen = HashSet::from([normalize_query(tr!("menubar-system"))]);
+        let mut seen = HashSet::new();
         let mut middle = Vec::new();
         let has_about_slot = app_items.iter().any(is_about_slot);
         let mut about = None;
@@ -373,6 +373,12 @@ mod tests {
             ]
         );
         assert_eq!(titles[1].remote_id, Some(1));
+    }
+
+    #[test]
+    fn a_remote_title_named_like_the_system_menu_is_kept() {
+        let titles = sources().compose(&[submenu("System", "1", Vec::new())]);
+        assert_eq!(titles[1].label, "System");
     }
 
     #[test]

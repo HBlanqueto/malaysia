@@ -18,7 +18,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 
 1. **Items.** `dock/items.rs` groups the windows by app: the `app_id` is
    matched to a `.desktop` entry (`menubar::find_entry`), and the entry id
-   is the key. The order is the kept apps (`persistent-apps` in
+   is the key. The Dock reads the entries when it starts and again when a
+   window has an `app_id` that is no entry's id. The order is the kept apps (`persistent-apps` in
    `~/.local/share/malaysia/dock.state`), a separator, the open apps that are
    not kept and up to `DOCK_RECENTS` recent apps (`recent-apps`, with
    `show-recents`), a separator, Downloads, one tile per minimized window
@@ -48,7 +49,7 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    icons, so magnified icons rise over the bar's edge. The fill is the
    neutral `shell.bar`: as in macOS, the wallpaper shows through the blur and
    does not tint the Dock.
-6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon`),
+6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon_in`),
    with the `LauncherEntry` badge and progress. A minimized window's tile is
    a picture of the window, taken once with `capture_window` when it
    minimizes, with the app icon at its corner. Every icon sits on macOS's

@@ -313,7 +313,7 @@ unsafe extern "C" fn conversation(
 pub fn current_user() -> Option<String> {
     // SAFETY: `getuid` has no preconditions.
     let uid = unsafe { libc::getuid() };
-    // SAFETY: the entry is process-wide static storage; the lock calls this before the PAM thread exists.
+    // SAFETY: the entry is process-wide static storage and no two calls overlap: the lock calls this before the PAM thread exists, the print watcher once behind a `OnceLock`.
     let pw = unsafe { libc::getpwuid(uid) };
     if pw.is_null() {
         return None;

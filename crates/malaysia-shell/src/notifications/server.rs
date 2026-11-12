@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
 use bk::platform::WakeHandle;
@@ -39,6 +39,7 @@ const SOUND: &str = "message-new-instant";
 const INLINE_REPLY: &str = "inline-reply";
 const REPLY_PURPOSE: &str = "im.reply-with-text";
 const PORTAL_KEY: &str = "x-malaysia-portal";
+const RESCAN_AFTER: Duration = Duration::from_secs(5);
 const CAPABILITIES: [&str; 7] = [
     "actions",
     "body",
@@ -52,7 +53,7 @@ const CAPABILITIES: [&str; 7] = [
 #[derive(Default)]
 pub(crate) struct Hub {
     pub(crate) center: Center,
-    pub(crate) banners: Vec<(u32, AlertStyle)>,
+    pub(crate) banners: Vec<(Notification, AlertStyle)>,
     pub(crate) panel_open: bool,
     pub(crate) front_app: Option<String>,
     pub(crate) activities: Vec<live::Activity>,
@@ -63,6 +64,16 @@ pub(crate) struct Hub {
 }
 
 impl Hub {
+    pub(crate) fn save(&self) {
+        super::image::prune(
+            self.center
+                .notifications
+                .iter()
+                .chain(self.banners.iter().map(|(banner, _)| banner)),
+        );
+        self.center.save();
+    }
+
     fn changed(&self) {
         if let Some(wake) = &self.wake {
             wake.wake();
@@ -89,9 +100,7 @@ pub(crate) struct Link {
 
 impl Link {
     pub(crate) fn hub(&self) -> MutexGuard<'_, Hub> {
-        self.hub
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        lock(&self.hub)
     }
 
     pub(crate) fn set_wake(&self, wake: WakeHandle) {
@@ -177,12 +186,13 @@ async fn serve(link: Link, replies: Receiver<Reply>) -> zbus::Result<()> {
         .await?;
     loop {
         let reply = futures_lite::future::or(async { replies.recv().await.ok() }, async {
-            let change = owners.next().await?;
-            let args = change.args().ok()?;
-            if args.new_owner().is_some() {
-                return Some(Reply::Activities);
+            loop {
+                let change = owners.next().await?;
+                let args = change.args().ok()?;
+                if args.new_owner().is_none() {
+                    return Some(Reply::OwnerGone(args.name().to_string()));
+                }
             }
-            Some(Reply::OwnerGone(args.name().to_string()))
         })
         .await;
         let Some(reply) = reply else {
@@ -342,7 +352,7 @@ async fn activate_gtk(
     target: Option<String>,
     token: Option<String>,
 ) -> zbus::Result<()> {
-    let path = format!("/{}", app_id.replace('.', "/").replace('-', "_"));
+    let path = crate::spawn::application_path(app_id);
     let platform: HashMap<&str, Value<'_>> = token
         .iter()
         .flat_map(|token| {
@@ -396,15 +406,19 @@ pub(crate) fn desktop_entry(id: &str) -> Option<DesktopEntry> {
 #[derive(Default)]
 struct Apps {
     entries: HashMap<String, DesktopEntry>,
+    scanned: Option<Instant>,
 }
 
 impl Apps {
     fn entry(&mut self, id: &str) -> Option<DesktopEntry> {
-        if !self.entries.contains_key(id) {
+        if !self.entries.contains_key(id)
+            && self.scanned.is_none_or(|at| at.elapsed() > RESCAN_AFTER)
+        {
             self.entries = read_entries()
                 .into_iter()
                 .map(|entry| (entry.id.clone(), entry))
                 .collect();
+            self.scanned = Some(Instant::now());
         }
         self.entries.get(id).cloned()
     }
@@ -460,9 +474,9 @@ fn deliver(link: &Link, incoming: Incoming) -> u32 {
         &moment,
     );
     let id = notification.id;
-    hub.banners.retain(|(banner, _)| *banner != id);
+    hub.banners.retain(|(banner, _)| banner.id != id);
     if let Some(style) = shown.banner {
-        hub.banners.insert(0, (id, style));
+        hub.banners.insert(0, (notification.clone(), style));
         hub.banners.truncate(ctdesign::NOTIFICATION_MAX_BANNERS);
     }
     if shown.kept {
@@ -470,7 +484,7 @@ fn deliver(link: &Link, incoming: Incoming) -> u32 {
     } else {
         hub.center.remove(id);
     }
-    hub.center.save();
+    hub.save();
     if shown.sound && sound {
         bk::notifications::play_event_sound(SOUND);
     }
@@ -769,8 +783,8 @@ impl Gtk {
         let mut hub = self.link.hub();
         if let Some(number) = hub.center.gtk_id(&app_id, &id) {
             hub.center.remove(number);
-            hub.banners.retain(|(banner, _)| *banner != number);
-            hub.center.save();
+            hub.banners.retain(|(banner, _)| banner.id != number);
+            hub.save();
             hub.changed();
         }
     }
@@ -907,9 +921,9 @@ fn show_panel(link: &Link, open: bool) {
 pub(crate) fn close(link: &Link, id: u32, by_call: bool) {
     let removed = {
         let mut hub = link.hub();
-        hub.banners.retain(|(banner, _)| *banner != id);
+        hub.banners.retain(|(banner, _)| banner.id != id);
         let removed = hub.center.remove(id);
-        hub.center.save();
+        hub.save();
         removed
     };
     if let Some(notification) = removed {
@@ -925,7 +939,7 @@ pub(crate) fn close(link: &Link, id: u32, by_call: bool) {
 }
 
 pub(crate) fn expire_banner(link: &Link, id: u32) {
-    link.hub().banners.retain(|(banner, _)| *banner != id);
+    link.hub().banners.retain(|(banner, _)| banner.id != id);
 }
 
 #[cfg(test)]

@@ -17,6 +17,12 @@ const SIZES: [&str; 7] = [
 
 pub type StatusAnchors = Rc<RefCell<HashMap<String, Rc<Cell<(f32, f32)>>>>>;
 
+type ThemedImage = Option<(Bytes, TemplateRenderingMode)>;
+
+thread_local! {
+    static THEMED_IMAGES: RefCell<HashMap<(String, String), ThemedImage>> = RefCell::default();
+}
+
 fn themed_icon(item: &TrayItem, name: &str) -> Option<IconData> {
     let own = (!item.icon_theme_path.is_empty()).then(|| {
         ["svg", "png"].into_iter().find_map(|extension| {
@@ -49,15 +55,25 @@ fn rendering_mode(icon: &IconData) -> TemplateRenderingMode {
     }
 }
 
+fn themed_image(item: &TrayItem) -> ThemedImage {
+    THEMED_IMAGES.with_borrow_mut(|images| {
+        images
+            .entry((item.icon_theme_path.clone(), item.icon_name.clone()))
+            .or_insert_with(|| {
+                let icon = status_symbol(item)?;
+                let bytes = icon
+                    .svg
+                    .clone()
+                    .or_else(|| std::fs::read(&icon.path).ok().map(Bytes::from))?;
+                Some((bytes, rendering_mode(&icon)))
+            })
+            .clone()
+    })
+}
+
 pub fn status_icon(item: &TrayItem) -> Element {
     let size = SYMBOL.grid;
-    let themed = status_symbol(item).and_then(|icon| {
-        let bytes = icon
-            .svg
-            .clone()
-            .or_else(|| std::fs::read(&icon.path).ok())?;
-        Some(Image::data(bytes).rendering_mode(rendering_mode(&icon)))
-    });
+    let themed = themed_image(item).map(|(bytes, mode)| Image::data(bytes).rendering_mode(mode));
     let pixmap = || {
         item.pixmap
             .as_ref()
@@ -74,6 +90,13 @@ pub fn status_titles(
     host: &StatusHost,
     anchors: &StatusAnchors,
 ) -> Vec<MenuTitleSpec> {
+    THEMED_IMAGES.with_borrow_mut(|images| {
+        images.retain(|(path, name), _| {
+            items
+                .iter()
+                .any(|item| item.icon_theme_path == *path && item.icon_name == *name)
+        });
+    });
     items
         .iter()
         .map(|item| {
@@ -85,7 +108,7 @@ pub fn status_titles(
             let menu = item.menu.clone();
             let (host, key) = (host.clone(), item.key.clone());
             MenuTitleSpec {
-                icon: Some(status_icon(item)),
+                icon: (!item.menu.is_empty()).then(|| status_icon(item)),
                 enabled: !item.menu.is_empty(),
                 ..MenuTitleSpec::new(
                     item.key.clone(),

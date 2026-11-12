@@ -88,9 +88,9 @@ async fn follow(entries: Entries, wake: WakeHandle) -> zbus::Result<()> {
         .receive_name_owner_changed()
         .await?;
     loop {
-        futures_lite::future::or(
+        let open = futures_lite::future::or(
             async {
-                if let Some(Ok(message)) = updates.next().await {
+                if let Ok(message) = updates.next().await? {
                     let sender = message
                         .header()
                         .sender()
@@ -104,23 +104,27 @@ async fn follow(entries: Entries, wake: WakeHandle) -> zbus::Result<()> {
                         wake.wake();
                     }
                 }
+                Some(())
             },
             async {
-                if let Some(change) = owners.next().await
-                    && let Ok(args) = change.args()
+                if let Ok(args) = owners.next().await?.args()
                     && args.new_owner().is_none()
                 {
                     let gone = args.name().to_string();
                     lock(&entries).retain(|_, entry| entry.sender != gone);
                     wake.wake();
                 }
+                Some(())
             },
         )
         .await;
+        if open.is_none() {
+            return Ok(());
+        }
     }
 }
 
-fn lock(entries: &Entries) -> std::sync::MutexGuard<'_, HashMap<String, Entry>> {
+pub(crate) fn lock(entries: &Entries) -> std::sync::MutexGuard<'_, HashMap<String, Entry>> {
     entries
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())

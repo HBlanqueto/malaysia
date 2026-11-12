@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -247,9 +245,9 @@ fn confirm_view(action: PowerAction, seconds: u32) -> VStack {
 }
 
 pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {
-    let action = arg.and_then(PowerAction::from_arg).ok_or_else(|| {
-        anyhow::anyhow!("usage: malaysia-shell power <suspend|restart|shutdown|logout>")
-    })?;
+    let action = arg
+        .and_then(PowerAction::from_arg)
+        .ok_or_else(|| anyhow::anyhow!("usage: malaysia-shell power <restart|shutdown|logout>"))?;
     run_layer(
         AppComponent::new(ConfirmApp {
             action,
@@ -280,23 +278,14 @@ fn running_apps(windows: &[ToplevelInfo]) -> Vec<RunningApp> {
     apps
 }
 
-type IconCache = Rc<RefCell<HashMap<String, Option<IconData>>>>;
-
 struct ForceQuitApp {
     entries: Rc<Vec<DesktopEntry>>,
-    icons: IconCache,
     selected: State<usize>,
 }
 
 impl ForceQuitApp {
     fn icon(&self, app_id: &str) -> Option<IconData> {
-        self.icons
-            .borrow_mut()
-            .entry(app_id.to_string())
-            .or_insert_with(|| {
-                find_entry(app_id, &self.entries).and_then(|entry| load_icon(entry.icon.as_deref()))
-            })
-            .clone()
+        find_entry(app_id, &self.entries).and_then(|entry| load_icon(entry.icon.as_deref()))
     }
 }
 
@@ -376,7 +365,6 @@ impl App for ForceQuitApp {
 pub fn run_force_quit() -> anyhow::Result<()> {
     let app = ForceQuitApp {
         entries: Rc::new(desktop::read_entries()),
-        icons: Rc::default(),
         selected: State::create_global(0usize),
     };
     run_layer(AppComponent::new(app), spec(FORCE_QUIT_SIZE))

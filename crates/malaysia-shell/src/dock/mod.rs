@@ -35,13 +35,13 @@ use ctdesign::{
     DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
-use freya_components::image_viewer::ImageViewer;
+use freya_components::image_viewer::{DecodeMode, ImageViewer};
 use freya_core::integration::AppComponent;
 use serde::{Deserialize, Serialize};
 use torin::prelude::{Gaps, Position};
 
 use crate::desktop::{self, DesktopEntry};
-use crate::launcher::{ICON_SIZES, IconData, app_icon, launch, load_icon, load_icon_in};
+use crate::launcher::{ICON_SIZES, IconData, app_icon, forget_icons, launch, load_icon_in};
 use crate::launcher_entry::{self, Entries, Entry};
 use crate::localize::tr;
 use crate::menubar::{find_entry, resolve_app_name};
@@ -275,10 +275,29 @@ fn use_thumbnails(windows: &[ToplevelInfo]) -> State<HashMap<u64, Thumbnail>> {
     thumbnails
 }
 
+// An app installed after the Dock started first shows up as a window whose app id no entry has.
+fn use_desktop_entries(windows: &[ToplevelInfo]) -> Rc<Vec<DesktopEntry>> {
+    let entries = use_hook(|| Rc::new(RefCell::new(Rc::new(desktop::read_entries()))));
+    let unknown = use_hook(|| Rc::new(RefCell::new(Vec::<String>::new())));
+    let now: Vec<String> = windows
+        .iter()
+        .map(|window| &window.app_id)
+        .filter(|id| !id.is_empty() && entries.borrow().iter().all(|entry| entry.id != **id))
+        .cloned()
+        .collect();
+    if now.iter().any(|id| !unknown.borrow().contains(id)) {
+        let read = desktop::read_entries();
+        if read != **entries.borrow() {
+            *entries.borrow_mut() = Rc::new(read);
+            forget_icons();
+        }
+    }
+    *unknown.borrow_mut() = now;
+    entries.borrow().clone()
+}
+
 fn launcher_entry(entries: &Entries, id: &str) -> Option<Entry> {
-    entries
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+    launcher_entry::lock(entries)
         .iter()
         .find(|(key, _)| key.eq_ignore_ascii_case(id))
         .map(|(_, entry)| entry.clone())
@@ -305,15 +324,13 @@ fn downloads_dir() -> PathBuf {
     })
 }
 
-struct DockApp {
-    entries: Rc<Vec<DesktopEntry>>,
-}
+struct DockApp;
 
 impl App for DockApp {
     fn render(&self) -> impl IntoElement {
-        let entries = &self.entries;
         let toplevels = Toplevels::get();
         let windows = toplevels.list.read().clone();
+        let entries = &use_desktop_entries(&windows);
         let config = use_defaults::<DockConfig>(DOMAIN).read().clone();
         let notifications = use_defaults::<NotificationsConfig>("notifications")
             .read()
@@ -331,7 +348,6 @@ impl App for DockApp {
         let after_drag = use_hook(|| Rc::new(Cell::new(false)));
         let revealing = use_hook(|| Rc::new(Cell::new(false)));
         let written_size = use_hook(|| Rc::new(Cell::new(0)));
-        let icons = use_hook(|| Rc::new(RefCell::new(HashMap::<String, Option<IconData>>::new())));
         let activation = Activation::get();
         let timers = Timers::get();
 
@@ -516,22 +532,7 @@ impl App for DockApp {
         let dot = (tile * DOCK_DOT).clamp(DOCK_DOT_MIN, DOCK_DOT_MAX);
         let launching_now = launching.read().clone();
 
-        let icon = {
-            let icons = icons.clone();
-            move |name: &str, contexts: &[&str]| -> Option<IconData> {
-                icons
-                    .borrow_mut()
-                    .entry(name.to_string())
-                    .or_insert_with(|| {
-                        if contexts == ["apps"] {
-                            load_icon(Some(name))
-                        } else {
-                            load_icon_in(Some(name), ICON_SIZES, contexts)
-                        }
-                    })
-                    .clone()
-            }
-        };
+        let icon = |name: &str, contexts: &[&str]| load_icon_in(Some(name), ICON_SIZES, contexts);
         let app_name = |id: &str| match entry_for(id, entries) {
             Some(entry) => entry.name.clone(),
             None => resolve_app_name(Some(id), entries),
@@ -726,7 +727,10 @@ impl App for DockApp {
                                 Some(picture) => {
                                     let (width, height) =
                                         thumbnail::fit(picture.size, slot.size * DOCK_ICON_BODY);
+                                    // Freya caches by id; a window minimized again has a new picture.
                                     ImageViewer::new((id, picture.png.clone()))
+                                        .decode_mode(DecodeMode::Source)
+                                        .asset_age(Duration::ZERO)
                                         .width(Size::px(width))
                                         .height(Size::px(height))
                                         .into_element()
@@ -887,7 +891,7 @@ impl App for DockApp {
         let bar_span = (layout.bar_start, layout.bar_start + layout.bar_length);
         let thickness = layout.thickness;
         let autohide = config.autohide;
-        let delay = config.autohide_delay;
+        let delay = Duration::try_from_secs_f32(config.autohide_delay).unwrap_or_default();
         let reveal_timers = timers.clone();
         let reveal = revealing.clone();
         let leave = revealing.clone();
@@ -914,7 +918,7 @@ impl App for DockApp {
                 if autohide && !*shown.peek() && !reveal.get() {
                     reveal.set(true);
                     let reveal = reveal.clone();
-                    reveal_timers.after(Duration::from_secs_f32(delay.max(0.0)), move || {
+                    reveal_timers.after(delay, move || {
                         if reveal.replace(false) {
                             let mut shown = shown;
                             shown.set(true);
@@ -1201,9 +1205,7 @@ fn on_separator_command(command: String) {
 pub fn run() -> anyhow::Result<()> {
     let config: DockConfig = load_defaults(DOMAIN);
     let geometry = layer_geometry(&config, geometry::thickness(config.tilesize()));
-    let app = AppComponent::new(DockApp {
-        entries: Rc::new(desktop::read_entries()),
-    });
+    let app = AppComponent::new(DockApp);
     run_layer(
         app,
         LayerSpec {

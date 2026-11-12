@@ -1,21 +1,9 @@
-use std::collections::{BTreeSet, HashMap};
-use std::sync::Mutex;
+use std::collections::HashMap;
 
 use bk::menu::{CheckState, MNEMONIC_MARK, MenuItem, normalize_separators};
 use zbus::zvariant::OwnedValue;
 
 use crate::menubar::dbusmenu::RawItem;
-
-const KNOWN_PROPERTIES: &[&str] = &[
-    "label",
-    "enabled",
-    "visible",
-    "type",
-    "children-display",
-    "toggle-type",
-    "toggle-state",
-    "shortcut",
-];
 
 pub fn menu_items(items: &[RawItem]) -> Vec<MenuItem> {
     let mut mapped: Vec<MenuItem> = items.iter().filter_map(menu_item).collect();
@@ -25,11 +13,6 @@ pub fn menu_items(items: &[RawItem]) -> Vec<MenuItem> {
 
 fn menu_item(item: &RawItem) -> Option<MenuItem> {
     let props = &item.properties;
-    for key in props.keys() {
-        if !KNOWN_PROPERTIES.contains(&key.as_str()) {
-            debug_once(key, props.get(key));
-        }
-    }
     if !prop(props, "visible").unwrap_or(true) {
         return None;
     }
@@ -105,16 +88,6 @@ fn shortcut(props: &HashMap<String, OwnedValue>) -> Option<String> {
         return None;
     }
     Some(keys.join("+"))
-}
-
-fn debug_once(key: &str, value: Option<&OwnedValue>) {
-    static SEEN: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
-    if SEEN
-        .lock()
-        .is_ok_and(|mut seen| seen.insert(key.to_string()))
-    {
-        tracing::debug!(property = key, value = ?value, "menubar: unsupported dbusmenu property");
-    }
 }
 
 #[cfg(test)]
