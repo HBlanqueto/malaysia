@@ -316,7 +316,7 @@ pub fn wallpaper_pane(wallpaper: Wallpaper, dark: bool, error: State<Option<Stri
             header_padding: [0.0, right, 0.0, left],
             ..style
         })
-        .section(hero(wallpaper, &selection, &items, dark, error))
+        .pinned(hero(wallpaper, &selection, &items, dark, error))
         .section(toolbar(wallpaper, &collections));
     let query = wallpaper.filter.read().trim().to_lowercase();
     let scope = scopes(&collections)
