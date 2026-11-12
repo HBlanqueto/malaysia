@@ -487,6 +487,7 @@ impl State {
                 || !self.popup_fades.is_empty()
                 || !self.minimizing.is_empty()
                 || !self.minimize_requests.is_empty()
+                || self.chrome.tint_fading()
                 || self.focus_reveal.animating(now))
             || self.theme_fade.is_some()
             || self.lock_transition.animating(now)

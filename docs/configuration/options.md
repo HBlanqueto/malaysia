@@ -165,7 +165,7 @@ background (6 % in light, 8 % in dark, at `normal` strength). Traffic lights in
 
 `wallpaper_tinting` is macOS's "Tint window background with wallpaper color".
 The compositor sends each BarrierKit window the average color of the wallpaper
-behind it and tints each server-side titlebar with the same color. As in macOS, the window keeps its lightness and takes part of
+behind it and tints each server-side titlebar with the same color, fading it in over 220 ms like the apps. As in macOS, the window keeps its lightness and takes part of
 that color's hue (chroma in OKLab): 15 % in dark, 12 % in light with
 `wallpaper_tinting_in_light`, the sidebar twice as much, times
 `tint_strength` (measured on macOS 26, ADR 0065). The color follows the

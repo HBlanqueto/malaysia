@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Once;
+use std::time::{Duration, Instant};
 
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
 use ctappearance::traffic::{self, TrafficInput};
@@ -27,6 +28,7 @@ use crate::config::Config;
 use crate::cursor::OutputRenderElement;
 use crate::decoration::Insets;
 use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
+use crate::theme_fade::{ease, progress};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ChromeTheme {
@@ -133,8 +135,24 @@ pub(crate) enum FrameOwner {
 
 pub(crate) struct ChromeCache {
     entries: HashMap<WindowId, Cached>,
+    tints: HashMap<WindowId, TintFade>,
     shaders: HashMap<(FrameOwner, u8), CachedShader>,
     text: TextEngine,
+}
+
+const TINT_FADE: Duration = Duration::from_millis(ctdesign::DURATION_BASE);
+
+struct TintFade {
+    from: Rgba,
+    to: Rgba,
+    start: Instant,
+}
+
+impl TintFade {
+    fn current(&self, now: Instant) -> Rgba {
+        self.from
+            .mix(self.to, ease(progress(self.start, now, TINT_FADE)))
+    }
 }
 
 struct Cached {
@@ -167,6 +185,7 @@ impl ChromeCache {
     pub(crate) fn new() -> Self {
         Self {
             entries: HashMap::new(),
+            tints: HashMap::new(),
             shaders: HashMap::new(),
             text: TextEngine::new(),
         }
@@ -175,8 +194,33 @@ impl ChromeCache {
     pub(crate) fn remove(&mut self, owner: FrameOwner) {
         if let FrameOwner::Window(id) = owner {
             self.entries.remove(&id);
+            self.tints.remove(&id);
         }
         self.shaders.retain(|(cached, _), _| *cached != owner);
+    }
+
+    pub(crate) fn fading_tint(&mut self, id: WindowId, target: Rgba, now: Instant) -> Rgba {
+        let fade = self.tints.entry(id).or_insert(TintFade {
+            from: target,
+            to: target,
+            start: now,
+        });
+        if fade.to != target {
+            *fade = TintFade {
+                from: fade.current(now),
+                to: target,
+                start: now,
+            };
+        }
+        let color = fade.current(now);
+        if progress(fade.start, now, TINT_FADE) >= 1.0 {
+            fade.from = fade.to;
+        }
+        color
+    }
+
+    pub(crate) fn tint_fading(&self) -> bool {
+        self.tints.values().any(|fade| fade.from != fade.to)
     }
 
     pub(crate) fn remove_cards(&mut self, id: u64) {

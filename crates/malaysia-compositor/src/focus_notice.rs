@@ -114,13 +114,13 @@ impl State {
         )
     }
 
-    pub(crate) fn chrome_theme_of(&self, window: WindowId) -> crate::chrome::ChromeTheme {
-        match self.wallpaper_behind(window) {
-            Some(wallpaper) => self
-                .chrome_theme
-                .behind_window(wallpaper, &self.config.appearance),
-            None => self.chrome_theme,
-        }
+    pub(crate) fn chrome_theme_of(&mut self, window: WindowId) -> crate::chrome::ChromeTheme {
+        let Some(target) = self.wallpaper_behind(window) else {
+            return self.chrome_theme;
+        };
+        let wallpaper = self.chrome.fading_tint(window, target, std::time::Instant::now());
+        self.chrome_theme
+            .behind_window(wallpaper, &self.config.appearance)
     }
 
     pub(crate) fn send_wallpaper_colors(&mut self) {
