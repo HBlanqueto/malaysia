@@ -14,6 +14,7 @@ use bk::shell::{
     set_layer_geometry, use_status_items,
 };
 use ctappearance::menubar::{MenubarConfig, MenubarStyle, colors_over};
+use ctappearance::tinting::WallpaperGrid;
 use ctappearance::{MenuBarSize, WallpaperState};
 use ctdesign::{
     MENUBAR_FONT_SIZE, MENUBAR_FONT_SIZE_LARGE, MENUBAR_MARGIN, MENUBAR_MARGIN_RIGHT,
@@ -284,13 +285,23 @@ impl App for BarApp {
         let desktop = *Toplevels::get().desktop.read();
         let look = bar_look(
             style,
-            wallpaper_under_bar(&wallpaper.read(), desktop, width, height),
+            wallpaper_under_bar(
+                &wallpaper.read(),
+                desktop,
+                width,
+                height,
+                WallpaperGrid::behind,
+            ),
+            wallpaper_under_bar(
+                &wallpaper.read(),
+                desktop,
+                width,
+                height,
+                WallpaperGrid::across,
+            ),
         );
         let text = theme::color(look.ink);
-        let bar = theme::color(Rgba {
-            a: look.background.a * shown_desktop,
-            ..look.background
-        });
+        let bar = bar_fill(&look, shown_desktop);
         let menu_state = MenuState::new();
         let open_pill = menu_state
             .open_label
@@ -672,7 +683,7 @@ impl BarApp {
     }
 }
 
-pub(crate) fn bar_root(background: Color) -> HStack {
+pub(crate) fn bar_root(background: impl Into<Fill>) -> HStack {
     let mut root = HStack::new()
         .cross_align(Alignment::Start)
         .spacing(0.0)
@@ -820,6 +831,7 @@ fn tick_at(tick: State<u64>, deadline: Instant) {
 
 struct BarLook {
     background: Rgba,
+    across: Vec<Rgba>,
     ink: Rgba,
     selection: Rgba,
     blur: BarBlur,
@@ -832,10 +844,11 @@ enum BarBlur {
     Selection,
 }
 
-fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
+fn bar_look(style: MenubarStyle, under: Option<Rgba>, across: Option<Vec<Rgba>>) -> BarLook {
     if Toplevels::get().focus_bar.read().over_focus() {
         return BarLook {
             background: ctdesign::FOCUS_BAR_BACKGROUND,
+            across: Vec::new(),
             ink: ctdesign::FOCUS_BAR_TEXT,
             selection: colors_over(ctdesign::FOCUS_BAR_BACKGROUND).selection,
             blur: BarBlur::None,
@@ -852,6 +865,7 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
     match style {
         MenubarStyle::Solid => BarLook {
             background: Rgba { a: 1.0, ..solid },
+            across: Vec::new(),
             ink: resolved.shell.text,
             selection: theme::menu_palette(&resolved, theme::SurfaceKind::LayerShell)
                 .bar_title_open_bg,
@@ -859,6 +873,11 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
         },
         MenubarStyle::Translucent => BarLook {
             background: over.glass,
+            across: across
+                .unwrap_or_default()
+                .into_iter()
+                .map(|color| color.mix(over.glass, over.glass.a))
+                .collect(),
             ink: over.ink,
             selection: over.selection,
             blur: BarBlur::Bar,
@@ -868,6 +887,7 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
                 a: 0.0,
                 ..over.glass
             },
+            across: Vec::new(),
             ink: over.ink,
             selection: over.selection,
             blur: BarBlur::Selection,
@@ -875,21 +895,45 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
     }
 }
 
-fn wallpaper_under_bar(
+fn bar_fill(look: &BarLook, shown_desktop: f32) -> Fill {
+    let shown = |color: Rgba| {
+        theme::color(Rgba {
+            a: color.a * shown_desktop,
+            ..color
+        })
+    };
+    if look.across.len() < 2 {
+        return shown(look.background).into();
+    }
+    let last = (look.across.len() - 1) as f32;
+    look.across
+        .iter()
+        .enumerate()
+        .fold(
+            LinearGradient::new().angle(90.0),
+            |gradient, (index, color)| gradient.stop((shown(*color), index as f32 / last * 100.0)),
+        )
+        .into()
+}
+
+fn wallpaper_under_bar<T>(
     wallpaper: &WallpaperState,
     desktop: Option<u32>,
     width: i32,
     height: i32,
-) -> Option<Rgba> {
+    sample: fn(&WallpaperGrid, (f64, f64), (f64, f64, f64, f64)) -> Option<T>,
+) -> Option<T> {
     let output = wallpaper
         .outputs
         .first()
         .filter(|output| output.width > 0)?;
     let width = f64::from(width);
     let output_height = width * f64::from(output.height) / f64::from(output.width);
-    wallpaper
-        .grid_for(desktop)?
-        .behind((width, output_height), (0.0, 0.0, width, f64::from(height)))
+    sample(
+        wallpaper.grid_for(desktop)?,
+        (width, output_height),
+        (0.0, 0.0, width, f64::from(height)),
+    )
 }
 
 fn title_specs(
