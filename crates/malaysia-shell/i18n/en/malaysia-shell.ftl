@@ -124,7 +124,6 @@ app-help = { $app } Help
 
 help-shortcuts = Malaysia Keyboard Shortcuts
 help-docs = Malaysia Documentation
-help-topics = Help Topics
 help-show-all-topics = Show All Help Topics
 help-topic-shortcuts = Keyboard Shortcuts
 help-topic-dock = Dock

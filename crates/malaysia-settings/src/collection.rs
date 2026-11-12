@@ -121,25 +121,12 @@ fn replace_source(
     new: Option<&str>,
     error: State<Option<String>>,
 ) {
+    let collection = |name: &str| WallpaperSource::ShuffleCollection(name.to_owned());
     let mut next = wallpaper.selection.peek().clone();
-    let old = WallpaperSource::ShuffleCollection(old.to_owned()).value();
-    let using: Vec<String> = next
-        .desktops
-        .iter()
-        .filter(|(_, source)| **source == old)
-        .map(|(key, _)| key.clone())
-        .collect();
-    if using.is_empty() {
-        return;
+    next.replace_source(&collection(old), new.map(collection).as_ref());
+    if next != *wallpaper.selection.peek() {
+        save(wallpaper.selection, next, error);
     }
-    for key in using {
-        let desktop = key.parse().ok();
-        next.set_source(
-            desktop,
-            new.map(|name| WallpaperSource::ShuffleCollection(name.to_owned())),
-        );
-    }
-    save(wallpaper.selection, next, error);
 }
 
 fn store(wallpaper: Wallpaper, draft: &CollectionDraft, name: &str, error: State<Option<String>>) {

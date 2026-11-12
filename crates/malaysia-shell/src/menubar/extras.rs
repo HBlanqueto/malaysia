@@ -6,7 +6,10 @@ use bk::menu::{CheckState, MenuIcon, MenuItem};
 use bk::prelude::*;
 use bk::style::Palette;
 use ctappearance::menubar::MenubarConfig;
-use ctdesign::{ACCENT_SWATCHES, MENUBAR_FADED_ALPHA, MENUBAR_MARGIN, Rgba, SYMBOL};
+use ctdesign::{
+    ACCENT_SWATCHES, MENUBAR_BATTERY_ICON, MENUBAR_BATTERY_LOW, MENUBAR_FADED_ALPHA,
+    MENUBAR_MARGIN, Rgba, SYMBOL,
+};
 use freya_components::svg_viewer::SvgViewer;
 use malaysia_services::bluez::{BlueZ, Bluetooth, BluetoothCommand, Device};
 use malaysia_services::bus::{Live, Remote, use_service};
@@ -23,9 +26,6 @@ use crate::menubar::status::StatusAnchors;
 use crate::spawn::open_settings;
 
 const CHARGING: Rgba = ACCENT_SWATCHES[6].1;
-// macOS paints the battery red from 20 % down.
-const LOW_BATTERY: f64 = 20.0;
-const BATTERY_ICON: (f32, f32) = (24.0, 12.0);
 
 pub struct Extras {
     network: Live<NetworkManager>,
@@ -517,7 +517,9 @@ fn battery_title(
 fn battery_icon(battery: &Battery, show_percentage: bool, ink: Rgba) -> Element {
     let fill = match battery.charge() {
         Charge::Charging(_) | Charge::Full => CHARGING,
-        Charge::Discharging(_) if battery.percent <= LOW_BATTERY => Palette::current().destructive,
+        Charge::Discharging(_) if battery.percent <= MENUBAR_BATTERY_LOW => {
+            Palette::current().destructive
+        }
         Charge::Discharging(_) => ink,
     };
     HStack::new()
@@ -528,7 +530,7 @@ fn battery_icon(battery: &Battery, show_percentage: bool, ink: Rgba) -> Element 
         )
         .child(svg_icon(
             battery_svg(battery.percent, ink, fill),
-            BATTERY_ICON,
+            MENUBAR_BATTERY_ICON.into(),
         ))
         .into_element()
 }

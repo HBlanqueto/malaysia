@@ -988,16 +988,7 @@ fn remove_color(wallpaper: Wallpaper, file: PathBuf, mut error: State<Option<Str
         return;
     }
     let mut next = wallpaper.selection.peek().clone();
-    let removed = WallpaperSource::File(file).value();
-    let shown: Vec<Option<u32>> = next
-        .desktops
-        .iter()
-        .filter(|(_, source)| **source == removed)
-        .map(|(key, _)| key.parse().ok())
-        .collect();
-    for desktop in shown {
-        next.set_source(desktop, None);
-    }
+    next.replace_source(&WallpaperSource::File(file), None);
     save(wallpaper.selection, next, error);
 }
 

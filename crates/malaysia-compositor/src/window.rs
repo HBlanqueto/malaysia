@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
-use ctdesign::TITLEBAR;
+use ctdesign::{TITLEBAR, WINDOW_CLIENT_RESIZE};
 use malaysia_scene::geometry::{
     Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
 };
@@ -244,9 +244,6 @@ impl WindowData {
     }
 }
 
-const CLIENT_RESIZE_BORDER: f64 = 6.0;
-const CLIENT_RESIZE_CORNER: f64 = 12.0;
-
 struct EdgeTarget {
     id: WindowId,
     band: SceneRect<f64, SceneLogical>,
@@ -269,8 +266,8 @@ fn edge_hit(
                 malaysia_scene::scene::edge_at(
                     target.band,
                     point,
-                    CLIENT_RESIZE_BORDER,
-                    CLIENT_RESIZE_CORNER,
+                    f64::from(WINDOW_CLIENT_RESIZE.edge),
+                    f64::from(WINDOW_CLIENT_RESIZE.corner),
                 )
             } else {
                 malaysia_scene::scene::edge_at(target.band, point, side, corner)

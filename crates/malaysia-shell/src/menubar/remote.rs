@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use bk::menu::{
-    ItemsSource, MenuItem, SearchLocation, SearchSource, SearchableEntry, normalize_query,
-    normalize_separators, submenu_contents,
+    ItemsSource, MenuItem, SearchLocation, SearchableEntry, normalize_query, normalize_separators,
+    submenu_contents,
 };
 
 use crate::localize::tr;
@@ -205,7 +205,6 @@ pub fn searchable(titles: &[Title]) -> Vec<SearchableEntry> {
     for (title_index, title) in titles.iter().enumerate() {
         collect(
             &title.items,
-            &bk::menu::strip_mnemonic(&title.label),
             SearchLocation {
                 title_index,
                 indices: Vec::new(),
@@ -216,29 +215,21 @@ pub fn searchable(titles: &[Title]) -> Vec<SearchableEntry> {
     out
 }
 
-fn collect(
-    items: &[MenuItem],
-    path: &str,
-    location: SearchLocation,
-    out: &mut Vec<SearchableEntry>,
-) {
+fn collect(items: &[MenuItem], location: SearchLocation, out: &mut Vec<SearchableEntry>) {
     for (index, item) in items.iter().enumerate() {
         match item {
             MenuItem::Action { .. } => {
                 let mut location = location.clone();
                 location.indices.push(index);
                 out.push(SearchableEntry {
-                    path: path.to_string(),
                     item: item.clone(),
                     location: Some(location),
-                    source: SearchSource::Menu,
                 });
             }
-            MenuItem::Submenu { label, items, .. } => {
+            MenuItem::Submenu { items, .. } => {
                 let mut location = location.clone();
                 location.indices.push(index);
-                let label = bk::menu::strip_mnemonic(label);
-                collect(items, &format!("{path} › {label}"), location, out);
+                collect(items, location, out);
             }
             _ => {}
         }
@@ -603,24 +594,12 @@ mod tests {
         let titles = sources().compose(&mapped);
         let entries = searchable(&titles);
 
-        let hits: Vec<String> = entries
+        let labels: Vec<String> = entries
             .iter()
-            .filter(|entry| {
-                entry
-                    .item
-                    .label()
-                    .is_some_and(|label| label.to_lowercase().contains("nuev"))
-            })
-            .map(|entry| {
-                let label = bk::menu::strip_mnemonic(entry.item.label().unwrap());
-                format!("{} › {label}", entry.path)
-            })
+            .filter_map(|entry| entry.item.label().map(bk::menu::strip_mnemonic))
             .collect();
-        assert!(
-            hits.contains(&"Archivo › Nuevo".to_string()),
-            "hits: {hits:?}"
-        );
-        assert!(hits.contains(&"Archivo › Nueva ventana".to_string()));
+        assert!(labels.contains(&"Nuevo".to_string()), "labels: {labels:?}");
+        assert!(labels.contains(&"Nueva ventana".to_string()));
 
         let nested = entries
             .iter()
@@ -629,8 +608,6 @@ mod tests {
                     == Some("documento.txt".to_string())
             })
             .expect("a nested leaf is indexed");
-        assert_eq!(nested.path, "Archivo › Abrir reciente");
-        assert_eq!(nested.source, SearchSource::Menu);
         let location = nested.location.as_ref().unwrap();
         assert_eq!(location.title_index, 1);
         assert_eq!(location.indices.len(), 2);

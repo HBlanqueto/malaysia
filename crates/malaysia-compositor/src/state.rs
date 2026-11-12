@@ -58,7 +58,6 @@ use crate::window::Windows;
 
 const CURSOR_BOOST_ID: u64 = u64::MAX - 1;
 const ACTIVATION_SERIAL_MAX_AGE: Duration = Duration::from_secs(30);
-const CURSOR_SHAKE_ACTIVE_WINDOW: Duration = Duration::from_millis(150);
 
 #[derive(Debug, thiserror::Error)]
 pub enum StateError {
@@ -697,10 +696,9 @@ impl State {
         let Some(started) = self.cursor_boost_started else {
             return;
         };
-        let recent = self
-            .shake
-            .last_shake
-            .is_some_and(|last| now.duration_since(last) <= CURSOR_SHAKE_ACTIVE_WINDOW);
+        let recent = self.shake.last_shake.is_some_and(|last| {
+            now.duration_since(last) <= Duration::from_millis(ctdesign::CURSOR_SHAKE_ACTIVE_MS)
+        });
         let grown =
             now.duration_since(started) >= Duration::from_millis(ctdesign::CURSOR_SHAKE_GROW_MS);
         if recent && grown {

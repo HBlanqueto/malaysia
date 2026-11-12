@@ -124,7 +124,6 @@ app-help = Ayuda de { $app }
 
 help-shortcuts = Atajos de teclado de Malaysia
 help-docs = Documentación de Malaysia
-help-topics = Temas de ayuda
 help-show-all-topics = Mostrar todos los temas de ayuda
 help-topic-shortcuts = Atajos de teclado
 help-topic-dock = Dock

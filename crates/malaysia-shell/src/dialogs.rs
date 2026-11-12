@@ -12,7 +12,9 @@ use ctdesign::{
     ABOUT_APP_HEIGHT, ABOUT_APP_ICON, ABOUT_APP_WIDTH, ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP,
     ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP, ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM,
     ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP, ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE,
-    ABOUT_VALUE_WIDTH, ABOUT_WIDTH, DIALOG_PADDING, SIDEBAR, TITLEBAR,
+    ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CONFIRM_BUTTON_GAP, CONFIRM_GLYPH, CONFIRM_HEIGHT,
+    CONFIRM_ICON, CONFIRM_WIDTH, DIALOG_PADDING, FORCE_QUIT_HEIGHT, FORCE_QUIT_ICON,
+    FORCE_QUIT_ROW_HEIGHT, FORCE_QUIT_WIDTH, SIDEBAR, TITLEBAR,
 };
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
@@ -25,15 +27,12 @@ use crate::menubar::{find_entry, resolve_app_name};
 use crate::power::{self, PowerAction};
 use bk::theme;
 
-const CONFIRM_SIZE: (u32, u32) = (280, 250);
-const CONFIRM_BUTTON_GAP: f32 = 10.0;
-const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
+const CONFIRM_SIZE: (u32, u32) = (CONFIRM_WIDTH, CONFIRM_HEIGHT);
+const FORCE_QUIT_SIZE: (u32, u32) = (FORCE_QUIT_WIDTH, FORCE_QUIT_HEIGHT);
 pub const ABOUT_APP_ID: &str = "about";
 pub const ABOUT_APP_INFO_ID: &str = "about-app";
 const ABOUT_SIZE: (u32, u32) = (ABOUT_WIDTH, ABOUT_HEIGHT);
 const ABOUT_APP_SIZE: (u32, u32) = (ABOUT_APP_WIDTH, ABOUT_APP_HEIGHT);
-const ROW_HEIGHT: f32 = 32.0;
-const ICON_SIZE: f32 = 22.0;
 
 fn spec(size: (u32, u32)) -> LayerSpec {
     LayerSpec {
@@ -93,8 +92,6 @@ fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) 
         )
 }
 
-const POWER_ICON_SIZE: f32 = 64.0;
-const POWER_GLYPH_SIZE: f32 = 34.0;
 const COUNTDOWN_SECONDS: u32 = 60;
 
 const POWER_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><path d=\"M10.2 8.6a10 10 0 1 0 11.6 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/><path d=\"M16 4.5v11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/></svg>";
@@ -154,15 +151,15 @@ fn power_badge(glyph: &'static str) -> Rect {
     let mut disc = Palette::current().secondary_label;
     disc.a = 0.55;
     rect()
-        .width(Size::px(POWER_ICON_SIZE))
-        .height(Size::px(POWER_ICON_SIZE))
-        .corner_radius(POWER_ICON_SIZE / 2.0)
+        .width(Size::px(CONFIRM_ICON))
+        .height(Size::px(CONFIRM_ICON))
+        .corner_radius(CONFIRM_ICON / 2.0)
         .background(theme::color(disc))
         .center()
         .child(
             SvgViewer::new(Bytes::from_static(glyph.as_bytes()))
-                .width(Size::px(POWER_GLYPH_SIZE))
-                .height(Size::px(POWER_GLYPH_SIZE))
+                .width(Size::px(CONFIRM_GLYPH))
+                .height(Size::px(CONFIRM_GLYPH))
                 .color(Color::WHITE)
                 .show_loader(false),
         )
@@ -316,7 +313,7 @@ impl App for ForceQuitApp {
             HStack::new()
                 .main_align(Alignment::Start)
                 .width(Size::fill())
-                .height(Size::px(ROW_HEIGHT))
+                .height(Size::px(FORCE_QUIT_ROW_HEIGHT))
                 .corner_radius(SIDEBAR.item_radius as f32)
                 .background(if row == selected {
                     theme::color(highlight)
@@ -327,7 +324,11 @@ impl App for ForceQuitApp {
                 .cross_align(Alignment::Center)
                 .spacing(SPACE_2)
                 .on_press(move |_| selected_state.set(row))
-                .child(app_icon(self.icon(&app.app_id).as_ref(), &name, ICON_SIZE))
+                .child(app_icon(
+                    self.icon(&app.app_id).as_ref(),
+                    &name,
+                    FORCE_QUIT_ICON,
+                ))
                 .child(Text::new(name).font_size(BODY.size as f32).color(text))
                 .into_element()
         });

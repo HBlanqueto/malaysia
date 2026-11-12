@@ -628,6 +628,7 @@ impl Component for OtherNetworkSheet {
                 Row::new(tr!("wifi-network-name")).control(
                     TextField::new(name, "")
                         .auto_focus(true)
+                        .autocorrection_disabled(true)
                         .width(Size::px(INLINE_FIELD_WIDTH))
                         .style(|s| TextFieldStyle {
                             background: StateValue::new(ShapeStyle::Color(Rgba::TRANSPARENT)),

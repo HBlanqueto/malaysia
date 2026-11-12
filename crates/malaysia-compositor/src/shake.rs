@@ -1,17 +1,19 @@
 use std::time::{Duration, Instant};
 
-pub(crate) const SHAKE_MIN_DX: f64 = 2.0;
-pub(crate) const SHAKE_MIN_SWING: f64 = 24.0;
-pub(crate) const SHAKE_MAX_SWING: Duration = Duration::from_millis(300);
-pub(crate) const SHAKE_MAX_TOTAL: Duration = Duration::from_secs(1);
-pub(crate) const SHAKE_REVERSALS: u8 = 3;
+use ctdesign::{
+    CURSOR_SHAKE_MAX_SWING_MS, CURSOR_SHAKE_MAX_TOTAL_MS, CURSOR_SHAKE_MIN_DX,
+    CURSOR_SHAKE_MIN_SWING, CURSOR_SHAKE_REVERSALS,
+};
+
+const SHAKE_MAX_SWING: Duration = Duration::from_millis(CURSOR_SHAKE_MAX_SWING_MS);
+const SHAKE_MAX_TOTAL: Duration = Duration::from_millis(CURSOR_SHAKE_MAX_TOTAL_MS);
 
 #[derive(Debug, Default)]
 pub(crate) struct ShakeDetector {
     last_x: Option<f64>,
     direction: i8,
     swing: f64,
-    reversals: u8,
+    reversals: u32,
     started: Option<Instant>,
     last_reversal: Option<Instant>,
     pub(crate) last_shake: Option<Instant>,
@@ -23,7 +25,7 @@ impl ShakeDetector {
             return false;
         };
         let dx = x - last;
-        if dx.abs() < SHAKE_MIN_DX {
+        if dx.abs() < CURSOR_SHAKE_MIN_DX {
             return false;
         }
         let direction = if dx > 0.0 { 1 } else { -1 };
@@ -52,7 +54,10 @@ impl ShakeDetector {
             .started
             .map(|started| now.duration_since(started))
             .unwrap_or_default();
-        if swing < SHAKE_MIN_SWING || reversal_dt > SHAKE_MAX_SWING || total > SHAKE_MAX_TOTAL {
+        if swing < CURSOR_SHAKE_MIN_SWING
+            || reversal_dt > SHAKE_MAX_SWING
+            || total > SHAKE_MAX_TOTAL
+        {
             self.start(direction, dx.abs(), now);
             return false;
         }
@@ -62,7 +67,7 @@ impl ShakeDetector {
         self.last_reversal = Some(now);
         self.last_shake = Some(now);
         self.swing = dx.abs();
-        if self.reversals >= SHAKE_REVERSALS {
+        if self.reversals >= CURSOR_SHAKE_REVERSALS {
             self.direction = 0;
             self.swing = 0.0;
             self.reversals = 0;

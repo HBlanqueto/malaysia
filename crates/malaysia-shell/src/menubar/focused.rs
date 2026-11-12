@@ -1,4 +1,4 @@
-use bk::menu::{CheckState, MenuIcon, MenuItem, SearchSource, SearchableEntry};
+use bk::menu::{CheckState, MenuIcon, MenuItem, SearchableEntry};
 use bk::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
 use crate::localize::tr;
@@ -159,10 +159,8 @@ pub fn help_search_topics() -> Vec<SearchableEntry> {
             tr!("help-show-all-topics"),
         )])
         .map(|item| SearchableEntry {
-            path: tr!("help-topics").to_string(),
             item,
             location: None,
-            source: SearchSource::Help,
         })
         .collect()
 }
