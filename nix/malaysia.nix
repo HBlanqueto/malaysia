@@ -99,7 +99,8 @@ in
       ];
       config.malaysia = lib.mkDefault {
         default = [ "gtk" ];
-        "org.freedesktop.impl.portal.Settings" = [ "malaysia" ];
+        # GTK 4 on Wayland reads only the portal, so gtk adds icon-theme, cursor and fonts from GSettings; malaysia wins per key.
+        "org.freedesktop.impl.portal.Settings" = [ "malaysia" "gtk" ];
         "org.freedesktop.impl.portal.Notification" = [ "malaysia" ];
       };
     };

@@ -42,17 +42,17 @@
     "malaysia-icon-theme": {
       "flake": false,
       "locked": {
-        "lastModified": 1794439458,
-        "narHash": "sha256-aSU2/1VJvYbVC/L3ErSAG31Ndrg41ePfgC6VKTsBl8s=",
+        "lastModified": 1794444866,
+        "narHash": "sha256-UkM+8fwucjrsn2tsehGH1RvtTptV3VJWvpbITdpI0sI=",
         "owner": "HBlanqueto",
         "repo": "malaysia-icon-theme",
-        "rev": "b53c48f6e89fba8bc38a693e048b07111b911f2d",
+        "rev": "221d2d6d9bd142611c41f2b36f3af6bcfbdb625f",
         "type": "github"
       },
       "original": {
         "owner": "HBlanqueto",
         "repo": "malaysia-icon-theme",
-        "rev": "b53c48f6e89fba8bc38a693e048b07111b911f2d",
+        "rev": "221d2d6d9bd142611c41f2b36f3af6bcfbdb625f",
         "type": "github"
       }
     },
