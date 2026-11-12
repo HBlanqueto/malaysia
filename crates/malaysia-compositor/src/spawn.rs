@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::process::{Child, Command};
 
 use crate::config::Config;
-use ctappearance::Toolkit;
 
 pub const WRAPPER_ENV: &[&str] = &[
     "LD_LIBRARY_PATH",
@@ -23,7 +22,6 @@ pub fn command(program: impl AsRef<OsStr>, config: &Config) -> Command {
     let mut command = Command::new(program);
     sanitize(&mut command);
     apply_qt_decoration(&mut command, config);
-    apply_gtk3_text_size(&mut command, config);
     apply_x11_display(&mut command);
     command
 }
@@ -44,7 +42,6 @@ pub fn shell_component(component: &str, display: Option<&str>) -> io::Result<Chi
 pub fn spawn(mut command: Command, config: &Config) -> io::Result<Child> {
     sanitize(&mut command);
     apply_qt_decoration(&mut command, config);
-    apply_gtk3_text_size(&mut command, config);
     apply_x11_display(&mut command);
     if let Some(language) = ctappearance::language::system_language() {
         command.env("LANGUAGE", language);
@@ -87,15 +84,6 @@ fn apply_qt_decoration(command: &mut Command, config: &Config) {
     }
     if std::env::var_os("QT_WAYLAND_DISABLE_WINDOWDECORATION").is_none() {
         command.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
-    }
-}
-
-// GTK 3 reads GSettings, not the portal, outside a sandbox; GDK_DPI_SCALE
-// scales only its fonts (gtk-3-24, gdk/wayland/gdkscreen-wayland.c).
-fn apply_gtk3_text_size(command: &mut Command, config: &Config) {
-    if std::env::var_os("GDK_DPI_SCALE").is_none() {
-        let scale = config.appearance.text_size_for(Toolkit::Gtk);
-        command.env("GDK_DPI_SCALE", scale.to_string());
     }
 }
 

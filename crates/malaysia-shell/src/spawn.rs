@@ -64,11 +64,21 @@ pub(crate) fn spawn_client(mut command: Command) -> io::Result<()> {
     if let Some(language) = ctappearance::language::system_language() {
         command.env("LANGUAGE", language);
     }
+    apply_gtk3_text_size(&mut command);
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     detached(command)
+}
+
+// GTK 3 reads GSettings, not the portal, outside a sandbox; GDK_DPI_SCALE
+// scales only its fonts (gtk-3-24, gdk/wayland/gdkscreen-wayland.c).
+fn apply_gtk3_text_size(command: &mut Command) {
+    if env::var_os("GDK_DPI_SCALE").is_none() {
+        let scale = ctappearance::load_appearance().text_size_for(ctappearance::Toolkit::Gtk);
+        command.env("GDK_DPI_SCALE", scale.to_string());
+    }
 }
 
 pub(crate) fn spawn_component(component: &str) {
