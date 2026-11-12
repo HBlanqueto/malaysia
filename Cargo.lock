@@ -421,7 +421,7 @@ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 [[package]]
 name = "bk"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=5f0479c95e1669e32dbe94b94d0663dc4e4c378c#5f0479c95e1669e32dbe94b94d0663dc4e4c378c"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=cc58a12c32fdc751850e14053a720121a7552845#cc58a12c32fdc751850e14053a720121a7552845"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -783,7 +783,7 @@ dependencies = [
 [[package]]
 name = "ctappearance"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=5f0479c95e1669e32dbe94b94d0663dc4e4c378c#5f0479c95e1669e32dbe94b94d0663dc4e4c378c"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=cc58a12c32fdc751850e14053a720121a7552845#cc58a12c32fdc751850e14053a720121a7552845"
 dependencies = [
  "ctdesign",
  "md-5",
@@ -797,7 +797,7 @@ dependencies = [
 [[package]]
 name = "ctdesign"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=5f0479c95e1669e32dbe94b94d0663dc4e4c378c#5f0479c95e1669e32dbe94b94d0663dc4e4c378c"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=cc58a12c32fdc751850e14053a720121a7552845#cc58a12c32fdc751850e14053a720121a7552845"
 dependencies = [
  "serde_json",
 ]
@@ -1899,7 +1899,7 @@ dependencies = [
 [[package]]
 name = "infinity-protocol"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=5f0479c95e1669e32dbe94b94d0663dc4e4c378c#5f0479c95e1669e32dbe94b94d0663dc4e4c378c"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=cc58a12c32fdc751850e14053a720121a7552845#cc58a12c32fdc751850e14053a720121a7552845"
 dependencies = [
  "bitflags 2.13.2",
  "wayland-backend",
@@ -4875,7 +4875,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -167,10 +167,12 @@ background (6 % in light, 8 % in dark, at `normal` strength). Traffic lights in
 
 `wallpaper_tinting` is macOS's "Tint window background with wallpaper color".
 The compositor sends each BarrierKit window the average color of the wallpaper
-behind it, and the window mixes it into the parts of `tint_parts` (9 % in
-dark, 7 % in light with `wallpaper_tinting_in_light`, times `tint_strength`
-and the layer factor; provisional values, ADR 0065). It needs a neutral
-`window_color`; any accent works.
+behind it. As in macOS, the window keeps its lightness and takes part of
+that color's hue (chroma in OKLab): 15 % in dark, 12 % in light with
+`wallpaper_tinting_in_light`, the sidebar twice as much, times
+`tint_strength` (measured on macOS 26, ADR 0065). The color follows the
+window as it moves and fades in over 220 ms when it changes at once. It needs
+a neutral `window_color`; any accent works.
 
 System Settings › Appearance shows both tints as one control: «Tint windows»
 (Neutral, Subtle, Normal, Strong, Intense) sets `tint_strength`, or turns both

@@ -1,8 +1,7 @@
 # 0065 — Wallpaper tinting per window
 
-Status: accepted (2026-11-08), amended 2026-11-11 (steps 8 to 10). The
-amounts are provisional until they are measured on macOS (step 4 of
-«Calibration»).
+Status: accepted (2026-11-08), amended 2026-11-11 (steps 8 to 10) and
+2026-11-12 (step 11, amounts measured on macOS 26).
 
 ## Context
 
@@ -69,6 +68,18 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
 10. **The bars are a part (2026-11-11).** `tint_parts` gains `bars`, the menu
     bar and the Dock, and `window_tint_scope` is retired. With the wallpaper
     as tint color they take the wallpaper's dominant color.
+11. **Like macOS: chroma, measured amounts and a fade (2026-11-12).** Five
+    screenshots of macOS 26 System Settings in dark mode over the Sonoma
+    wallpaper, with the window in different places, show one tint per window
+    and a constant lightness: the content stays at OKLab L 0.27–0.29 while
+    the wallpaper behind goes from 0.53 to 0.76. Only the hue moves. So
+    `behind_window` mixes the chroma in OKLab (`backdrop::take_chroma`) and
+    keeps each gray's lightness; the accent tint keeps its sRGB mix. The
+    content takes about 15 % of the wallpaper's chroma (`WALLPAPER_TINTING`
+    dark 0.15; light 0.12 keeps the old ratio) and the sidebar about twice
+    as much (`WALLPAPER_TINTING_SIDEBAR` 2.0). When the compositor sends a
+    new color the kit fades to it over `DURATION_BASE`, unless Reduce
+    motion is on.
 
 ## Calibration
 
