@@ -49,7 +49,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    `bk::style::panel_edges`, in the compositor's panel colours and one
    physical pixel wide like them, under its icons, so magnified icons rise
    over the bar's edge. The fill is the translucent `shell.dock`: as in
-   macOS, the wallpaper shows through the blur. It takes the bar tint only
+   macOS, the wallpaper and the windows that pass behind the Dock show through
+   the blur (ADR 0071, `"behind"`). It takes the bar tint only
    with `bars` in `appearance.tint_parts`, and is opaque with
    `appearance.reduce_transparency`.
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon_in`),

@@ -20,18 +20,20 @@ use crate::cursor::OutputRenderElement;
 use crate::effects::RoundedTextureElement;
 use crate::renderer::MalaysiaRenderer;
 use crate::scene_elements::{
-    LayerSide, append_buffer, append_layers, background_of, physical_rect,
+    LayerSide, append_buffer, append_layers, append_window_frame, background_of, physical_rect,
 };
 use crate::state::State;
 
-// ADR 0071: dual Kawase (Bjørge, SIGGRAPH 2015) over the wallpaper, blurred again only when it changes.
+// ADR 0071: dual Kawase (Bjørge, SIGGRAPH 2015), blurred again only when what it samples changes.
+// `wallpaper` is the Background layer; `behind` adds the windows, for the Dock's glass.
 pub(crate) struct Blur {
     down: GlesTexProgram,
     up: GlesTexProgram,
-    wallpaper: Option<Wallpaper>,
+    wallpaper: Option<Blurred>,
+    behind: Option<Blurred>,
 }
 
-struct Wallpaper {
+struct Blurred {
     tracker: OutputDamageTracker,
     scale: f64,
     source: GlesTexture,
@@ -58,6 +60,7 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<Blur> {
         down: program(grade_graphics::shaders::BLUR_DOWN)?,
         up: program(grade_graphics::shaders::BLUR_UP)?,
         wallpaper: None,
+        behind: None,
     })
 }
 
@@ -79,7 +82,13 @@ pub(crate) fn update(
         tracing::warn!("failed to blur the wallpaper");
         blur.wallpaper = None;
     }
+    if !drawn(state) || !behind_requested(state) {
+        blur.behind = None;
+    }
     state.blur = Some(blur);
+    if drawn(state) && behind_requested(state) {
+        refresh_behind(state, renderer, output_size);
+    }
 }
 
 pub(crate) fn backdrop<R: MalaysiaRenderer>(
@@ -142,7 +151,7 @@ fn sampled<R: MalaysiaRenderer>(
         state
             .blur
             .as_ref()
-            .and_then(|blur| blur.wallpaper.as_ref())
+            .and_then(|blur| sampled_cache(blur, surface))
             .filter(|_| drawn(state)),
         state.rounded_clip.clone(),
     ) else {
@@ -195,6 +204,14 @@ fn sampled<R: MalaysiaRenderer>(
         .collect()
 }
 
+// ADR 0071: the Dock's glass shows the windows that pass behind it; if that cache failed, the wallpaper.
+fn sampled_cache<'a>(blur: &'a Blur, surface: &WlSurface) -> Option<&'a Blurred> {
+    let behind = crate::window_style::is_dock_layer(surface)
+        .then_some(blur.behind.as_ref())
+        .flatten();
+    behind.or(blur.wallpaper.as_ref())
+}
+
 fn blur_region(surface: &WlSurface) -> Vec<Rectangle<i32, Logical>> {
     with_states(surface, |states| {
         if !states
@@ -238,6 +255,14 @@ fn requested(state: &State) -> bool {
             .any(|surface| !blur_region(surface.wl_surface()).is_empty())
 }
 
+fn behind_requested(state: &State) -> bool {
+    !state.locked
+        && state.layers.on_layer(Layer::Top).any(|entry| {
+            crate::window_style::is_dock_layer(entry.surface.wl_surface())
+                && !blur_region(entry.surface.wl_surface()).is_empty()
+        })
+}
+
 impl Blur {
     fn refresh(
         &mut self,
@@ -246,36 +271,106 @@ impl Blur {
         output_size: Size<i32, Physical>,
     ) -> Option<()> {
         let scale = state.scale.fractional_scale();
-        let stale = self.wallpaper.as_ref().is_none_or(|wallpaper| {
-            wallpaper.scale != scale
-                || wallpaper.source.size() != Size::from((output_size.w, output_size.h))
-        });
-        if stale {
-            self.wallpaper = Some(Wallpaper::new(renderer, output_size, scale)?);
-        }
         let elements = wallpaper_elements(state, renderer, scale);
-        let wallpaper = self.wallpaper.as_mut()?;
-        let changed = {
-            let mut target = renderer.bind(&mut wallpaper.source).ok()?;
-            wallpaper
-                .tracker
-                .render_output(
-                    renderer,
-                    &mut target,
-                    1,
-                    &elements,
-                    ctdesign::DESKTOP_CLEAR.premultiplied(),
-                )
-                .ok()?
-                .damage
-                .is_some_and(|damage| !damage.is_empty())
-        };
-        if changed {
-            wallpaper.blur(renderer, &self.down, &self.up)?;
-            wallpaper.commit.increment();
-        }
-        Some(())
+        render_blurred(
+            &mut self.wallpaper,
+            (&self.down, &self.up),
+            renderer,
+            (output_size, scale),
+            &elements,
+        )
     }
+}
+
+fn refresh_behind(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    output_size: Size<i32, Physical>,
+) {
+    let scale = state.scale.fractional_scale();
+    let elements = behind_elements(state, renderer, scale);
+    let Some(mut blur) = state.blur.take() else {
+        return;
+    };
+    if render_blurred(
+        &mut blur.behind,
+        (&blur.down, &blur.up),
+        renderer,
+        (output_size, scale),
+        &elements,
+    )
+    .is_none()
+    {
+        tracing::warn!("failed to blur what is behind the Dock");
+        blur.behind = None;
+    }
+    state.blur = Some(blur);
+}
+
+fn render_blurred(
+    cache: &mut Option<Blurred>,
+    (down, up): (&GlesTexProgram, &GlesTexProgram),
+    renderer: &mut GlesRenderer,
+    (output_size, scale): (Size<i32, Physical>, f64),
+    elements: &[OutputRenderElement<GlesRenderer>],
+) -> Option<()> {
+    let stale = cache.as_ref().is_none_or(|blurred| {
+        blurred.scale != scale
+            || blurred.source.size() != Size::from((output_size.w, output_size.h))
+    });
+    if stale {
+        *cache = Some(Blurred::new(renderer, output_size, scale)?);
+    }
+    let blurred = cache.as_mut()?;
+    let changed = {
+        let mut target = renderer.bind(&mut blurred.source).ok()?;
+        blurred
+            .tracker
+            .render_output(
+                renderer,
+                &mut target,
+                1,
+                elements,
+                ctdesign::DESKTOP_CLEAR.premultiplied(),
+            )
+            .ok()?
+            .damage
+            .is_some_and(|damage| !damage.is_empty())
+    };
+    if changed {
+        blurred.blur(renderer, down, up)?;
+        blurred.commit.increment();
+    }
+    Some(())
+}
+
+fn behind_elements(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    scale: f64,
+) -> Vec<OutputRenderElement<GlesRenderer>> {
+    let focused = state.focused_window();
+    let windows: Vec<_> = state
+        .windows
+        .iter_visible(&state.minimized)
+        .rev()
+        .map(|window| window.id())
+        .filter(|id| !state.is_minimizing(*id))
+        .collect();
+    let mut elements = Vec::new();
+    for id in windows {
+        append_window_frame(
+            state,
+            renderer,
+            id,
+            focused,
+            scale,
+            Point::default(),
+            &mut elements,
+        );
+    }
+    elements.extend(wallpaper_elements(state, renderer, scale));
+    elements
 }
 
 fn wallpaper_elements(
@@ -317,7 +412,7 @@ fn wallpaper_elements(
     elements
 }
 
-impl Wallpaper {
+impl Blurred {
     fn new(renderer: &mut GlesRenderer, size: Size<i32, Physical>, scale: f64) -> Option<Self> {
         let full = Size::<i32, BufferCoords>::from((size.w, size.h));
         let mut texture =
@@ -396,4 +491,89 @@ fn pass(
         .ok()?;
     // The passes and the draw that samples them share one GL context, which orders them.
     frame.finish().ok().map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::try_test_renderer;
+    use smithay::backend::renderer::ExportMem;
+    use smithay::backend::renderer::element::Kind;
+    use smithay::backend::renderer::element::solid::{SolidColorBuffer, SolidColorRenderElement};
+
+    const SIDE: i32 = 128;
+    fn output() -> Size<i32, Physical> {
+        Size::from((SIDE, SIDE))
+    }
+
+    fn solid(x: i32, size: i32, color: [f32; 4]) -> OutputRenderElement<GlesRenderer> {
+        SolidColorRenderElement::from_buffer(
+            &SolidColorBuffer::new(Size::from((size, size)), color),
+            Point::from((x, x)),
+            1.0,
+            1.0,
+            Kind::Unspecified,
+        )
+        .into()
+    }
+
+    fn center_pixel(renderer: &mut GlesRenderer, blurred: &mut Blurred) -> [u8; 4] {
+        let size = Size::<i32, BufferCoords>::from((SIDE, SIDE));
+        let target = renderer.bind(&mut blurred.blurred).unwrap();
+        let mapping = renderer
+            .copy_framebuffer(&target, Rectangle::from_size(size), Fourcc::Abgr8888)
+            .unwrap();
+        let bytes = renderer.map_texture(&mapping).unwrap();
+        let at = ((SIDE / 2 * SIDE + SIDE / 2) * 4) as usize;
+        [bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]
+    }
+
+    #[test]
+    fn what_is_behind_the_dock_shows_a_window_and_blurs_again_only_when_it_changes() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        let blur = compile(&mut renderer).expect("the blur shaders compile");
+        let wallpaper = || solid(0, 128, [0.0, 0.0, 1.0, 1.0]);
+        let programs = (&blur.down, &blur.up);
+        let mut cache = None;
+
+        let with_window = [solid(32, 64, [1.0, 0.0, 0.0, 1.0]), wallpaper()];
+        render_blurred(
+            &mut cache,
+            programs,
+            &mut renderer,
+            (output(), 1.0),
+            &with_window,
+        )
+        .unwrap();
+        let blurred = cache.as_mut().unwrap();
+        let commit = blurred.commit;
+        let [red, _, blue, _] = center_pixel(&mut renderer, blurred);
+        assert!(red > blue, "the window is under the glass: {red} {blue}");
+
+        render_blurred(
+            &mut cache,
+            programs,
+            &mut renderer,
+            (output(), 1.0),
+            &with_window,
+        )
+        .unwrap();
+        assert_eq!(cache.as_ref().unwrap().commit, commit, "nothing changed");
+
+        render_blurred(
+            &mut cache,
+            programs,
+            &mut renderer,
+            (output(), 1.0),
+            &[wallpaper()],
+        )
+        .unwrap();
+        let blurred = cache.as_mut().unwrap();
+        assert_ne!(blurred.commit, commit, "the window left");
+        let [red, _, blue, _] = center_pixel(&mut renderer, blurred);
+        assert!(blue > red, "only the wallpaper is left: {red} {blue}");
+    }
 }

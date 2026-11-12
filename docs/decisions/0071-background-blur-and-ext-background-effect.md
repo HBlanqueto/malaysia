@@ -258,7 +258,11 @@ Read at `7f81a7f7` (2026-11-10):
    their material regions (barrierkit change); `appearance.blur_all_windows`
    (step 4.1 of «Decision»).
 3. **`"behind"` and pop-ups.** Framebuffer-effect elements, the blit
-   fallback and the fades.
+   fallback and the fades. The Dock got `"behind"` first (2026-11-12) without
+   them: `blur.rs` keeps a second cache like the wallpaper's, rendered from
+   the windows and the `Background` layer through its own
+   `OutputDamageTracker`, so it blurs again only when something below changes.
+   Pending: the other rows of the table.
 4. **Calibration.** The blur values, saturation and noise, measured on a
    Mac with a solid and a striped wallpaper.
 

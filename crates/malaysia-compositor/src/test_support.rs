@@ -50,3 +50,15 @@ pub(crate) fn insert_client(display: &Display<State>, server_side: UnixStream) -
         )
         .expect("the server should accept the client")
 }
+
+#[allow(unsafe_code)]
+pub(crate) fn try_test_renderer() -> Option<smithay::backend::renderer::gles::GlesRenderer> {
+    use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
+    use smithay::backend::renderer::gles::GlesRenderer;
+    let device = EGLDevice::enumerate().ok()?.next()?;
+    // SAFETY: the display owns `device`, so the native handle lives as long as the display.
+    let display = unsafe { EGLDisplay::new(device) }.ok()?;
+    let context = EGLContext::new(&display).ok()?;
+    // SAFETY: `context` was just created on this thread and is not shared with another.
+    unsafe { GlesRenderer::new(context) }.ok()
+}

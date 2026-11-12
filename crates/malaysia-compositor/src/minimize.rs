@@ -260,18 +260,8 @@ mod tests {
         Rectangle::new(Point::from((x, y)), Size::from((w, h)))
     }
 
+    use crate::test_support::try_test_renderer;
     use smithay::backend::renderer::ExportMem;
-
-    #[allow(unsafe_code)]
-    fn try_test_renderer() -> Option<GlesRenderer> {
-        use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
-        let device = EGLDevice::enumerate().ok()?.next()?;
-        // SAFETY: the display owns `device`, so the native handle lives as long as the display.
-        let display = unsafe { EGLDisplay::new(device) }.ok()?;
-        let context = EGLContext::new(&display).ok()?;
-        // SAFETY: `context` was just created on this thread and is not shared with another.
-        unsafe { GlesRenderer::new(context) }.ok()
-    }
 
     // Draws a red 120 × 80 window at (40, 20) on a 200 × 200 output, bent toward (90, 180).
     fn bent_pixels(renderer: &mut GlesRenderer, effect: MinimizeEffect, progress: f32) -> Vec<u8> {
