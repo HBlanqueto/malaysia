@@ -137,6 +137,8 @@
                 --set GBM_BACKENDS_PATH "${pkgs.mesa}/lib/gbm" \
                 --prefix LD_LIBRARY_PATH : "${pkgs.lib.makeLibraryPath (nativeDeps pkgs)}"
             done
+            install -Dm644 share/fontconfig/malaysia.conf \
+              $out/share/fontconfig/malaysia.conf
             install -Dm644 share/xdg-desktop-portal/portals/malaysia.portal \
               $out/share/xdg-desktop-portal/portals/malaysia.portal
             mkdir -p $out/share/dbus-1/services
@@ -167,6 +169,7 @@
             done
 
             wrapProgram "$out/bin/malaysia-compositor" \
+              --set-default FONTCONFIG_FILE "$out/share/fontconfig/malaysia.conf" \
               --prefix PATH : "${pkgs.xwayland-satellite}/bin"
 
             wrapProgram "$out/bin/malaysia-wallpaper" \
@@ -250,7 +253,7 @@
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
           <fontconfig>
-            <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+            <include>${./share/fontconfig/malaysia.conf}</include>
             <dir>${pkgs.geist-font}/share/fonts</dir>
             <dir>${pkgs.inter}/share/fonts</dir>
           </fontconfig>
