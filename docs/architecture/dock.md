@@ -75,7 +75,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    windows (a diamond marks a minimized one), Options › Keep in Dock, and
    Hide and Quit (or Open). On Downloads and the Trash it has Open; the Trash adds Empty Trash, which
    asks first (`malaysia-shell empty-trash`) and erases the home trash
-   (`$XDG_DATA_HOME/Trash`), not the trash of other volumes. On the
+   (`$XDG_DATA_HOME/Trash`) and the user's trash on every mounted volume
+   (`$topdir/.Trash/$uid` or `$topdir/.Trash-$uid`). On the
    separator it turns hiding and magnification on or off, sets the position
    and the minimize effect, and opens Dock Settings; these write
    `dock.domain`.
