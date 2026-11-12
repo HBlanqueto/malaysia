@@ -42,8 +42,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    there), so clicks above it reach the windows.
 5. **Frame.** The bar is a card (ADR 0068) with a continuous corner of
    `DOCK_RADIUS` × its thickness. The compositor knows the Dock by its
-   namespace (`DOCK_LAYER_NAMESPACE`) and gives that card only the window
-   shadow and the blur of `set_blur_region`, clipped to the corner. The Dock
+   namespace (`DOCK_LAYER_NAMESPACE`) and gives that card only the blur of
+   `set_blur_region`, clipped to the corner, and no shadow: it would show
+   through the translucent fill. The Dock
    draws the outer border and the inner line itself with
    `bk::style::panel_edges`, in the compositor's panel colours and one
    physical pixel wide like them, under its icons, so magnified icons rise

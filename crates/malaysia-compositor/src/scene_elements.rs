@@ -1289,13 +1289,16 @@ fn append_cards<R: MalaysiaRenderer>(
         shadows.extend(shadow);
     }
     // macOS: magnified Dock icons rise over the bar's edge, so the Dock draws its own edges
-    // (`panel_edges`) under them and gets only the shadow and the blur.
-    if !crate::window_style::is_dock_layer(surface) {
+    // (`panel_edges`) under them and gets only the blur; a shadow would show through its glass.
+    let dock = crate::window_style::is_dock_layer(surface);
+    if !dock {
         elements.extend(borders);
     }
     elements.extend(surface_elements.into_iter().map(|e| e.into()));
     elements.extend(backdrops);
-    elements.extend(shadows);
+    if !dock {
+        elements.extend(shadows);
+    }
 }
 
 pub(crate) fn append_cursor<R: MalaysiaRenderer>(
