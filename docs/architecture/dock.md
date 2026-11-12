@@ -60,7 +60,10 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    open app (`show-process-indicators`). The name label shows over the icon
    under the pointer.
 7. **Clicks.** A click on an open app activates its first visible window, or
-   restores a minimized one. On a closed app it launches the `.desktop`
+   restores a minimized one. With Option held it first hides the active app
+   (minimizes its windows), and does nothing more on that app's own icon; the
+   compositor sends `wl_keyboard.modifiers` to the client under a pointer
+   button when it has no keyboard focus. On a closed app it launches the `.desktop`
    entry with an activation token; with `launchanim` the icon bounces until a
    window of the app appears or `DOCK_LAUNCH_TIMEOUT_MS` passes. An app whose
    `LauncherEntry` is `urgent` bounces until one of its windows is active. A minimized

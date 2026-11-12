@@ -15,7 +15,7 @@ use bk::adornments::Badge;
 use bk::animation::use_switch_progress;
 use bk::app::{load_defaults, load_restoration, save_defaults, save_restoration, use_defaults};
 use bk::menu::{CheckState, MenuItem};
-use bk::platform::{PopupAnchor, Timers};
+use bk::platform::{PopupAnchor, Timers, modifier_flags};
 use bk::popup_button::pop_up_menu;
 use bk::prelude::*;
 use bk::shell::{
@@ -37,6 +37,7 @@ use ctdesign::{
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
 use freya_core::integration::AppComponent;
+use freya_core::prelude::Modifiers;
 use serde::{Deserialize, Serialize};
 use torin::prelude::{Gaps, Position};
 
@@ -608,6 +609,11 @@ impl App for DockApp {
             autohide: config.autohide,
         };
         let mut drop_targets: Vec<(String, f32)> = Vec::new();
+        let active_app: Vec<u64> = running
+            .iter()
+            .find(|(_, windows)| windows.iter().any(|window| window.active))
+            .map(|(_, windows)| windows.iter().map(|window| window.id).collect())
+            .unwrap_or_default();
         for (item, slot) in list.iter().zip(&layout.placed) {
             let center = slot.start + slot.length / 2.0;
             match item {
@@ -659,6 +665,8 @@ impl App for DockApp {
                     let progress = launcher.as_ref().and_then(Entry::progress);
                     let open = open_app.clone();
                     let pressed = app.clone();
+                    let hide = toplevels.clone();
+                    let active_app = active_app.clone();
                     let after_drag_down = after_drag.clone();
                     let after_drag = after_drag.clone();
                     let commands = Rc::new(AppCommands {
@@ -701,9 +709,17 @@ impl App for DockApp {
                             .on_press(move |_| {
                                 let dragged =
                                     dragging.peek().as_ref().is_some_and(|drag| drag.moved);
-                                if !(dragged || after_drag.replace(false)) {
-                                    open(&pressed);
+                                if dragged || after_drag.replace(false) {
+                                    return;
                                 }
+                                // macOS: Option-click hides the active app; on another app it also opens it.
+                                if modifier_flags().contains(Modifiers::ALT) {
+                                    active_app.iter().for_each(|id| hide.minimize(*id));
+                                    if pressed.windows.iter().any(|window| window.active) {
+                                        return;
+                                    }
+                                }
+                                open(&pressed);
                             })
                             .on_secondary_down(move |_| {
                                 let commands = commands.clone();

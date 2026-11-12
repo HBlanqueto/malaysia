@@ -137,6 +137,7 @@ impl State {
                 if let Some(pointer) = self.seat.get_pointer() {
                     if let Some(focus) = pointer.current_focus() {
                         self.note_client_input_serial(&focus, serial);
+                        self.send_modifiers_to_pointer_focus(&focus, serial);
                     }
                     pointer.button(
                         self,
@@ -801,6 +802,30 @@ impl State {
                 && at.elapsed().as_millis()
                     <= u128::from(ctdesign::TITLEBAR_DOUBLE_CLICK.interval_ms)
         })
+    }
+
+    // wl_keyboard.modifiers may go to a client without keyboard focus, to tie the modifiers to
+    // pointer focus (wayland.xml): the Dock reads Option from it on a click.
+    fn send_modifiers_to_pointer_focus(&self, surface: &WlSurface, serial: Serial) {
+        let (Some(keyboard), Some(client)) = (self.seat.get_keyboard(), surface.client()) else {
+            return;
+        };
+        if keyboard
+            .current_focus()
+            .is_some_and(|focus| focus.client().as_ref() == Some(&client))
+        {
+            return;
+        }
+        let modifiers = keyboard.modifier_state().serialized;
+        for resource in keyboard.client_keyboards(&client) {
+            resource.modifiers(
+                serial.into(),
+                modifiers.depressed,
+                modifiers.latched,
+                modifiers.locked,
+                modifiers.layout_effective,
+            );
+        }
     }
 
     pub(crate) fn note_client_input_serial(&self, surface: &WlSurface, serial: Serial) {
