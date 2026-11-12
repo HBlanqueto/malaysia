@@ -320,6 +320,10 @@ fn append_desktop<R: MalaysiaRenderer>(
     append_popups(state, renderer, scale, elements, |id| {
         layer_popups.contains(&id)
     });
+    if slide.is_none() {
+        // Over the Dock, where the genie meets its tile; it ends before the windows are listed, so no frame lacks both.
+        crate::minimize::append(state, now, scale, elements);
+    }
     append_layers(
         state,
         renderer,
@@ -360,7 +364,6 @@ fn append_desktop<R: MalaysiaRenderer>(
             .map(|window| window.id())
             .filter(|id| Some(*id) != moving && !state.is_minimizing(*id))
             .collect();
-        crate::minimize::append(state, Instant::now(), scale, elements);
         for id in window_ids {
             let offset = match reveal {
                 Some(frame) if frame.owner == id && frame.slides => {

@@ -89,7 +89,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 10. **Minimize target.** The Dock sends each window's slot with
     `set_minimize_target` (`zwlr_foreign_toplevel_handle_v1.set_rectangle`):
     the app's icon with `minimize-to-application`, otherwise the window's own
-    tile, or the slot before the Trash where that tile will appear.
+    tile, or the slot before the Trash where that tile will appear. The slot
+    is the one drawn now: with the pointer on the Dock, the magnified tile.
 11. **Hiding.** With `autohide`, the bar slides off the edge when the pointer
    leaves. A strip of `DOCK_REVEAL_STRIP` px at the edge takes the pointer;
    after `autohide-delay` seconds the bar slides back in. The slide lasts
@@ -105,7 +106,9 @@ with `grade-graphics/src/minimize.frag` for `DOCK_MINIMIZE_MS`. The genie
 follows Wayfire's squeezimize (MIT, see `NOTICE`): the content slides toward
 the target while its sides narrow along a sigmoid. The window travels toward
 the screen edge nearest the target; without one it goes to the bottom
-centre. While it restores, the window is drawn only by the effect.
+centre. The effect is drawn over the Dock, so it leaves and reaches the tile
+in sight. While it restores, the window is drawn only by the effect; the frame
+where it ends already draws the window.
 
 A popup whose root parent is a layer surface, such as a Dock menu, is drawn
 above the `Top` and `Overlay` layers and takes the pointer before them; the

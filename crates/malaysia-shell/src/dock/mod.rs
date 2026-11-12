@@ -497,22 +497,14 @@ impl App for DockApp {
             });
             *applied_regions.borrow_mut() = Some(regions);
         }
-        let rest = geometry::layout(
-            &slots,
-            tile,
-            largesize,
-            frame.main_length() / 2.0,
-            None,
-            0.0,
-        );
         let targets: Vec<MinimizeTarget> =
             items::minimize_slots(&list, config.minimize_to_application)
                 .into_iter()
                 .map(|(window, index)| {
-                    let slot = rest.placed[index];
+                    let slot = layout.placed[index];
                     let (x, y, width, height) = region(frame.area(
                         slot.start,
-                        DOCK_EDGE_MARGIN + rest.padding,
+                        DOCK_EDGE_MARGIN + layout.padding,
                         slot.size,
                         slot.size,
                     ));
