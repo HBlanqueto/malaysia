@@ -1151,7 +1151,11 @@ impl State {
                 start_outer,
             } => {
                 let dx = location.x - start_pointer.x;
-                let dy = location.y - start_pointer.y;
+                let mut dy = location.y - start_pointer.y;
+                if matches!(edge, Edge::Top | Edge::TopLeft | Edge::TopRight) {
+                    let top = self.workspace().0.y - self.client_shadow_top(window);
+                    dy = dy.max(f64::from(top) - start_outer.y());
+                }
                 let minimum = self.windows.minimum_outer_size(window);
                 let maximum = self.windows.maximum_outer_size(window);
                 let outer =
