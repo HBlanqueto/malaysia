@@ -156,8 +156,8 @@ fn zoom_steps() -> usize {
 fn frame(image: (f32, f32), aspect: f32, centre: [f32; 2], zoom: f32) -> [f32; 4] {
     let width = widest(image, aspect) / zoom;
     let height = width * (image.0 / image.1) / aspect;
-    let x = (centre[0] - width / 2.0).clamp(0.0, 1.0 - width);
-    let y = (centre[1] - height / 2.0).clamp(0.0, 1.0 - height);
+    let x = (centre[0] - width / 2.0).clamp(0.0, (1.0 - width).max(0.0));
+    let y = (centre[1] - height / 2.0).clamp(0.0, (1.0 - height).max(0.0));
     [x, y, width, height]
 }
 
@@ -716,10 +716,13 @@ struct Still {
 }
 
 impl Component for Still {
+    fn render_key(&self) -> DiffKey {
+        DiffKey::from(&self.path)
+    }
+
     fn render(&self) -> impl IntoElement {
         let artwork = use_artwork(self.path.clone());
         rect()
-            .key(format!("{:?}", self.path))
             .width(Size::px(self.width))
             .height(Size::px(self.height))
             .maybe_child(artwork.read().clone().map(|handle| {
@@ -740,6 +743,10 @@ struct DesktopPreview {
 }
 
 impl Component for DesktopPreview {
+    fn render_key(&self) -> DiffKey {
+        DiffKey::from(&self.path)
+    }
+
     fn render(&self) -> impl IntoElement {
         let metrics = SETTINGS.wallpaper;
         let artwork = use_artwork(self.path.clone());
@@ -773,7 +780,6 @@ impl Component for DesktopPreview {
                 .into_element()
         }));
         rect()
-            .key(format!("{:?}", self.path))
             .width(Size::px(width))
             .height(Size::px(height))
             .corner_radius(SETTINGS.card_radius as f32)
@@ -819,6 +825,14 @@ mod tests {
     fn zoomed_out_the_frame_of_a_wide_image_spans_its_whole_height() {
         let shown = frame((2000.0, 1000.0), 1.6, [0.5, 0.5], 1.0);
         assert!(close(shown, [0.1, 0.0, 0.8, 1.0]), "{shown:?}");
+    }
+
+    #[test]
+    fn the_frame_of_an_image_wider_than_the_display_stays_inside_it() {
+        for image in [(6000.0, 2000.0), (4096.0, 1716.0), (1920.0, 816.0)] {
+            let [_, y, _, height] = frame(image, 1.6, [0.5, 0.5], 1.0);
+            assert!(y == 0.0 && (height - 1.0).abs() < 1e-5, "{image:?}");
+        }
     }
 
     #[test]

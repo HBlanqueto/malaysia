@@ -3,7 +3,9 @@ use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
+use zbus::MatchRule;
 use zbus::blocking::Connection;
+use zbus::message::Type;
 
 use crate::bus::Service;
 
@@ -35,6 +37,14 @@ impl Service for Cups {
 
     fn run(&mut self, _bus: &Connection, command: Infallible) -> zbus::Result<()> {
         match command {}
+    }
+
+    // cupsd's D-Bus notifier owns no bus name: its signals match by interface only.
+    fn signals() -> zbus::Result<MatchRule<'static>> {
+        Ok(MatchRule::builder()
+            .msg_type(Type::Signal)
+            .interface(NOTIFIER)?
+            .build())
     }
 }
 

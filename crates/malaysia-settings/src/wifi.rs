@@ -1,4 +1,4 @@
-use bk::app::{load_defaults, save_defaults};
+use bk::app::load_defaults;
 use bk::buttons::MenuButton;
 use bk::menu::{CheckState, MenuItem};
 use bk::password::PasswordField;
@@ -8,6 +8,7 @@ use bk::prelude::*;
 use bk::progress::Spinner;
 use bk::views::feedback::{Alert, Sheet};
 use bk::views::form::{Form, Row, Section};
+use ctappearance::menubar::MenubarConfig;
 use ctappearance::palette;
 use ctdesign::{ACCENT_SWATCHES, Rgba, SPACE_2, SPACE_4};
 use freya_components::svg_viewer::SvgViewer;
@@ -15,8 +16,10 @@ use torin::prelude::{Content, Gaps};
 use zbus::zvariant::OwnedObjectPath;
 use zeroize::Zeroizing;
 
+use crate::app::position;
 use crate::localize::{intern, tr};
 use crate::menubar::show_in_menu_bar;
+use crate::state::edit_defaults;
 use malaysia_services::bus::{Live, Remote, WhileVisible};
 use malaysia_services::networkmanager::{
     AskToJoin, LinkState, NetworkCommand, NetworkManager, PrivateAddress, Protocol, Security,
@@ -58,6 +61,7 @@ pub enum WifiDialog {
 pub fn wifi_pane(
     network: &Live<NetworkManager>,
     dialog: State<Option<WifiDialog>>,
+    menubar: &MenubarConfig,
     error: State<Option<String>>,
 ) -> Option<Pane> {
     let wifi = network.snapshot.read().clone()?.wifi?;
@@ -82,6 +86,7 @@ pub fn wifi_pane(
     );
     let pane = |form: Form| {
         let form = form.section(Section::new().row(show_in_menu_bar(
+            menubar,
             tr!("show-in-menu-bar"),
             |config| &mut config.show_wifi,
             error,
@@ -133,21 +138,12 @@ fn ask_to_join_row(error: State<Option<String>>) -> Row {
                 .item(tr!("ask-to-join-off"))
                 .item(tr!("ask-to-join-notify"))
                 .item(tr!("ask-to-join-ask"))
-                .selected(
-                    ASK_TO_JOIN
-                        .iter()
-                        .position(|ask| *ask == config.ask_to_join)
-                        .unwrap_or(0),
-                )
-                .on_change(move |index: usize| {
-                    let config = WifiConfig {
-                        ask_to_join: ASK_TO_JOIN[index],
-                    };
-                    if let Err(message) = save_defaults(WIFI_DOMAIN, &config) {
-                        let mut error = error;
-                        error.set(Some(message.to_string()));
-                    }
-                }),
+                .selected(position(&ASK_TO_JOIN, config.ask_to_join))
+                .on_change(edit_defaults(
+                    WIFI_DOMAIN,
+                    error,
+                    |config: &mut WifiConfig, index: usize| config.ask_to_join = ASK_TO_JOIN[index],
+                )),
         )
 }
 
@@ -494,12 +490,7 @@ impl Component for DetailsSheet {
                         .item(tr!("private-address-off"))
                         .item(tr!("private-address-fixed"))
                         .item(tr!("private-address-rotating"))
-                        .selected(
-                            PRIVATE_ADDRESSES
-                                .iter()
-                                .position(|address| *address == options.private_address)
-                                .unwrap_or(0),
-                        )
+                        .selected(position(&PRIVATE_ADDRESSES, options.private_address))
                         .on_change(move |index: usize| {
                             draft.write().private_address = PRIVATE_ADDRESSES[index];
                         }),

@@ -2,6 +2,7 @@ use std::fs::{DirBuilder, OpenOptions};
 use std::io::BufWriter;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use ctappearance::{
     WallpaperAppearance, WallpaperKind, file_uri, frame_path, modified_seconds, thumbnail_is_fresh,
@@ -14,10 +15,13 @@ use crate::image::{DecodedImage, decode_heif, decode_image_bytes, is_heif};
 use crate::shader::Shader;
 use crate::video::Video;
 
+static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+
 pub fn spawn(files: Vec<PathBuf>, device: wgpu::Device, queue: wgpu::Queue) {
     let spawned = std::thread::Builder::new()
         .name("wallpaper thumbnails".into())
         .spawn(move || {
+            let _pass = ONE_AT_A_TIME.lock();
             for file in files {
                 if let Err(error) = previews(&file, &device, &queue) {
                     tracing::warn!(?file, %error, "cannot make the wallpaper's thumbnail");

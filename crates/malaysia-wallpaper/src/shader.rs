@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use futures_lite::future::block_on;
 use wgpu::util::DeviceExt;
 
-use crate::image::{DecodedImage, Pixels};
+use crate::image::{DecodedImage, Pixels, packed_rows};
 use crate::render::{fullscreen_pipeline, offscreen_texture, padded_bytes_per_row, read_back};
 
 // Shadertoy's single-pass contract: `mainImage(out vec4, in vec2)` with `iResolution` and `iTime`,
@@ -178,11 +178,8 @@ impl Shader {
         self.draw(device, queue, &view, SNAPSHOT_FORMAT, size, 0.0)?;
         let padded = read_back(device, queue, &target);
         let row = size.0 as usize * 4;
-        let pixels: Vec<u8> = padded
-            .chunks(padded_bytes_per_row(size.0) as usize)
-            .flat_map(|line| &line[..row])
-            .copied()
-            .collect();
+        let stride = padded_bytes_per_row(size.0) as usize;
+        let pixels = packed_rows(&padded, stride, row, size.1 as usize);
         if pixels.len() != row * size.1 as usize {
             anyhow::bail!("the shader snapshot could not be read");
         }

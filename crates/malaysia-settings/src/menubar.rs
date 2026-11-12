@@ -1,7 +1,8 @@
-use bk::app::{load_defaults, save_defaults};
 use bk::prelude::*;
 use bk::views::form::Row;
 use ctappearance::menubar::MenubarConfig;
+
+use crate::state::edit_defaults;
 
 pub const DOMAIN: &str = "menubar";
 
@@ -11,19 +12,16 @@ pub fn edit<T: 'static>(
     error: State<Option<String>>,
     apply: impl Fn(&mut MenubarConfig, T) + 'static,
 ) -> Callback<T, ()> {
-    Callback::new(move |value| {
-        let mut config: MenubarConfig = load_defaults(DOMAIN);
-        apply(&mut config, value);
-        if let Err(message) = save_defaults(DOMAIN, &config) {
-            let mut error = error;
-            error.set(Some(message.to_string()));
-        }
-    })
+    edit_defaults(DOMAIN, error, apply)
 }
 
-pub fn show_in_menu_bar(title: &'static str, shown: Shown, error: State<Option<String>>) -> Row {
-    let mut config: MenubarConfig = load_defaults(DOMAIN);
-    let on = *shown(&mut config);
+pub fn show_in_menu_bar(
+    config: &MenubarConfig,
+    title: &'static str,
+    shown: Shown,
+    error: State<Option<String>>,
+) -> Row {
+    let on = *shown(&mut config.clone());
     Row::new(title).control(
         Switch::new(title)
             .on(on)

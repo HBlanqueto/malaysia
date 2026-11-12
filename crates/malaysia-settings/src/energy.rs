@@ -9,12 +9,14 @@ use malaysia_services::upower::{
 
 use crate::localize::{intern, tr};
 use crate::menubar::show_in_menu_bar;
+use ctappearance::menubar::MenubarConfig;
 
 const TINT: ctdesign::Rgba = ACCENT_SWATCHES[6].1;
 
 pub fn energy_pane(
     power: &Live<UPower>,
     profiles: &Live<PowerProfiles>,
+    menubar: &MenubarConfig,
     error: State<Option<String>>,
 ) -> Pane {
     let battery = power.snapshot.read().flatten();
@@ -40,11 +42,13 @@ pub fn energy_pane(
         form = form.section(health(&battery, power)).section(
             Section::new()
                 .row(show_in_menu_bar(
+                    menubar,
                     tr!("show-in-menu-bar"),
                     |config| &mut config.show_battery,
                     error,
                 ))
                 .row(show_in_menu_bar(
+                    menubar,
                     tr!("show-battery-percentage"),
                     |config| &mut config.show_battery_percentage,
                     error,

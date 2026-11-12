@@ -14,7 +14,7 @@ use ctdesign::{DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, SETTINGS};
 use crate::app::position;
 use crate::dock::edit as edit_dock;
 use crate::localize::{tr, tr_list};
-use crate::menubar::{DOMAIN, edit};
+use crate::menubar::edit;
 use crate::previews::menubar_preview;
 
 const STYLES: [MenubarStyle; 3] = [
@@ -229,11 +229,14 @@ fn dock_advanced_section(config: &DockConfig, error: State<Option<String>>) -> S
         )
 }
 
-pub fn desktop_pane(resolved: &Resolved, error: State<Option<String>>) -> Pane {
+pub fn desktop_pane(
+    resolved: &Resolved,
+    config: &MenubarConfig,
+    error: State<Option<String>>,
+) -> Pane {
     let dock = use_defaults::<DockConfig>(crate::dock::DOMAIN)
         .read()
         .clone();
-    let config = use_defaults::<MenubarConfig>(DOMAIN).read().clone();
     let styles = [
         tr!("menu-bar-style-solid"),
         tr!("menu-bar-style-translucent"),

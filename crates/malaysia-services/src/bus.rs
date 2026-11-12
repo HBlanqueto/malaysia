@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bk::prelude::*;
 use zbus::MatchRule;
@@ -24,6 +24,9 @@ pub trait Service: Default + Send + 'static {
     fn read(&mut self, bus: &Connection) -> zbus::Result<Self::Snapshot>;
     fn run(&mut self, bus: &Connection, command: Self::Command) -> zbus::Result<()>;
     fn tick(&mut self, _bus: &Connection) {}
+    fn signals() -> zbus::Result<MatchRule<'static>> {
+        signals_from(Self::NAME)
+    }
 }
 
 enum Event<C> {
@@ -100,7 +103,7 @@ fn work<S: Service>(
             return;
         }
     };
-    watch(&bus, signals_from(S::NAME), events.clone());
+    watch(&bus, S::signals(), events.clone());
     watch(&bus, owner_changes_of(S::NAME), events);
     let mut last: Option<Option<S::Snapshot>> = None;
     loop {
@@ -126,6 +129,7 @@ fn work<S: Service>(
             Err(RecvTimeoutError::Disconnected) => return,
         };
         let mut event = Some(first);
+        let settled = Instant::now() + SETTLE;
         while let Some(next) = event {
             if let Event::Command(command) = next
                 && let Err(error) = service.run(&bus, command)
@@ -135,7 +139,9 @@ fn work<S: Service>(
             {
                 return;
             }
-            event = inbox.recv_timeout(SETTLE).ok();
+            event = inbox
+                .recv_timeout(settled.saturating_duration_since(Instant::now()))
+                .ok();
         }
     }
 }

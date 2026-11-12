@@ -227,10 +227,13 @@ pub fn freedesktop(
                                     .qt_palette
                                     .popup(tr!("qt-palette"))
                                     .disabled(qt_off)
-                                    .on_change(move |index: usize| {
-                                        apply(set_palette(
-                                            index.checked_sub(1).map(|i| palettes[i].as_path()),
-                                        ))
+                                    .on_change(move |index: usize| match index.checked_sub(1) {
+                                        None => apply(set_palette(None)),
+                                        Some(listed) => {
+                                            if let Some(path) = palettes.get(listed) {
+                                                apply(set_palette(Some(path)))
+                                            }
+                                        }
                                     }),
                             )
                             .child(Button::new(tr!("import")).disabled(qt_off).on_press(
@@ -347,10 +350,8 @@ fn edit_bridges(on: bool, error: State<Option<String>>) {
     let mut config = ctappearance::load_appearance();
     config.gtk_bridge = on;
     config.qt_bridge = on;
-    if let Some(message) = crate::state::save_config(&config) {
-        let mut error = error;
-        error.set(Some(message));
-    }
+    let mut error = error;
+    error.set(crate::state::save_config(&config));
 }
 
 async fn pick(title: &'static str) -> Option<PathBuf> {
@@ -568,7 +569,10 @@ fn import_palette(file: &Path) -> io::Result<()> {
     let colors = config_file(&format!("{}/colors", QT_TOOLS[0]));
     fs::create_dir_all(&colors)?;
     let target = colors.join(file.file_name().unwrap_or_default());
-    fs::copy(file, &target)?;
+    // Copying a file onto itself truncates it.
+    if file != target {
+        fs::copy(file, &target)?;
+    }
     set_palette(Some(&target))
 }
 
@@ -581,13 +585,14 @@ fn import_gtk4_css(file: &Path) -> io::Result<()> {
             path = css.display().to_string()
         )));
     }
+    let sheet = fs::read(file)?;
     if let Some(parent) = css.parent() {
         fs::create_dir_all(parent)?;
     }
     if css.exists() {
         fs::rename(&css, css.with_extension("css.bak"))?;
     }
-    fs::copy(file, &css).map(|_| ())
+    fs::write(&css, sheet)
 }
 
 fn remove_gtk4_css() -> io::Result<()> {

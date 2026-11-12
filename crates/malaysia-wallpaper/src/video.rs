@@ -8,7 +8,7 @@ use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use gstreamer_video as gst_video;
 
-use crate::image::{DecodedImage, Pixels};
+use crate::image::{DecodedImage, Pixels, packed_rows};
 
 const PREROLL_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -114,15 +114,6 @@ impl Video {
         ));
         let video = Self { pipeline, latest };
         result?;
-        if video
-            .latest
-            .lock()
-            .ok()
-            .and_then(|frame| frame.clone())
-            .is_none()
-        {
-            anyhow::bail!("the video gave no frame");
-        }
         Ok(video)
     }
 
@@ -173,14 +164,8 @@ fn rgba(sample: &gst::Sample) -> Option<DecodedImage> {
     let (width, height) = (info.width(), info.height());
     let stride = *info.stride().first()? as usize;
     let row = width as usize * 4;
-    let pixels = buffer
-        .chunks(stride)
-        .take(height as usize)
-        .flat_map(|line| &line[..row])
-        .copied()
-        .collect();
     Some(DecodedImage {
         size: (width, height),
-        pixels: Pixels::Srgb8(pixels),
+        pixels: Pixels::Srgb8(packed_rows(&buffer, stride, row, height as usize)),
     })
 }

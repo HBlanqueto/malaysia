@@ -16,5 +16,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv = uniforms.origin + in.uv * uniforms.size;
     let color = textureSample(wallpaper, samp, uv);
     let inside = all(uv >= vec2<f32>(0.0)) && all(uv <= vec2<f32>(1.0));
-    return select(uniforms.background, color, inside);
+    let blended = vec4<f32>(mix(uniforms.background.rgb, color.rgb, color.a), 1.0);
+    return select(uniforms.background, blended, inside);
 }

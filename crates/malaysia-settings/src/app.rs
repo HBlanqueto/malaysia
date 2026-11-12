@@ -31,7 +31,8 @@ use crate::previews::theme_preview;
 use crate::state::{account_name, initials, save_config};
 use crate::wallpaper::{color_sheet, use_wallpaper, wallpaper_pane};
 use crate::wifi::{WifiDialog, wifi_dialog, wifi_pane};
-use bk::app::use_menu_action;
+use bk::app::{use_defaults, use_menu_action};
+use ctappearance::menubar::MenubarConfig;
 use malaysia_services::SETTINGS_PANE_ACTION as PANE_ACTION;
 use malaysia_services::bluez::{BlueZ, BluetoothCommand};
 use malaysia_services::bus::use_service;
@@ -114,7 +115,11 @@ pub fn settings_window(
         themes_changed.read();
         Themes::read()
     });
-    let name = account_name();
+    let name = use_hook(account_name);
+    let menubar = use_defaults::<MenubarConfig>(crate::menubar::DOMAIN)
+        .read()
+        .clone();
+    let [notifications, focus] = crate::notifications::panes(error);
     let window = SettingsWindow::new()
         .account(initials(&name), name, tr!("local-account"))
         .sidebar_toggle(false)
@@ -123,11 +128,11 @@ pub fn settings_window(
         .navigation_destination(destination)
         .group(
             [
-                wifi_pane(&network, wifi_shown, error),
-                bluetooth_pane(&bluetooth, busy_device, error),
+                wifi_pane(&network, wifi_shown, &menubar, error),
+                bluetooth_pane(&bluetooth, busy_device, &menubar, error),
                 network_pane(&network),
-                vpn_pane(&network, error),
-                Some(energy_pane(&power, &profiles, error)),
+                vpn_pane(&network, &menubar, error),
+                Some(energy_pane(&power, &profiles, &menubar, error)),
             ]
             .into_iter()
             .flatten()
@@ -180,10 +185,10 @@ pub fn settings_window(
                 SETTINGS.section_icon_bg,
                 appearance(config, dominant, resolved, error),
             ))
-            .pane(desktop_pane(resolved, error))
+            .pane(desktop_pane(resolved, &menubar, error))
             .pane(wallpaper_pane(wallpaper, resolved.scheme.is_dark(), error))
-            .pane(crate::notifications::notifications_pane(error))
-            .pane(crate::notifications::focus_pane(error)),
+            .pane(notifications)
+            .pane(focus),
     );
     let message = error.read().clone();
     let failures = [
@@ -227,10 +232,9 @@ fn edit<T: 'static>(
     Callback::new(move |value| {
         let mut config = load_appearance();
         apply(&mut config, value);
-        if let Some(message) = save_config(&config) {
-            let mut error = error;
-            error.set(Some(message));
-        }
+        let mut error = error;
+        // Setting it even to `None` renders the root again, which reads the file just written.
+        error.set(save_config(&config));
     })
 }
 
@@ -915,10 +919,13 @@ fn traffic_row_svg(lights: [Rgba; 3], shape: TrafficLightShape) -> String {
 fn accent_index(config: &AppearanceConfig) -> Option<usize> {
     match config.accent_color {
         None => Some(0),
-        Some(rgb) => ACCENT_SWATCHES
-            .iter()
-            .position(|(_, color)| [color.r, color.g, color.b] == rgb)
-            .map(|index| index + 1),
+        Some([r, g, b]) => {
+            let saved = Rgba { r, g, b, a: 1.0 }.to_rgba8();
+            ACCENT_SWATCHES
+                .iter()
+                .position(|(_, color)| color.to_rgba8() == saved)
+                .map(|index| index + 1)
+        }
     }
 }
 

@@ -25,6 +25,7 @@ use ctdesign::{
 };
 use torin::prelude::{Content, Gaps, Position};
 
+use crate::app::position;
 use crate::collection::CollectionDraft;
 use crate::crop::CropDraft;
 use crate::localize::{intern, tr};
@@ -232,6 +233,11 @@ pub fn preview(file: Option<&Path>, look: WallpaperAppearance) -> Option<PathBuf
     frame_path(file, look)
         .filter(|frame| frame.exists())
         .or_else(|| thumbnail_path(file))
+}
+
+// Freya paints by layer (one more per level): the artwork's image sits three levels down.
+fn over_artwork(position: Position) -> Rect {
+    rect().layer(3).position(position)
 }
 
 fn kind_symbol(item: &Item) -> Option<Symbol> {
@@ -725,6 +731,8 @@ fn hero(
     Section::new().illustration(Hero {
         preview: if is_color {
             shown.clone()
+        } else if shuffled && shown.is_none() {
+            None
         } else {
             preview(shown.as_deref(), look)
         },
@@ -934,7 +942,7 @@ fn mode_button(
         .item(tr!("wallpaper-automatic"))
         .item(tr!("wallpaper-light"))
         .item(tr!("wallpaper-dark"))
-        .selected(modes.iter().position(|&mode| mode == still).unwrap_or(0))
+        .selected(position(&modes, still))
         .on_change(move |index: usize| {
             let mut next = selection.peek().clone();
             let desktop = edited_desktop(&next);
@@ -950,7 +958,7 @@ fn scale_button(
     wallpaper: Wallpaper,
     error: State<Option<String>>,
 ) -> PopUpButton {
-    let selected = SCALES.iter().position(|&each| each == scale).unwrap_or(0);
+    let selected = position(&SCALES, scale);
     let selection = wallpaper.selection;
     let mut cropping = wallpaper.cropping;
     PopUpButton::new(tr!("wallpaper-scale"))
@@ -1174,10 +1182,7 @@ impl Component for Hero {
                         aspect,
                     }))
                     .child(
-                        // Freya paints by layer (one more per level): the image sits three levels down.
-                        rect()
-                            .layer(3)
-                            .position(Position::new_absolute())
+                        over_artwork(Position::new_absolute())
                             .width(Size::px(width))
                             .height(Size::px(height))
                             .corner_radius(SETTINGS.card_radius as f32)
@@ -1291,10 +1296,7 @@ impl Component for Choice {
         let over_preview = self.preview.is_some();
         let symbol = self.symbol.map(|symbol| {
             let mark = Image::system(symbol);
-            // Freya paints by layer (one more per level): the preview's image sits three levels down.
-            rect()
-                .layer(3)
-                .position(Position::new_absolute())
+            over_artwork(Position::new_absolute())
                 .width(Size::px(width))
                 .height(Size::px(height))
                 .center()
@@ -1312,7 +1314,7 @@ impl Component for Choice {
                 })
         });
         let thumb = rect()
-            .key(self.label)
+            .key(format!("{:?}", self.preview))
             .corner_radius(radius)
             .overflow(Overflow::Clip)
             .border(ring)
@@ -1327,24 +1329,21 @@ impl Component for Choice {
             }))
             .maybe_child(symbol)
             .maybe_child(self.kind.map(|kind| {
-                // Freya paints by layer (one more per level): the preview's image sits three levels down.
-                rect()
-                    .layer(3)
-                    .position(
-                        Position::new_absolute()
-                            .left(metrics.kind_inset)
-                            .top(height - metrics.kind_inset - metrics.kind_size),
-                    )
-                    .width(Size::px(metrics.kind_size))
-                    .height(Size::px(metrics.kind_size))
-                    .corner_radius(metrics.kind_size / 2.0)
-                    .center()
-                    .background(color(HUD_BACKGROUND))
-                    .child(
-                        Image::system(kind)
-                            .size(metrics.kind_icon)
-                            .color(Rgba::rgb8(0xff, 0xff, 0xff)),
-                    )
+                over_artwork(
+                    Position::new_absolute()
+                        .left(metrics.kind_inset)
+                        .top(height - metrics.kind_inset - metrics.kind_size),
+                )
+                .width(Size::px(metrics.kind_size))
+                .height(Size::px(metrics.kind_size))
+                .corner_radius(metrics.kind_size / 2.0)
+                .center()
+                .background(color(HUD_BACKGROUND))
+                .child(
+                    Image::system(kind)
+                        .size(metrics.kind_icon)
+                        .color(Rgba::rgb8(0xff, 0xff, 0xff)),
+                )
             }));
         let element = interaction
             .attach(rect(), true)

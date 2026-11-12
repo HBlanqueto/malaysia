@@ -964,7 +964,8 @@ pub fn signal_svg(bars: u8, on: Rgba, off: Rgba) -> String {
             let [r, g, b, a] = if usize::from(bars) > index { on } else { off }.to_rgba8();
             let alpha = f32::from(a) / 255.0;
             format!(
-                r#"<path d="{path}" fill="none" stroke="rgba({r},{g},{b},{alpha})" stroke-width="1.6" stroke-linecap="round"/>"#
+                r#"<path d="{path}" fill="none" stroke="rgba({r},{g},{b},{alpha})" stroke-width="{}" stroke-linecap="round"/>"#,
+                ctdesign::SYMBOL.stroke
             )
         })
         .collect();

@@ -9,6 +9,7 @@ use freya_components::svg_viewer::SvgViewer;
 use crate::localize::{intern, tr};
 use crate::menubar::show_in_menu_bar;
 use crate::wifi::TINT;
+use ctappearance::menubar::MenubarConfig;
 use malaysia_services::bluez::{BlueZ, BluetoothCommand, Device, PROMPTS, Prompt};
 use malaysia_services::bus::{Live, WhileVisible};
 use zbus::zvariant::OwnedObjectPath;
@@ -63,6 +64,7 @@ pub fn use_busy_device(bluetooth: &Live<BlueZ>) -> State<Option<OwnedObjectPath>
 pub fn bluetooth_pane(
     bluetooth: &Live<BlueZ>,
     busy: State<Option<OwnedObjectPath>>,
+    menubar: &MenubarConfig,
     error: State<Option<String>>,
 ) -> Option<Pane> {
     let adapter = bluetooth.snapshot.read().clone().flatten()?;
@@ -82,6 +84,7 @@ pub fn bluetooth_pane(
     );
     let pane = |form: Form| {
         let form = form.section(Section::new().row(show_in_menu_bar(
+            menubar,
             tr!("show-in-menu-bar"),
             |config| &mut config.show_bluetooth,
             error,

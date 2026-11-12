@@ -70,6 +70,8 @@ const WINDOW_STYLE_DESKTOPS: u32 = 5;
 const MINUTE: Duration = Duration::from_secs(60);
 
 pub struct App {
+    // Declared first: the wgpu surfaces must drop while the connection is still open.
+    outputs: HashMap<ObjectId, OutputSurface>,
     compositor: CompositorState,
     layer_shell: LayerShell,
     output_state: OutputState,
@@ -81,7 +83,6 @@ pub struct App {
     loop_signal: Option<calloop::LoopSignal>,
     loop_handle: Option<calloop::LoopHandle<'static, App>>,
     render: RenderContext,
-    outputs: HashMap<ObjectId, OutputSurface>,
     store_path: PathBuf,
     state_path: PathBuf,
     selection: WallpaperSelection,
@@ -93,6 +94,8 @@ pub struct App {
     dark: bool,
     reduced_motion: bool,
     appearance_watch: AppearanceWatch,
+    failure: Option<anyhow::Error>,
+    animation_timer: Option<calloop::RegistrationToken>,
 }
 
 struct Shown {
@@ -248,6 +251,8 @@ impl App {
             dark: false,
             reduced_motion: false,
             appearance_watch,
+            failure: None,
+            animation_timer: None,
         };
         app.reload(true);
         app.make_thumbnails();
@@ -313,13 +318,7 @@ impl App {
                 TimeoutAction::ToDuration(MINUTE)
             })
             .map_err(|e| anyhow::anyhow!("failed to add shuffle timer: {e}"))?;
-        let frame = Duration::from_secs(1) / WALLPAPER_FPS;
-        loop_handle
-            .insert_source(Timer::from_duration(frame), move |_, _, app: &mut App| {
-                app.animate_shaders();
-                TimeoutAction::ToDuration(frame)
-            })
-            .map_err(|e| anyhow::anyhow!("failed to add animation timer: {e}"))?;
+        self.sync_animation_timer();
 
         let signals = Signals::new(&[Signal::SIGTERM, Signal::SIGINT])
             .map_err(|e| anyhow::anyhow!("failed to create signal source: {e}"))?;
@@ -342,7 +341,7 @@ impl App {
                 warn!(%error, "failed to flush Wayland connection");
             }
         })?;
-        Ok(())
+        self.failure.take().map_or(Ok(()), Err)
     }
 
     fn reload(&mut self, starting: bool) {
@@ -389,6 +388,7 @@ impl App {
                 Content::Image(_) => {}
             }
         }
+        self.sync_animation_timer();
         if changed {
             self.sync_surfaces();
             self.write_state();
@@ -453,15 +453,15 @@ impl App {
             Ok(shown) => (shown, true),
             Err(error) => {
                 error!(?file, %error, "cannot show the wallpaper");
-                match previous {
-                    Some(previous) => (previous, false),
-                    None => (
-                        self.load(desktop, None).unwrap_or_else(|error| {
-                            panic!("the embedded wallpaper is corrupt: {error}")
-                        }),
-                        true,
-                    ),
-                }
+                let loaded = previous.is_none();
+                let mut shown = previous.unwrap_or_else(|| {
+                    self.load(desktop, None).unwrap_or_else(|error| {
+                        panic!("the embedded wallpaper is corrupt: {error}")
+                    })
+                });
+                // Keeps the failed request, so the next reload does not load it again.
+                shown.file = file;
+                (shown, loaded)
             }
         }
     }
@@ -619,36 +619,53 @@ impl App {
     }
 
     fn show_video_frames(&mut self) {
-        let mut updated = Vec::new();
-        for (key, shown) in &mut self.shown {
-            let Content::Video(video, texture) = &mut shown.content else {
-                continue;
-            };
-            let Some(frame) = video.take() else {
-                continue;
-            };
-            if !self.render.update_texture(texture, &frame) {
-                *texture = self.render.upload_texture(&frame, false);
-            }
-            updated.push(key.clone());
-        }
-        for key in updated {
-            self.request_frames(&key);
-        }
-    }
-
-    fn animate_shaders(&mut self) {
-        let reduced_motion = self.reduced_motion;
         let keys: Vec<String> = self
             .shown
             .iter()
-            .filter(|(_, shown)| {
-                shown.moving(reduced_motion) && matches!(shown.content, Content::Shader(..))
-            })
+            .filter(|(_, shown)| matches!(shown.content, Content::Video(..)))
             .map(|(key, _)| key.clone())
             .collect();
         for key in keys {
             self.request_frames(&key);
+        }
+    }
+
+    fn moving_shaders(&self) -> Vec<String> {
+        self.shown
+            .iter()
+            .filter(|(_, shown)| {
+                shown.moving(self.reduced_motion) && matches!(shown.content, Content::Shader(..))
+            })
+            .map(|(key, _)| key.clone())
+            .collect()
+    }
+
+    fn animate_shaders(&mut self) {
+        for key in self.moving_shaders() {
+            self.request_frames(&key);
+        }
+    }
+
+    fn sync_animation_timer(&mut self) {
+        let Some(handle) = self.loop_handle.as_ref() else {
+            return;
+        };
+        match (
+            self.moving_shaders().is_empty(),
+            self.animation_timer.take(),
+        ) {
+            (false, None) => {
+                let frame = Duration::from_secs(1) / WALLPAPER_FPS;
+                self.animation_timer = handle
+                    .insert_source(Timer::from_duration(frame), move |_, _, app: &mut App| {
+                        app.animate_shaders();
+                        TimeoutAction::ToDuration(frame)
+                    })
+                    .inspect_err(|error| error!(%error, "failed to add animation timer"))
+                    .ok();
+            }
+            (true, Some(timer)) => handle.remove(timer),
+            (_, timer) => self.animation_timer = timer,
         }
     }
 
@@ -673,7 +690,7 @@ impl App {
 
     fn render_or_stop(&mut self, surface: &WlSurface) {
         if let Err(error) = self.render_surface(surface) {
-            error!(%error, "render failed");
+            self.failure = Some(error);
             if let Some(signal) = self.loop_signal.as_ref() {
                 signal.stop();
             }
@@ -932,6 +949,10 @@ impl App {
                     }
                 }
             }
+            Err(wgpu::CurrentSurfaceTexture::Timeout) => {
+                self.schedule_redraw(surface.clone());
+                false
+            }
             Err(wgpu::CurrentSurfaceTexture::Lost) => anyhow::bail!("wgpu surface lost"),
             Err(error) => anyhow::bail!("wgpu render error: {error:?}"),
         };
@@ -972,6 +993,13 @@ impl App {
             return Ok(());
         };
         let format = output.surface_format;
+        // A frame uploaded without a present piles up in wgpu's pending writes until the next submit.
+        if let Content::Video(video, texture) = &mut shown.content
+            && let Some(frame) = video.take()
+            && !self.render.update_texture(texture, &frame)
+        {
+            *texture = self.render.upload_texture(&frame, false);
+        }
         match &mut shown.content {
             Content::Image(texture) | Content::Video(_, texture) => {
                 self.render

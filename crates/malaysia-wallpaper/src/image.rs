@@ -135,10 +135,75 @@ pub fn decode_jpeg(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     let info = decoder
         .info()
         .ok_or_else(|| anyhow::anyhow!("the JPEG headers were not decoded"))?;
-    Ok(DecodedImage {
-        size: (u32::from(info.width), u32::from(info.height)),
-        pixels: Pixels::Srgb8(rgba),
-    })
+    let size = (u32::from(info.width), u32::from(info.height));
+    Ok(
+        match decoder.exif().and_then(|tiff| exif_orientation(tiff)) {
+            Some(orientation @ 2..=8) => upright(&rgba, size, orientation),
+            _ => DecodedImage {
+                size,
+                pixels: Pixels::Srgb8(rgba),
+            },
+        },
+    )
+}
+
+// TIFF 6.0 §2: byte order, then the offset of IFD0 and its 12-byte entries; Orientation is tag 0x0112.
+fn exif_orientation(tiff: &[u8]) -> Option<u16> {
+    let little_endian = match tiff.get(..2)? {
+        b"II" => true,
+        b"MM" => false,
+        _ => return None,
+    };
+    let short_at = |at: usize| {
+        let bytes = tiff.get(at..at + 2)?.try_into().ok()?;
+        Some(if little_endian {
+            u16::from_le_bytes(bytes)
+        } else {
+            u16::from_be_bytes(bytes)
+        })
+    };
+    let directory = if little_endian {
+        u32::from_le_bytes(tiff.get(4..8)?.try_into().ok()?)
+    } else {
+        u32::from_be_bytes(tiff.get(4..8)?.try_into().ok()?)
+    } as usize;
+    (0..usize::from(short_at(directory)?))
+        .map(|entry| directory + 2 + entry * 12)
+        .find(|&entry| short_at(entry) == Some(0x0112))
+        .and_then(|entry| short_at(entry + 8))
+}
+
+// Exif 2.32 §4.6.4 Orientation: 2 to 4 mirror or turn it around; 5 to 8 also swap the axes.
+fn upright(rgba: &[u8], (width, height): (u32, u32), orientation: u16) -> DecodedImage {
+    let (width, height) = (width as usize, height as usize);
+    let swapped = orientation >= 5;
+    let size = if swapped {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    let mut pixels = Vec::with_capacity(rgba.len());
+    for y in 0..size.1 {
+        for x in 0..size.0 {
+            let (column, line) = if swapped { (y, x) } else { (x, y) };
+            let column = if matches!(orientation, 2 | 3 | 7 | 8) {
+                width - 1 - column
+            } else {
+                column
+            };
+            let line = if matches!(orientation, 3 | 4 | 6 | 7) {
+                height - 1 - line
+            } else {
+                line
+            };
+            let at = (line * width + column) * 4;
+            pixels.extend_from_slice(&rgba[at..at + 4]);
+        }
+    }
+    DecodedImage {
+        size: (size.0 as u32, size.1 as u32),
+        pixels: Pixels::Srgb8(pixels),
+    }
 }
 
 pub fn decode_heif(bytes: &[u8], image: Option<usize>) -> anyhow::Result<DecodedImage> {
@@ -162,14 +227,23 @@ pub fn decode_heif(bytes: &[u8], image: Option<usize>) -> anyhow::Result<Decoded
         .interleaved
         .ok_or_else(|| anyhow::anyhow!("the HEIF image has no interleaved RGBA plane"))?;
     let row = plane.width as usize * 4;
-    let mut rgba = Vec::with_capacity(row * plane.height as usize);
-    for line in plane.data.chunks(plane.stride) {
-        rgba.extend_from_slice(&line[..row]);
-    }
     Ok(DecodedImage {
         size: (plane.width, plane.height),
-        pixels: Pixels::Srgb8(rgba),
+        pixels: Pixels::Srgb8(packed_rows(
+            plane.data,
+            plane.stride,
+            row,
+            plane.height as usize,
+        )),
     })
+}
+
+pub fn packed_rows(data: &[u8], stride: usize, row: usize, height: usize) -> Vec<u8> {
+    let mut packed = Vec::with_capacity(row * height);
+    for line in data.chunks(stride).take(height) {
+        packed.extend_from_slice(&line[..row]);
+    }
+    packed
 }
 
 impl DecodedImage {
@@ -401,6 +475,25 @@ mod tests {
         let luma = |image: &DecodedImage| dominant(image).map(|c| c.r + c.g + c.b);
         assert_eq!(dark.size, light.size);
         assert_ne!(luma(&dark), luma(&light));
+    }
+
+    #[test]
+    fn the_orientation_is_read_from_either_byte_order() {
+        let little = b"II*\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0\x06\0\0\0";
+        let big = b"MM\0*\0\0\0\x08\0\x01\x01\x12\0\x03\0\0\0\x01\0\x08\0\0";
+        assert_eq!(exif_orientation(little), Some(6));
+        assert_eq!(exif_orientation(big), Some(8));
+        assert_eq!(exif_orientation(b"II*\0"), None);
+    }
+
+    #[test]
+    fn orientation_six_turns_the_stored_row_into_a_column_read_top_down() {
+        let stored = [1, 1, 1, 255, 2, 2, 2, 255];
+        let image = upright(&stored, (2, 1), 6);
+        assert_eq!(image.size, (1, 2));
+        assert!(image.pixels == Pixels::Srgb8(stored.to_vec()));
+        let turned = upright(&stored, (2, 1), 8);
+        assert!(turned.pixels == Pixels::Srgb8(vec![2, 2, 2, 255, 1, 1, 1, 255]));
     }
 
     #[test]

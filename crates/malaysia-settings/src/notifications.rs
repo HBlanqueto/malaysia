@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bk::app::{load_defaults, load_restoration, save_defaults, use_defaults};
+use bk::app::{load_restoration, use_defaults};
 use bk::patterns::settings::Pane;
 use bk::popup_button::PopUpButton;
 use bk::prelude::*;
@@ -11,7 +11,9 @@ use ctappearance::notifications::{
 use ctdesign::{ACCENT_SWATCHES, Rgba};
 use serde::Deserialize;
 
+use crate::app::position;
 use crate::localize::{intern, tr, tr_list};
+use crate::state::edit_defaults;
 
 const DOMAIN: &str = "notifications";
 const TINT: Rgba = ACCENT_SWATCHES[3].1;
@@ -41,14 +43,7 @@ fn edit<T: 'static>(
     error: State<Option<String>>,
     apply: impl Fn(&mut NotificationsConfig, T) + 'static,
 ) -> Callback<T, ()> {
-    Callback::new(move |value| {
-        let mut config: NotificationsConfig = load_defaults(DOMAIN);
-        apply(&mut config, value);
-        if let Err(message) = save_defaults(DOMAIN, &config) {
-            let mut error = error;
-            error.set(Some(message.to_string()));
-        }
-    })
+    edit_defaults(DOMAIN, error, apply)
 }
 
 fn known_apps(config: &NotificationsConfig) -> BTreeMap<String, String> {
@@ -64,9 +59,20 @@ fn known_apps(config: &NotificationsConfig) -> BTreeMap<String, String> {
     apps
 }
 
-pub fn notifications_pane(error: State<Option<String>>) -> Pane {
+pub fn panes(error: State<Option<String>>) -> [Pane; 2] {
     let config = use_defaults::<NotificationsConfig>(DOMAIN).read().clone();
     let apps = known_apps(&config);
+    [
+        notifications_pane(&config, &apps, error),
+        focus_pane(&config, &apps, error),
+    ]
+}
+
+fn notifications_pane(
+    config: &NotificationsConfig,
+    apps: &BTreeMap<String, String>,
+    error: State<Option<String>>,
+) -> Pane {
     let general = Section::titled(tr!("notification-center"))
         .row(
             Row::new(tr!("notifications-when-locked")).control(
@@ -87,12 +93,7 @@ pub fn notifications_pane(error: State<Option<String>>) -> Pane {
                     PopUpButton::new(tr!("notifications-show-previews")),
                     |popup, name| popup.item(name),
                 )
-                .selected(
-                    PREVIEWS
-                        .iter()
-                        .position(|p| *p == config.show_previews)
-                        .unwrap_or(0),
-                )
+                .selected(position(&PREVIEWS, config.show_previews))
                 .on_change(edit(error, |config, index: usize| {
                     config.show_previews = PREVIEWS[index]
                 })),
@@ -118,14 +119,14 @@ pub fn notifications_pane(error: State<Option<String>>) -> Pane {
         TINT,
         Form::new().section(general).section(list),
     );
-    apps.into_iter().fold(pane, |pane, (id, name)| {
-        let app = config.app(&id);
+    apps.iter().fold(pane, |pane, (id, name)| {
+        let app = config.app(id);
         pane.page(Pane::new(
             intern(format!("notifications-{id}")),
-            intern(name),
+            intern(name.clone()),
             Symbol::Bell,
             TINT,
-            app_form(intern(id), &app, error),
+            app_form(intern(id.clone()), &app, error),
         ))
     })
 }
@@ -194,7 +195,7 @@ fn app_form(id: &'static str, app: &AppNotifications, error: State<Option<String
                             SegmentedControl::new(tr!("notifications-style"))
                                 .segment(tr!("notifications-temporary"))
                                 .segment(tr!("notifications-persistent"))
-                                .selected(STYLES.iter().position(|s| *s == app.style).unwrap_or(0))
+                                .selected(position(&STYLES, app.style))
                                 .on_change(edit(error, move |config, index: usize| {
                                     config.app_mut(id).style = STYLES[index];
                                 })),
@@ -231,12 +232,7 @@ fn app_form(id: &'static str, app: &AppNotifications, error: State<Option<String
                                 PopUpButton::new(tr!("notifications-grouping")),
                                 |popup, name| popup.item(name),
                             )
-                            .selected(
-                                GROUPINGS
-                                    .iter()
-                                    .position(|g| *g == app.grouping)
-                                    .unwrap_or(0),
-                            )
+                            .selected(position(&GROUPINGS, app.grouping))
                             .on_change(edit(error, move |config, index: usize| {
                                 config.app_mut(id).grouping = GROUPINGS[index];
                             })),
@@ -258,9 +254,11 @@ fn focus_parts(focus: Focus) -> (&'static str, &'static str, Symbol) {
     }
 }
 
-pub fn focus_pane(error: State<Option<String>>) -> Pane {
-    let config = use_defaults::<NotificationsConfig>(DOMAIN).read().clone();
-    let apps = known_apps(&config);
+fn focus_pane(
+    config: &NotificationsConfig,
+    apps: &BTreeMap<String, String>,
+    error: State<Option<String>>,
+) -> Pane {
     let list = Focus::ALL
         .into_iter()
         .fold(Section::new(), |section, focus| {
@@ -283,7 +281,7 @@ pub fn focus_pane(error: State<Option<String>>) -> Pane {
             title,
             symbol,
             FOCUS_TINT,
-            focus_form(focus, &config, &apps, error),
+            focus_form(focus, config, apps, error),
         ))
     })
 }

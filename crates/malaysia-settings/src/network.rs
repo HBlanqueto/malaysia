@@ -5,6 +5,7 @@ use bk::views::form::{Form, Row, Section};
 use crate::localize::{intern, tr};
 use crate::menubar::show_in_menu_bar;
 use crate::wifi::TINT;
+use ctappearance::menubar::MenubarConfig;
 use malaysia_services::bus::Live;
 use malaysia_services::networkmanager::{
     ExternalVpn, LinkKind, LinkState, NetworkCommand, NetworkManager, Vpn,
@@ -49,7 +50,11 @@ pub fn network_pane(network: &Live<NetworkManager>) -> Option<Pane> {
     ))
 }
 
-pub fn vpn_pane(network: &Live<NetworkManager>, error: State<Option<String>>) -> Option<Pane> {
+pub fn vpn_pane(
+    network: &Live<NetworkManager>,
+    menubar: &MenubarConfig,
+    error: State<Option<String>>,
+) -> Option<Pane> {
     let snapshot = network.snapshot.read().clone()?;
     let list = if snapshot.vpns.is_empty() {
         Section::titled(tr!("vpn-configurations")).row(Row::new(tr!("vpn-none")))
@@ -91,6 +96,7 @@ pub fn vpn_pane(network: &Live<NetworkManager>, error: State<Option<String>>) ->
     );
     let mut form = Form::new()
         .section(Section::new().row(show_in_menu_bar(
+            menubar,
             tr!("show-in-menu-bar"),
             |config| &mut config.show_vpn,
             error,

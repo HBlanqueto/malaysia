@@ -113,17 +113,20 @@ impl RenderContext {
             })
             .await
             .map_err(|_| {
-                let vk_files = std::env::var("VK_DRIVER_FILES")
-                    .unwrap_or_else(|_| "(sin definir)".to_string());
-                let mut msg = format!("no Vulkan adapter found; VK_DRIVER_FILES={vk_files}");
-                if vk_files != "(sin definir)" {
-                    for path in vk_files.split(':').filter(|p| !p.is_empty()) {
-                        let exists = std::path::Path::new(path).exists();
-                        msg.push_str(&format!(
-                            "\n  {path}: {}",
-                            if exists { "existe" } else { "no existe" }
-                        ));
+                let vk_files = std::env::var("VK_DRIVER_FILES").ok();
+                let mut msg = format!(
+                    "no Vulkan adapter found; VK_DRIVER_FILES={}",
+                    vk_files.as_deref().unwrap_or("(unset)")
+                );
+                for path in vk_files.iter().flat_map(|files| files.split(':')) {
+                    if path.is_empty() {
+                        continue;
                     }
+                    let exists = std::path::Path::new(path).exists();
+                    msg.push_str(&format!(
+                        "\n  {path}: {}",
+                        if exists { "exists" } else { "missing" }
+                    ));
                 }
                 anyhow::anyhow!(msg)
             })?;
