@@ -590,8 +590,10 @@ impl App for DockApp {
             })
         };
 
+        // Freya paints one layer in hash order, so the bar's body must sit below the icons' images.
         let mut children: Vec<Element> = vec![
             placed(bar)
+                .layer(-1)
                 .child(bk::style::panel_edges(
                     rect().width(Size::px(bar.2)).height(Size::px(bar.3)),
                     radius,
