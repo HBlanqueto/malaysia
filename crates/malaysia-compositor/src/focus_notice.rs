@@ -97,35 +97,51 @@ impl Dispatch2<InfinityFocusSurfaceV1, State> for FocusNoticeSurfaceData {
 }
 
 impl State {
-    pub(crate) fn send_wallpaper_colors(&mut self) {
+    fn desktop_of(&self, window: WindowId) -> u32 {
+        self.spaces.space_of(window).map_or(0, |space| {
+            self.spaces.desktop_number(space).unwrap_or(0) as u32
+        })
+    }
+
+    pub(crate) fn wallpaper_behind(&self, window: WindowId) -> Option<ctdesign::Rgba> {
+        let desktop = self.desktop_of(window);
+        let grid = self.wallpaper.grid_for((desktop > 0).then_some(desktop))?;
+        let outer = self.windows.iter().find(|w| w.id() == window)?.outer();
         let output = self.logical_output_size();
-        let output = (f64::from(output.w), f64::from(output.h));
+        grid.behind(
+            (f64::from(output.w), f64::from(output.h)),
+            (outer.x(), outer.y(), outer.width(), outer.height()),
+        )
+    }
+
+    pub(crate) fn chrome_theme_of(&self, window: WindowId) -> crate::chrome::ChromeTheme {
+        match self.wallpaper_behind(window) {
+            Some(wallpaper) => self
+                .chrome_theme
+                .behind_window(wallpaper, &self.config.appearance),
+            None => self.chrome_theme,
+        }
+    }
+
+    pub(crate) fn send_wallpaper_colors(&mut self) {
         self.focus_notices.retain(|notice| notice.is_alive());
         for notice in &self.focus_notices {
             let Some(data) = notice.data::<FocusNoticeSurfaceData>() else {
                 continue;
             };
-            let Some(window) = self
+            let Some(id) = self
                 .windows
                 .iter()
                 .find(|window| *window.surface() == data.surface)
+                .map(|window| window.id())
             else {
                 continue;
             };
-            let desktop = self.spaces.space_of(window.id()).map_or(0, |space| {
-                self.spaces.desktop_number(space).unwrap_or(0) as u32
-            });
+            let desktop = self.desktop_of(id);
             if notice.version() >= 4 && data.desktop.swap(desktop, Ordering::Relaxed) != desktop {
                 notice.desktop(desktop);
             }
-            let Some(grid) = self.wallpaper.grid_for((desktop > 0).then_some(desktop)) else {
-                continue;
-            };
-            let outer = window.outer();
-            let Some(color) = grid.behind(
-                output,
-                (outer.x(), outer.y(), outer.width(), outer.height()),
-            ) else {
+            let Some(color) = self.wallpaper_behind(id) else {
                 continue;
             };
             let [r, g, b, _] = color.to_rgba8();

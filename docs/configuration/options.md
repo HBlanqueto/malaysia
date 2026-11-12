@@ -115,7 +115,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.tint_strength` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of the accent tint and of `wallpaper_tinting` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings**; the retired key `tint_strength_accent` is no longer read and System Settings removes it |
 | `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"`, `"bars"` | all but `"bars"` | **active** | which surfaces the tint reaches, with either tint color; `bars` is the Dock and the menu bar with the Solid style, tinted with the accent or with the wallpaper's dominant color. Replaces the retired `window_tint_scope`, **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
-| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window, and each libadwaita window with Malaysia's patch, mixes the wallpaper behind it into its `tint_parts`, at `tint_strength`, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
+| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window, each libadwaita window with Malaysia's patch and the compositor's server-side titlebar mix the wallpaper behind it into its `tint_parts`, at `tint_strength`, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
 | `appearance.wallpaper_tinting_in_light` | bool | `false` | **active** | `wallpaper_tinting` also in light mode, **System Settings › Accessibility › Display** |
 | `appearance.invert_colors` | bool | `false` | **active** | compositor: inverts the screen (ADR 0066), **System Settings › Accessibility › Display** |
 | `appearance.show_borders` | bool | `false` | **active** | kit: a border on icon buttons, tool groups and search fields, **System Settings › Accessibility › Display** |
@@ -165,7 +165,7 @@ background (6 % in light, 8 % in dark, at `normal` strength). Traffic lights in
 
 `wallpaper_tinting` is macOS's "Tint window background with wallpaper color".
 The compositor sends each BarrierKit window the average color of the wallpaper
-behind it. As in macOS, the window keeps its lightness and takes part of
+behind it and tints each server-side titlebar with the same color. As in macOS, the window keeps its lightness and takes part of
 that color's hue (chroma in OKLab): 15 % in dark, 12 % in light with
 `wallpaper_tinting_in_light`, the sidebar twice as much, times
 `tint_strength` (measured on macOS 26, ADR 0065). The color follows the

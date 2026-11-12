@@ -4,8 +4,8 @@ use std::sync::Once;
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
 use ctappearance::traffic::{self, TrafficInput};
 use ctappearance::{
-    AppearanceConfig, ColorScheme, TrafficLightShape, TrafficLightStyle, WindowColorMode,
-    load_dominant, palette as base_palette, resolve,
+    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle,
+    WindowColorMode, load_dominant, palette as base_palette, resolve,
 };
 use ctdesign::{
     ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
@@ -31,6 +31,7 @@ use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ChromeTheme {
     pub(crate) palette: Palette,
+    resolved: Resolved,
     scheme: ColorScheme,
     lights: [Rgba; 3],
     traffic_style: TrafficLightStyle,
@@ -45,7 +46,14 @@ impl ChromeTheme {
     }
 
     fn from_parts(appearance: &AppearanceConfig, wallpaper: Option<Rgba>) -> Self {
-        let resolved = resolve(appearance, wallpaper);
+        Self::from_resolved(resolve(appearance, wallpaper), appearance)
+    }
+
+    pub(crate) fn behind_window(&self, wallpaper: Rgba, appearance: &AppearanceConfig) -> Self {
+        Self::from_resolved(self.resolved.behind_window(wallpaper), appearance)
+    }
+
+    fn from_resolved(resolved: Resolved, appearance: &AppearanceConfig) -> Self {
         let base = base_palette(resolved.scheme);
         let mut palette = base;
         palette.accent = resolved.accent;
@@ -66,6 +74,7 @@ impl ChromeTheme {
         );
         Self {
             palette,
+            resolved,
             scheme: resolved.scheme,
             lights: resolved.lights,
             traffic_style,

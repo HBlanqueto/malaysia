@@ -464,7 +464,7 @@ pub(crate) fn append_revealed_titlebar<R: MalaysiaRenderer>(
         pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
         zoom_supported: state.green_button_admitted(id),
     };
-    let theme = state.chrome_theme;
+    let theme = state.chrome_theme_of(id);
     if let Some(element) = state.chrome.element(
         renderer.gles(),
         id,
@@ -754,6 +754,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
             pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
             zoom_supported: state.green_button_admitted(id),
         };
+        let chrome_theme = state.chrome_theme_of(id);
         if let Some(program) = state.rounded_clip.clone()
             && let Some(element) = state.chrome.element(
                 renderer.gles(),
@@ -764,7 +765,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
                 frame_rect_logical.size.w,
                 frame_rect_logical.loc,
                 scale,
-                &state.chrome_theme,
+                &chrome_theme,
                 program,
                 frame_rect_physical,
                 radius_physical,
