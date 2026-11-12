@@ -522,9 +522,12 @@ impl App for DockApp {
         }
 
         let resolved = bk::theme::resolved();
-        // macOS keeps the Dock neutral glass; the wallpaper shows through the blur, not as a tint.
-        let glass_rgba = resolved.shell.bar;
-        let glass = theme::color(glass_rgba);
+        let glass_rgba = resolved
+            .bar_tint
+            .map_or(resolved.shell.dock, |(tint, factor)| {
+                resolved.shell.dock.mix(tint, factor)
+            });
+        let label_fill = theme::color(resolved.shell.bar);
         let ink = theme::color(resolved.shell.text);
         let separator_ink = theme::color(resolved.menu_separator(glass_rgba));
         let progress_track = theme::color(resolved.shell.tile);
@@ -817,7 +820,7 @@ impl App for DockApp {
                     DOCK_LABEL_PADDING_X,
                 ))
                 .corner_radius(DOCK_LABEL_RADIUS)
-                .background(glass)
+                .background(label_fill)
                 .child(Text::new(text).font_size(DOCK_LABEL_FONT_SIZE).color(ink));
             let beyond = icon_cross + slot.size + DOCK_LABEL_GAP;
             let center = slot.start + slot.length / 2.0;
@@ -876,7 +879,7 @@ impl App for DockApp {
                                         DOCK_LABEL_PADDING_X,
                                     ))
                                     .corner_radius(DOCK_LABEL_RADIUS)
-                                    .background(glass)
+                                    .background(label_fill)
                                     .child(
                                         Text::new(tr!("dock-remove"))
                                             .font_size(DOCK_LABEL_FONT_SIZE)

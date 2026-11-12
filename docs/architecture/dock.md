@@ -45,10 +45,12 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    namespace (`DOCK_LAYER_NAMESPACE`) and gives that card only the window
    shadow and the blur of `set_blur_region`, clipped to the corner. The Dock
    draws the outer border and the inner line itself with
-   `bk::style::panel_edges`, in the compositor's panel colours, under its
-   icons, so magnified icons rise over the bar's edge. The fill is the
-   neutral `shell.bar`: as in macOS, the wallpaper shows through the blur and
-   does not tint the Dock.
+   `bk::style::panel_edges`, in the compositor's panel colours and one
+   physical pixel wide like them, under its icons, so magnified icons rise
+   over the bar's edge. The fill is the translucent `shell.dock`: as in
+   macOS, the wallpaper shows through the blur. It takes the bar tint only
+   with `bars` in `appearance.tint_parts`, and is opaque with
+   `appearance.reduce_transparency`.
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon_in`),
    with the `LauncherEntry` badge and progress. A minimized window's tile is
    a picture of the window, taken once with `capture_window` when it
