@@ -82,6 +82,7 @@ impl MenuTitleSpec {
 pub struct MenuState {
     pub root_id: Rc<Cell<Option<PopupId>>>,
     pub open_label: State<Option<String>>,
+    pub pill: State<Option<(i32, i32, i32, i32)>>,
 }
 
 impl MenuState {
@@ -89,6 +90,7 @@ impl MenuState {
         Self {
             root_id: use_hook(|| Rc::new(Cell::new(None))),
             open_label: use_state(|| None::<String>),
+            pill: use_state(|| None),
         }
     }
 }
@@ -271,7 +273,18 @@ pub fn menu_title(
         });
 
     if is_open {
-        title = title.child(title_pill(selection, palette));
+        let mut pill = state.pill;
+        title = title.child(title_pill(selection, palette).on_sized(
+            move |event: Event<SizedEventData>| {
+                let area = event.data().area;
+                pill.set_if_modified(Some((
+                    area.min_x().floor() as i32,
+                    area.min_y().floor() as i32,
+                    area.width().ceil() as i32,
+                    area.height().ceil() as i32,
+                )));
+            },
+        ));
     }
 
     let content = if let Some(icon) = &spec.icon {

@@ -1203,13 +1203,11 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
             }
             let Some(alert) = crate::window_style::alert_layer(&surface) else {
                 elements.extend(surface_elements.into_iter().map(|e| e.into()));
-                elements.extend(crate::blur::backdrop(
+                elements.extend(crate::blur::layer(
                     state,
                     &surface,
                     rect.loc,
                     physical_rect(rect, scale),
-                    0,
-                    ctdesign::WINDOW_CORNER.exponent,
                     scale,
                 ));
                 continue;

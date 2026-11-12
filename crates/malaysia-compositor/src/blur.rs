@@ -94,6 +94,26 @@ pub(crate) fn backdrop<R: MalaysiaRenderer>(
     })
 }
 
+// ADR 0075: a rectangle shorter than the menu bar is its selection pill, rounded like it.
+pub(crate) fn layer<R: MalaysiaRenderer>(
+    state: &State,
+    surface: &WlSurface,
+    origin: Point<i32, Logical>,
+    frame: Rectangle<i32, Physical>,
+    scale: f64,
+) -> Vec<OutputRenderElement<R>> {
+    let pill = (f64::from(ctdesign::MENU_LIGHT.bar_title_open_radius) * scale).round() as i32;
+    sampled(state, surface, origin, scale, |dst| {
+        let dst = dst.intersection(frame)?;
+        let radius = if dst.size.h < frame.size.h {
+            pill.min(dst.size.h / 2)
+        } else {
+            0
+        };
+        Some((dst, dst, radius, CIRCLE_EXPONENT))
+    })
+}
+
 // ADR 0074: the lock screen's blur rectangles are its capsule-shaped fields.
 pub(crate) fn capsules<R: MalaysiaRenderer>(
     state: &State,

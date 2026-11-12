@@ -27,18 +27,18 @@ wallpaper alone and shows it behind any surface that asks for it with
    - `solid` (Classic in System Settings): the theme's `shell-bar`, opaque
      and without blur, as in macOS Catalina: white or gray. The text follows
      the color scheme.
-   - `translucent`: a light or dark glass over the blurred wallpaper. The
+   - `translucent` (default): a light or dark glass over the blurred wallpaper. The
      shell reads the color of the wallpaper under the bar from the wallpaper
      grid in `wallpaper.state`, and `ctappearance::menubar::colors_over` picks
      dark ink and light glass over a light wallpaper, light ink and dark glass
      over a dark one, whatever the color scheme.
-   - `floating` (default): the same ink as `translucent`, with no glass and
-     no blur.
-
-   Only `translucent` asks for the blur.
-3. The blur shows only the wallpaper, never the windows: the bar asks for it
-   over its whole surface with `set_blur_region`, and stops asking while the
-   screen locks.
+   - `floating`: the same ink as `translucent`, with no glass. Only the pill
+     of an open menu title is blurred.
+3. The blur shows only the wallpaper, never the windows. The bar asks for it
+   with `set_blur_region`: `translucent` over its whole surface, `floating`
+   over the open pill only. It stops asking while the screen locks. The
+   compositor rounds a blur rectangle shorter than the bar with the pill's
+   radius (`title-open.radius`).
 4. With `reduce_transparency` (or Increase contrast) every style draws as an
    opaque `solid` bar without blur.
 5. `menubar.bar_height` is `slim` (`MENUBAR_HEIGHT`, 30 px, default) or
@@ -51,7 +51,7 @@ wallpaper alone and shows it behind any surface that asks for it with
 
 ## Consequences
 
-- A new install shows the floating bar over the wallpaper with the blur on.
+- A new install shows the translucent bar over the blurred wallpaper.
 - The ink follows the wallpaper of the shown desktop. Infinity v8 sends the
   bar the number of that desktop (`desktop` event of
   `infinity_window_manager_v1`), and the bar reads its grid from

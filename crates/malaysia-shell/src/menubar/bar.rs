@@ -290,20 +290,29 @@ impl App for BarApp {
             a: look.background.a * shown_desktop,
             ..look.background
         });
-        let blurred = look.blurred && progress.is_none();
-        let applied = use_hook(|| Rc::new(Cell::new(None::<(i32, i32, bool)>)));
-        if applied.replace(Some((width, height, blurred))) != Some((width, height, blurred)) {
+        let menu_state = MenuState::new();
+        let open_pill = menu_state
+            .open_label
+            .read()
+            .is_some()
+            .then(|| *menu_state.pill.read())
+            .flatten();
+        let blur_rects = match look.blur {
+            _ if progress.is_some() => Vec::new(),
+            BarBlur::Bar => vec![(0, 0, width, height)],
+            BarBlur::Selection => open_pill.into_iter().collect(),
+            BarBlur::None => Vec::new(),
+        };
+        let applied_height = use_hook(|| Rc::new(Cell::new(None::<i32>)));
+        if applied_height.replace(Some(height)) != Some(height) {
             set_layer_geometry(bar_geometry(height));
-            set_blur_region(BlurRegion {
-                rects: if blurred {
-                    vec![(0, 0, width, height)]
-                } else {
-                    Vec::new()
-                },
-            });
+        }
+        let applied_blur = use_hook(|| Rc::new(RefCell::new(None::<Vec<(i32, i32, i32, i32)>>)));
+        if applied_blur.borrow().as_ref() != Some(&blur_rects) {
+            applied_blur.replace(Some(blur_rects.clone()));
+            set_blur_region(BlurRegion { rects: blur_rects });
         }
 
-        let menu_state = MenuState::new();
         let help_query = use_hook(|| {
             Rc::new(RefCell::new(SearchQuery {
                 text: String::new(),
@@ -815,7 +824,14 @@ struct BarLook {
     background: Rgba,
     ink: Rgba,
     selection: Rgba,
-    blurred: bool,
+    blur: BarBlur,
+}
+
+#[derive(Clone, Copy)]
+enum BarBlur {
+    None,
+    Bar,
+    Selection,
 }
 
 fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
@@ -824,7 +840,7 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
             background: ctdesign::FOCUS_BAR_BACKGROUND,
             ink: ctdesign::FOCUS_BAR_TEXT,
             selection: colors_over(ctdesign::FOCUS_BAR_BACKGROUND).selection,
-            blurred: false,
+            blur: BarBlur::None,
         };
     }
     let resolved = theme::resolved();
@@ -841,13 +857,13 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
             ink: resolved.shell.text,
             selection: theme::menu_palette(&resolved, theme::SurfaceKind::LayerShell)
                 .bar_title_open_bg,
-            blurred: false,
+            blur: BarBlur::None,
         },
         MenubarStyle::Translucent => BarLook {
             background: over.glass,
             ink: over.ink,
             selection: over.selection,
-            blurred: true,
+            blur: BarBlur::Bar,
         },
         MenubarStyle::Floating => BarLook {
             background: Rgba {
@@ -856,7 +872,7 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>) -> BarLook {
             },
             ink: over.ink,
             selection: over.selection,
-            blurred: false,
+            blur: BarBlur::Selection,
         },
     }
 }
