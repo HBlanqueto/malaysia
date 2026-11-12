@@ -39,13 +39,15 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    when icons grow; with `autohide` it is 0. `set_input_region` takes the
    pointer on the bar only (on the magnified icons while the pointer is
    there), so clicks above it reach the windows.
-5. **Frame.** The bar is a card (ADR 0068): `set_card_frames` gives it the
-   window frame, outer border, inner line and shadow, around a continuous
-   corner of `DOCK_RADIUS` × its thickness, and the client draws the bar with
-   the same corner, inset by the hairline. `set_blur_region` blurs behind it,
-   clipped to that corner. The compositor knows the Dock by its namespace
-   (`DOCK_LAYER_NAMESPACE`) and draws its frame under the surface, so
-   magnified icons rise over the bar's edge.
+5. **Frame.** The bar is a card (ADR 0068) with a continuous corner of
+   `DOCK_RADIUS` × its thickness. The compositor knows the Dock by its
+   namespace (`DOCK_LAYER_NAMESPACE`) and gives that card only the window
+   shadow and the blur of `set_blur_region`, clipped to the corner. The Dock
+   draws the outer border and the inner line itself with
+   `bk::style::panel_edges`, in the compositor's panel colours, under its
+   icons, so magnified icons rise over the bar's edge. The fill is the
+   neutral `shell.bar`: as in macOS, the wallpaper shows through the blur and
+   does not tint the Dock.
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon`),
    with the `LauncherEntry` badge and progress. A minimized window's tile is
    a picture of the window, taken once with `capture_window` when it

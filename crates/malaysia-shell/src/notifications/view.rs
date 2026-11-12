@@ -251,6 +251,7 @@ impl App for NotificationsApp {
         }
 
         let frames = use_hook(|| Rc::new(RefCell::new(HashMap::<u32, Area>::new())));
+        let shifts = use_state(HashMap::<u64, f32>::new);
         let relayout = use_state(|| 0u64);
         let surface = use_state(Area::default);
         let sent = use_hook(|| Rc::new(RefCell::new(CardFrames::default())));
@@ -267,10 +268,12 @@ impl App for NotificationsApp {
             frames: frames.clone(),
             rendered: Rc::new(RefCell::new(Vec::new())),
             relayout,
+            shifts,
         };
         let content = if shown.panel_open || panel_closing {
             Slide {
-                key: 0,
+                key: PANEL_SLIDE,
+                shifts: context.shifts,
                 height: Size::fill(),
                 leaving: panel_closing,
                 child: panel(&context, &shown, &config, expanded, editing).into_element(),
@@ -326,17 +329,34 @@ struct Context {
     frames: Rc<RefCell<HashMap<u32, Area>>>,
     rendered: Rc<RefCell<Vec<u32>>>,
     relayout: State<u64>,
+    shifts: State<HashMap<u64, f32>>,
 }
 
 // ADR 0068: the compositor gives each card the window frame; only cards fully on the surface count.
+// A sliding card is drawn `offset_x` from its laid-out area, so its frame moves with it.
 fn card_frames(context: &Context, surface: Area) -> CardFrames {
     let frames = context.frames.borrow();
+    let shifts = context.shifts.read();
     let cards = context
         .rendered
         .borrow()
         .iter()
-        .filter_map(|id| frames.get(id))
-        .filter(|area| area.min_y() >= surface.min_y() && area.max_y() <= surface.max_y())
+        .filter_map(|id| {
+            let shift = shifts
+                .get(&u64::from(*id))
+                .or_else(|| shifts.get(&PANEL_SLIDE))
+                .copied()
+                .unwrap_or(0.0);
+            frames
+                .get(id)
+                .map(|area| area.translate((shift, 0.0).into()))
+        })
+        .filter(|area| {
+            area.min_y() >= surface.min_y()
+                && area.max_y() <= surface.max_y()
+                && area.min_x() >= surface.min_x()
+                && area.max_x() <= surface.max_x()
+        })
         .map(|area| {
             (
                 (area.min_x() - surface.min_x()).round() as i32,
@@ -388,6 +408,7 @@ fn close_panel(link: &Link, mut snapshot: State<Snapshot>) {
 #[derive(PartialEq)]
 struct Slide {
     key: u64,
+    shifts: State<HashMap<u64, f32>>,
     height: Size,
     leaving: bool,
     child: Element,
@@ -425,10 +446,20 @@ impl Component for Slide {
         } else {
             enter.get().current()
         };
+        let offset = shift * surface_width() as f32;
+        let (key, mut shifts) = (self.key, self.shifts);
+        use_side_effect_with_deps(&offset, move |offset: &f32| {
+            if shifts.peek().get(&key) != Some(offset) {
+                shifts.write().insert(key, *offset);
+            }
+        });
+        use_drop(move || {
+            shifts.write().remove(&key);
+        });
         rect()
             .width(Size::fill())
             .height(self.height.clone())
-            .offset_x(shift * surface_width() as f32)
+            .offset_x(offset)
             .child(self.child.clone())
     }
 
@@ -458,6 +489,7 @@ fn banners(
                 .chain(leaving.iter().map(|notification| (notification, true)))
                 .map(|(notification, leaving)| Slide {
                     key: u64::from(notification.id),
+                    shifts: context.shifts,
                     height: Size::auto(),
                     leaving,
                     child: card(context, notification, None),
@@ -959,6 +991,7 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
 
 // Notification ids start at 1 (Desktop Notifications spec), so 0 never names a card.
 const FOCUS_FRAME: u32 = 0;
+const PANEL_SLIDE: u64 = 0;
 
 fn framed(context: &Context, id: u32, body: Rect) -> Rect {
     context.rendered.borrow_mut().push(id);

@@ -24,7 +24,7 @@ use bk::shell::{
     set_blur_region, set_card_frames, set_input_region, set_layer_geometry, set_minimize_target,
 };
 use bk::styles::Animation;
-use bk::theme::{self, SurfaceKind};
+use bk::theme;
 use ctappearance::dock::{DockConfig, DockOrientation, MinimizeEffect};
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
@@ -32,7 +32,7 @@ use ctdesign::{
     DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X,
     DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS,
     DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX,
-    DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, HAIRLINE,
+    DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::ImageViewer;
@@ -127,10 +127,6 @@ fn placed((x, y, width, height): Area) -> Rect {
         .position(Position::new_absolute().left(x).top(y))
         .width(Size::px(width))
         .height(Size::px(height))
-}
-
-fn inset((x, y, width, height): Area, by: f32) -> Area {
-    (x + by, y + by, width - 2.0 * by, height - 2.0 * by)
 }
 
 // macOS draws every icon on one 1024 grid with an 824 body. Malaysia's app icons already are;
@@ -510,7 +506,8 @@ impl App for DockApp {
         }
 
         let resolved = bk::theme::resolved();
-        let glass_rgba = bk::theme::surface_background(&resolved, SurfaceKind::LayerShell);
+        // macOS keeps the Dock neutral glass; the wallpaper shows through the blur, not as a tint.
+        let glass_rgba = resolved.shell.bar;
         let glass = theme::color(glass_rgba);
         let ink = theme::color(resolved.shell.text);
         let separator_ink = theme::color(resolved.menu_separator(glass_rgba));
@@ -579,9 +576,12 @@ impl App for DockApp {
         };
 
         let mut children: Vec<Element> = vec![
-            placed(inset(bar, HAIRLINE))
-                .corner_radius(bk::style::continuous_corner(radius - HAIRLINE))
-                .background(glass)
+            placed(bar)
+                .child(bk::style::panel_edges(
+                    rect().width(Size::px(bar.2)).height(Size::px(bar.3)),
+                    radius,
+                    glass_rgba,
+                ))
                 .into_element(),
         ];
         let menu = Menus {
