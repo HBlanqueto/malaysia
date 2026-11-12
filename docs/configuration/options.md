@@ -235,7 +235,7 @@ Without the key, each window gets its bar's radius: 16, 20, 26 or 15
 (ADR 0059). Fullscreen still has no corners.
 
 `"default"` respects the negotiation (GTK/Libadwaita keep their headerbar; Qt and the
-rest get Malaysia's chrome). `"force_server"` draws Malaysia's chrome on every
+rest get Malaysia's chrome). An app that states no mode (WezTerm) gets it too. `"force_server"` draws Malaysia's chrome on every
 window; `"force_client"` draws none.
 
 `double_click_titlebar` uses macOS's words: "**Fill / Minimize / Zoom / No

@@ -64,7 +64,7 @@ pub(crate) fn effective_decoration(
     match policy {
         crate::config::DecorationPolicy::ForceServer => Decoration::Server,
         crate::config::DecorationPolicy::ForceClient => Decoration::Client,
-        crate::config::DecorationPolicy::Default => requested.unwrap_or(Decoration::Client),
+        crate::config::DecorationPolicy::Default => requested.unwrap_or(Decoration::Server),
     }
 }
 
@@ -107,9 +107,9 @@ mod tests {
     }
 
     #[test]
-    fn the_default_policy_honours_the_request_and_prefers_client_side() {
+    fn the_default_policy_honours_the_request_and_prefers_server_side() {
         for (requested, expected) in [
-            (None, Decoration::Client),
+            (None, Decoration::Server),
             (Some(Decoration::Server), Decoration::Server),
             (Some(Decoration::Client), Decoration::Client),
         ] {

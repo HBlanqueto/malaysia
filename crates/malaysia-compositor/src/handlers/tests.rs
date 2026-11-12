@@ -84,7 +84,7 @@ fn effective_decoration_covers_every_policy_and_native_case() {
             let foreign_expected = match policy {
                 DecorationPolicy::ForceServer => Decoration::Server,
                 DecorationPolicy::ForceClient => Decoration::Client,
-                DecorationPolicy::Default => requested.unwrap_or(Decoration::Client),
+                DecorationPolicy::Default => requested.unwrap_or(Decoration::Server),
             };
             assert_eq!(
                 effective_decoration(policy, requested, false),
