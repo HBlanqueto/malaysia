@@ -340,7 +340,7 @@ fn capture_into_dmabuf(
     let mut target = renderer
         .bind(&mut dmabuf)
         .map_err(|error| format!("bind dmabuf failed: {error}"))?;
-    let mut tracker = OutputDamageTracker::new(size, Scale::from(scale), Transform::Flipped);
+    let mut tracker = OutputDamageTracker::new(size, Scale::from(scale), Transform::Normal);
     let result = tracker
         .render_output(renderer, &mut target, 0, elements, clear)
         .map_err(|error| format!("capture render failed: {error}"))?;
@@ -456,7 +456,7 @@ fn capture_into_shm(
         .map_err(|error| format!("invalid shm capture buffer: {error}"))?;
         let size_buf: Size<i32, BufferCoord> = Size::from((size.w, size.h));
         let mut offscreen = shm_offscreen(renderer, fourcc, size_buf)?;
-        let mut tracker = OutputDamageTracker::new(size, Scale::from(scale), Transform::Flipped);
+        let mut tracker = OutputDamageTracker::new(size, Scale::from(scale), Transform::Normal);
         {
             let mut target = renderer
                 .bind(&mut offscreen)
