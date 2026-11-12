@@ -1131,7 +1131,6 @@ impl Component for Hero {
                 );
             HStack::new()
                 .width(Size::fill())
-                .min_height(Size::px(LIST_GROUP.row_min_height))
                 .content(Content::flex())
                 .cross_align(Alignment::Center)
                 .spacing(SPACE_3)
@@ -1149,7 +1148,17 @@ impl Component for Hero {
                     )
                 })
                 .child(labels)
-                .maybe_child(row.control.clone())
+                .child(
+                    rect()
+                        .direction(Direction::Horizontal)
+                        .cross_align(Alignment::Center)
+                        .child(
+                            rect()
+                                .width(Size::px(0.0))
+                                .height(Size::px(LIST_GROUP.row_min_height)),
+                        )
+                        .maybe_child(row.control.clone()),
+                )
                 .into_element()
         });
         HStack::new()
