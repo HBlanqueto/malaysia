@@ -80,6 +80,7 @@ in
     };
 
     fonts.packages = [
+      pkgs.adwaita-fonts
       pkgs.geist-font
       pkgs.inter
     ];

@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/5e8f892115db3239fd849fc5327ba4cce2dc42a6";
+      url = "github:HBlanqueto/barrierkit/ef9aa9e93bfa48fba96885359878d5337bd87113";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
@@ -80,8 +80,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca" =
               "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=5e8f892115db3239fd849fc5327ba4cce2dc42a6#5e8f892115db3239fd849fc5327ba4cce2dc42a6" =
-              "sha256-4zcGq+cwu38oqlJAViZBdROK5J5XggWBUDrizghJe/A=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=ef9aa9e93bfa48fba96885359878d5337bd87113#ef9aa9e93bfa48fba96885359878d5337bd87113" =
+              "sha256-8C/mLkTTK6+d/aMPj6o49YXJln2iCtr1wtgcHFMNYJg=";
           };
 
           env = {
@@ -254,6 +254,7 @@
           <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
           <fontconfig>
             <include>${./share/fontconfig/malaysia.conf}</include>
+            <dir>${pkgs.adwaita-fonts}/share/fonts</dir>
             <dir>${pkgs.geist-font}/share/fonts</dir>
             <dir>${pkgs.inter}/share/fonts</dir>
           </fontconfig>
@@ -295,6 +296,7 @@
           ] ++ labApps;
 
           buildInputs = deps ++ videoDeps ++ [
+            pkgs.adwaita-fonts
             pkgs.geist-font
             pkgs.inter
           ];

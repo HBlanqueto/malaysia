@@ -24,7 +24,7 @@ bk layer surface → layer-shell Top (30 or 38 px) → Skia on Vulkan
 2. Without a `.desktop`, the last segment with an initial capital (`org.example.notes` → «Notes»).
 3. Without an app or window, «Malaysia».
 
-It is bold (`MENUBAR_APP_NAME_WEIGHT`, 700), color `ink-strong`, 13 px, with the `ctdesign` sans (Geist); the clock uses the regular weight.
+It is bold (`MENUBAR_APP_NAME_WEIGHT`, 700), color `ink-strong`, 13 px, with the `ctdesign` sans (Adwaita Sans); the clock uses the regular weight.
 
 ## Style and height
 

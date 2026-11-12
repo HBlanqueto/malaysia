@@ -120,7 +120,7 @@ mod tests {
             move |runner| runner.provide_root_context(|| State::create(resolved)),
             1.0,
         );
-        test.set_default_fonts(&[std::borrow::Cow::Borrowed("Geist")]);
+        test.set_default_fonts(&[std::borrow::Cow::Borrowed(ctdesign::BODY.family)]);
         test.sync_and_update();
         let appearance =
             find_label(&test, tr!("appearance")).expect("the Appearance pane is listed");
