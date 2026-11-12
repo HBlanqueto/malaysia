@@ -59,6 +59,16 @@ pub fn export_session_env(config: &Config) {
             std::env::set_var("QT_QPA_PLATFORMTHEME", "qt6ct");
         }
     }
+    // ADR 0077: FreeType thickens thin stems only on request, like macOS font smoothing.
+    if std::env::var_os("FREETYPE_PROPERTIES").is_none() {
+        // SAFETY: runs single-threaded during startup, before any other thread reads the environment.
+        unsafe {
+            std::env::set_var(
+                "FREETYPE_PROPERTIES",
+                "cff:no-stem-darkening=0 autofitter:no-stem-darkening=0",
+            );
+        }
+    }
     if !config.window.qt_server_decorations {
         return;
     }

@@ -26,6 +26,7 @@ pub(crate) fn start(socket: &str) -> bool {
             "XDG_CURRENT_DESKTOP",
             "XDG_SESSION_ID",
             "MALAYSIA_BIN_DIR",
+            "FREETYPE_PROPERTIES",
         ],
         Some(socket),
     );
