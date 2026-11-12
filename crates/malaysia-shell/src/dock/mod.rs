@@ -1,5 +1,6 @@
 mod geometry;
 mod items;
+mod thumbnail;
 
 use std::{
     cell::{Cell, RefCell},
@@ -19,8 +20,8 @@ use bk::popup_button::pop_up_menu;
 use bk::prelude::*;
 use bk::shell::{
     Activation, Anchors, BlurRegion, CardFrames, InputRegion, KeyboardInteractivity, Layer,
-    LayerGeometry, LayerSpec, MinimizeTarget, ToplevelInfo, Toplevels, run_layer, set_blur_region,
-    set_card_frames, set_input_region, set_layer_geometry, set_minimize_target,
+    LayerGeometry, LayerSpec, MinimizeTarget, ToplevelInfo, Toplevels, capture_window, run_layer,
+    set_blur_region, set_card_frames, set_input_region, set_layer_geometry, set_minimize_target,
 };
 use bk::styles::Animation;
 use bk::theme::{self, SurfaceKind};
@@ -31,9 +32,10 @@ use ctdesign::{
     DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X,
     DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS,
     DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX,
-    DOCK_TILESIZE_MIN, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, HAIRLINE,
+    DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, HAIRLINE,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
+use freya_components::image_viewer::ImageViewer;
 use freya_core::integration::AppComponent;
 use serde::{Deserialize, Serialize};
 use torin::prelude::{Gaps, Position};
@@ -234,6 +236,49 @@ fn use_launcher_entries() -> Entries {
     entries
 }
 
+#[derive(Clone, PartialEq)]
+struct Thumbnail {
+    size: (u32, u32),
+    png: Bytes,
+}
+
+// macOS shows a minimized window as a picture of it; the picture is taken once, when it minimizes.
+fn use_thumbnails(windows: &[ToplevelInfo]) -> State<HashMap<u64, Thumbnail>> {
+    let mut thumbnails = use_state(HashMap::<u64, Thumbnail>::new);
+    let minimized: Vec<u64> = windows
+        .iter()
+        .filter(|window| window.minimized)
+        .map(|window| window.id)
+        .collect();
+    let asked = use_hook(|| Rc::new(RefCell::new(Vec::<u64>::new())));
+    use_side_effect_with_deps(&minimized, move |minimized: &Vec<u64>| {
+        asked.borrow_mut().retain(|id| minimized.contains(id));
+        thumbnails.write().retain(|id, _| minimized.contains(id));
+        for &id in minimized {
+            if asked.borrow().contains(&id) {
+                continue;
+            }
+            asked.borrow_mut().push(id);
+            capture_window(id, move |image| {
+                let Some(image) = image else {
+                    return;
+                };
+                if let Some(png) = thumbnail::png(&image) {
+                    let mut thumbnails = thumbnails;
+                    thumbnails.write().insert(
+                        id,
+                        Thumbnail {
+                            size: (image.width, image.height),
+                            png: Bytes::from(png),
+                        },
+                    );
+                }
+            });
+        }
+    });
+    thumbnails
+}
+
 fn launcher_entry(entries: &Entries, id: &str) -> Option<Entry> {
     entries
         .lock()
@@ -294,6 +339,7 @@ impl App for DockApp {
         let activation = Activation::get();
         let timers = Timers::get();
 
+        let thumbnails = use_thumbnails(&windows);
         let running = items::running(&windows, entries);
         let running_ids: Vec<String> = running.iter().map(|(id, _)| id.clone()).collect();
         let previous = use_hook(|| Rc::new(RefCell::new(Vec::<String>::new())));
@@ -676,15 +722,29 @@ impl App for DockApp {
                     children.push(
                         placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
                             .center()
-                            .child(
-                                rect()
+                            .child(match thumbnails.read().get(&id) {
+                                Some(picture) => {
+                                    let (width, height) =
+                                        thumbnail::fit(picture.size, slot.size * DOCK_ICON_BODY);
+                                    ImageViewer::new((id, picture.png.clone()))
+                                        .width(Size::px(width))
+                                        .height(Size::px(height))
+                                        .into_element()
+                                }
+                                None => rect()
                                     .width(Size::px(slot.size * DOCK_WINDOW_FRAME))
                                     .height(Size::px(slot.size * DOCK_WINDOW_FRAME))
                                     .corner_radius(slot.size * DOCK_RADIUS / 2.0)
                                     .background(progress_track)
                                     .center()
-                                    .child(app_icon_named(&key, slot.size * DOCK_WINDOW_ICON)),
-                            )
+                                    .child(app_icon_named(&key, slot.size * DOCK_WINDOW_ICON))
+                                    .into_element(),
+                            })
+                            .maybe_child(thumbnails.read().contains_key(&id).then(|| {
+                                rect()
+                                    .position(Position::new_absolute().right(0.0).bottom(0.0))
+                                    .child(app_icon_named(&key, slot.size * DOCK_WINDOW_BADGE))
+                            }))
                             .on_press(move |_| {
                                 toplevels.unset_minimized(id);
                                 toplevels.activate(id);

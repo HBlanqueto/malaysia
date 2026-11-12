@@ -47,7 +47,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    (`DOCK_LAYER_NAMESPACE`) and draws its frame under the surface, so
    magnified icons rise over the bar's edge.
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon`),
-   with the `LauncherEntry` badge and progress. Every icon sits on macOS's
+   with the `LauncherEntry` badge and progress. A minimized window's tile is
+   a picture of the window, taken once with `capture_window` when it
+   minimizes, with the app icon at its corner. Every icon sits on macOS's
    grid: Malaysia's app icons already keep the 824-on-1024 body; any other
    icon, and the places, is drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon marks an
    open app (`show-process-indicators`). The name label shows over the icon
@@ -100,6 +102,5 @@ space, so focus spaces hide it like the bottom one.
 ## Divergences
 
 - `zwlr_foreign_toplevel_management_v1` by hand (ADR 0023 allows for it).
-- A minimized window tile shows the app icon, not a picture of the window.
 - The drag image stays inside the Dock's surface.
 - `activate` carries no press serial in this version of the XML, so it is not validated against the implicit grab.
