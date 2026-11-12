@@ -271,30 +271,18 @@ impl Component for CollectionEditor {
             .map(|folder| wallpapers_in(folder).len())
             .sum::<usize>()
             + draft.images.len();
-        let title = VStack::new()
-            .cross_align(Alignment::Start)
-            .spacing(SPACE_1)
-            .child(
-                Text::new(if draft.index.is_some() {
-                    tr!("collection-edit-title")
-                } else {
-                    tr!("collection-new")
-                })
-                .font(HEADLINE),
-            )
-            .child(
-                Text::new(tr!("collection-help"))
-                    .font(CALLOUT)
-                    .foreground_style(ShapeStyle::Role(Role::SecondaryLabel)),
-            );
+        let title = Text::new(if draft.index.is_some() {
+            tr!("collection-edit-title")
+        } else {
+            tr!("collection-new")
+        })
+        .font(HEADLINE);
         let name_form = plain_form().section(
             Section::new().row(
-                Row::new(tr!("collection-name"))
-                    .detail(tr!("collection-name-help"))
-                    .control(
-                        TextField::new(name, intern(fallback_name(&draft)))
-                            .width(Size::px(SETTINGS.wallpaper.field_width as f32)),
-                    ),
+                Row::new(tr!("collection-name")).control(
+                    TextField::new(name, intern(fallback_name(&draft)))
+                        .width(Size::px(SETTINGS.wallpaper.field_width as f32)),
+                ),
             ),
         );
         let [top, right, bottom, left] = LIST_GROUP.header_padding;

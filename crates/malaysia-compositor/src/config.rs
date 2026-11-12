@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn defaults_are_complete_and_sane() {
         let config = Config::default();
-        assert_eq!(config.appearance.color_scheme, ColorScheme::Auto);
+        assert_eq!(config.appearance.color_scheme, ColorScheme::Light);
         assert!(!config.appearance.contrast);
         assert!(!config.appearance.reduced_motion);
         assert_eq!(config.appearance.window_color, WindowColorMode::Neutral);
@@ -192,13 +192,6 @@ mod tests {
     }
 
     #[test]
-    fn auto_resolves_to_the_light_default() {
-        assert_eq!(ColorScheme::Auto.resolved(), ColorScheme::Light);
-        assert_eq!(ColorScheme::Dark.resolved(), ColorScheme::Dark);
-        assert_eq!(ColorScheme::DarkTint.resolved(), ColorScheme::DarkTint);
-    }
-
-    #[test]
     fn dark_tint_is_a_color_scheme_value() {
         let parsed: Config = toml::from_str("[appearance]\ncolor_scheme = \"dark_tint\"\n")
             .expect("dark_tint parses");
@@ -208,7 +201,7 @@ mod tests {
     #[test]
     fn a_partial_file_keeps_the_defaults_for_missing_keys() {
         let parsed: Config = toml::from_str("").expect("an empty file is a valid config");
-        assert_eq!(parsed.appearance.color_scheme, ColorScheme::Auto);
+        assert_eq!(parsed.appearance.color_scheme, ColorScheme::Light);
     }
 
     #[test]

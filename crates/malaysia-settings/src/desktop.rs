@@ -58,16 +58,11 @@ fn without_ticks(style: SliderStyle) -> SliderStyle {
 
 fn switch_row(
     title: &'static str,
-    detail: Option<&'static str>,
     on: bool,
     error: State<Option<String>>,
     set: fn(&mut DockConfig, bool),
 ) -> Row {
-    let row = Row::new(title).control(Switch::new(title).on(on).on_toggle(edit_dock(error, set)));
-    match detail {
-        Some(detail) => row.detail(detail),
-        None => row,
-    }
+    Row::new(title).control(Switch::new(title).on(on).on_toggle(edit_dock(error, set)))
 }
 
 fn dock_section(config: &DockConfig, error: State<Option<String>>) -> Section {
@@ -149,35 +144,30 @@ fn dock_section(config: &DockConfig, error: State<Option<String>>) -> Section {
         )
         .row(switch_row(
             tr!("dock-minimize-into-app"),
-            None,
             config.minimize_to_application,
             error,
             |config, on| config.minimize_to_application = on,
         ))
         .row(switch_row(
             tr!("dock-autohide"),
-            Some(tr!("dock-autohide-help")),
             config.autohide,
             error,
             |config, on| config.autohide = on,
         ))
         .row(switch_row(
             tr!("dock-launchanim"),
-            Some(tr!("dock-launchanim-help")),
             config.launchanim,
             error,
             |config, on| config.launchanim = on,
         ))
         .row(switch_row(
             tr!("dock-indicators"),
-            Some(tr!("dock-indicators-help")),
             config.show_process_indicators,
             error,
             |config, on| config.show_process_indicators = on,
         ))
         .row(switch_row(
             tr!("dock-recents"),
-            Some(tr!("dock-recents-help")),
             config.show_recents,
             error,
             |config, on| config.show_recents = on,
@@ -188,44 +178,39 @@ fn dock_advanced_section(config: &DockConfig, error: State<Option<String>>) -> S
     Section::titled(tr!("dock-advanced"))
         .row(switch_row(
             tr!("dock-static-only"),
-            Some(tr!("dock-static-only-help")),
             config.static_only,
             error,
             |config, on| config.static_only = on,
         ))
         .row(
-            Row::new(tr!("dock-autohide-delay"))
-                .detail(tr!("dock-autohide-delay-help"))
-                .control(
-                    Slider::stepped(tr!("dock-autohide-delay"), DELAY_STEPS)
-                        .value((config.autohide_delay / DELAY_STEP_SECONDS).round() as usize)
-                        .labels(tr_list!(
-                            "dock-autohide-delay-none",
-                            "dock-autohide-delay-max"
-                        ))
-                        .style(without_ticks)
-                        .disabled(!config.autohide)
-                        .on_change(edit_dock(error, |config: &mut DockConfig, index: usize| {
-                            config.autohide_delay = index as f32 * DELAY_STEP_SECONDS;
-                        })),
-                ),
+            Row::new(tr!("dock-autohide-delay")).control(
+                Slider::stepped(tr!("dock-autohide-delay"), DELAY_STEPS)
+                    .value((config.autohide_delay / DELAY_STEP_SECONDS).round() as usize)
+                    .labels(tr_list!(
+                        "dock-autohide-delay-none",
+                        "dock-autohide-delay-max"
+                    ))
+                    .style(without_ticks)
+                    .disabled(!config.autohide)
+                    .on_change(edit_dock(error, |config: &mut DockConfig, index: usize| {
+                        config.autohide_delay = index as f32 * DELAY_STEP_SECONDS;
+                    })),
+            ),
         )
         .row(
-            Row::new(tr!("dock-autohide-speed"))
-                .detail(tr!("dock-autohide-speed-help"))
-                .control(
-                    Slider::stepped(tr!("dock-autohide-speed"), SPEED_STEPS)
-                        .value((config.autohide_time_modifier / SPEED_STEP).round() as usize)
-                        .labels(tr_list!(
-                            "dock-autohide-speed-none",
-                            "dock-autohide-speed-slow"
-                        ))
-                        .style(without_ticks)
-                        .disabled(!config.autohide)
-                        .on_change(edit_dock(error, |config: &mut DockConfig, index: usize| {
-                            config.autohide_time_modifier = index as f32 * SPEED_STEP;
-                        })),
-                ),
+            Row::new(tr!("dock-autohide-speed")).control(
+                Slider::stepped(tr!("dock-autohide-speed"), SPEED_STEPS)
+                    .value((config.autohide_time_modifier / SPEED_STEP).round() as usize)
+                    .labels(tr_list!(
+                        "dock-autohide-speed-none",
+                        "dock-autohide-speed-slow"
+                    ))
+                    .style(without_ticks)
+                    .disabled(!config.autohide)
+                    .on_change(edit_dock(error, |config: &mut DockConfig, index: usize| {
+                        config.autohide_time_modifier = index as f32 * SPEED_STEP;
+                    })),
+            ),
         )
 }
 
@@ -273,11 +258,6 @@ pub fn desktop_pane(
         .on_change(edit(error, |config, index: usize| {
             config.bar_height = HEIGHTS[index];
         }));
-    let style_help = match config.style {
-        MenubarStyle::Solid => tr!("menu-bar-style-solid-help"),
-        MenubarStyle::Translucent => tr!("menu-bar-style-translucent-help"),
-        MenubarStyle::Floating => tr!("menu-bar-style-floating-help"),
-    };
     Pane::new(
         "desktop-dock",
         tr!("desktop-dock"),
@@ -291,14 +271,9 @@ pub fn desktop_pane(
                     .row(
                         Row::new(tr!("menu-bar-style"))
                             .keywords(tr_list!("menu-bar-style-keywords"))
-                            .detail(style_help)
                             .control(styles),
                     )
-                    .row(
-                        Row::new(tr!("menu-bar-height"))
-                            .detail(tr!("menu-bar-height-help"))
-                            .control(heights),
-                    ),
+                    .row(Row::new(tr!("menu-bar-height")).control(heights)),
             ),
     )
 }

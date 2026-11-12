@@ -102,7 +102,7 @@ They are not domain options; they are fixed and documented here:
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"dark_tint"` \| `"light"` | `"auto"` | **active** | portal `org.freedesktop.appearance`, shell, **System Settings** |
+| `appearance.color_scheme` | `"light"` \| `"dark"` \| `"dark_tint"` | `"light"` | **active** | portal `org.freedesktop.appearance`, shell, **System Settings**; an old `"auto"` reads as `"light"` |
 | `appearance.accent_color` | `[r,g,b]` in `[0,1]` or `null` | `null` | **active** | `null` is «Automatic» (the rainbow swatch): the theme's blue, and apps with their own accent keep it; the portal then reports no accent preference. A color forces that accent on every app. Portal, shell, effects, **System Settings**; the retired key `wallpaper_accent` is no longer read and System Settings removes it |
 | `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`), kit (`ctappearance::resolve`; also reduces transparency), **System Settings › Accessibility › Display** |
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
@@ -113,7 +113,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` | `"auto"` | **active** | titlebar traffic lights; an old `"wallpaper"` reads as `"accent"`, **System Settings** |
 | `appearance.traffic_light_shape` | integer 0–7 | `4` | **active** | corner radius of the 14 traffic lights, from square (0) to round (7); the old `"square"` reads as 4 and `"round"` as 7, **System Settings** |
 | `appearance.tint_strength` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of the accent tint and of `wallpaper_tinting` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings**; the retired key `tint_strength_accent` is no longer read and System Settings removes it |
-| `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"`, `"bars"` | all but `"bars"` | **active** | which surfaces the tint reaches, with either tint color; `bars` is the menu bar and the Dock, tinted with the accent or with the wallpaper's dominant color. Replaces the retired `window_tint_scope`, **System Settings** |
+| `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"`, `"bars"` | all but `"bars"` | **active** | which surfaces the tint reaches, with either tint color; `bars` is the Dock and the menu bar with the Solid style, tinted with the accent or with the wallpaper's dominant color. Replaces the retired `window_tint_scope`, **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
 | `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window, and each libadwaita window with Malaysia's patch, mixes the wallpaper behind it into its `tint_parts`, at `tint_strength`, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
 | `appearance.wallpaper_tinting_in_light` | bool | `false` | **active** | `wallpaper_tinting` also in light mode, **System Settings › Accessibility › Display** |
@@ -122,15 +122,13 @@ They are not domain options; they are fixed and documented here:
 | `appearance.differentiate_without_color` | bool | `false` | **active** | kit and compositor: the traffic lights keep their symbols in the focused window, **System Settings › Accessibility › Display** |
 | `appearance.display_contrast` | a value of `DISPLAY_CONTRAST` | `1.0` | **active** | compositor: contrast of the whole screen around middle gray, **System Settings › Accessibility › Display** |
 | `appearance.text_size` | a value of `TEXT_SIZES` | `1.0` | **active** | the preferred reading size of every toolkit without its own, **System Settings › Accessibility › Display › Text size** |
-| `appearance.text_sizes` | table: `barrierkit`, `gtk`, `qt`, each a value of `TEXT_SIZES` | empty | **active** | kit (`Text`, sidebar items), portal (`text-scaling-factor` for GTK 4), compositor (`GDK_DPI_SCALE` for GTK 3) and the Qt bridge (qt6ct font); a missing key uses `text_size` (ADR 0067). **System Settings**: `barrierkit` in Accessibility › Display › Text size, `gtk` and `qt` in Accessibility › freedesktop Options |
+| `appearance.text_sizes` | table: `barrierkit`, `gtk`, `qt`, each a value of `TEXT_SIZES` | empty | **active** | kit (`Text`, sidebar items), portal (`text-scaling-factor` for GTK 4), compositor (`GDK_DPI_SCALE` for GTK 3) and the Qt bridge (qt6ct font, only with `qt_bridge`); a missing key uses `text_size` (ADR 0067). **System Settings**: `barrierkit` in Accessibility › Display › Text size, `gtk` and `qt` in Accessibility › freedesktop Options |
 | `appearance.menu_bar_size` | `"default"` \| `"large"` | `"default"` | **active** | shell: menu bar text size, **System Settings › Accessibility › Display** |
 | `appearance.shake_to_locate` | bool | `true` | **active** | compositor: shaking the pointer enlarges it, **System Settings › Accessibility › Display** |
 | `appearance.pointer_size` | a value of `POINTER_SIZES` | `1.0` | **active** | compositor: size of the cursors it draws; a cursor an app draws itself keeps the app's size (ADR 0066), **System Settings › Accessibility › Display** |
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
 | `appearance.color_filter` | `"grayscale"` \| `"red_green"` \| `"green_red"` \| `"blue_yellow"` | `"grayscale"` | **active** | compositor: grayscale or a color-blindness filter (ADR 0066) |
 | `appearance.color_filter_intensity` | a value of `COLOR_FILTER_INTENSITY` | `1.0` | **active** | compositor: blends the filter with the original colors |
-| `appearance.blur_behind` | `"mixed"`, `"wallpaper"`, `"windows"` | `"mixed"` | pending | compositor: what the blur behind a surface shows (ADR 0071); today every surface shows only the wallpaper. **System Settings › Accessibility › Display › Blur** |
-| `appearance.blur_all_windows` | bool | `false` | pending | compositor: also blur windows that do not ask for it (ADR 0071). **System Settings › Accessibility › Display › Blur** |
 | `appearance.qt_bridge` | bool | `true` | **active** | portal: writes `qt6ct.conf` and `qt5ct.conf` in `~/.config/qt6ct` and `~/.config/qt5ct` (Fusion, the Malaysia palette in `malaysia-colors.conf`, Breeze or Breeze Dark icons unless another theme is set, the Qt text size); other keys stay (ADR 0067). Off, the portal removes its palette. Settings sets it with `gtk_bridge` (Accessibility › freedesktop Options, ADR 0070) |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Settings sets it with `qt_bridge` (Accessibility › freedesktop Options, ADR 0070) |
 
@@ -468,7 +466,7 @@ System Settings writes it. An app gets the defaults until it has a
 | `notifications.focus.<mode>.time_sensitive` | bool | `true` | **active**: the Focus lets time-sensitive alerts through | shell |
 | `notifications.apps.<id>.sound` | bool | `true` | **active** | shell |
 | `notifications.apps.<id>.badge` | bool | `true` | **active**: the Dock shows the app's `LauncherEntry` count | shell (dock) |
-| `notifications.apps.<id>.grouping` | `"automatic"` \| `"by-app"` \| `"off"` | `"automatic"` | **active** (`automatic` groups by app) | shell |
+| `notifications.apps.<id>.grouping` | `"automatic"` \| `"off"` | `"automatic"` | **active** (`automatic` groups by app; an old `"by-app"` reads as `"automatic"`) | shell |
 | `notifications.apps.<id>.muted_until` | unix time | none | **active**; written by «Mute for 1 Hour» and «Mute for Today» | shell |
 
 ## `effects` — compositor surface effects (ADR 0020)
@@ -543,7 +541,7 @@ Like macOS, one file per domain in `~/.config/malaysia/`:
 
 ```toml
 # ~/.config/malaysia/appearance.domain
-color_scheme = "dark"           # auto | dark | dark_tint | light
+color_scheme = "dark"           # light | dark | dark_tint
 accent_color = [0.208, 0.518, 0.894]   # leave it out for «Automatic»
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
@@ -568,8 +566,6 @@ pointer_size = 1.0
 color_filters = false
 color_filter = "grayscale"
 color_filter_intensity = 1.0
-blur_behind = "mixed"           # mixed | wallpaper | windows
-blur_all_windows = false
 
 [text_sizes]                    # optional; a missing key uses text_size
 qt = 1.3                        # barrierkit | gtk | qt

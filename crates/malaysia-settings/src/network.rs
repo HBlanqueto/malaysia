@@ -110,8 +110,7 @@ pub fn vpn_pane(
                 .iter()
                 .fold(Section::titled(tr!("vpn-external")), |section, vpn| {
                     section.row(external_row(vpn))
-                })
-                .footer(tr!("vpn-external-help")),
+                }),
         );
     }
     Some(Pane::new("vpn", tr!("vpn"), Symbol::Lock, TINT, form))

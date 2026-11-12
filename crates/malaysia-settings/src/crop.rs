@@ -9,7 +9,7 @@ use ctappearance::{
     load_wallpaper_state, thumbnail_image_size,
 };
 use ctdesign::{
-    BADGE, CHECKBOX, DESKTOP_CLEAR, DIALOG_PADDING, HAIRLINE, HUD_BACKGROUND, LIST_GROUP, SETTINGS,
+    BADGE, DESKTOP_CLEAR, DIALOG_PADDING, HAIRLINE, HUD_BACKGROUND, LIST_GROUP, SETTINGS,
 };
 use torin::prelude::{Content, Gaps, Position};
 
@@ -21,7 +21,6 @@ pub struct CropDraft {
     name: &'static str,
     stills: Vec<(&'static str, PathBuf)>,
     video: bool,
-    dynamic: bool,
     desktop: Option<u32>,
     outputs: Vec<WallpaperOutput>,
     crops: Vec<Option<[f32; 4]>>,
@@ -35,8 +34,7 @@ impl CropDraft {
         selection: &WallpaperSelection,
         look: WallpaperAppearance,
     ) -> Option<Self> {
-        let dynamic = file.is_none_or(is_dynamic);
-        let stills = if dynamic {
+        let stills = if file.is_none_or(is_dynamic) {
             vec![
                 (tr!("crop-now"), preview(file, look)?),
                 (
@@ -67,7 +65,6 @@ impl CropDraft {
             name: name_of(file),
             stills,
             video: file.and_then(WallpaperKind::of) == Some(WallpaperKind::Video),
-            dynamic,
             desktop,
             outputs,
             crops,
@@ -246,22 +243,7 @@ impl Component for CropEditor {
         let mut drag = use_state(|| None::<Drag>);
         let mut origin = use_state(|| (0.0f32, 0.0f32));
 
-        let title = VStack::new()
-            .width(Size::fill())
-            .cross_align(Alignment::Start)
-            .spacing(SPACE_1)
-            .child(Text::new(intern(tr!("crop-title-named", name = draft.name))).font(HEADLINE))
-            .child(
-                Text::new(if draft.video {
-                    tr!("crop-help-video")
-                } else if draft.dynamic {
-                    tr!("crop-help-dynamic")
-                } else {
-                    tr!("crop-help")
-                })
-                .font(CALLOUT)
-                .foreground_style(ShapeStyle::Role(Role::SecondaryLabel)),
-            );
+        let title = Text::new(intern(tr!("crop-title-named", name = draft.name))).font(HEADLINE);
         let Some(handle) = artwork.read().clone() else {
             return VStack::new()
                 .width(Size::px(sheet_content_width()))
@@ -615,14 +597,6 @@ fn options(
     mut chrome: State<bool>,
 ) -> Rect {
     let palette = Palette::current();
-    let help_indent = CHECKBOX.size + SETTINGS.check.gap as f32;
-    let help = move |line: &'static str| {
-        rect().padding(Gaps::new(0.0, 0.0, 0.0, help_indent)).child(
-            Text::new(line)
-                .font(CAPTION)
-                .foreground_style(ShapeStyle::Role(Role::SecondaryLabel)),
-        )
-    };
     let shown = *output.read();
     let display = draft.outputs.get(shown).map(|display| {
         let (wide, high) = ratio(display.width, display.height);
@@ -650,20 +624,9 @@ fn options(
             .maybe_child(picker)
     });
     let same = (draft.outputs.len() > 1).then(|| {
-        VStack::new()
-            .width(Size::fill())
-            .cross_align(Alignment::Start)
-            .spacing(SPACE_1)
-            .child(
-                Checkbox::new(tr!("crop-all-displays"))
-                    .checked(!*separate.read())
-                    .on_toggle(move |same: bool| separate.set(!same)),
-            )
-            .child(help(if *separate.read() {
-                tr!("crop-each-display-help")
-            } else {
-                tr!("crop-all-displays-help")
-            }))
+        Checkbox::new(tr!("crop-all-displays"))
+            .checked(!*separate.read())
+            .on_toggle(move |same: bool| separate.set(!same))
     });
     let rows: Vec<Element> = [
         display.map(IntoElement::into_element),
@@ -675,16 +638,9 @@ fn options(
                 .into_element(),
         ),
         Some(
-            VStack::new()
-                .width(Size::fill())
-                .cross_align(Alignment::Start)
-                .spacing(SPACE_1)
-                .child(
-                    Checkbox::new(tr!("crop-chrome"))
-                        .checked(*chrome.read())
-                        .on_toggle(move |on: bool| chrome.set(on)),
-                )
-                .child(help(tr!("crop-chrome-help")))
+            Checkbox::new(tr!("crop-chrome"))
+                .checked(*chrome.read())
+                .on_toggle(move |on: bool| chrome.set(on))
                 .into_element(),
         ),
     ]

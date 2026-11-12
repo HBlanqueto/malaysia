@@ -137,46 +137,38 @@ pub fn freedesktop(
     let gtk =
         Section::titled(tr!("gtk-section"))
             .row(
-                Row::new(tr!("gtk3-theme"))
-                    .detail(tr!("gtk3-theme-help"))
-                    .control(
-                        themes
-                            .gtk3
-                            .popup(tr!("gtk3-theme"))
-                            .disabled(!own)
-                            .on_change(move |index: usize| {
-                                apply(set_gtk("gtk-theme", "gtk-theme-name", Some(&gtk3[index])))
-                            }),
-                    ),
+                Row::new(tr!("gtk3-theme")).control(
+                    themes
+                        .gtk3
+                        .popup(tr!("gtk3-theme"))
+                        .disabled(!own)
+                        .on_change(move |index: usize| {
+                            apply(set_gtk("gtk-theme", "gtk-theme-name", Some(&gtk3[index])))
+                        }),
+                ),
             )
             .row(
-                Row::new(tr!("gtk4-css"))
-                    .detail(if themes.gtk4_css {
-                        tr!("gtk4-css-custom")
-                    } else {
-                        tr!("gtk4-css-none")
-                    })
-                    .control(
-                        rect()
-                            .direction(Direction::Horizontal)
-                            .spacing(ctdesign::SPACE_2)
-                            .maybe_child(themes.gtk4_css.then(|| {
-                                Button::new(tr!("remove"))
-                                    .disabled(!own)
-                                    .on_press(move |_| apply(remove_gtk4_css()))
-                            }))
-                            .child(
-                                Button::new(tr!("import"))
-                                    .disabled(!own)
-                                    .on_press(move |_| {
-                                        spawn(async move {
-                                            if let Some(file) = pick(tr!("gtk4-css")).await {
-                                                apply(import_gtk4_css(&file));
-                                            }
-                                        });
-                                    }),
-                            ),
-                    ),
+                Row::new(tr!("gtk4-css")).control(
+                    rect()
+                        .direction(Direction::Horizontal)
+                        .spacing(ctdesign::SPACE_2)
+                        .maybe_child(themes.gtk4_css.then(|| {
+                            Button::new(tr!("remove"))
+                                .disabled(!own)
+                                .on_press(move |_| apply(remove_gtk4_css()))
+                        }))
+                        .child(
+                            Button::new(tr!("import"))
+                                .disabled(!own)
+                                .on_press(move |_| {
+                                    spawn(async move {
+                                        if let Some(file) = pick(tr!("gtk4-css")).await {
+                                            apply(import_gtk4_css(&file));
+                                        }
+                                    });
+                                }),
+                        ),
+                ),
             )
             .row(
                 Row::new(tr!("icons")).control(
@@ -193,142 +185,122 @@ pub fn freedesktop(
             )
             .row(
                 Row::new(tr!("themes-folder"))
-                    .detail(tr!("themes-folder-help"))
                     .control(Button::new(tr!("open")).on_press(|_| open_themes_folder())),
             );
-    let qt =
-        Section::titled(tr!("qt-section"))
-            .row(
-                Row::new(tr!("qt-style"))
-                    .detail(if themes.qt_managed {
-                        tr!("qt-managed")
-                    } else {
-                        tr!("qt-style-help")
-                    })
-                    .control(
+    let qt_style = Row::new(tr!("qt-style"));
+    let qt_style = if themes.qt_managed {
+        qt_style.detail(tr!("qt-managed"))
+    } else {
+        qt_style
+    };
+    let qt = Section::titled(tr!("qt-section"))
+        .row(
+            qt_style.control(
+                themes
+                    .qt_style
+                    .popup(tr!("qt-style"))
+                    .disabled(qt_off)
+                    .on_change(move |index: usize| {
+                        apply(set_qt(&[("style", Some(&styles[index]))]))
+                    }),
+            ),
+        )
+        .row(
+            Row::new(tr!("qt-palette")).control(
+                rect()
+                    .direction(Direction::Horizontal)
+                    .spacing(ctdesign::SPACE_2)
+                    .child(
                         themes
-                            .qt_style
-                            .popup(tr!("qt-style"))
+                            .qt_palette
+                            .popup(tr!("qt-palette"))
                             .disabled(qt_off)
-                            .on_change(move |index: usize| {
-                                apply(set_qt(&[("style", Some(&styles[index]))]))
+                            .on_change(move |index: usize| match index.checked_sub(1) {
+                                None => apply(set_palette(None)),
+                                Some(listed) => {
+                                    if let Some(path) = palettes.get(listed) {
+                                        apply(set_palette(Some(path)))
+                                    }
+                                }
+                            }),
+                    )
+                    .child(
+                        Button::new(tr!("import"))
+                            .disabled(qt_off)
+                            .on_press(move |_| {
+                                spawn(async move {
+                                    if let Some(file) = pick(tr!("qt-palette")).await {
+                                        apply(import_palette(&file));
+                                    }
+                                });
                             }),
                     ),
-            )
-            .row(
-                Row::new(tr!("qt-palette"))
-                    .detail(tr!("qt-palette-help"))
-                    .control(
-                        rect()
-                            .direction(Direction::Horizontal)
-                            .spacing(ctdesign::SPACE_2)
-                            .child(
-                                themes
-                                    .qt_palette
-                                    .popup(tr!("qt-palette"))
-                                    .disabled(qt_off)
-                                    .on_change(move |index: usize| match index.checked_sub(1) {
-                                        None => apply(set_palette(None)),
-                                        Some(listed) => {
-                                            if let Some(path) = palettes.get(listed) {
-                                                apply(set_palette(Some(path)))
-                                            }
-                                        }
-                                    }),
-                            )
-                            .child(Button::new(tr!("import")).disabled(qt_off).on_press(
-                                move |_| {
-                                    spawn(async move {
-                                        if let Some(file) = pick(tr!("qt-palette")).await {
-                                            apply(import_palette(&file));
-                                        }
-                                    });
-                                },
-                            )),
-                    ),
-            )
-            .row(
-                Row::new(tr!("icons")).control(
-                    themes
-                        .qt_icons
-                        .popup(tr!("icons"))
-                        .disabled(qt_off)
-                        .on_change(move |index: usize| {
-                            let theme = index.checked_sub(1).map(|_| qt_icons[index].as_str());
-                            apply(set_qt(&[("icon_theme", theme)]))
+            ),
+        )
+        .row(
+            Row::new(tr!("icons")).control(
+                themes
+                    .qt_icons
+                    .popup(tr!("icons"))
+                    .disabled(qt_off)
+                    .on_change(move |index: usize| {
+                        let theme = index.checked_sub(1).map(|_| qt_icons[index].as_str());
+                        apply(set_qt(&[("icon_theme", theme)]))
+                    }),
+            ),
+        )
+        .row(
+            Row::new(tr!("qt-advanced")).control(
+                Button::new(tr!("open-qt6ct"))
+                    .disabled(!own || !crate::apps::installed(QT_TOOLS[0]))
+                    .on_press(|_| crate::apps::open_app(QT_TOOLS[0])),
+            ),
+        );
+    let text_size = Section::titled(tr!("text-size")).row(toolkit_text_size(
+        config,
+        error,
+        Toolkit::Gtk,
+        tr!("text-size-gtk"),
+    ));
+    // The portal writes the qt6ct font only while it syncs Qt.
+    let text_size = if config.qt_bridge {
+        text_size.row(toolkit_text_size(
+            config,
+            error,
+            Toolkit::Qt,
+            tr!("text-size-qt"),
+        ))
+    } else {
+        text_size
+    };
+    let mut confirming = confirming;
+    let mut form = Form::new()
+        .section(
+            Section::new().row(
+                Row::new(tr!("own-themes")).control(
+                    Switch::new(tr!("own-themes"))
+                        .on(own)
+                        .on_toggle(move |on: bool| {
+                            if on {
+                                confirming.set(true);
+                            } else {
+                                edit_bridges(true, error);
+                            }
                         }),
                 ),
-            )
-            .row(
-                Row::new(tr!("qt-advanced"))
-                    .detail(tr!("qt-advanced-help"))
-                    .control(
-                        Button::new(tr!("open-qt6ct"))
-                            .disabled(!own || !crate::apps::installed(QT_TOOLS[0]))
-                            .on_press(|_| crate::apps::open_app(QT_TOOLS[0])),
-                    ),
-            );
-    let mut confirming = confirming;
-    let mut form =
-        Form::new()
-            .section(
-                Section::new().row(
-                    Row::new(tr!("freedesktop-title"))
-                        .symbol(Symbol::SlidersVertical, crate::app::ACCESSIBILITY_TINT)
-                        .detail(tr!("freedesktop-about")),
-                ),
-            )
-            .section(
-                Section::new().row(
-                    Row::new(tr!("own-themes"))
-                        .detail(if own {
-                            tr!("own-themes-on")
-                        } else {
-                            tr!("own-themes-off")
-                        })
-                        .control(Switch::new(tr!("own-themes")).on(own).on_toggle(
-                            move |on: bool| {
-                                if on {
-                                    confirming.set(true);
-                                } else {
-                                    edit_bridges(true, error);
-                                }
-                            },
-                        )),
-                ),
-            )
-            .section(gtk)
-            .section(qt)
-            .section(
-                Section::titled(tr!("text-size"))
-                    .row(toolkit_text_size(
-                        config,
-                        error,
-                        Toolkit::Gtk,
-                        tr!("text-size-gtk"),
-                        tr!("text-size-gtk-help"),
-                    ))
-                    .row(toolkit_text_size(
-                        config,
-                        error,
-                        Toolkit::Qt,
-                        tr!("text-size-qt"),
-                        tr!("text-size-qt-help"),
-                    )),
-            )
-            .section(
-                Section::titled(tr!("still-synced"))
-                    .row(Row::new(tr!("still-synced-items")).detail(tr!("still-synced-help"))),
-            );
+            ),
+        )
+        .section(gtk)
+        .section(qt)
+        .section(text_size);
     if own {
-        form = form.section(
-            Section::new()
-                .row(Row::destructive(tr!("back-to-malaysia"), move |_| {
-                    apply(reset());
-                    edit_bridges(true, error);
-                }))
-                .footer(tr!("back-to-malaysia-help")),
-        );
+        form = form.section(Section::new().row(Row::destructive(
+            tr!("back-to-malaysia"),
+            move |_| {
+                apply(reset());
+                edit_bridges(true, error);
+            },
+        )));
     }
     form
 }

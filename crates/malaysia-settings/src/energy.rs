@@ -28,13 +28,11 @@ pub fn energy_pane(
         let remote = profiles.remote.clone();
         form = form.section(
             Section::new().row(
-                Row::new(tr!("low-power-mode"))
-                    .detail(tr!("low-power-mode-help"))
-                    .control(
-                        Switch::new(tr!("low-power-mode"))
-                            .on(current.low_power)
-                            .on_toggle(move |on| remote.send(ProfileCommand::LowPower(on))),
-                    ),
+                Row::new(tr!("low-power-mode")).control(
+                    Switch::new(tr!("low-power-mode"))
+                        .on(current.low_power)
+                        .on_toggle(move |on| remote.send(ProfileCommand::LowPower(on))),
+                ),
             ),
         );
     }
@@ -87,7 +85,7 @@ fn health(battery: &Battery, power: &Live<UPower>) -> Section {
         let title = intern(tr!("charge-limit", percent = limit.end));
         let remote = power.remote.clone();
         section = section.row(
-            Row::new(title).detail(tr!("charge-limit-help")).control(
+            Row::new(title).control(
                 Switch::new(title)
                     .on(limit.enabled)
                     .on_toggle(move |on| remote.send(BatteryCommand::LimitCharge(on))),

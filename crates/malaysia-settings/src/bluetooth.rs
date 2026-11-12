@@ -77,7 +77,6 @@ pub fn bluetooth_pane(
     let mut header = Section::new().row(
         Row::new(tr!("bluetooth"))
             .symbol(Symbol::Bluetooth, TINT)
-            .detail(tr!("bluetooth-about"))
             .control(WhileVisible::new(switch, move |shown| {
                 visible.send(BluetoothCommand::Visible(shown))
             })),

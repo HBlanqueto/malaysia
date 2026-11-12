@@ -1,7 +1,7 @@
 # 0071 — Background blur and ext-background-effect-v1
 
-Status: accepted (2026-11-11). Phase 1 and the Settings control are
-implemented (2026-11-11); the rest is in «Plan».
+Status: accepted (2026-11-11). Phase 1 is implemented (2026-11-11); the
+rest is in «Plan».
 
 ## Goal and scope
 
@@ -238,9 +238,9 @@ Read at `7f81a7f7` (2026-11-10):
 10. **Configuration.** `blur_behind` and `blur_all_windows` are the only
     new keys. They live in `appearance.domain` (`ctappearance::AppearanceConfig`),
     like the other Accessibility › Display options (ADR 0066), and are read
-    live. System Settings shows both in a «Blur» section below the first one
-    of Accessibility › Display, and dims them while «Reduce transparency»
-    is on.
+    live. Each key and its System Settings control arrive with the phase that
+    reads it: `blur_all_windows` with phase 2, `blur_behind` with phase 3.
+    The control dims while «Reduce transparency» is on.
 
 ## Plan
 
@@ -259,8 +259,7 @@ Read at `7f81a7f7` (2026-11-10):
    (step 4.1 of «Decision»).
 3. **`"behind"` and pop-ups.** Framebuffer-effect elements, the blit
    fallback and the fades.
-4. **Settings and calibration.** The control of step 10 is done
-   (2026-11-11). Left: the blur values, saturation and noise, measured on a
+4. **Calibration.** The blur values, saturation and noise, measured on a
    Mac with a solid and a striped wallpaper.
 
 Each phase updates [`options.md`](../configuration/options.md) and

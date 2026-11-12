@@ -439,9 +439,9 @@ searching `crates/malaysia-compositor/src`.
 - **Effects:** blur and vibrancy (`AGENTS.md`, design policy 3); plan in
   [ADR 0071](decisions/0071-background-blur-and-ext-background-effect.md).
   Phase 1 done (2026-11-11), not accepted in a session: `ext-background-effect-v1`
-  and the wallpaper blur behind windows and layer surfaces that ask for it,
-  plus the Blur section of Accessibility › Display. Pending: true transparency
-  (`"windows"`, pop-ups), general blur and the shell's own regions.
+  and the wallpaper blur behind windows and layer surfaces that ask for it.
+  Pending: true transparency (`"windows"`, pop-ups), general blur, the shell's
+  own regions and their options in Settings.
 - **Shell:** supervision and overview (ADR 0023), notifications daemon,
   polkit agent, volume/network/battery/brightness
   indicators (network, Bluetooth and battery done, ADR 0069), OSD and

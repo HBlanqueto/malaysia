@@ -71,19 +71,15 @@ pub fn wifi_pane(
         .on(wifi.enabled)
         .disabled(!wifi.switchable)
         .on_toggle(move |on| remote.send(NetworkCommand::Wifi(on)));
-    let about = if wifi.wrong_password {
-        tr!("wifi-wrong-password")
+    let title = Row::new(tr!("wifi")).symbol(Symbol::Wifi, TINT);
+    let title = if wifi.wrong_password {
+        title.detail(tr!("wifi-wrong-password"))
     } else {
-        tr!("wifi-about")
+        title
     };
-    let mut header = Section::new().row(
-        Row::new(tr!("wifi"))
-            .symbol(Symbol::Wifi, TINT)
-            .detail(about)
-            .control(WhileVisible::new(switch, move |shown| {
-                scanning.send(NetworkCommand::Scanning(shown))
-            })),
-    );
+    let mut header = Section::new().row(title.control(WhileVisible::new(switch, move |shown| {
+        scanning.send(NetworkCommand::Scanning(shown))
+    })));
     let pane = |form: Form| {
         let form = form.section(Section::new().row(show_in_menu_bar(
             menubar,
@@ -131,20 +127,18 @@ pub fn wifi_pane(
 
 fn ask_to_join_row(error: State<Option<String>>) -> Row {
     let config: WifiConfig = load_defaults(WIFI_DOMAIN);
-    Row::new(tr!("wifi-ask-to-join"))
-        .detail(tr!("wifi-ask-to-join-help"))
-        .control(
-            PopUpButton::new(tr!("wifi-ask-to-join"))
-                .item(tr!("ask-to-join-off"))
-                .item(tr!("ask-to-join-notify"))
-                .item(tr!("ask-to-join-ask"))
-                .selected(position(&ASK_TO_JOIN, config.ask_to_join))
-                .on_change(edit_defaults(
-                    WIFI_DOMAIN,
-                    error,
-                    |config: &mut WifiConfig, index: usize| config.ask_to_join = ASK_TO_JOIN[index],
-                )),
-        )
+    Row::new(tr!("wifi-ask-to-join")).control(
+        PopUpButton::new(tr!("wifi-ask-to-join"))
+            .item(tr!("ask-to-join-off"))
+            .item(tr!("ask-to-join-notify"))
+            .item(tr!("ask-to-join-ask"))
+            .selected(position(&ASK_TO_JOIN, config.ask_to_join))
+            .on_change(edit_defaults(
+                WIFI_DOMAIN,
+                error,
+                |config: &mut WifiConfig, index: usize| config.ask_to_join = ASK_TO_JOIN[index],
+            )),
+    )
 }
 
 fn current_row(current: &WifiNetwork, wifi: &Wifi, mut dialog: State<Option<WifiDialog>>) -> Row {
@@ -483,18 +477,16 @@ impl Component for DetailsSheet {
         let mut dialog = self.dialog;
         let options = *draft.read();
         let mut identity = Section::new().row(
-            Row::new(tr!("wifi-private-address"))
-                .detail(tr!("wifi-private-address-help"))
-                .control(
-                    PopUpButton::new(tr!("wifi-private-address"))
-                        .item(tr!("private-address-off"))
-                        .item(tr!("private-address-fixed"))
-                        .item(tr!("private-address-rotating"))
-                        .selected(position(&PRIVATE_ADDRESSES, options.private_address))
-                        .on_change(move |index: usize| {
-                            draft.write().private_address = PRIVATE_ADDRESSES[index];
-                        }),
-                ),
+            Row::new(tr!("wifi-private-address")).control(
+                PopUpButton::new(tr!("wifi-private-address"))
+                    .item(tr!("private-address-off"))
+                    .item(tr!("private-address-fixed"))
+                    .item(tr!("private-address-rotating"))
+                    .selected(position(&PRIVATE_ADDRESSES, options.private_address))
+                    .on_change(move |index: usize| {
+                        draft.write().private_address = PRIVATE_ADDRESSES[index];
+                    }),
+            ),
         );
         if self.found.current && !self.wifi.hardware_address.is_empty() {
             identity = identity.row(Row::value(
@@ -515,13 +507,11 @@ impl Component for DetailsSheet {
             .section(identity)
             .section(
                 Section::new().row(
-                    Row::new(tr!("wifi-low-data"))
-                        .detail(tr!("wifi-low-data-help"))
-                        .control(
-                            Switch::new(tr!("wifi-low-data"))
-                                .on(options.low_data)
-                                .on_toggle(move |on| draft.write().low_data = on),
-                        ),
+                    Row::new(tr!("wifi-low-data")).control(
+                        Switch::new(tr!("wifi-low-data"))
+                            .on(options.low_data)
+                            .on_toggle(move |on| draft.write().low_data = on),
+                    ),
                 ),
             );
         if self.found.current {

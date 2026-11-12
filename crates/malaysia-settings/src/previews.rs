@@ -25,33 +25,11 @@ pub fn theme_preview(
     base_config: &AppearanceConfig,
     dominant: Option<Rgba>,
 ) -> Rect {
-    let accent = preview_for_theme(base_config, scheme, dominant).accent;
-    let light = preview_for_theme(base_config, ColorScheme::Light, dominant);
-    let dark = preview_for_theme(base_config, ColorScheme::Dark, dominant);
-
-    let mut preview = gradient_background(accent);
-    match scheme {
-        ColorScheme::Auto => {
-            preview = preview
-                .child(preview_panel(&light, Alignment::Start))
-                .child(preview_panel(&dark, Alignment::End))
-                .child(preview_menu(&light, accent))
-                .child(preview_app(&dark));
-        }
-        ColorScheme::Light => {
-            preview = preview
-                .child(preview_panel(&light, Alignment::Start))
-                .child(preview_menu(&light, accent))
-                .child(preview_app(&light));
-        }
-        ColorScheme::Dark | ColorScheme::DarkTint => {
-            preview = preview
-                .child(preview_panel(&dark, Alignment::Start))
-                .child(preview_menu(&dark, accent))
-                .child(preview_app(&dark));
-        }
-    }
-    preview
+    let theme = preview_for_theme(base_config, scheme, dominant);
+    gradient_background(theme.accent)
+        .child(preview_panel(&theme))
+        .child(preview_menu(&theme, theme.accent))
+        .child(preview_app(&theme))
 }
 
 fn gradient_background(accent: Rgba) -> Rect {
@@ -68,12 +46,10 @@ fn gradient_background(accent: Rgba) -> Rect {
         .overflow(Overflow::Clip)
 }
 
-fn preview_panel(resolved: &Resolved, align: Alignment) -> Rect {
-    let width = SETTINGS.preview_panel_w as f32;
-    let left = if align == Alignment::End { width } else { 0.0 };
+fn preview_panel(resolved: &Resolved) -> Rect {
     rect()
-        .position(Position::new_absolute().top(0.0).left(left))
-        .width(Size::px(width))
+        .position(Position::new_absolute().top(0.0).left(0.0))
+        .width(Size::px(SETTINGS.preview_panel_w as f32))
         .height(Size::px(SETTINGS.preview_panel_h as f32))
         .background(rgba(resolved.surfaces.window))
 }
@@ -232,7 +208,7 @@ mod tests {
             window_color: WindowColorMode::Neutral,
             ..AppearanceConfig::default()
         };
-        let preview = preview_for_theme(&config, ColorScheme::Auto, None);
+        let preview = preview_for_theme(&config, ColorScheme::Light, None);
         assert_eq!(preview.accent, accent);
         assert!(preview.window_tint.is_none());
     }

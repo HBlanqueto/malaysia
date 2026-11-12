@@ -351,7 +351,7 @@ impl App {
             Err(error) => error!(%error, "cannot read the wallpaper selection"),
         }
         let appearance = ctappearance::load_appearance();
-        self.dark = appearance.color_scheme.resolved().is_dark();
+        self.dark = appearance.color_scheme.is_dark();
         self.reduced_motion = appearance.reduced_motion;
         let now = epoch_seconds();
         let shuffle = (starting && self.selection.shuffle == WallpaperShuffle::Login)

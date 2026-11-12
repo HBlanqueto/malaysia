@@ -90,7 +90,7 @@ Takeaways:
 
 | macOS | Since | Malaysia / barrierkit |
 |---|---|---|
-| `AppleInterfaceStyle = Dark`, `AppleInterfaceStyleSwitchesAutomatically` (Auto) in `NSGlobalDomain` [C] | 10.14, Auto 10.15 | `appearance.color_scheme`: `auto` resolves to `light` (`ctappearance/src/config.rs`); no time-based switch |
+| `AppleInterfaceStyle = Dark`, `AppleInterfaceStyleSwitchesAutomatically` (Auto) in `NSGlobalDomain` [C] | 10.14, Auto 10.15 | `appearance.color_scheme`: `light`, `dark` or `dark_tint`; no Auto |
 | `AppleAccentColor` (integers −1…6) and app accent via `NSAccentColorName` when the user picks multicolor [A] ([HIG Color](https://developer.apple.com/design/human-interface-guidelines/color)) | 10.14, app accent 11 | `appearance.accent_color` as RGB or `null`; no "app picks its own accent" |
 | `NSApp.effectiveAppearance` KVO; appearances `aqua`, `darkAqua`, `vibrant*`, `accessibilityHighContrast*` [A] ([names](https://developer.apple.com/documentation/appkit/nsappearance/name-swift.struct)) | 10.14 | `bk::theme::resolved()` plus the inotify watch; GTK/Qt through the portal |
 | Semantic dynamic colours (`labelColor`, `controlAccentColor`, `windowBackgroundColor`) [A] | 10.14 | `ctdesign` tokens resolved per scheme |
@@ -106,8 +106,7 @@ Takeaways:
 2. Tinting is a separate switch in both: macOS's "Allow wallpaper tinting
    in windows" and Malaysia's `window_color`. `dark_tint` has no macOS
    counterpart; it is a second dark palette.
-3. macOS Auto follows the time of day. In Malaysia `auto` is the same as
-   `light`, which is "auto" in name only.
+3. macOS Auto follows the time of day. Malaysia has no Auto.
 
 ## 4. App ↔ desktop integration (AppKit/SwiftUI against bk)
 
@@ -251,8 +250,9 @@ Kept: `titlebar` (a window without a toolbar has no `ToolbarStyle`) and
 4. **Graceful Log Out, Restart and Shut Down.** Close every toplevel and
    wait (loginwindow waits 45 s) before calling logind. Repo: malaysia
    (`power.rs`, plus a compositor request).
-5. **`auto` that follows the time of day.** Or remove `auto` until it
-   does. Repo: barrierkit (`ctappearance`).
+5. **Auto appearance that follows the time of day.** A new
+   `color_scheme` value and its Settings card. Repo: barrierkit
+   (`ctappearance`) and malaysia (settings).
 6. **XDG autostart.** Pull in `xdg-desktop-autostart.target` from
    `malaysia-session.target`, and list the entries in Settings (Ventura's
    Login Items). Repo: malaysia (`nix/malaysia.nix`, settings).

@@ -8,9 +8,9 @@ use bk::styles::{Axis, RadioGroupStyle};
 use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
-    AppearanceConfig, BlurBehind, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick,
-    ScrollBars, TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle,
-    WindowColorMode, lights_for, load_appearance, palette,
+    AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick, ScrollBars,
+    TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle, WindowColorMode,
+    lights_for, load_appearance, palette,
 };
 use ctdesign::{
     ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, MENU_POPOVER, POINTER_SIZES, Rgba,
@@ -24,7 +24,7 @@ use crate::collection::collection_sheet;
 use crate::crop::crop_sheet;
 use crate::desktop::desktop_pane;
 use crate::energy::energy_pane;
-use crate::freedesktop::{Themes, confirm, freedesktop, own_themes};
+use crate::freedesktop::{Themes, confirm, freedesktop};
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
 use crate::previews::theme_preview;
@@ -39,7 +39,7 @@ use malaysia_services::bus::use_service;
 use malaysia_services::networkmanager::NetworkManager;
 use malaysia_services::upower::{PowerProfiles, UPower};
 
-const SCHEMES: [ColorScheme; 3] = [ColorScheme::Auto, ColorScheme::Light, ColorScheme::Dark];
+const SCHEMES: [ColorScheme; 2] = [ColorScheme::Light, ColorScheme::Dark];
 const WINDOW_COLORS: [WindowColorMode; 2] = [WindowColorMode::Neutral, WindowColorMode::Accent];
 const STRENGTHS: [TintStrength; 4] = [
     TintStrength::Subtle,
@@ -59,11 +59,6 @@ const COLOR_FILTERS: [ColorFilter; 4] = [
     ColorFilter::RedGreen,
     ColorFilter::GreenRed,
     ColorFilter::BlueYellow,
-];
-const BLUR_BEHIND: [BlurBehind; 3] = [
-    BlurBehind::Mixed,
-    BlurBehind::Wallpaper,
-    BlurBehind::Windows,
 ];
 pub(crate) const ACCESSIBILITY_TINT: Rgba = ACCENT_SWATCHES[0].1;
 const COLOR_FILTER_PENCILS: &[u8] = include_bytes!("../assets/color-filters.svg");
@@ -146,7 +141,7 @@ pub fn settings_window(
                     tr!("accessibility"),
                     Symbol::Accessibility,
                     ACCESSIBILITY_TINT,
-                    accessibility(config),
+                    accessibility(),
                 )
                 .page(
                     Pane::new(
@@ -246,13 +241,7 @@ fn appearance(
 ) -> Form {
     let level = tint_level(config);
     let accent_source = config.window_color == WindowColorMode::Accent;
-    let automatic_accent = config.accent_color.is_none();
     let accent = Row::new(tr!("accent-color"))
-        .detail(if automatic_accent {
-            tr!("accent-automatic-help")
-        } else {
-            tr!("accent-fixed-help")
-        })
         .keywords(tr_list!("accent-color-keywords"))
         .control(
             ColorWell::new(tr!("accent-color"), &ACCENT_SWATCHES)
@@ -265,14 +254,6 @@ fn appearance(
                         .map(|color| [color.r, color.g, color.b]);
                 })),
         );
-    let source_help = match (accent_source, automatic_accent) {
-        (true, true) => tr!("tint-source-accent-automatic-help"),
-        (true, false) => tr!("tint-source-accent-help"),
-        (false, _) if resolved.scheme.is_dark() || config.wallpaper_tinting_in_light => {
-            tr!("tint-source-wallpaper-help")
-        }
-        (false, _) => tr!("tint-source-wallpaper-light-help"),
-    };
     Form::new()
         .section(
             Section::new()
@@ -288,11 +269,6 @@ fn appearance(
                 .row(accent)
                 .row(
                     Row::new(tr!("tint-windows"))
-                        .detail(if level == 0 {
-                            tr!("tint-windows-off-help")
-                        } else {
-                            tr!("tint-windows-help")
-                        })
                         .keywords(tr_list!("tint-windows-keywords"))
                         .control(
                             Slider::stepped(tr!("tint-windows"), STRENGTHS.len() + 1)
@@ -309,7 +285,6 @@ fn appearance(
                 )
                 .row(
                     Row::new(tr!("tint-source"))
-                        .detail(source_help)
                         .keywords(tr_list!("tint-source-keywords"))
                         .stacked()
                         .control(
@@ -326,7 +301,6 @@ fn appearance(
                 )
                 .row(
                     Row::new(tr!("tint-parts"))
-                        .detail(tr!("tint-parts-help"))
                         .keywords(tr_list!("tint-parts-keywords"))
                         .stacked()
                         .control(tint_parts(config.tint_parts, level == 0, error)),
@@ -399,13 +373,7 @@ fn set_tint_level(config: &mut AppearanceConfig, level: usize) {
 fn traffic_shape_row(config: &AppearanceConfig, error: State<Option<String>>) -> Row {
     let radius = config.traffic_light_shape.radius();
     let round = TrafficLightShape::ROUND.radius();
-    let detail = match radius {
-        0 => tr!("traffic-shape-square"),
-        r if r >= round => tr!("traffic-shape-round"),
-        _ => tr!("traffic-shape-rounded"),
-    };
     Row::new(tr!("traffic-shape"))
-        .detail(detail)
         .keywords(tr_list!("traffic-shape-keywords"))
         .control(
             HStack::new()
@@ -427,15 +395,8 @@ fn shape_end(glyph: Symbol) -> Image {
     Image::system(glyph).color(palette(bk::theme::resolved().scheme).ink_muted)
 }
 
-fn accessibility(config: &AppearanceConfig) -> Form {
+fn accessibility() -> Form {
     Form::new()
-        .section(
-            Section::new().row(
-                Row::new(tr!("accessibility"))
-                    .symbol(Symbol::Accessibility, ACCESSIBILITY_TINT)
-                    .detail(tr!("accessibility-about")),
-            ),
-        )
         .section(
             Section::titled(tr!("vision")).row(
                 Row::page(tr!("display"), "display").symbol(Symbol::Display, ACCESSIBILITY_TINT),
@@ -444,12 +405,7 @@ fn accessibility(config: &AppearanceConfig) -> Form {
         .section(
             Section::titled(tr!("other-environments")).row(
                 Row::page(tr!("freedesktop"), "freedesktop")
-                    .symbol(Symbol::SlidersVertical, ACCESSIBILITY_TINT)
-                    .detail(if own_themes(config) {
-                        tr!("freedesktop-custom")
-                    } else {
-                        tr!("freedesktop-synced")
-                    }),
+                    .symbol(Symbol::SlidersVertical, ACCESSIBILITY_TINT),
             ),
         )
 }
@@ -498,7 +454,6 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                 })
                 .row(
                     Row::new(tr!("wallpaper-tinting-in-light"))
-                        .detail(tr!("wallpaper-tinting-in-light-help"))
                         .keywords(tr_list!("wallpaper-tinting-in-light-keywords"))
                         .control(
                             Switch::new(tr!("wallpaper-tinting-in-light"))
@@ -543,10 +498,9 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                     )),
                 ),
         )
-        .section(blur(config, error))
         .section(
             Section::titled(tr!("text"))
-                .row(Row::page(tr!("text-size"), "text-size").detail(tr!("text-size-help")))
+                .row(Row::page(tr!("text-size"), "text-size"))
                 .row(
                     Row::new(tr!("menu-bar-size")).control(
                         RadioGroup::new(tr!("menu-bar-size"))
@@ -565,16 +519,13 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
         )
         .section(
             Section::titled(tr!("pointer"))
-                .row(
-                    switch(
-                        tr!("shake-to-locate"),
-                        config.shake_to_locate,
-                        |config, on| {
-                            config.shake_to_locate = on;
-                        },
-                    )
-                    .detail(tr!("shake-to-locate-help")),
-                )
+                .row(switch(
+                    tr!("shake-to-locate"),
+                    config.shake_to_locate,
+                    |config, on| {
+                        config.shake_to_locate = on;
+                    },
+                ))
                 .row(
                     Row::new(tr!("pointer-size")).control(option_column(
                         Slider::stepped(tr!("pointer-size"), POINTER_SIZES.len())
@@ -656,13 +607,12 @@ pub(crate) fn toolkit_text_size(
     error: State<Option<String>>,
     toolkit: Toolkit,
     title: &'static str,
-    help: &'static str,
 ) -> Row {
     let mut sizes = config.text_sizes;
     let selected = sizes
         .get_mut(toolkit)
         .map_or(0, |size| 1 + nearest(&TEXT_SIZES, size));
-    Row::new(title).detail(help).control(
+    Row::new(title).control(
         text_size_names()
             .iter()
             .fold(PopUpButton::new(title), |popup, name| popup.item(name))
@@ -680,28 +630,25 @@ fn text_size(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
         error,
         Toolkit::BarrierKit,
         tr!("text-size-barrierkit"),
-        tr!("text-size-barrierkit-help"),
     ));
     Form::new()
         .section(
             Section::new().row(
-                Row::new(tr!("text-size-preferred"))
-                    .detail(tr!("text-size-preferred-help"))
-                    .control(option_column(
-                        Slider::stepped(tr!("text-size-preferred"), TEXT_SIZES.len())
-                            .value(nearest(&TEXT_SIZES, config.text_size))
-                            .labels(tr_list!(
-                                "text-size-default",
-                                "step-blank",
-                                "step-blank",
-                                "step-blank",
-                                "step-blank",
-                                "text-size-largest"
-                            ))
-                            .on_change(edit(error, |config, index: usize| {
-                                config.text_size = TEXT_SIZES[index];
-                            })),
-                    )),
+                Row::new(tr!("text-size-preferred")).control(option_column(
+                    Slider::stepped(tr!("text-size-preferred"), TEXT_SIZES.len())
+                        .value(nearest(&TEXT_SIZES, config.text_size))
+                        .labels(tr_list!(
+                            "text-size-default",
+                            "step-blank",
+                            "step-blank",
+                            "step-blank",
+                            "step-blank",
+                            "text-size-largest"
+                        ))
+                        .on_change(edit(error, |config, index: usize| {
+                            config.text_size = TEXT_SIZES[index];
+                        })),
+                )),
             ),
         )
         .section(apps)
@@ -718,59 +665,6 @@ fn text_size_names() -> &'static [&'static str] {
             )
             .collect()
     })
-}
-
-const BLUR_BEHIND_NAMES: [Text; 3] = [
-    || tr!("blur-behind-mixed"),
-    || tr!("blur-behind-wallpaper"),
-    || tr!("blur-behind-windows"),
-];
-
-const BLUR_BEHIND_HELP: [Text; 3] = [
-    || tr!("blur-behind-mixed-help"),
-    || tr!("blur-behind-wallpaper-help"),
-    || tr!("blur-behind-windows-help"),
-];
-
-fn blur(config: &AppearanceConfig, error: State<Option<String>>) -> Section {
-    let reduced = config.transparency_reduced();
-    let selected = position(&BLUR_BEHIND, config.blur_behind);
-    let help = |text: &'static str| {
-        if reduced {
-            tr!("blur-reduced-help")
-        } else {
-            text
-        }
-    };
-    Section::titled(tr!("blur"))
-        .row(
-            Row::new(tr!("blur-behind"))
-                .detail(help(BLUR_BEHIND_HELP[selected]()))
-                .control(
-                    BLUR_BEHIND_NAMES
-                        .iter()
-                        .fold(PopUpButton::new(tr!("blur-behind")), |popup, name| {
-                            popup.item(name())
-                        })
-                        .selected(selected)
-                        .disabled(reduced)
-                        .on_change(edit(error, |config, index: usize| {
-                            config.blur_behind = BLUR_BEHIND[index];
-                        })),
-                ),
-        )
-        .row(
-            Row::new(tr!("blur-all-windows"))
-                .detail(help(tr!("blur-all-windows-help")))
-                .control(
-                    Switch::new(tr!("blur-all-windows"))
-                        .on(config.blur_all_windows)
-                        .disabled(reduced)
-                        .on_toggle(edit(error, |config, on: bool| {
-                            config.blur_all_windows = on;
-                        })),
-                ),
-        )
 }
 
 const COLOR_FILTER_NAMES: [Text; 4] = [
@@ -814,10 +708,10 @@ fn scheme_cards(
     error: State<Option<String>>,
 ) -> ChoiceCards {
     let selected = match config.color_scheme {
-        ColorScheme::DarkTint => 2,
+        ColorScheme::DarkTint => 1,
         scheme => position(&SCHEMES, scheme),
     };
-    [tr!("scheme-auto"), tr!("scheme-light"), tr!("scheme-dark")]
+    [tr!("scheme-light"), tr!("scheme-dark")]
         .into_iter()
         .zip(SCHEMES)
         .fold(

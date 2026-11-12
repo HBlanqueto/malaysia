@@ -23,7 +23,7 @@ const PREVIEWS: [ShowPreviews; 3] = [
     ShowPreviews::WhenUnlocked,
     ShowPreviews::Never,
 ];
-const GROUPINGS: [Grouping; 3] = [Grouping::Automatic, Grouping::ByApp, Grouping::Off];
+const GROUPINGS: [Grouping; 2] = [Grouping::Automatic, Grouping::Off];
 const STYLES: [AlertStyle; 2] = [AlertStyle::Temporary, AlertStyle::Persistent];
 
 #[derive(Default, Deserialize)]
@@ -189,35 +189,29 @@ fn app_form(id: &'static str, app: &AppNotifications, error: State<Option<String
                     |app, on| app.lock_screen = on,
                 ))
                 .row(
-                    Row::new(tr!("notifications-style"))
-                        .detail(tr!("notifications-style-help"))
-                        .control(
-                            SegmentedControl::new(tr!("notifications-style"))
-                                .segment(tr!("notifications-temporary"))
-                                .segment(tr!("notifications-persistent"))
-                                .selected(position(&STYLES, app.style))
-                                .on_change(edit(error, move |config, index: usize| {
-                                    config.app_mut(id).style = STYLES[index];
-                                })),
-                        ),
+                    Row::new(tr!("notifications-style")).control(
+                        SegmentedControl::new(tr!("notifications-style"))
+                            .segment(tr!("notifications-temporary"))
+                            .segment(tr!("notifications-persistent"))
+                            .selected(position(&STYLES, app.style))
+                            .on_change(edit(error, move |config, index: usize| {
+                                config.app_mut(id).style = STYLES[index];
+                            })),
+                    ),
                 ),
         )
         .section(
             Section::new()
-                .row(
-                    switch(tr!("notifications-critical"), app.critical, |app, on| {
-                        app.critical = on
-                    })
-                    .detail(tr!("notifications-critical-help")),
-                )
-                .row(
-                    switch(
-                        tr!("notifications-time-sensitive"),
-                        app.time_sensitive,
-                        |app, on| app.time_sensitive = on,
-                    )
-                    .detail(tr!("notifications-time-sensitive-help")),
-                )
+                .row(switch(
+                    tr!("notifications-critical"),
+                    app.critical,
+                    |app, on| app.critical = on,
+                ))
+                .row(switch(
+                    tr!("notifications-time-sensitive"),
+                    app.time_sensitive,
+                    |app, on| app.time_sensitive = on,
+                ))
                 .row(switch(tr!("notifications-sound"), app.sound, |app, on| {
                     app.sound = on
                 }))
@@ -226,7 +220,7 @@ fn app_form(id: &'static str, app: &AppNotifications, error: State<Option<String
                 }))
                 .row(
                     Row::new(tr!("notifications-grouping")).control(
-                        tr_list!("grouping-automatic", "grouping-by-app", "grouping-off")
+                        tr_list!("grouping-automatic", "grouping-off")
                             .iter()
                             .fold(
                                 PopUpButton::new(tr!("notifications-grouping")),
@@ -270,9 +264,7 @@ fn focus_pane(
         tr!("focus"),
         Symbol::Moon,
         FOCUS_TINT,
-        Form::new()
-            .section(Section::new().row(Row::new(tr!("focus")).detail(tr!("focus-about"))))
-            .section(list),
+        Form::new().section(list),
     );
     Focus::ALL.into_iter().fold(pane, |pane, focus| {
         let (id, title, symbol) = focus_parts(focus);
@@ -317,23 +309,15 @@ fn focus_form(
             },
         )
     };
-    Form::new()
-        .section(
-            Section::new()
-                .row(Row::new(tr!("focus-allowed-apps")).detail(tr!("focus-allowed-apps-help"))),
-        )
-        .section(allowed)
-        .section(
-            Section::new().row(
-                Row::new(tr!("focus-time-sensitive"))
-                    .detail(tr!("focus-time-sensitive-help"))
-                    .control(
-                        Switch::new(tr!("focus-time-sensitive"))
-                            .on(settings.time_sensitive)
-                            .on_toggle(edit(error, move |config, on: bool| {
-                                config.focus_mut(focus).time_sensitive = on;
-                            })),
-                    ),
+    Form::new().section(allowed).section(
+        Section::new().row(
+            Row::new(tr!("focus-time-sensitive")).control(
+                Switch::new(tr!("focus-time-sensitive"))
+                    .on(settings.time_sensitive)
+                    .on_toggle(edit(error, move |config, on: bool| {
+                        config.focus_mut(focus).time_sensitive = on;
+                    })),
             ),
-        )
+        ),
+    )
 }
