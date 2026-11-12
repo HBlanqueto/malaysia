@@ -1,5 +1,4 @@
 mod app_scope;
-mod clock_face;
 mod desktop;
 mod dialogs;
 mod dock;
