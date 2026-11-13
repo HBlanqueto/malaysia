@@ -63,7 +63,7 @@ mod tests {
     fn the_line_is_fainter_than_the_palette_over_black_and_never_stronger_over_white() {
         assert_eq!(strength_for(0.0), DOCK_RIM_DARK);
         assert_eq!(strength_for(1.0), DOCK_RIM_BRIGHT);
-        const { assert!(DOCK_RIM_DARK < 1.0 && DOCK_RIM_BRIGHT > 1.0) };
+        const { assert!(DOCK_RIM_DARK < 1.0 && DOCK_RIM_BRIGHT <= 1.0) };
     }
 
     #[test]

@@ -1070,19 +1070,24 @@ mod tests {
             b: 0.2,
             a: 1.0,
         };
-        let factor = WINDOW_TINT_ACCENT[0];
+        let factor = WINDOW_TINT_ACCENT[0] * ctdesign::ACCENT_CHROMA_GAIN;
+        let tint = ctappearance::backdrop::take_chroma;
         assert_eq!(theme.palette.accent, accent);
         assert_eq!(
             theme.palette.titlebar_bg.focused,
-            BG_WINDOW_LIGHT.mix(accent, factor)
+            tint(BG_WINDOW_LIGHT, accent, factor)
         );
         assert_eq!(
             theme.palette.titlebar_bg.unfocused,
-            LIGHT.titlebar_bg.unfocused.mix(accent, factor)
+            tint(LIGHT.titlebar_bg.unfocused, accent, factor)
         );
         assert_eq!(
             theme.palette.hairline,
-            LIGHT.line.mix(accent, factor * ctdesign::LAYER_FACTOR_LINE)
+            tint(
+                LIGHT.line,
+                accent,
+                WINDOW_TINT_ACCENT[0] * ctdesign::LAYER_FACTOR_LINE * ctdesign::ACCENT_CHROMA_GAIN
+            )
         );
         assert_eq!(
             theme.lights[0],
