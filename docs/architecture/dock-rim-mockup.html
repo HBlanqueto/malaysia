@@ -108,7 +108,7 @@
       <div class="readout" id="readout" aria-live="polite"></div>
     </div>
     <div class="panel">
-      <h2>Opacidad de la línea a lo largo del Dock</h2>
+      <h2 id="chart-title">Opacidad de la línea a lo largo del Dock</h2>
       <canvas id="chart" width="1280" height="420" role="img" aria-label="Opacidad de la línea según la posición horizontal"></canvas>
       <div class="legend">
         <span><i></i>Arriba</span><span><i class="dash"></i>Abajo</span><span><i class="dot"></i>Lados</span><span><i class="today"></i>Hoy (arriba)</span>
@@ -122,7 +122,7 @@
       <li><b>Por tramos.</b> La claridad del fondo se mide cada 10 px bajo la barra y la línea sigue esa medida. Apagado, usa una sola media para todo el Dock, como hoy.</li>
       <li><b>Base por borde.</b> Arriba, abajo y lados tienen su propia curva medida en las capturas. Apagado, usa 26 % arriba y abajo y 10 % en los lados, por la fuerza global.</li>
       <li><b>Tono del fondo.</b> La línea es el color del fondo aclarado, no blanco puro. Apagado, es blanca.</li>
-      <li><b>Referencia Apple.</b> Reproduce la captura de alta resolución: la línea suma luz al fondo (no lo tapa con blanco), así que conserva su tono sin un paso aparte. Es más fuerte arriba que en los lados y abajo.</li>
+      <li><b>Referencia Apple.</b> La línea mezcla casi a partes iguales el fondo de fuera y el vidrio de dentro, y suma luz. Por eso toma el color del fondo, se apaga donde fuera es oscuro y se enciende donde es claro. Es más fuerte arriba que en los lados y abajo.</li>
       <li>El blur de 0,7 px de la línea está siempre activo. Los iconos son marcadores; el vidrio es el desenfoque del propio fondo más un velo oscuro.</li>
     </ul>
   </section>
@@ -138,6 +138,7 @@
           <tr><td>Aurora oscura</td><td>Lados</td><td class="num">13 % a 17 %</td><td>Más fuertes que arriba con el mismo fondo.</td></tr>
           <tr><td>Azul plano</td><td>Superior / inferior</td><td class="num">≈ 29 % / ≈ 39 %</td><td>La fuerza crece con la claridad del fondo.</td></tr>
           <tr><td>Azul plano</td><td>Color</td><td class="num">+34 +40 +8 (RGB)</td><td>Suma luz y el canal azul se satura: no es un velo blanco.</td></tr>
+          <tr><td>Aurora oscura</td><td>Superior, cada 4 px</td><td class="num">+24 ± 12 niveles</td><td>Ajuste: línea = 0,37·dentro + 0,43·fuera + 33,5 (r = 0,57). Siempre más clara que el interior, pero entre 0 y +45: donde fuera es oscuro apenas se nota.</td></tr>
           <tr><td>Alta resolución (Apple)</td><td>Superior</td><td class="num">+64 a +39 por canal</td><td>Casi uniforme en 1 000 px de borde: 25 % de luz sumada sobre el azul oscuro, 16 % sobre el claro. Perfil de 3 px: núcleo de 1 px y hombros al 50 %.</td></tr>
           <tr><td>Alta resolución (Apple)</td><td>Inferior</td><td class="num">+48 a +27 por canal</td><td>Menos que arriba, también uniforme.</td></tr>
           <tr><td>Alta resolución (Apple)</td><td>Lado derecho</td><td class="num">+37 por canal</td><td>Se apaga hacia la esquina de abajo (un 40 % menos).</td></tr>
@@ -159,7 +160,7 @@
   BAR.x = (W - BAR.w) / 2; BAR.y = H - BAR.bottom - BAR.h;
   const SEG = 58, SEGW = BAR.w / SEG;
   const state = { wall: "aurora", local: true, edge: true, tone: true, apple: false };
-  let wp, wpData, probe = null;
+  let wp, wpData, wpFull, probe = null, tint = null;
 
   // ---------- fondos ----------
   function paintWall(kind) {
@@ -180,6 +181,7 @@
   function setWall(kind) {
     state.wall = kind; wp = paintWall(kind);
     wpData = wp.getContext("2d").getImageData(Math.floor(BAR.x), Math.floor(BAR.y), Math.ceil(BAR.w), BAR.h);
+    wpFull = wp.getContext("2d").getImageData(0, 0, W, H);
     render();
   }
 
@@ -201,6 +203,26 @@
   // Modelo de la propuesta: ajustado a las medidas de las capturas (tabla de abajo).
   const proposal = l => ({ top: clamp(.62 * l, 0, .6), bottom: clamp(.12 + .6 * l, 0, .7), sides: clamp(.09 + .4 * l, 0, .5) });
   // Referencia de alta resolución (captura de Apple): luz que se suma, algo más fuerte sobre fondo oscuro; arriba > lados > abajo.
+  // Referencia Apple (captura de la aurora, ajuste por mínimos cuadrados): línea = 0,37 dentro + 0,43 fuera + 33,5 niveles, con r = 0,57.
+  // Dentro y fuera pesan casi igual y se suma luz: sobre fuera oscuro la línea sube poco sobre el vidrio, sobre fuera claro sube mucho.
+  const BOOST = { top: 34, sides: 27, bottom: 22 };
+  const px = (d, w, x, y) => { const k = (Math.floor(y) * w + Math.floor(x)) * 4; return [d[k], d[k + 1], d[k + 2]]; };
+  const mean = (a, b) => a.map((v, i) => .4 * (v + b[i]));
+  const lift = (c, b) => c.map(v => clamp(v + b, 0, 255));
+  const lvl = c => lum(...c) * 255;
+  function smooth(arr, r) { return arr.map((_, i) => { let a = [0, 0, 0], n = 0; for (let j = Math.max(0, i - r); j <= Math.min(arr.length - 1, i + r); j++) { a = a.map((v, k) => v + arr[j][k]); n++; } return a.map(v => v / n); }); }
+  function appleRim(ins) {
+    const n = Math.floor(BAR.w), top = [], bot = [], inTop = [], inBot = [];
+    for (let i = 0; i < n; i++) {
+      const ic = clamp(i, BAR.r, n - 1 - BAR.r), x = BAR.x + ic, oT = px(wpFull.data, W, x, BAR.y - 5), iT = px(ins.data, ins.width, ic * S, 6 * S);
+      const oB = px(wpFull.data, W, x, BAR.y + BAR.h + 5), iB = px(ins.data, ins.width, ic * S, (BAR.h - 7) * S);
+      top.push(mean(oT, iT)); bot.push(mean(oB, iB)); inTop.push(iT); inBot.push(iB);
+    }
+    const sideAt = (xo, xi) => { let o = [0, 0, 0], q = [0, 0, 0], c = 0; for (let y = BAR.r; y < BAR.h - BAR.r; y += 4) { o = o.map((v, k) => v + px(wpFull.data, W, xo, BAR.y + y)[k]); q = q.map((v, k) => v + px(ins.data, ins.width, xi * S, y * S)[k]); c++; } return { rim: lift(mean(o.map(v => v / c), q.map(v => v / c)), BOOST.sides), inside: q.map(v => v / c) }; };
+    const left = sideAt(BAR.x - 5, 6), right = sideAt(BAR.x + BAR.w + 5, BAR.w - 7);
+    const T = smooth(top, 3).map(c => lift(c, BOOST.top)), B = smooth(bot, 3).map(c => lift(c, BOOST.bottom));
+    return { n, top: T, bot: B, inTop, inBot, left, right };
+  }
   const apple = l => ({ top: clamp(.27 - .25 * l, .1, .3), bottom: clamp(.21 - .22 * l, .08, .25), sides: clamp(.17 - .05 * l, .1, .2) });
   const today = l => { const k = .6 + .4 * l; return { top: .26 * k, bottom: .26 * k, sides: .1 * k }; };
   const globalLum = segs => lum(...[0, 1, 2].map(ch => segs.reduce((a, s) => a + s[ch], 0) / segs.length));
@@ -218,11 +240,17 @@
   function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   function interp(arr, x) { const t = clamp((x - BAR.x) / SEGW - .5, 0, SEG - 1), i = Math.floor(t), f = t - i, j = Math.min(SEG - 1, i + 1); return arr[i] + (arr[j] - arr[i]) * f; }
 
-  function rimLayer(segs, glob) {
+  function rimLayer(segs, glob, rim) {
     const T = document.createElement("canvas"); T.width = W * S; T.height = H * S; const t = T.getContext("2d"); t.scale(S, S);
     const al = segs.map(s => alphasAt(s, glob)), col = segs.map(rimColor);
     const curve = BAR.r / BAR.h;
     for (let x = Math.floor(BAR.x); x < Math.ceil(BAR.x + BAR.w); x++) {
+      if (rim) {
+        const i = clamp(x - Math.floor(BAR.x), 0, rim.n - 1), side = i < rim.n / 2 ? rim.left.rim : rim.right.rim, c = v => `rgb(${v.map(Math.round).join(",")})`;
+        const g = t.createLinearGradient(0, BAR.y, 0, BAR.y + BAR.h);
+        g.addColorStop(0, c(rim.top[i])); g.addColorStop(curve, c(side)); g.addColorStop(1 - curve, c(side)); g.addColorStop(1, c(rim.bot[i]));
+        t.fillStyle = g; t.fillRect(x, BAR.y, 1, BAR.h); continue;
+      }
       const top = interp(al.map(a => a.top), x), bot = interp(al.map(a => a.bottom), x), sid = interp(al.map(a => a.sides), x);
       const rgb = [0, 1, 2].map(ch => Math.round(interp(col.map(c => c[ch]), x)));
       const g = t.createLinearGradient(0, BAR.y, 0, BAR.y + BAR.h), c = a => `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a.toFixed(3)})`;
@@ -242,23 +270,29 @@
     mc.save(); rr(mc, BAR.x, BAR.y, BAR.w, BAR.h, BAR.r); mc.clip();
     mc.filter = "blur(12px)"; mc.drawImage(wp, 0, 0); mc.filter = "none";
     mc.fillStyle = "rgba(26,26,30,.34)"; mc.fillRect(BAR.x, BAR.y, BAR.w, BAR.h); mc.restore();
-    const { T, al } = rimLayer(segs, glob);
-    mc.save(); mc.filter = "blur(.7px)"; if (state.apple) mc.globalCompositeOperation = "lighter"; mc.setTransform(1, 0, 0, 1, 0, 0); mc.drawImage(T, 0, 0); mc.restore();
+    const rim = state.apple ? appleRim(mc.getImageData(Math.floor(BAR.x * S), Math.floor(BAR.y * S), Math.floor(BAR.w * S), BAR.h * S)) : null;
+    const { T, al } = rimLayer(segs, glob, rim); tint = rim;
+    mc.save(); mc.filter = "blur(.7px)"; mc.setTransform(1, 0, 0, 1, 0, 0); mc.drawImage(T, 0, 0); mc.restore();
     mc.setTransform(S, 0, 0, S, 0, 0);
     const tile = 52, gap = 14, n = ICONS.length, total = n * tile + (n - 1) * gap, x0 = BAR.x + (BAR.w - total) / 2, y0 = BAR.y + (BAR.h - tile) / 2;
     ICONS.forEach((c, i) => { const x = x0 + i * (tile + gap); mc.fillStyle = c; rr(mc, x, y0, tile, tile, 12); mc.fill(); mc.fillStyle = "rgba(255,255,255,.22)"; rr(mc, x, y0, tile, tile * .5, 12); mc.fill(); });
-    drawChart(segs, glob, al);
-    drawLoupe(segs, glob, al);
+    drawChart(segs, glob, al, rim);
+    drawLoupe(segs, glob, al, rim);
   }
 
   // ---------- lupa y lectura ----------
-  function drawLoupe(segs, glob, al) {
+  function drawLoupe(segs, glob, al, rim) {
     const p = probe || { x: BAR.x + BAR.w * .62, y: BAR.y + 1 }, zoom = 6, span = 240 / zoom;
     lc.imageSmoothingEnabled = false; lc.fillStyle = "#000"; lc.fillRect(0, 0, 240, 240);
     lc.drawImage(main, (p.x - span / 2) * S, (p.y - span / 2) * S, span * S, span * S, 0, 0, 240, 240);
     lc.strokeStyle = "rgba(255,255,255,.55)"; lc.lineWidth = 1; lc.strokeRect(116, 116, 8, 8);
     const i = clamp(Math.floor((p.x - BAR.x) / SEGW), 0, SEG - 1), a = al[i], now = state.apple ? "referencia Apple, luz sumada" : state.edge ? "propuesta" : "hoy";
     const t = lum(...segs[i]), pct = v => `<b>${Math.round(v * 100)} %</b>`;
+    if (rim) {
+      const c = clamp(Math.floor(p.x - BAR.x), 0, rim.n - 1), up = p.y < BAR.y + BAR.h / 2, d = Math.round(lvl(up ? rim.top[c] : rim.bot[c]) - lvl(up ? rim.inTop[c] : rim.inBot[c]));
+      $("readout").innerHTML = `borde ${up ? "superior" : "inferior"}, columna ${c + 1}<br>la línea queda <b>${d >= 0 ? "+" + d : d}</b> niveles sobre el interior<br>${d < 0 ? "más oscura que el vidrio de dentro" : "más clara que el vidrio de dentro"}<br>0,4 fuera + 0,4 dentro + luz · referencia Apple`;
+      return;
+    }
     $("readout").innerHTML = `tramo ${i + 1} de ${SEG}, fondo ${Math.round(t * 100)} %<br>arriba ${pct(a.top)} · abajo ${pct(a.bottom)}<br>lados ${pct(a.sides)}<br>${state.local ? "medida local" : "media global " + Math.round(glob * 100) + " %"} · ${now}${state.apple ? "" : state.tone ? " · tono del fondo" : " · blanca"}`;
   }
   main.addEventListener("pointermove", e => { const r = main.getBoundingClientRect(); probe = { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; render(); });
@@ -266,15 +300,22 @@
 
   // ---------- curva ----------
   function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
-  function drawChart(segs, glob, al) {
+  function drawChart(segs, glob, al, rim) {
     const w = 640, h = 210, L = 38, B = 22, T = 8, R = 8, k = 2;
+    $("chart-title").textContent = rim ? "Luz de la línea sobre el vidrio de dentro" : "Opacidad de la línea a lo largo del Dock";
     cc.setTransform(k, 0, 0, k, 0, 0); cc.clearRect(0, 0, w, h);
     const fg = cssVar("--muted"), grid = cssVar("--line"), acc = cssVar("--accent"), td = cssVar("--today");
-    const X = i => L + (w - L - R) * (i + .5) / SEG, Y = v => T + (h - T - B) * (1 - v / .6);
+    const lo = rim ? -30 : 0, hi = rim ? 60 : .6, X = i => L + (w - L - R) * (i + .5) / SEG, Y = v => T + (h - T - B) * (1 - (v - lo) / (hi - lo));
     cc.font = "11px system-ui, sans-serif"; cc.fillStyle = fg; cc.strokeStyle = grid; cc.lineWidth = 1; cc.textAlign = "right"; cc.textBaseline = "middle";
-    [0, .2, .4, .6].forEach(v => { cc.beginPath(); cc.moveTo(L, Y(v)); cc.lineTo(w - R, Y(v)); cc.stroke(); cc.fillText(Math.round(v * 100) + " %", L - 6, Y(v)); });
+    (rim ? [-30, 0, 30, 60] : [0, .2, .4, .6]).forEach(v => { cc.beginPath(); cc.strokeStyle = rim && v === 0 ? fg : grid; cc.moveTo(L, Y(v)); cc.lineTo(w - R, Y(v)); cc.stroke(); cc.fillText(rim ? (v > 0 ? "+" : "") + v : Math.round(v * 100) + " %", L - 6, Y(v)); });
     cc.textAlign = "center"; cc.textBaseline = "top"; cc.fillText("izquierda", L + 26, h - B + 6); cc.fillText("derecha", w - R - 24, h - B + 6);
     const line = (vals, color, dash, wd) => { cc.beginPath(); cc.setLineDash(dash); cc.strokeStyle = color; cc.lineWidth = wd; vals.forEach((v, i) => i ? cc.lineTo(X(i), Y(v)) : cc.moveTo(X(i), Y(v))); cc.stroke(); cc.setLineDash([]); };
+    if (rim) {
+      const at = i => clamp(Math.floor((i + .5) * rim.n / SEG), 0, rim.n - 1), delta = (a, b) => Array.from({ length: SEG }, (_, i) => lvl(a[at(i)]) - lvl(b[at(i)]));
+      line(delta(rim.top, rim.inTop), acc, [], 2.2); line(delta(rim.bot, rim.inBot), acc, [6, 4], 2);
+      cc.fillStyle = fg; cc.textAlign = "left"; cc.fillText("niveles de luminancia de la línea sobre el interior; debajo de 0 es más oscura", L + 6, T + 4);
+      return;
+    }
     const hoy = segs.map(s => today(lum(...s)).top);
     line(hoy, td, [], 1.5);
     line(al.map(a => a.top), acc, [], 2.2); line(al.map(a => a.bottom), acc, [6, 4], 2); line(al.map(a => a.sides), acc, [2, 3], 2);
