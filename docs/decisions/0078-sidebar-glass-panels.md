@@ -1,6 +1,6 @@
 # 0078 — Glass panels for BarrierKit sidebars
 
-Status: accepted (2026-11-13). Phases 1 to 5 and the fade between states are written but were not built or run in a session. The calibration is pending; the order is in «Plan».
+Status: accepted (2026-11-13). Phases 1 to 5 and the fade between states are written, built and unit-tested (2026-11-13), but not yet run on a screen: the container has no EGL. The calibration is pending; the order is in «Plan».
 
 ## Goal and scope
 
