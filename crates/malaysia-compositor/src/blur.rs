@@ -373,7 +373,11 @@ impl Blur {
             &mut self.glass,
             programs,
             renderer,
-            (output_size, scale, ctdesign::GLASS.blur_passes),
+            (
+                output_size,
+                scale,
+                ctappearance::glass_blur_passes(state.config.appearance.color_scheme),
+            ),
             &elements,
         )
     }

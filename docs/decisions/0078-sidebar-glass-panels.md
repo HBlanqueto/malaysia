@@ -92,16 +92,30 @@ and the bottom.
       empty array removes the panels. It lasts for the lifetime of the surface.
    5. The client leaves the panels transparent. The compositor fills them.
 3. **The material of an active panel** is, for each point p of the panel:
-   `take_chroma(base, B(p), chroma)`, where B is the blurred wallpaper. The
-   windows below do not show through: a macOS capture (2026-11-13) shows a window
-   with a reddish titlebar behind a sidebar and the sidebar does not change.
+   `take_tint(base, B(p), chroma, lightness, chroma_cap)`, where B is the blurred
+   wallpaper, and along the panel's left, top and bottom edges
+   `take_tint(base, B(q), edge.chroma, edge.lightness, edge.cap)` mixed in with
+   `edge.intensity × exp(-d / edge.span)`, where d is the distance to that edge of
+   the panel and q is the point `edge.offset` outside the window's edge at the
+   nearest point of the edge. There is no ramp on the edge that faces the
+   content. Measured on macOS (2026-11-13): the wallpaper beside the window varies
+   by 0.135 in lightness along a sidebar, while the dark sidebar's center varies
+   by 0.010; the edge's chroma follows the wallpaper just outside the window and
+   decays by about 1/e every 46 px. The windows below do not show through in this
+   version. This is pending: a capture of Books over Apple TV (light, 2026-11-13)
+   shows the fill taking the hue of the window behind it (the yellow-blue axis
+   correlates 0.77 to 0.90, the lightness does not), and the first test, a thin
+   reddish titlebar, was too small to show under a blur this wide.
    `appearance.blur_behind` does not apply to panels.
 4. **The rim** is the inner border of the window frame, around each panel and
    on the same corner, with no shadow and no outer border. It is the line
    `set_cards` already gets (ADR 0068), drawn above the surface. It is a line,
    white in dark and gray in light (a white line does not show on the light
    panel), with `rim_chroma` of the chroma of B(p), the blurred wallpaper behind
-   that stretch, so its tint changes along the contour. It shows nothing of
+   that stretch, so its tint changes along the contour. Its token is white at
+   alpha 0.03 in dark (`rim_chroma` 1.00) and white at alpha 0.80 in light
+   (`rim_chroma` 0.00): a line of 1 px a little lighter than the fill, measured on
+   macOS (L 0.41 over 0.33 in dark, 0.98 over 0.97 in light). It shows nothing of
    what is behind it. With an accent as window color the request's `rim` is
    the accent and the rim takes its chroma from it, not from the wallpaper, so
    border and fill stay uniform. In both cases the chroma saturates towards
@@ -110,8 +124,8 @@ and the bottom.
 
    | State | Panel | Rim |
    |---|---|---|
-   | Toplevel active | Material of step 3 | Rim of step 4 |
-   | Toplevel not active | Flat `solid`, no blur | None. In the island style the rim disappears into the fill |
+   | Toplevel active | Material of step 3 | Rim of step 4 and, in light, the island's shadow |
+   | Toplevel not active | Flat `solid`, no blur, no edge | None. In the island style the rim and the shadow disappear |
    | `reduce_transparency` or `contrast` | Nothing. The kit paints a neutral solid itself | None |
 
    The change between active and not active fades over `ctdesign::DURATION_BASE`.
@@ -128,22 +142,21 @@ and the bottom.
    so the hole never shows the wallpaper sharp.
 7. **Values live in `ctdesign`.** The kit sends `chroma` with the request;
    with an accent as window color `base` is the accent-tinted tone and `chroma`
-   is `accent_share` (0.35) of the usual one. `chroma` is 0.35 in dark and 0.60 in
-   light, `rim_chroma` 0.65. The panel's chroma saturates towards `chroma_cap`
-   (0.04 dark, 0.09 light) and takes `lightness` of what is behind it (0 dark,
-   0.20 light), so the shapes and colors behind the window stay readable. The
-   first values, taken from the measurements above, left the sidebar one flat tone
-   (the owner's report, 2026-11-13, with macOS references where the sidebar follows
-   the wallpaper's reds and blues). The glass blurs what is behind it
-   `blur_passes` (5) times, in its own cache. The rim's color
-   (`sidebar-glass-rim`) and its width are tokens. They are first values, to
-   calibrate in phase 6.
-   Reference for that calibration, read by eye from macOS screenshots over the
-   vivid Sonoma wallpaper (not measured): in dark the sidebar reaches a chroma
-   of about 0.035 to 0.05, blue above and green below; in light it is a clear
-   pastel (mint, pink, cyan), about 0.03 to 0.05, at L about 0.95. The caps
-   and the light `chroma` follow it. A first cap of 0.016, taken from the
-   dark Tahoe capture over a dark wallpaper, would have left it gray.
+   is `accent_share` (0.35) of the usual one. The values are `GLASS` in
+   `components.window.sidebar.glass`, light and dark, chosen by the owner on the
+   mockup (`docs/architecture/sidebar-glass-editor.html`) from the measures
+   above: `chroma` 0.00 and 0.05, `chroma_cap` 0.03 and 0.02, `lightness` 0.00
+   and 0.00, `rim_chroma` 0.00 and 1.00, `blur_passes` 4 and 6, the edge
+   (`intensity` 0.70 and 0.70, `span` 46 and 28 logical pixels, `chroma` 0.45 and
+   0.25, `lightness` 0.00 and 0.10, `cap` 0.04 and 0.18, `offset` 11) and the
+   shadow (`opacity` 0.13 and 0.00, `span` 25, `tint` 1.00, `lightness` 0.20).
+   The mockup also let the owner set the blur of the center and of the edge
+   apart (dark 5 and 6, light 8 and 4); the compositor has one blur per scheme
+   for both, so it takes the edge's, which is where the wallpaper shows. The
+   tones are tokens: `sidebar-glass-base` (`#272727` dark, `#ebedee` light),
+   `sidebar-glass-solid` (`#f2f2f2` light, the same as base in dark) and
+   `sidebar-glass-rim`. The glass blurs what is behind it `glass_blur_passes`
+   times, in its own cache.
 8. **Without this request** (another compositor, or version below 6) the kit
    keeps painting its opaque sidebar. Nothing else changes.
 9. **No new configuration.** `appearance.reduce_transparency`,
@@ -161,7 +174,9 @@ and the bottom.
 5. **Rim.** The window frame's inner border around each panel, tinted with the
    wallpaper's chroma.
 6. **Calibration.** Measure light mode, other wallpapers and the unfocused
-   state on a Mac, and fix the values of step 7.
+   state on a Mac, and fix the values of step 7. The edge, the rim and the
+   shadow were measured on captures of Settings (dark) and Books and Apple TV
+   (light); the dark unfocused state and the dark shadow are still not measured.
 
 Each phase updates [`roadmap.md`](../roadmap.md) and the chapter that
 describes what it changes, in its own commit.

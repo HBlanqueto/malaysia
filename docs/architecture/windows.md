@@ -29,12 +29,14 @@ The compositor recognizes a BarrierKit app because it binds `infinity_window_sty
 
 A BarrierKit window can ask for glass panels with `infinity_window_style_v1.set_glass` (version 6, [ADR 0078](../decisions/0078-sidebar-glass-panels.md)). The kit leaves each panel transparent. While blur is drawn (`appearance.reduce_transparency` and `appearance.contrast` off), the compositor fills it under the surface and, in the island style, draws a rim above it:
 
-1. The panel takes the lightness of `base` and the request's `chroma` (0.40 dark, 0.25 light, less under an accent) of the blurred wallpaper's chroma behind it, saturating towards `chroma_cap`, with the same `take_chroma_capped` as `ctappearance`. The wallpaper is blurred in a cache of its own, wider than the other blurs. It never shows windows.
-2. The rim is a white line (`sidebar-glass-rim`) with `rim_chroma` (0.65) of the chroma of the wallpaper behind each stretch, saturating towards `chroma_cap`. With an accent as window color the request's `rim` is the accent and the rim takes its chroma from it, so it stays uniform with the fill.
-3. A window that is not focused gets the flat `solid` tone and no rim.
-4. An island keeps its own corner. A flat panel takes the window's corner.
+1. The panel is `base` with the request's `chroma` and `GLASS` `lightness` of the blurred wallpaper behind it (`take_tint`, saturating towards `chroma_cap`). In dark `base` carries the wallpaper's tint, so with the defaults the center is nearly a solid tone. The wallpaper is blurred in a cache of its own, `glass_blur_passes` times. It never shows windows.
+2. Along the panel's left, top and bottom edges the wallpaper shows (`glass_edge`): at each point, the wallpaper `offset` logical pixels outside the window's edge, taken as `edge.chroma` and `edge.lightness`, mixed in with `intensity` times `exp(-d / span)`, where `d` is the distance to that edge of the panel. It does not show on the edge that faces the content.
+3. The rim is a line (`sidebar-glass-rim`: white at alpha 0.03 in dark and 0.80 in light) with `glass_rim_chroma` of the chroma of the wallpaper behind each stretch, saturating towards `chroma_cap`. With an accent as window color the request's `rim` is the accent and the rim takes its chroma from it, so it stays uniform with the fill.
+4. An island casts a soft shadow on the window around it (`glass_shadow`, light only for now): dark, with the wallpaper's chroma, darkest at the island's edge and fading over `span`, inside the window's shape and above the surface.
+5. A window that is not focused gets the flat `solid` tone, no edge, no rim and no shadow.
+6. An island keeps its own corner. A flat panel takes the window's corner.
 
-The request applies on the next `wl_surface.commit`. Only kit clients may send it. The change between focused and not focused fades over `ctdesign::DURATION_BASE`: the material blends to the solid tone and the island rim fades out.
+The request applies on the next `wl_surface.commit`. Only kit clients may send it. The change between focused and not focused fades over `ctdesign::DURATION_BASE`: the material blends to the solid tone and the island rim and shadow fade out.
 
 ## Moving
 

@@ -446,7 +446,7 @@ searching `crates/malaysia-compositor/src`.
   general blur, the shell's own regions and their options in Settings.
   Sidebars of BarrierKit windows get a glass panel with the wallpaper's
   chroma and a white line tinted by it ([ADR 0078](decisions/0078-sidebar-glass-panels.md)),
-  accepted 2026-11-13. The protocol, the kit and the compositor's material and rim are written, built and unit-tested (2026-11-13), but not yet run on a screen; the calibration is pending.
+  accepted 2026-11-13. The protocol, the kit and the compositor's material, edge, rim and island shadow are written, built and unit-tested, the shaders with a real GL context (2026-11-13), but not yet run on a screen; the values come from the owner's mockup and the dark unfocused state is not measured.
 - **Shell:** supervision and overview (ADR 0023), notifications daemon,
   polkit agent, volume/network/battery/brightness
   indicators (network, Bluetooth and battery done, ADR 0069), OSD and

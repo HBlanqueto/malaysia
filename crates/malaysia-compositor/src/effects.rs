@@ -357,7 +357,8 @@ mod tests {
 
     use super::{
         compile_dock_glass, compile_dock_solid, compile_glass, compile_glass_rim,
-        frame_to_texture_geometry, opaque_inside_frame, shader_area, texture_radius,
+        compile_glass_shadow, frame_to_texture_geometry, opaque_inside_frame, shader_area,
+        texture_radius,
     };
     use crate::test_support::try_test_renderer;
 
@@ -371,6 +372,7 @@ mod tests {
         assert!(compile_glass_rim(&mut renderer).is_some());
         assert!(compile_dock_glass(&mut renderer).is_some());
         assert!(compile_dock_solid(&mut renderer).is_some());
+        assert!(compile_glass_shadow(&mut renderer).is_some());
     }
 
     #[test]
@@ -505,9 +507,30 @@ pub(crate) fn compile_glass(renderer: &mut GlesRenderer) -> Option<GlesTexProgra
             UniformName::new("chroma_cap", UniformType::_1f),
             UniformName::new("lightness", UniformType::_1f),
             UniformName::new("settle", UniformType::_1f),
+            UniformName::new("panel", UniformType::_4f),
+            UniformName::new("outer", UniformType::_4f),
+            UniformName::new("edge", UniformType::_4f),
+            UniformName::new("edge_cap", UniformType::_1f),
+            UniformName::new("edge_offset", UniformType::_1f),
         ],
     )
     .inspect_err(|error| tracing::warn!(?error, "failed to compile glass shader"))
+    .ok()
+}
+
+pub(crate) fn compile_glass_shadow(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
+    compile_wallpaper_shape(
+        renderer,
+        grade_graphics::shaders::GLASS_SHADOW,
+        &[
+            UniformName::new("panel", UniformType::_4f),
+            UniformName::new("panel_radius", UniformType::_1f),
+            UniformName::new("panel_exponent", UniformType::_1f),
+            UniformName::new("shadow", UniformType::_3f),
+            UniformName::new("shade", UniformType::_1f),
+        ],
+    )
+    .inspect_err(|error| tracing::warn!(?error, "failed to compile glass shadow shader"))
     .ok()
 }
 
