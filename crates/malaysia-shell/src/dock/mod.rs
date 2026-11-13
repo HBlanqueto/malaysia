@@ -746,44 +746,53 @@ impl App for DockApp {
                             .maybe_child(progress.map(|progress| {
                                 progress_bar(slot.size, progress, progress_track, progress_fill)
                             }))
-                            .on_pointer_down(move |event: Event<PointerEventData>| {
-                                if !primary(&event) {
-                                    return;
-                                }
-                                let at = event.global_location();
-                                let at = (at.x as f32, at.y as f32);
-                                after_drag_down.set(false);
-                                dragging.set(Some(Drag {
-                                    id: id.clone(),
-                                    kept,
-                                    from: at,
-                                    at,
-                                    moved: false,
-                                    order: state.peek().persistent_apps.clone(),
-                                }));
-                            })
-                            .on_press(move |_| {
-                                let dragged =
-                                    dragging.peek().as_ref().is_some_and(|drag| drag.moved);
-                                if dragged || after_drag.replace(false) {
-                                    return;
-                                }
-                                // macOS: Option-click hides the active app; on another app it also opens it.
-                                if modifier_flags().contains(Modifiers::ALT) {
-                                    active_app.iter().for_each(|id| hide.minimize(*id));
-                                    if pressed.windows.iter().any(|window| window.active) {
-                                        return;
-                                    }
-                                }
-                                open(&pressed);
-                            })
-                            .on_secondary_down(move |_| {
-                                let commands = commands.clone();
-                                menu.open(items.clone(), anchor, move |command: String| {
-                                    commands.run(&command)
-                                })
-                            })
+                            .interactive(false)
                             .into_element(),
+                    );
+                    children.push(
+                        placed(frame.area(
+                            slot.start,
+                            cross0,
+                            slot.size,
+                            layout.padding + lift + slot.size,
+                        ))
+                        .on_pointer_down(move |event: Event<PointerEventData>| {
+                            if !primary(&event) {
+                                return;
+                            }
+                            let at = event.global_location();
+                            let at = (at.x as f32, at.y as f32);
+                            after_drag_down.set(false);
+                            dragging.set(Some(Drag {
+                                id: id.clone(),
+                                kept,
+                                from: at,
+                                at,
+                                moved: false,
+                                order: state.peek().persistent_apps.clone(),
+                            }));
+                        })
+                        .on_press(move |_| {
+                            let dragged = dragging.peek().as_ref().is_some_and(|drag| drag.moved);
+                            if dragged || after_drag.replace(false) {
+                                return;
+                            }
+                            // macOS: Option-click hides the active app; on another app it also opens it.
+                            if modifier_flags().contains(Modifiers::ALT) {
+                                active_app.iter().for_each(|id| hide.minimize(*id));
+                                if pressed.windows.iter().any(|window| window.active) {
+                                    return;
+                                }
+                            }
+                            open(&pressed);
+                        })
+                        .on_secondary_down(move |_| {
+                            let commands = commands.clone();
+                            menu.open(items.clone(), anchor, move |command: String| {
+                                commands.run(&command)
+                            })
+                        })
+                        .into_element(),
                     );
                     let bouncing = launching_now.contains(&app.id);
                     if config.show_process_indicators && !app.windows.is_empty() && !bouncing {
@@ -796,6 +805,7 @@ impl App for DockApp {
                             ))
                             .corner_radius(dot / 2.0)
                             .background(ink)
+                            .interactive(false)
                             .into_element(),
                         );
                     }
@@ -842,6 +852,16 @@ impl App for DockApp {
                                 .position(Position::new_absolute().right(0.0).bottom(0.0))
                                 .child(app_icon_named(&key, slot.size * DOCK_WINDOW_BADGE))
                         }))
+                        .interactive(false)
+                        .into_element(),
+                    );
+                    children.push(
+                        placed(frame.area(
+                            slot.start,
+                            cross0,
+                            slot.length,
+                            layout.padding + slot.size,
+                        ))
                         .on_press(move |_| {
                             toplevels.unset_minimized(id);
                             toplevels.activate(id);
@@ -898,25 +918,35 @@ impl App for DockApp {
                                 tr!("dock-trash"),
                                 slot.size,
                             ))
-                            .on_press(move |_| xdg_open(TRASH))
-                            .on_secondary_down({
-                                let anchor = menu.anchor(slot.start, slot.length, slot.size);
-                                move |_| {
-                                    let mut items = open_menu();
-                                    items.push(
-                                        MenuItem::action("empty", tr!("trash-empty"))
-                                            .with_enabled(!crate::trash::is_empty()),
-                                    );
-                                    menu.open(items, anchor, |command: String| {
-                                        if command == "empty" {
-                                            spawn_component("empty-trash")
-                                        } else {
-                                            xdg_open(TRASH)
-                                        }
-                                    })
-                                }
-                            })
+                            .interactive(false)
                             .into_element(),
+                    );
+                    children.push(
+                        placed(frame.area(
+                            slot.start,
+                            cross0,
+                            slot.size,
+                            layout.padding + slot.size,
+                        ))
+                        .on_press(move |_| xdg_open(TRASH))
+                        .on_secondary_down({
+                            let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                            move |_| {
+                                let mut items = open_menu();
+                                items.push(
+                                    MenuItem::action("empty", tr!("trash-empty"))
+                                        .with_enabled(!crate::trash::is_empty()),
+                                );
+                                menu.open(items, anchor, |command: String| {
+                                    if command == "empty" {
+                                        spawn_component("empty-trash")
+                                    } else {
+                                        xdg_open(TRASH)
+                                    }
+                                })
+                            }
+                        })
+                        .into_element(),
                     );
                 }
             }

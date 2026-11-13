@@ -35,8 +35,10 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    `DOCK_PADDING` + `DOCK_PADDING_SCALE` × size, `DOCK_EDGE_MARGIN` from the
    screen edge.
 3. **Magnification.** While the pointer is on the bar, each icon grows to
-   `largesize` along a cosine curve over `DOCK_MAGNIFY_RADIUS` icons. Icons
-   grow away from the edge and the bar only widens.
+   `largesize` along a cosine curve over `DOCK_MAGNIFY_RADIUS` icons;
+   `largesize` is at least `DOCK_MAGNIFY_MIN` times `tilesize`, so icons grow
+   at the largest size too. Icons grow away from the edge and the bar only
+   widens.
 4. **Surface.** The layer surface is anchored to the `orientation` edge. It
    is as deep as the bar plus room for magnified and bouncing icons and the
    name label. The exclusive zone is only the bar, so windows do not move
@@ -72,7 +74,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    icon, and the places, is drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon marks an
    open app (`show-process-indicators`). The name label shows over the icon
    under the pointer.
-7. **Clicks.** A click on an open app activates its first visible window, or
+7. **Clicks.** A tile answers over its whole column, from the bar's edge up
+   to the top of its icon (the icon itself takes no pointer events, nor the
+   running dot). A click on an open app activates its first visible window, or
    restores a minimized one. With Option held it first hides the active app
    (minimizes its windows), and does nothing more on that app's own icon; the
    compositor sends `wl_keyboard.modifiers` to the client under a pointer

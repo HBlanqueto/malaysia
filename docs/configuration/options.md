@@ -392,7 +392,7 @@ desktop (`shown`, `shuffled_at`).
 | `dock.orientation` | `"bottom"` \| `"left"` \| `"right"` | `"bottom"` | **active** | shell (dock) |
 | `dock.magnification` | bool | `false` | **active** | shell (dock) |
 | `dock.tilesize` | integer (px, 16–128) | `48` | **active** | shell (dock): fitted to the screen; dragging the separator writes it |
-| `dock.largesize` | integer (px, 16–128) | `64` | **active** | shell (dock): magnified size |
+| `dock.largesize` | integer (px, 16–128) | `64` | **active** | shell (dock): magnified size, at least `DOCK_MAGNIFY_MIN` × `tilesize` |
 | `dock.mineffect` | `"genie"` \| `"scale"` \| `"suck"` | `"genie"` | **active** | compositor: minimizes and restores toward the Dock tile, `DOCK_MINIMIZE_MS` |
 | `dock.show-process-indicators` | bool | `true` | **active** | shell (dock) |
 | `dock.static-only` | bool | `false` | **active** | shell (dock) |
