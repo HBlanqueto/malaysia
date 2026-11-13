@@ -1,0 +1,292 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Contorno del Dock</title>
+<style>
+  /* Una herramienta de comparación: el Dock a la vista, la lupa y la curva de opacidad debajo. */
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --fg: #15181d;
+    --muted: #5d6673;
+    --line: #d9dde3;
+    --accent: #0a6cf0;
+    --accent-ink: #ffffff;
+    --soft: #e8ecf2;
+    --today: #8a929e;
+    --ok: #17803d;
+    --font-text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111419; --panel: #1a1e25; --fg: #eceff4; --muted: #9aa3b0; --line: #2c333d;
+      --accent: #5aa2ff; --accent-ink: #07131f; --soft: #232a34; --today: #7d8590; --ok: #5fcf86;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111419; --panel: #1a1e25; --fg: #eceff4; --muted: #9aa3b0; --line: #2c333d;
+    --accent: #5aa2ff; --accent-ink: #07131f; --soft: #232a34; --today: #7d8590; --ok: #5fcf86;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-text); line-height: 1.5;
+    padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+  .eyebrow { font: 600 12px/1 var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font: 700 34px/1.1 var(--font-head); margin: 8px 0 10px; text-wrap: balance; }
+  h2 { font: 600 16px/1.3 var(--font-head); margin: 0 0 10px; }
+  p { margin: 0; max-width: 68ch; color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+  .stage { padding: 0; overflow: hidden; }
+  canvas { display: block; width: 100%; height: auto; }
+  #main { cursor: crosshair; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+  .group { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+  .label { font-size: 12px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  select, button { font: 500 14px var(--font-text); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; }
+  button { cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .check { display: inline-flex; gap: 7px; align-items: center; font-size: 14px; cursor: pointer; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .grid { align-items: start; display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 20px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 28px; } }
+  #loupe { width: 100%; max-width: 300px; aspect-ratio: 1; image-rendering: pixelated; border-radius: 10px; border: 1px solid var(--line); background: #000; }
+  .readout { font: 13px/1.6 var(--font-mono); color: var(--fg); margin-top: 10px; min-height: 6.4em; }
+  .readout b { color: var(--accent); font-weight: 600; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--accent); vertical-align: middle; margin-right: 6px; }
+  .legend i.dash { border-top-style: dashed; } .legend i.dot { border-top-style: dotted; } .legend i.today { border-top-color: var(--today); }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  ul.notes { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 6px; max-width: 72ch; }
+  ul.notes b { color: var(--fg); font-weight: 600; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Dock · línea del contorno</div>
+    <h1>Contorno del Dock</h1>
+    <p>La línea de macOS cambia con el fondo en conjunto y tramo a tramo. Aquí se compara lo que hace Malaysia hoy con la propuesta. Cambia el fondo, activa cada punto por separado y mira la lupa y la curva.</p>
+  </header>
+
+  <section class="panel controls" aria-label="Controles">
+    <div class="group">
+      <label class="label" for="wall">Fondo</label>
+      <select id="wall">
+        <option value="aurora" selected>Aurora oscura</option>
+        <option value="blue">Azul plano</option>
+        <option value="light">Claro plano</option>
+        <option value="ramp">Degradado claro a oscuro</option>
+        <option value="color">Colorido</option>
+      </select>
+    </div>
+    <div class="group" role="group" aria-label="Preajuste">
+      <button id="preset-today" type="button" aria-pressed="false">Hoy</button>
+      <button id="preset-new" type="button" aria-pressed="true">Propuesta</button>
+    </div>
+    <div class="group">
+      <label class="check"><input id="c-local" type="checkbox" checked> Por tramos</label>
+      <label class="check"><input id="c-edge" type="checkbox" checked> Base por borde</label>
+      <label class="check"><input id="c-tone" type="checkbox" checked> Tono del fondo</label>
+    </div>
+  </section>
+
+  <section class="panel stage" aria-label="Dock">
+    <canvas id="main" width="1920" height="680" role="img" aria-label="Dock sobre el fondo elegido, con su línea de contorno"></canvas>
+  </section>
+
+  <section class="grid">
+    <div class="panel">
+      <h2>Lupa ×6</h2>
+      <canvas id="loupe" width="240" height="240" role="img" aria-label="Zona ampliada del contorno"></canvas>
+      <div class="readout" id="readout" aria-live="polite"></div>
+    </div>
+    <div class="panel">
+      <h2>Opacidad de la línea a lo largo del Dock</h2>
+      <canvas id="chart" width="1280" height="420" role="img" aria-label="Opacidad de la línea según la posición horizontal"></canvas>
+      <div class="legend">
+        <span><i></i>Arriba</span><span><i class="dash"></i>Abajo</span><span><i class="dot"></i>Lados</span><span><i class="today"></i>Hoy (arriba)</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Qué cambia con cada punto</h2>
+    <ul class="notes">
+      <li><b>Por tramos.</b> La claridad del fondo se mide cada 10 px bajo la barra y la línea sigue esa medida. Apagado, usa una sola media para todo el Dock, como hoy.</li>
+      <li><b>Base por borde.</b> Arriba, abajo y lados tienen su propia curva medida en las capturas. Apagado, usa 26 % arriba y abajo y 10 % en los lados, por la fuerza global.</li>
+      <li><b>Tono del fondo.</b> La línea es el color del fondo aclarado, no blanco puro. Apagado, es blanca.</li>
+      <li>El blur de 0,7 px de la línea está siempre activo. Los iconos son marcadores; el vidrio es el desenfoque del propio fondo más un velo oscuro.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>Medido en las capturas de macOS</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Captura</th><th>Borde</th><th>Opacidad blanca estimada</th><th>Lectura</th></tr></thead>
+        <tbody>
+          <tr><td>Aurora oscura</td><td>Superior</td><td class="num">2 % a 24 % (media 12 %)</td><td>4–8 % con fondo oscuro, 21–24 % con fondo más claro. Correlación 0,6 con la claridad de arriba.</td></tr>
+          <tr><td>Aurora oscura</td><td>Inferior</td><td class="num">17 % a 22 %</td><td>Casi constante: el fondo es uniforme y oscuro.</td></tr>
+          <tr><td>Aurora oscura</td><td>Lados</td><td class="num">13 % a 17 %</td><td>Más fuertes que arriba con el mismo fondo.</td></tr>
+          <tr><td>Azul plano</td><td>Superior / inferior</td><td class="num">≈ 29 % / ≈ 39 %</td><td>La fuerza crece con la claridad del fondo.</td></tr>
+          <tr><td>Azul plano</td><td>Color</td><td class="num">+34 +40 +8 (RGB)</td><td>No suma blanco: aclara el tono del fondo.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:10px">Son estimaciones sobre capturas comprimidas, suponiendo una línea blanca sobre el interior del Dock. Una captura de otro material de vidrio (degradado azul) muestra la tendencia contraria; el modelo sigue las dos de este Dock. Los lados con fondo claro son una extrapolación, no una medida.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const W = 960, H = 340, S = 2;
+  const $ = id => document.getElementById(id);
+  const main = $("main"), mc = main.getContext("2d");
+  const loupe = $("loupe"), lc = loupe.getContext("2d");
+  const chart = $("chart"), cc = chart.getContext("2d");
+  const BAR = { w: 580, h: 78, r: 19, bottom: 16 };
+  BAR.x = (W - BAR.w) / 2; BAR.y = H - BAR.bottom - BAR.h;
+  const SEG = 58, SEGW = BAR.w / SEG;
+  const state = { wall: "aurora", local: true, edge: true, tone: true };
+  let wp, wpData, probe = null;
+
+  // ---------- fondos ----------
+  function paintWall(kind) {
+    const c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
+    const lin = (x0, y0, x1, y1, stops) => { const g = x.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, col]) => g.addColorStop(o, col)); return g; };
+    const glow = (cx, cy, rad, col) => { const g = x.createRadialGradient(cx, cy, 0, cx, cy, rad); g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, W, H); };
+    if (kind === "aurora") {
+      x.fillStyle = lin(0, 0, 0, H, [[0, "#07121f"], [.36, "#0f3a50"], [.58, "#a95a7c"], [.7, "#2f6384"], [1, "#0a1d30"]]); x.fillRect(0, 0, W, H);
+      glow(300, 90, 260, "rgba(48,214,170,.55)"); glow(520, 60, 200, "rgba(120,235,200,.35)");
+      glow(800, 290, 170, "rgba(255,150,175,.85)"); glow(520, 292, 110, "rgba(240,150,170,.4)");
+      x.fillStyle = lin(0, 0, W, 0, [[0, "rgba(2,8,14,.95)"], [.34, "rgba(2,8,14,.6)"], [.5, "rgba(2,8,14,0)"], [.9, "rgba(2,8,14,0)"], [1, "rgba(2,8,14,.7)"]]); x.fillRect(0, 200, W, H);
+    } else if (kind === "blue") { x.fillStyle = "#2a7ddb"; x.fillRect(0, 0, W, H); }
+    else if (kind === "light") { x.fillStyle = "#e6ebef"; x.fillRect(0, 0, W, H); }
+    else if (kind === "ramp") { x.fillStyle = lin(0, 0, W, 0, [[0, "#9ab9d8"], [.35, "#5272b0"], [1, "#101a80"]]); x.fillRect(0, 0, W, H); }
+    else { x.fillStyle = lin(0, 0, W, H, [[0, "#35398f"], [.35, "#a8408a"], [.7, "#f0485c"], [1, "#b8386f"]]); x.fillRect(0, 0, W, H); glow(180, 250, 200, "rgba(255,200,120,.35)"); }
+    return c;
+  }
+  function setWall(kind) {
+    state.wall = kind; wp = paintWall(kind);
+    wpData = wp.getContext("2d").getImageData(Math.floor(BAR.x), Math.floor(BAR.y), Math.ceil(BAR.w), BAR.h);
+    render();
+  }
+
+  // ---------- medida del fondo bajo la barra ----------
+  const lum = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  function segments() {
+    const out = [];
+    for (let i = 0; i < SEG; i++) {
+      const x0 = Math.floor(i * SEGW), x1 = Math.min(wpData.width, Math.ceil((i + 1) * SEGW));
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let y = 0; y < wpData.height; y += 2) for (let x = x0; x < x1; x++) { const k = (y * wpData.width + x) * 4; r += wpData.data[k]; g += wpData.data[k + 1]; b += wpData.data[k + 2]; n++; }
+      out.push([r / n, g / n, b / n]);
+    }
+    const sm = out.map((_, i) => [0, 1, 2].map(ch => .25 * out[Math.max(0, i - 1)][ch] + .5 * out[i][ch] + .25 * out[Math.min(SEG - 1, i + 1)][ch]));
+    const mean = [0, 1, 2].map(ch => sm.reduce((a, s) => a + s[ch], 0) / SEG);
+    return state.local ? sm : sm.map(() => mean);
+  }
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  // Modelo de la propuesta: ajustado a las medidas de las capturas (tabla de abajo).
+  const proposal = l => ({ top: clamp(.62 * l, 0, .6), bottom: clamp(.12 + .6 * l, 0, .7), sides: clamp(.09 + .4 * l, 0, .5) });
+  const today = l => { const k = .6 + .4 * l; return { top: .26 * k, bottom: .26 * k, sides: .1 * k }; };
+  const globalLum = segs => lum(...[0, 1, 2].map(ch => segs.reduce((a, s) => a + s[ch], 0) / segs.length));
+  function alphasAt(seg, glob) {
+    const l = state.local ? lum(...seg) : glob;
+    return state.edge ? proposal(l) : today(l);
+  }
+  function rimColor(seg) {
+    if (!state.tone) return [255, 255, 255];
+    const lifted = seg.map(v => v + (255 - v) * .65);
+    return lifted.map(v => 255 + (v - 255) * .7);
+  }
+
+  // ---------- dibujo ----------
+  function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+  function interp(arr, x) { const t = clamp((x - BAR.x) / SEGW - .5, 0, SEG - 1), i = Math.floor(t), f = t - i, j = Math.min(SEG - 1, i + 1); return arr[i] + (arr[j] - arr[i]) * f; }
+
+  function rimLayer(segs, glob) {
+    const T = document.createElement("canvas"); T.width = W * S; T.height = H * S; const t = T.getContext("2d"); t.scale(S, S);
+    const al = segs.map(s => alphasAt(s, glob)), col = segs.map(rimColor);
+    const curve = BAR.r / BAR.h;
+    for (let x = Math.floor(BAR.x); x < Math.ceil(BAR.x + BAR.w); x++) {
+      const top = interp(al.map(a => a.top), x), bot = interp(al.map(a => a.bottom), x), sid = interp(al.map(a => a.sides), x);
+      const rgb = [0, 1, 2].map(ch => Math.round(interp(col.map(c => c[ch]), x)));
+      const g = t.createLinearGradient(0, BAR.y, 0, BAR.y + BAR.h), c = a => `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a.toFixed(3)})`;
+      g.addColorStop(0, c(top)); g.addColorStop(curve, c(sid)); g.addColorStop(1 - curve, c(sid)); g.addColorStop(1, c(bot));
+      t.fillStyle = g; t.fillRect(x, BAR.y, 1, BAR.h);
+    }
+    t.globalCompositeOperation = "destination-in"; t.lineWidth = 1; t.strokeStyle = "#000"; rr(t, BAR.x + .5, BAR.y + .5, BAR.w - 1, BAR.h - 1, BAR.r - .5); t.stroke();
+    return { T, al };
+  }
+
+  const ICONS = ["#ff8a3d", "#c9ccd4", "#4c8dff", "#35c26b", "#a066f0", "#f2c230", "#e8566c", "#4cc9d0"];
+  function render() {
+    if (!wpData) return;
+    const segs = segments(), glob = globalLum(segs);
+    mc.setTransform(S, 0, 0, S, 0, 0); mc.clearRect(0, 0, W, H);
+    mc.drawImage(wp, 0, 0);
+    mc.save(); rr(mc, BAR.x, BAR.y, BAR.w, BAR.h, BAR.r); mc.clip();
+    mc.filter = "blur(12px)"; mc.drawImage(wp, 0, 0); mc.filter = "none";
+    mc.fillStyle = "rgba(26,26,30,.34)"; mc.fillRect(BAR.x, BAR.y, BAR.w, BAR.h); mc.restore();
+    const { T, al } = rimLayer(segs, glob);
+    mc.save(); mc.filter = "blur(.7px)"; mc.setTransform(1, 0, 0, 1, 0, 0); mc.drawImage(T, 0, 0); mc.restore();
+    mc.setTransform(S, 0, 0, S, 0, 0);
+    const tile = 52, gap = 14, n = ICONS.length, total = n * tile + (n - 1) * gap, x0 = BAR.x + (BAR.w - total) / 2, y0 = BAR.y + (BAR.h - tile) / 2;
+    ICONS.forEach((c, i) => { const x = x0 + i * (tile + gap); mc.fillStyle = c; rr(mc, x, y0, tile, tile, 12); mc.fill(); mc.fillStyle = "rgba(255,255,255,.22)"; rr(mc, x, y0, tile, tile * .5, 12); mc.fill(); });
+    drawChart(segs, glob, al);
+    drawLoupe(segs, glob, al);
+  }
+
+  // ---------- lupa y lectura ----------
+  function drawLoupe(segs, glob, al) {
+    const p = probe || { x: BAR.x + BAR.w * .62, y: BAR.y + 1 }, zoom = 6, span = 240 / zoom;
+    lc.imageSmoothingEnabled = false; lc.fillStyle = "#000"; lc.fillRect(0, 0, 240, 240);
+    lc.drawImage(main, (p.x - span / 2) * S, (p.y - span / 2) * S, span * S, span * S, 0, 0, 240, 240);
+    lc.strokeStyle = "rgba(255,255,255,.55)"; lc.lineWidth = 1; lc.strokeRect(116, 116, 8, 8);
+    const i = clamp(Math.floor((p.x - BAR.x) / SEGW), 0, SEG - 1), a = al[i], now = state.edge ? "propuesta" : "hoy";
+    const t = lum(...segs[i]), pct = v => `<b>${Math.round(v * 100)} %</b>`;
+    $("readout").innerHTML = `tramo ${i + 1} de ${SEG}, fondo ${Math.round(t * 100)} %<br>arriba ${pct(a.top)} · abajo ${pct(a.bottom)}<br>lados ${pct(a.sides)}<br>${state.local ? "medida local" : "media global " + Math.round(glob * 100) + " %"} · ${now}${state.tone ? " · tono del fondo" : " · blanca"}`;
+  }
+  main.addEventListener("pointermove", e => { const r = main.getBoundingClientRect(); probe = { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; render(); });
+  main.addEventListener("pointerleave", () => { probe = null; render(); });
+
+  // ---------- curva ----------
+  function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function drawChart(segs, glob, al) {
+    const w = 640, h = 210, L = 38, B = 22, T = 8, R = 8, k = 2;
+    cc.setTransform(k, 0, 0, k, 0, 0); cc.clearRect(0, 0, w, h);
+    const fg = cssVar("--muted"), grid = cssVar("--line"), acc = cssVar("--accent"), td = cssVar("--today");
+    const X = i => L + (w - L - R) * (i + .5) / SEG, Y = v => T + (h - T - B) * (1 - v / .6);
+    cc.font = "11px system-ui, sans-serif"; cc.fillStyle = fg; cc.strokeStyle = grid; cc.lineWidth = 1; cc.textAlign = "right"; cc.textBaseline = "middle";
+    [0, .2, .4, .6].forEach(v => { cc.beginPath(); cc.moveTo(L, Y(v)); cc.lineTo(w - R, Y(v)); cc.stroke(); cc.fillText(Math.round(v * 100) + " %", L - 6, Y(v)); });
+    cc.textAlign = "center"; cc.textBaseline = "top"; cc.fillText("izquierda", L + 26, h - B + 6); cc.fillText("derecha", w - R - 24, h - B + 6);
+    const line = (vals, color, dash, wd) => { cc.beginPath(); cc.setLineDash(dash); cc.strokeStyle = color; cc.lineWidth = wd; vals.forEach((v, i) => i ? cc.lineTo(X(i), Y(v)) : cc.moveTo(X(i), Y(v))); cc.stroke(); cc.setLineDash([]); };
+    const hoy = segs.map(s => today(lum(...s)).top);
+    line(hoy, td, [], 1.5);
+    line(al.map(a => a.top), acc, [], 2.2); line(al.map(a => a.bottom), acc, [6, 4], 2); line(al.map(a => a.sides), acc, [2, 3], 2);
+  }
+
+  // ---------- controles ----------
+  function sync() {
+    const all = (a, b, c) => state.local === a && state.edge === b && state.tone === c;
+    $("preset-today").setAttribute("aria-pressed", String(all(false, false, false)));
+    $("preset-new").setAttribute("aria-pressed", String(all(true, true, true)));
+    $("c-local").checked = state.local; $("c-edge").checked = state.edge; $("c-tone").checked = state.tone;
+  }
+  const apply = (l, e, t) => { Object.assign(state, { local: l, edge: e, tone: t }); sync(); render(); };
+  $("preset-today").addEventListener("click", () => apply(false, false, false));
+  $("preset-new").addEventListener("click", () => apply(true, true, true));
+  [["c-local", "local"], ["c-edge", "edge"], ["c-tone", "tone"]].forEach(([id, key]) => $(id).addEventListener("change", e => { state[key] = e.target.checked; sync(); render(); }));
+  $("wall").addEventListener("change", e => setWall(e.target.value));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+  new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  sync(); setWall("aurora");
+})();
+</script>
