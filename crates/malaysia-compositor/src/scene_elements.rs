@@ -792,7 +792,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         1.0,
         kind,
     );
-    let backdrop = crate::blur::backdrop(
+    let mut backdrop = crate::blur::backdrop(
         state,
         &data.surface,
         data.location + data.surface_location,
@@ -801,6 +801,20 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         exponent,
         scale,
     );
+    let (material, rim) = crate::glass::panels(
+        state,
+        &data.surface,
+        data.location + data.surface_location,
+        &crate::glass::Frame {
+            rect: frame_rect_physical,
+            radius: radius_physical,
+            exponent,
+        },
+        is_focused,
+        scale,
+    );
+    backdrop.extend(material);
+    content.extend(rim);
     append_frame(
         state,
         content,

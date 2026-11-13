@@ -253,6 +253,8 @@ pub fn run() -> Result<(), SessionError> {
 
     let renderer = session.backend.renderer();
     session.state.rounded_clip = crate::effects::compile_rounded_clip(renderer);
+    session.state.glass = crate::effects::compile_glass(renderer);
+    session.state.glass_rim = crate::effects::compile_glass_rim(renderer);
     session.state.shadow = crate::effects::compile_shadow(renderer);
     session.state.border = crate::effects::compile_border(renderer);
     session.state.display_filter = crate::display_filter::compile(renderer);

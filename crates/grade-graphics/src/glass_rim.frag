@@ -1,0 +1,26 @@
+#if defined(EXTERNAL)
+uniform samplerExternalOES tex;
+#else
+uniform sampler2D tex;
+#endif
+
+uniform float alpha;
+varying vec2 v_coords;
+
+uniform vec2 texture_size;
+uniform vec4 geometry;
+uniform float radius;
+uniform float exponent;
+uniform vec4 line;
+uniform float chroma;
+uniform float width;
+
+// The inner border of the panel: a white line that takes the chroma of the wallpaper behind each stretch.
+void main() {
+    vec2 px = v_coords * texture_size;
+    float dist = frame_sdf(px, geometry, radius, exponent);
+    float coverage = window_coverage(dist) - window_coverage(dist + width);
+    vec3 wallpaper = texture2D(tex, v_coords).rgb;
+    vec3 color = take_chroma(vec3(1.0), wallpaper, chroma);
+    gl_FragColor = vec4(color * line.a, line.a) * (coverage * alpha);
+}

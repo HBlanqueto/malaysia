@@ -25,6 +25,17 @@ Only SSD windows receive a titlebar (ADR 0014/0019). GTK/Libadwaita and the clie
 
 The compositor recognizes a BarrierKit app because it binds `infinity_window_style_v1`, whatever its `app_id` (ADR 0035). The app requests its mode through `xdg-decoration` before the first commit: `Client` draws its own 44 px bar (apps with a toolbar/sidebar); `Server` leaves the 32 px bar to the compositor (simple utilities). `force_server`/`force_client` only affect third-party apps.
 
+### Sidebar glass
+
+A BarrierKit window can ask for glass panels with `infinity_window_style_v1.set_glass` (version 6, [ADR 0078](../decisions/0078-sidebar-glass-panels.md)). The kit leaves each panel transparent. While blur is drawn (`appearance.reduce_transparency` and `appearance.contrast` off), the compositor fills it under the surface and, in the island style, draws a rim above it:
+
+1. The panel takes the lightness of `base` and `chroma` (0.40) of the blurred wallpaper's chroma behind it, with the same `take_chroma` as `ctappearance`. It never shows windows.
+2. The rim is a white line (`sidebar-glass-rim`) with `rim_chroma` (0.65) of the chroma of the wallpaper behind each stretch.
+3. A window that is not focused gets the flat `solid` tone and no rim.
+4. An island keeps its own corner. A flat panel takes the window's corner.
+
+The request applies on the next `wl_surface.commit`. Only kit clients may send it. The fade between focused and not focused is pending.
+
 ## Moving
 
 While dragged, a window does not go behind the menubar: its top edge stops at the work area (`State::workspace`, which subtracts the top exclusive zones), as on macOS. For a CSD window the visible edge counts: the shadow the app draws inside its surface (`window_geometry`) is subtracted. The sides and the bottom edge may leave the screen.

@@ -138,11 +138,17 @@ pub(crate) struct RoundedTextureElement<R: Renderer> {
     exponent: f32,
     arrow: Arrow,
     program: GlesTexProgram,
+    extra: Vec<Uniform<'static>>,
 }
 
 impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
     pub(crate) fn with_arrow(mut self, arrow: Arrow) -> Self {
         self.arrow = arrow;
+        self
+    }
+
+    pub(crate) fn with_uniforms(mut self, extra: Vec<Uniform<'static>>) -> Self {
+        self.extra = extra;
         self
     }
 
@@ -168,6 +174,7 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
             exponent,
             arrow: Arrow::default(),
             program,
+            extra: Vec::new(),
         })
     }
 
@@ -208,13 +215,14 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
             exponent,
             arrow: Arrow::default(),
             program,
+            extra: Vec::new(),
         }
     }
 
-    fn uniforms(&self) -> [Uniform<'static>; 6] {
+    fn uniforms(&self) -> Vec<Uniform<'static>> {
         let src = self.src();
         let [arrow, slope] = self.arrow.uniforms(texture_radius(src, self.dst, 1));
-        [
+        let mut uniforms = vec![
             Uniform::new(
                 "texture_size",
                 [self.texture_size.w as f32, self.texture_size.h as f32],
@@ -227,7 +235,9 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
             Uniform::new("exponent", self.exponent),
             arrow,
             slope,
-        ]
+        ];
+        uniforms.extend(self.extra.iter().cloned());
+        uniforms
     }
 }
 
@@ -319,7 +329,7 @@ impl<R: MalaysiaRenderer> RenderElement<R> for RoundedTextureElement<R> {
         match &self.source {
             Source::Surface(element) => {
                 R::gles_frame(frame)
-                    .override_default_tex_program(self.program.clone(), self.uniforms().to_vec());
+                    .override_default_tex_program(self.program.clone(), self.uniforms());
                 let drawn = element.draw(frame, src, dst, damage, opaque_regions, cache);
                 R::gles_frame(frame).clear_tex_program_override();
                 drawn
@@ -466,6 +476,53 @@ pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTe
         )
         .inspect_err(|error| tracing::warn!(?error, "failed to compile rounded-clip shader"))
         .ok()
+}
+
+pub(crate) fn compile_glass(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
+    compile_wallpaper_shape(
+        renderer,
+        grade_graphics::shaders::GLASS,
+        &[
+            UniformName::new("base", UniformType::_3f),
+            UniformName::new("solid", UniformType::_3f),
+            UniformName::new("chroma", UniformType::_1f),
+            UniformName::new("settle", UniformType::_1f),
+        ],
+    )
+    .inspect_err(|error| tracing::warn!(?error, "failed to compile glass shader"))
+    .ok()
+}
+
+pub(crate) fn compile_glass_rim(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
+    compile_wallpaper_shape(
+        renderer,
+        grade_graphics::shaders::GLASS_RIM,
+        &[
+            UniformName::new("line", UniformType::_4f),
+            UniformName::new("chroma", UniformType::_1f),
+            UniformName::new("width", UniformType::_1f),
+        ],
+    )
+    .inspect_err(|error| tracing::warn!(?error, "failed to compile glass rim shader"))
+    .ok()
+}
+
+// The shape uniforms every RoundedTextureElement sends, then the ones of the shader itself.
+fn compile_wallpaper_shape(
+    renderer: &mut GlesRenderer,
+    shader: &str,
+    own: &[UniformName<'static>],
+) -> Result<GlesTexProgram, smithay::backend::renderer::gles::GlesError> {
+    let mut uniforms = vec![
+        UniformName::new("texture_size", UniformType::_2f),
+        UniformName::new("geometry", UniformType::_4f),
+        UniformName::new("radius", UniformType::_1f),
+        UniformName::new("exponent", UniformType::_1f),
+        UniformName::new("arrow", UniformType::_4f),
+        UniformName::new("arrow_slope", UniformType::_1f),
+    ];
+    uniforms.extend(own.iter().cloned());
+    renderer.compile_custom_texture_shader(shader, &uniforms)
 }
 
 pub(crate) fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {

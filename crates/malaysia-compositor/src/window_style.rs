@@ -6,7 +6,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
 use smithay::utils::{Logical, Rectangle};
-use smithay::wayland::compositor::with_states;
+use smithay::wayland::compositor::{Cacheable, with_states};
 use smithay::wayland::shell::xdg::PopupSurface;
 use smithay::wayland::{Dispatch2, GlobalDispatch2};
 
@@ -38,6 +38,24 @@ struct CardStyle(Mutex<Cards>);
 
 struct DesktopStyle(AtomicU32);
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct GlassPanels {
+    pub(crate) radius: u32,
+    pub(crate) rects: Vec<Rectangle<i32, Logical>>,
+    pub(crate) base: [f32; 3],
+    pub(crate) solid: [f32; 3],
+}
+
+impl Cacheable for GlassPanels {
+    fn commit(&mut self, _dh: &DisplayHandle) -> Self {
+        self.clone()
+    }
+
+    fn merge_into(self, into: &mut Self, _dh: &DisplayHandle) {
+        *into = self;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Cards {
     pub(crate) id: u64,
@@ -47,7 +65,9 @@ pub(crate) struct Cards {
 
 static NEXT_ALERT: AtomicU64 = AtomicU64::new(0);
 
-const VERSION: u32 = 5;
+const VERSION: u32 = 6;
+
+const MAX_GLASS_PANELS: usize = 16;
 
 impl WindowStyleGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
@@ -139,6 +159,26 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 }
                 state.request_redraw();
             }
+            infinity_window_style_v1::Request::SetGlass {
+                surface,
+                radius,
+                panels,
+                base,
+                solid,
+            } if is_kit_client(&surface) => {
+                let mut rects = card_rects(&panels);
+                rects.truncate(MAX_GLASS_PANELS);
+                with_states(&surface, |states| {
+                    let mut cached = states.cached_state.get::<GlassPanels>();
+                    *cached.pending() = GlassPanels {
+                        radius,
+                        rects,
+                        base: unpack_rgb(base),
+                        solid: unpack_rgb(solid),
+                    };
+                });
+                state.request_redraw();
+            }
             infinity_window_style_v1::Request::SetDesktop { surface, desktop } => {
                 with_states(&surface, |states| {
                     states
@@ -195,6 +235,22 @@ fn card_rects(bytes: &[u8]) -> Vec<Rectangle<i32, Logical>> {
         })
         .filter(|rect| rect.size.w > 0 && rect.size.h > 0)
         .collect()
+}
+
+fn unpack_rgb(argb: u32) -> [f32; 3] {
+    let [_, red, green, blue] = argb.to_be_bytes();
+    [red, green, blue].map(|channel| f32::from(channel) / 255.0)
+}
+
+pub(crate) fn glass(surface: &WlSurface) -> Option<GlassPanels> {
+    with_states(surface, |states| {
+        if !states.cached_state.has::<GlassPanels>() {
+            return None;
+        }
+        let mut cached = states.cached_state.get::<GlassPanels>();
+        let current = cached.current();
+        (!current.rects.is_empty()).then(|| current.clone())
+    })
 }
 
 pub(crate) fn cards(surface: &WlSurface) -> Option<Cards> {
@@ -348,6 +404,12 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_glass_color_unpacks_to_unit_channels_and_ignores_alpha() {
+        assert_eq!(unpack_rgb(0x00ff_8000), [1.0, 128.0 / 255.0, 0.0]);
+        assert_eq!(unpack_rgb(0xff00_0000), [0.0, 0.0, 0.0]);
+    }
 
     #[test]
     fn each_bar_gets_the_tahoe_radius() {

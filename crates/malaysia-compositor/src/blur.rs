@@ -239,11 +239,16 @@ fn blur_region(surface: &WlSurface) -> Vec<Rectangle<i32, Logical>> {
     })
 }
 
+pub(crate) fn wallpaper_texture(state: &State) -> Option<(GlesTexture, CommitCounter)> {
+    let wallpaper = state.blur.as_ref()?.wallpaper.as_ref()?;
+    drawn(state).then(|| (wallpaper.blurred.clone(), wallpaper.commit))
+}
+
 fn requested(state: &State) -> bool {
-    let windows = state
-        .windows
-        .iter_visible(&state.minimized)
-        .any(|window| !blur_region(window.surface()).is_empty());
+    let windows = state.windows.iter_visible(&state.minimized).any(|window| {
+        !blur_region(window.surface()).is_empty()
+            || crate::window_style::glass(window.surface()).is_some()
+    });
     windows
         || [Layer::Background, Layer::Bottom, Layer::Top, Layer::Overlay]
             .into_iter()

@@ -15,6 +15,7 @@ mod focus;
 mod focus_notice;
 mod foreign;
 mod frame_clock;
+mod glass;
 mod gtk;
 mod handlers;
 mod idle;

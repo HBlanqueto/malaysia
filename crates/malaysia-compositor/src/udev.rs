@@ -267,6 +267,8 @@ pub fn run(options: DrmOptions) -> Result<()> {
     }
 
     state.rounded_clip = crate::effects::compile_rounded_clip(renderer);
+    state.glass = crate::effects::compile_glass(renderer);
+    state.glass_rim = crate::effects::compile_glass_rim(renderer);
     state.shadow = crate::effects::compile_shadow(renderer);
     state.border = crate::effects::compile_border(renderer);
     state.display_filter = crate::display_filter::compile(renderer);
