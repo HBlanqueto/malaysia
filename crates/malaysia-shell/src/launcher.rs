@@ -14,6 +14,7 @@ use bk::shell::{
     Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer,
 };
 use bk::views::feedback::ContentUnavailableView;
+use ctappearance::ColorScheme;
 use ctdesign::{
     LAUNCHER_CLOSE_MS, LAUNCHER_CORNER_RADIUS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
     LAUNCHER_ICON_SIZE, LAUNCHER_MAX_RESULTS, LAUNCHER_OPEN_MS, LAUNCHER_PADDING,
@@ -35,6 +36,7 @@ pub(crate) struct IconData {
     pub(crate) path: PathBuf,
     pub(crate) svg: Option<Bytes>,
     raster: Option<Bytes>,
+    dark: Option<Bytes>,
     pub(crate) app: bool,
 }
 
@@ -281,7 +283,15 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
 
 // An icon of a Malaysia theme already is a plate; any other app icon gets one from the kit.
 fn app_image(icon: &IconData, size: f32) -> Element {
-    let Some(bytes) = icon.svg.clone().or_else(|| icon.raster.clone()) else {
+    let resolved = theme::resolved();
+    let dark = resolved.scheme == ColorScheme::Dark || resolved.icon_style == IconStyle::Clear;
+    let Some(bytes) = icon
+        .dark
+        .clone()
+        .filter(|_| dark)
+        .or_else(|| icon.svg.clone())
+        .or_else(|| icon.raster.clone())
+    else {
         return ImageViewer::new(icon.path.clone())
             .width(Size::px(size))
             .height(Size::px(size))
@@ -289,7 +299,7 @@ fn app_image(icon: &IconData, size: f32) -> Element {
     };
     let image = Image::data(bytes).size(size);
     if icon.path.to_string_lossy().contains("/icons/Malaysia") {
-        image.icon_style(theme::resolved().icon_style)
+        image.icon_style(resolved.icon_style)
     } else {
         image.app_icon()
     }
@@ -497,8 +507,19 @@ fn icon_data(path: &std::path::Path, app: bool) -> Option<IconData> {
         path: path.to_path_buf(),
         svg: svg.then(|| bytes.clone()),
         raster: (!svg).then_some(bytes),
+        dark: dark_twin(path),
         app,
     })
+}
+
+// The Malaysia theme's icon has a graphite twin in Malaysia-Dark, which a dark scheme or the clear style draws.
+fn dark_twin(path: &std::path::Path) -> Option<Bytes> {
+    let path = path.to_str()?;
+    let twin = path.replace("/icons/Malaysia/", "/icons/Malaysia-Dark/");
+    (twin != path)
+        .then(|| std::fs::read(twin).ok())
+        .flatten()
+        .map(Bytes::from)
 }
 
 pub fn open_app(id: Option<&str>) -> anyhow::Result<()> {
