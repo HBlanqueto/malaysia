@@ -121,7 +121,10 @@ and the bottom.
    the client's hole would let what is behind the window show through. The rim
    goes directly above the surface's elements and below the window's own border
    (ADR 0059). Both are part of the window, so offscreen fades, minimize and
-   captures include them.
+   captures include them. The minimize snapshot is laid out from its own
+   corner but samples the wallpaper where the window is, keeps the focus the
+   window had at the click, and gets a flat `solid` panel under the material,
+   so the hole never shows the wallpaper sharp.
 7. **Values live in `ctdesign`.** The kit sends `chroma` with the request;
    with an accent as window color `base` is the accent-tinted tone and `chroma`
    is `accent_share` (0.35) of the usual one. `chroma` is 0.40 in dark and 0.25 in light,

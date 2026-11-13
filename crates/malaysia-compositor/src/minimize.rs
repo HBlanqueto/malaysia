@@ -66,11 +66,27 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
         .ok()
 }
 
+pub(crate) struct MinimizeRequest {
+    window: WindowId,
+    hiding: bool,
+    // Focus has already moved to another window when the snapshot is taken; the baked look is the click's.
+    was_focused: bool,
+}
+
 impl State {
-    pub(crate) fn request_minimize_effect(&mut self, window: WindowId, hiding: bool) {
+    pub(crate) fn request_minimize_effect(
+        &mut self,
+        window: WindowId,
+        hiding: bool,
+        was_focused: bool,
+    ) {
         if self.minimize_program.is_some() {
             self.minimizing.retain(|effect| effect.window != window);
-            self.minimize_requests.push((window, hiding));
+            self.minimize_requests.push(MinimizeRequest {
+                window,
+                hiding,
+                was_focused,
+            });
         }
     }
 
@@ -81,8 +97,9 @@ impl State {
 
 // The window is drawn into a texture while it is still whole; the effect then bends that texture.
 pub(crate) fn start_requested(state: &mut State, renderer: &mut GlesRenderer, scale: f64) {
-    for (window, hiding) in std::mem::take(&mut state.minimize_requests) {
-        let Some((texture, from)) = snapshot(state, renderer, window, scale) else {
+    for request in std::mem::take(&mut state.minimize_requests) {
+        let MinimizeRequest { window, hiding, .. } = request;
+        let Some((texture, from)) = snapshot(state, renderer, &request, scale) else {
             continue;
         };
         let output = state.logical_output_size();
@@ -118,9 +135,10 @@ fn bottom_centre(output: Size<i32, Logical>) -> Rectangle<i32, Logical> {
 fn snapshot(
     state: &mut State,
     renderer: &mut GlesRenderer,
-    window: WindowId,
+    request: &MinimizeRequest,
     scale: f64,
 ) -> Option<(GlesTexture, Rectangle<i32, Logical>)> {
+    let window = request.window;
     let minimized = state.minimized.remove(&window);
     state.windows.set_hidden(window, false);
     let outer = state.windows.outer(window).map(|outer| {
@@ -131,7 +149,11 @@ fn snapshot(
     });
     let mut elements = Vec::new();
     if let Some(outer) = outer {
-        let focused = state.focused_window();
+        let focused = if request.hiding {
+            request.was_focused.then_some(window)
+        } else {
+            state.focused_window()
+        };
         crate::scene_elements::append_window_frame(
             state,
             renderer,
@@ -139,6 +161,7 @@ fn snapshot(
             focused,
             scale,
             Point::from((-outer.loc.x, -outer.loc.y)),
+            Some(crate::session::physical_point(outer.loc, scale)),
             &mut elements,
         );
     }

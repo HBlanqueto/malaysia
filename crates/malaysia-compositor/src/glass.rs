@@ -13,7 +13,7 @@ use smithay::wayland::compositor::with_states;
 use crate::cursor::OutputRenderElement;
 use crate::effects::RoundedTextureElement;
 use crate::renderer::MalaysiaRenderer;
-use crate::scene_elements::physical_rect;
+use crate::scene_elements::{append_solid, physical_rect};
 use crate::state::State;
 use crate::window_style::GlassPanels;
 
@@ -96,6 +96,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     window: &Frame,
     settle: f32,
     scale: f64,
+    screen_origin: Point<i32, Physical>,
 ) -> Layers<R> {
     let (Some(glass), Some((texture, commit)), Some(material), Some(rim)) = (
         crate::window_style::glass(surface),
@@ -107,7 +108,16 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     };
     let size = texture.size();
     let output = Rectangle::from_size(Size::<i32, Physical>::from((size.w, size.h)));
+    // A snapshot is laid out from its own corner, but the wallpaper is sampled where the window really is.
+    let on_screen =
+        |rect: Rectangle<i32, Physical>| Rectangle::new(rect.loc + screen_origin, rect.size);
+    let visible = |rect: Rectangle<i32, Physical>| {
+        on_screen(rect)
+            .intersection(output)
+            .map(|clipped| Rectangle::new(clipped.loc - screen_origin, clipped.size))
+    };
     let source = |dst: Rectangle<i32, Physical>| {
+        let dst = on_screen(dst);
         Rectangle::<f64, BufferCoords>::new(
             (f64::from(dst.loc.x), f64::from(dst.loc.y)).into(),
             (f64::from(dst.size.w), f64::from(dst.size.h)).into(),
@@ -159,10 +169,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
             (panel.size.w + 2 * bleed, panel.size.h + 2 * bleed).into(),
         );
         let material_frame = if island { spread } else { frame };
-        if let Some(dst) = spread
-            .intersection(window.rect)
-            .and_then(|dst| dst.intersection(output))
-        {
+        if let Some(dst) = spread.intersection(window.rect).and_then(visible) {
             materials.push(
                 RoundedTextureElement::from_texture(
                     texture.clone(),
@@ -187,7 +194,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
         }
         if island
             && settle < 1.0
-            && let Some(dst) = panel.intersection(output)
+            && let Some(dst) = visible(panel)
         {
             let line = rim_line(scheme);
             rims.push(
@@ -217,6 +224,33 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
         }
     }
     (materials, rims)
+}
+
+// A minimizing window is baked into a texture: its glass hole must never show the wallpaper sharp.
+pub(crate) fn flat_underlay<R: MalaysiaRenderer>(
+    surface: &WlSurface,
+    origin: Point<i32, Logical>,
+    window: Rectangle<i32, Physical>,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement<R>>,
+) {
+    let Some(glass) = crate::window_style::glass(surface) else {
+        return;
+    };
+    let [red, green, blue] = glass.solid;
+    for rect in &glass.rects {
+        let panel = physical_rect(Rectangle::new(origin + rect.loc, rect.size), scale);
+        if let Some(dst) = panel.intersection(window) {
+            let logical = dst.to_f64().to_logical(scale).to_i32_round();
+            append_solid(
+                logical.loc,
+                logical.size,
+                [red, green, blue, 1.0],
+                scale,
+                elements,
+            );
+        }
+    }
 }
 
 #[cfg(test)]

@@ -334,12 +334,13 @@ impl State {
         if let Some(dialog) = dialog {
             self.windows.set_hidden(dialog, minimized);
         }
+        let focused = self.focused_window();
+        let was_focused = focused == Some(id) || (dialog.is_some() && focused == dialog);
         if minimized {
             self.minimized.insert(id);
             self.windows.set_hidden(id, true);
             tracing::info!(window = id.get(), "window minimized");
-            let focused = self.focused_window();
-            if focused == Some(id) || (dialog.is_some() && focused == dialog) {
+            if was_focused {
                 match self.focus_fallback(Some(id)) {
                     Some(next) => self.focus_window(next),
                     None => self.clear_keyboard_focus(),
@@ -350,7 +351,7 @@ impl State {
             self.windows.set_hidden(id, false);
             tracing::info!(window = id.get(), "window restored");
         }
-        self.request_minimize_effect(id, minimized);
+        self.request_minimize_effect(id, minimized, was_focused);
         self.foreign_state_changed(id);
         self.request_redraw();
     }

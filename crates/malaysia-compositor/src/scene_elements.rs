@@ -376,7 +376,7 @@ fn append_desktop<R: MalaysiaRenderer>(
                 }
                 _ => Point::from((0, 0)),
             };
-            append_window_frame(state, renderer, id, focused, scale, offset, elements);
+            append_window_frame(state, renderer, id, focused, scale, offset, None, elements);
         }
         let focus_space = matches!(
             state.spaces.current().kind,
@@ -602,6 +602,7 @@ pub(crate) fn append_sliding_spaces<R: MalaysiaRenderer>(
                 focused,
                 scale,
                 Point::from((x, 0)),
+                None,
                 elements,
             );
         }
@@ -682,6 +683,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
     focused: Option<malaysia_scene::scene::WindowId>,
     scale: f64,
     offset: Point<i32, Logical>,
+    snapshot: Option<Point<i32, Physical>>,
     elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let data = {
@@ -817,8 +819,18 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         },
         settle,
         scale,
+        snapshot.unwrap_or_default(),
     );
     backdrop.extend(material);
+    if snapshot.is_some() {
+        crate::glass::flat_underlay(
+            &data.surface,
+            data.location + data.surface_location,
+            frame_rect_physical,
+            scale,
+            &mut backdrop,
+        );
+    }
     content.extend(rim);
     append_frame(
         state,

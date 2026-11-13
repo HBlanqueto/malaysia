@@ -164,7 +164,7 @@ pub struct State {
     pub(crate) popup_fade_request: Option<WindowId>,
     pub(crate) popup_fades: Vec<crate::popup_fade::PopupFade>,
     pub(crate) minimize_hints: std::collections::HashMap<WindowId, Rectangle<i32, Logical>>,
-    pub(crate) minimize_requests: Vec<(WindowId, bool)>,
+    pub(crate) minimize_requests: Vec<crate::minimize::MinimizeRequest>,
     pub(crate) minimizing: Vec<crate::minimize::Minimizing>,
     pub(crate) minimize_program: Option<GlesTexProgram>,
     pub(crate) rounded_clip: Option<GlesTexProgram>,

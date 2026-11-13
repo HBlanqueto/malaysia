@@ -397,6 +397,7 @@ fn behind_elements(
             focused,
             scale,
             Point::default(),
+            None,
             &mut elements,
         );
     }
