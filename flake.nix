@@ -5,12 +5,12 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/648ec40828349f89da58c936d4bf982e35e7171b";
+      url = "github:HBlanqueto/barrierkit/871c2ce792bf287058f1120aeb1b242dc27b5f8c";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
     malaysia-icon-theme = {
-      url = "github:HBlanqueto/malaysia-icon-theme/221d2d6d9bd142611c41f2b36f3af6bcfbdb625f";
+      url = "github:HBlanqueto/malaysia-icon-theme/65e5d2c6cf3eababbba727aecb2f3400074b740d";
       flake = false;
     };
   };
@@ -80,7 +80,7 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca" =
               "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=648ec40828349f89da58c936d4bf982e35e7171b#648ec40828349f89da58c936d4bf982e35e7171b" =
+            "git+https://github.com/HBlanqueto/barrierkit?rev=871c2ce792bf287058f1120aeb1b242dc27b5f8c#871c2ce792bf287058f1120aeb1b242dc27b5f8c" =
               "sha256-UY1TuawOwZcfUIP4FBGXch8gQ2sU7fgGCAKKeTrMaJw=";
           };
 
