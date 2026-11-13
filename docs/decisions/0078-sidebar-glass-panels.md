@@ -92,13 +92,10 @@ and the bottom.
       empty array removes the panels. It lasts for the lifetime of the surface.
    5. The client leaves the panels transparent. The compositor fills them.
 3. **The material of an active panel** is, for each point p of the panel:
-   `take_chroma(base, B(p), chroma)`, where B is the blurred stack below the
-   window: the windows under it, in their stacking order, over the wallpaper,
-   like the Dock's `"behind"` (ADR 0071, step 6). Each glass window has its own
-   cache, blurred again only when something below it changes. Where that cache
-   fails, B is the blurred wallpaper. The owner chose this on 2026-11-13, over the
-   measurement that the windows add nothing; `appearance.blur_behind` does not
-   apply to panels.
+   `take_chroma(base, B(p), chroma)`, where B is the blurred wallpaper. The
+   windows below do not show through: a macOS capture (2026-11-13) shows a window
+   with a reddish titlebar behind a sidebar and the sidebar does not change.
+   `appearance.blur_behind` does not apply to panels.
 4. **The rim** is the inner border of the window frame, around each panel and
    on the same corner, with no shadow and no outer border. It is the line
    `set_cards` already gets (ADR 0068), drawn above the surface. It is a line,
@@ -131,14 +128,14 @@ and the bottom.
    so the hole never shows the wallpaper sharp.
 7. **Values live in `ctdesign`.** The kit sends `chroma` with the request;
    with an accent as window color `base` is the accent-tinted tone and `chroma`
-   is `accent_share` (0.35) of the usual one. `chroma` is 0.85 in dark and 0.60 in
+   is `accent_share` (0.35) of the usual one. `chroma` is 0.35 in dark and 0.60 in
    light, `rim_chroma` 0.65. The panel's chroma saturates towards `chroma_cap`
-   (0.12 dark, 0.09 light) and takes `lightness` of what is behind it (0.50 dark,
+   (0.04 dark, 0.09 light) and takes `lightness` of what is behind it (0 dark,
    0.20 light), so the shapes and colors behind the window stay readable. The
    first values, taken from the measurements above, left the sidebar one flat tone
    (the owner's report, 2026-11-13, with macOS references where the sidebar follows
    the wallpaper's reds and blues). The glass blurs what is behind it
-   `blur_passes` (3) times, in its own cache. The rim's color
+   `blur_passes` (5) times, in its own cache. The rim's color
    (`sidebar-glass-rim`) and its width are tokens. They are first values, to
    calibrate in phase 6.
    Reference for that calibration, read by eye from macOS screenshots over the

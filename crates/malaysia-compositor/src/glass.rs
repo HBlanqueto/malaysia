@@ -24,7 +24,6 @@ type Layers<R> = (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>);
 #[derive(Clone, PartialEq)]
 struct Drawn {
     wallpaper: CommitCounter,
-    behind: bool,
     panel: Rectangle<i32, Physical>,
     window: Rectangle<i32, Physical>,
     radius: i32,
@@ -103,9 +102,9 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     let Some(surface) = state.windows.surface_of(id) else {
         return (Vec::new(), Vec::new());
     };
-    let (Some(glass), Some((texture, commit, behind)), Some(material), Some(rim)) = (
+    let (Some(glass), Some((texture, commit)), Some(material), Some(rim)) = (
         crate::window_style::glass(surface),
-        crate::blur::glass_texture(state, id),
+        crate::blur::glass_texture(state),
         state.glass.clone(),
         state.glass_rim.clone(),
     ) else {
@@ -148,7 +147,6 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
         );
         let drawn = Drawn {
             wallpaper: commit,
-            behind,
             panel,
             window: window.rect,
             radius,
