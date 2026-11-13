@@ -121,7 +121,7 @@
       <li><b>Claridad</b> es la parte de la luminosidad de lo de detrás que atraviesa el vidrio. Con 0 el panel es de un solo tono, como antes.</li>
       <li><b>Pasadas</b> es el ancho del desenfoque. Cada pasada lo duplica: sigma de 53 px con 5, 107 con 6 y 213 con 7, en una pantalla de 1080 px de alto. Aquí se dibuja con un gaussiano de ese sigma, escalado al tamaño del fondo.</li>
       <li>La sidebar solo desenfoca el fondo de pantalla: en macOS una ventana con barra rojiza detrás no cambia nada.</li>
-      <li>Referencia medida en macOS (captura del 13-nov, paisaje de Tahoe): la sidebar queda casi plana, con L 0.28 y croma 0.02 entre el 20 % y el 85 % de su altura, y solo sube a L 0.30 y croma 0.05 arriba. El fondo de detrás va de L 0.3 a 0.8, así que el vidrio toma cerca de un 12 % de su claridad y un 25–30 % de su croma. Con claridad 0 queda en L 0.23: más oscuro que macOS.</li>
+      <li>Referencia medida en macOS (capturas del 13-nov, paisaje de Tahoe). Oscuro: L 0.28 y croma 0.02 en casi toda la altura de la sidebar. Claro: L 0.91 y croma 0.006, casi gris. El fondo de detrás va de L 0.3 a 0.8 y tiene croma 0.07, así que el vidrio toma de él, en oscuro, cerca de un 12 % de su claridad y un 30 % de su croma; en claro, un 8 % de su claridad y solo un 9 % de su croma. Por eso el modo claro necesita otros valores: con los del oscuro se tiñe y se oscurece, y la sidebar parece transparente.</li>
       <li>El panel de detalle queda casi neutro en macOS (croma 0.01), como el nuestro.</li>
     </ul>
   </section>
@@ -135,7 +135,7 @@
   const DETAIL_X = PANEL.x + PANEL.w + 8;
 
   const BEFORE = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5 } };
-  const AFTER = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 6 } };
+  const AFTER = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6 }, light: { chroma: 0.09, cap: 0.03, lightness: 0.08, passes: 6 } };
   const RIM_CHROMA = 0.65;
   const KAWASE_SIGMA = 5 / 3;
   const BASE = { dark: '#1e1e1f', light: '#eceef2' };
