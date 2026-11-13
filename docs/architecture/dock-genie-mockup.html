@@ -87,7 +87,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
       <label class="f" for="speed">Velocidad
         <select id="speed"><option value="1">1×</option><option value="0.25" selected>¼×</option><option value="0.1">1/10×</option></select>
       </label>
-      <label class="f" for="radius">Esquinas de la miniatura
+      <label class="f" for="radius">Redondeo de la miniatura
         <input id="radius" type="range" min="0" max="30" value="16" aria-describedby="rv"><span id="rv" class="readout" style="margin:0">16 %</span>
       </label>
     </div>
@@ -106,9 +106,10 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   <section>
     <h2>Qué cambia en el código</h2>
     <ul class="notes">
-      <li><b>Compositor.</b> <code>minimize::append</code> ya dibuja el genie sobre el Dock. El destino pasa de ser el hueco cuadrado a un rectángulo con la proporción de la ventana, centrado en el hueco con <code>DOCK_ICON_BODY</code>.</li>
+      <li><b>Compositor.</b> <code>minimize::append</code> ya dibuja el genie sobre el Dock. El destino pasa de ser el hueco cuadrado a un rectángulo con la proporción de la ventana y el alto del cuerpo del icono (<code>DOCK_ICON_BODY</code>), centrado en el hueco.</li>
       <li><b>Dock.</b> Cada mosaico recibe una presencia de 0 a 1 que multiplica su ancho en <code>geometry::layout</code>. El mosaico de ventana nace en 0 y sube a 1 mientras el genie baja. Al restaurar baja a 0. El destino que envía el Dock es siempre el hueco con presencia 1.</li>
-      <li><b>Miniatura.</b> Se dibuja como una ventana pequeña: fondo opaco, esquinas redondeadas, borde interior de un píxel, sombra e insignia de la app. Aparece en el último 8 % del efecto y desaparece en el primero al restaurar.</li>
+      <li><b>Miniatura.</b> Se dibuja como la ventana en pequeño: fondo opaco, el redondeo de la ventana, sin borde, sombra suave e insignia de la app. Mide <code>DOCK_ICON_BODY</code> de alto; el hueco mide lo que ella más el margen del icono. Aparece en el último 8 % del efecto y desaparece en el primero al restaurar.</li>
+      <li><b>Carpeta de Descargas.</b> Hoy los lugares se dibujan al <code>DOCK_ICON_BODY</code> del lienzo y la carpeta llena el suyo. Se ajusta para que su alto sea el del cuerpo del icono de Ajustes.</li>
       <li><b>Pendiente de decidir.</b> Magnificación con el puntero sobre el Dock, Dock a izquierda o derecha, y el efecto con «minimizar en el icono de la app».</li>
     </ul>
   </section>
@@ -116,7 +117,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
 
 <script>
 (() => {
-  const W = 1000, H = 560, T = 56, PAD = 9, EDGE = 10, BODY = .82;
+  const W = 1000, H = 560, T = 56, PAD = 9, EDGE = 10, BODY = .805, B = T * BODY; // BODY is DOCK_ICON_BODY: the 824 of 1024 body of an app icon
   const WIN = {x: 150, y: 52, w: 560, h: 350, r: 12};
   const DUR = 560;
   const cv = document.getElementById("cv"), cx = cv.getContext("2d");
@@ -176,45 +177,52 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   }
 
   /* ---------- Icons ---------- */
+  // Every icon is drawn on the body box (x, y, B): the Settings icon fills it, the others match its height.
   function iconBrowser(c, x, y, s) {
     const g = c.createLinearGradient(x, y, x + s, y + s); g.addColorStop(0, "#ffb02e"); g.addColorStop(1, "#e5383b");
-    c.fillStyle = g; c.beginPath(); c.arc(x + s / 2, y + s / 2, s * .42, 0, 7); c.fill();
-    c.strokeStyle = "#5b3cc4"; c.lineWidth = s * .09; c.lineCap = "round";
-    c.beginPath(); c.arc(x + s / 2, y + s / 2, s * .26, .6, 4.9); c.stroke();
+    c.fillStyle = g; c.beginPath(); c.arc(x + s / 2, y + s / 2, s / 2, 0, 7); c.fill();
+    c.strokeStyle = "#5b3cc4"; c.lineWidth = s * .1; c.lineCap = "round";
+    c.beginPath(); c.arc(x + s / 2, y + s / 2, s * .3, .6, 4.9); c.stroke();
   }
   function iconSettings(c, x, y, s) {
     const g = c.createLinearGradient(x, y, x, y + s); g.addColorStop(0, "#f3f3f6"); g.addColorStop(1, "#b7b8c0");
-    c.fillStyle = g; rr(c, x + s * .08, y + s * .08, s * .84, s * .84, s * .2); c.fill();
+    c.fillStyle = g; rr(c, x, y, s, s, s * .225); c.fill();
     c.save(); c.translate(x + s / 2, y + s / 2); c.fillStyle = "#6e6f78"; c.beginPath();
-    const n = 12, R = s * .34, r = s * .27;
+    const n = 12, R = s * .4, r = s * .32;
     for (let i = 0; i < n * 2; i++) { const a = i * Math.PI / n, d = i % 2 ? r : R; c.lineTo(Math.cos(a) * d, Math.sin(a) * d); }
-    c.closePath(); c.fill(); c.fillStyle = "#e9e9ee"; c.beginPath(); c.arc(0, 0, s * .17, 0, 7); c.fill();
-    c.fillStyle = "#6e6f78"; c.beginPath(); c.arc(0, 0, s * .06, 0, 7); c.fill(); c.restore();
+    c.closePath(); c.fill(); c.fillStyle = "#e9e9ee"; c.beginPath(); c.arc(0, 0, s * .2, 0, 7); c.fill();
+    c.fillStyle = "#6e6f78"; c.beginPath(); c.arc(0, 0, s * .07, 0, 7); c.fill(); c.restore();
   }
-  function iconDownloads(c, x, y, s) {
-    c.fillStyle = "#59a9f5"; rr(c, x + s * .06, y + s * .22, s * .88, s * .66, s * .08); c.fill();
-    c.fillStyle = "#8cc6fb"; rr(c, x + s * .06, y + s * .16, s * .38, s * .14, s * .05); c.fill();
-    c.strokeStyle = "#ffffff"; c.lineWidth = s * .05; c.lineCap = "round"; c.lineJoin = "round";
-    c.beginPath(); c.moveTo(x + s / 2, y + s * .4); c.lineTo(x + s / 2, y + s * .7); c.moveTo(x + s * .38, y + s * .6); c.lineTo(x + s / 2, y + s * .72); c.lineTo(x + s * .62, y + s * .6); c.stroke();
+  function iconDownloads(c, x, y, h) { // x is the slot's left edge; the folder is h tall and centred in the slot
+    const w = h * 1.2, left = x + (T - w) / 2, top = y;
+    c.fillStyle = "#8cc6fb"; rr(c, left, top, w * .42, h * .2, h * .06); c.fill();
+    c.fillStyle = "#59a9f5"; rr(c, left, top + h * .12, w, h * .88, h * .1); c.fill();
+    c.strokeStyle = "#ffffff"; c.lineWidth = h * .06; c.lineCap = "round"; c.lineJoin = "round";
+    const mx = left + w / 2;
+    c.beginPath(); c.moveTo(mx, top + h * .4); c.lineTo(mx, top + h * .76); c.moveTo(mx - h * .14, top + h * .62); c.lineTo(mx, top + h * .78); c.lineTo(mx + h * .14, top + h * .62); c.stroke();
   }
-  function iconTrash(c, x, y, s) {
-    const g = c.createLinearGradient(x, y, x + s, y); g.addColorStop(0, "rgba(255,255,255,.55)"); g.addColorStop(1, "rgba(255,255,255,.85)");
-    c.fillStyle = g; c.beginPath(); c.moveTo(x + s * .2, y + s * .18); c.lineTo(x + s * .8, y + s * .18); c.lineTo(x + s * .74, y + s * .9); c.lineTo(x + s * .26, y + s * .9); c.closePath(); c.fill();
-    c.fillStyle = "rgba(255,255,255,.95)"; c.beginPath(); c.ellipse(x + s / 2, y + s * .18, s * .3, s * .06, 0, 0, 7); c.fill();
+  function iconTrash(c, x, y, h) {
+    const w = h * .8, left = x + (T - w) / 2;
+    const g = c.createLinearGradient(left, y, left + w, y); g.addColorStop(0, "rgba(255,255,255,.55)"); g.addColorStop(1, "rgba(255,255,255,.85)");
+    c.fillStyle = g; c.beginPath(); c.moveTo(left, y + h * .1); c.lineTo(left + w, y + h * .1); c.lineTo(left + w * .92, y + h); c.lineTo(left + w * .08, y + h); c.closePath(); c.fill();
+    c.fillStyle = "rgba(255,255,255,.95)"; c.beginPath(); c.ellipse(left + w / 2, y + h * .1, w / 2, h * .06, 0, 0, 7); c.fill();
   }
 
   /* ---------- Dock layout: tiles centred, the slot's width is its presence ---------- */
-  function layout(f) {
-    const items = [["browser", 1], ["settings", 1], ["sep", .34], ["downloads", 1], ["thumb", f], ["trash", 1]].map(([k, w]) => ({k, w}));
-    const total = items.reduce((a, i) => a + i.w * T, 0);
+  const thumbW = B * WIN.w / WIN.h; // the thumbnail is as tall as the Settings icon; its width follows the window
+  const slotWidth = target => target ? thumbW + T - B : T;
+  function layout(f, slotW) {
+    const items = [["browser", T], ["settings", T], ["sep", .34 * T], ["downloads", T], ["thumb", f * slotW], ["trash", T]].map(([k, px]) => ({k, px}));
+    const total = items.reduce((a, i) => a + i.px, 0);
     let x = W / 2 - total / 2;
-    items.forEach(i => { i.x = x; i.px = i.w * T; x += i.px; });
-    return {items, barX: W / 2 - total / 2 - PAD, barW: total + 2 * PAD, barY: H - EDGE - T - 2 * PAD, barH: T + 2 * PAD, iconY: H - EDGE - PAD - T};
+    items.forEach(i => { i.x = x; x += i.px; });
+    return {items, slotW, barX: W / 2 - total / 2 - PAD, barW: total + 2 * PAD, barY: H - EDGE - T - 2 * PAD, barH: T + 2 * PAD, iconY: H - EDGE - PAD - T};
   }
-  const slotRect = L => { const i = L.items.find(i => i.k === "thumb"); return {x: i.x, y: L.iconY, w: T, h: T}; };
-  function thumbRect(slot) {
-    const k = T * BODY / Math.max(WIN.w, WIN.h), w = WIN.w * k, h = WIN.h * k;
-    return {x: slot.x + (T - w) / 2, y: slot.y + (T - h) / 2, w, h};
+  const slotRect = L => { const i = L.items.find(i => i.k === "thumb"); return {x: i.x, y: L.iconY, w: L.slotW, h: T}; };
+  function thumbRect(slot, target) {
+    if (target) return {x: slot.x + (slot.w - thumbW) / 2, y: slot.y + (T - B) / 2, w: thumbW, h: B};
+    const k = B / Math.max(WIN.w, WIN.h), w = WIN.w * k, h = WIN.h * k;
+    return {x: slot.x + (slot.w - w) / 2, y: slot.y + (T - h) / 2, w, h};
   }
 
   /* ---------- Genie: the fragment shader of crates/grade-graphics/src/minimize.frag, drawn row by row ---------- */
@@ -264,12 +272,13 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     c.strokeStyle = "rgba(255,255,255,.2)"; rr(c, L.barX + .5, L.barY + .5, L.barW - 1, L.barH - 1, L.barH * .3 - .5); c.stroke();
   }
 
-  function dockIcons(c, L) {
+  function dockIcons(c, L, target) {
+    const off = (T - B) / 2, y = L.iconY + off, folder = target ? B : T * 1.12;
     L.items.forEach(i => {
-      if (i.k === "browser") iconBrowser(c, i.x, L.iconY, T);
-      if (i.k === "settings") iconSettings(c, i.x, L.iconY, T);
-      if (i.k === "downloads") iconDownloads(c, i.x, L.iconY, T);
-      if (i.k === "trash") iconTrash(c, i.x, L.iconY, T);
+      if (i.k === "browser") iconBrowser(c, i.x + off, y, B);
+      if (i.k === "settings") iconSettings(c, i.x + off, y, B);
+      if (i.k === "downloads") iconDownloads(c, i.x, target ? y : L.iconY + (T - folder) / 2 - 4, folder);
+      if (i.k === "trash") iconTrash(c, i.x, y, B);
       if (i.k === "sep") { c.fillStyle = "rgba(255,255,255,.28)"; c.fillRect(i.x + i.px / 2 - .5, L.iconY + 6, 1, T - 12); }
       if (i.k === "browser" || i.k === "settings") { c.fillStyle = "rgba(255,255,255,.8)"; c.beginPath(); c.arc(i.x + T / 2, L.barY + L.barH - 5, 2, 0, 7); c.fill(); }
     });
@@ -277,31 +286,30 @@ input[type=range]{accent-color:var(--accent);min-width:0}
 
   function thumbnailTarget(c, slot, a) {
     if (a <= 0) return;
-    const r = thumbRect(slot), rad = Math.min(r.w, r.h) * S.radius;
+    const r = thumbRect(slot, true), rad = Math.min(r.w, r.h) * S.radius;
     c.save(); c.globalAlpha = a;
-    c.shadowColor = "rgba(0,0,0,.45)"; c.shadowBlur = 8; c.shadowOffsetY = 3; rr(c, r.x, r.y, r.w, r.h, rad); c.fillStyle = "#242427"; c.fill();
+    c.shadowColor = "rgba(0,0,0,.35)"; c.shadowBlur = 6; c.shadowOffsetY = 2; rr(c, r.x, r.y, r.w, r.h, rad); c.fillStyle = "#242427"; c.fill();
     c.shadowColor = "transparent"; rr(c, r.x, r.y, r.w, r.h, rad); c.clip(); c.imageSmoothingQuality = "high"; c.drawImage(snap, r.x, r.y, r.w, r.h); c.restore();
-    c.save(); c.globalAlpha = a; c.strokeStyle = "rgba(255,255,255,.28)"; c.lineWidth = 1; rr(c, r.x + .5, r.y + .5, r.w - 1, r.h - 1, rad); c.stroke(); c.restore();
-    c.save(); c.globalAlpha = a; iconSettings(c, slot.x + T * .56, slot.y + T * .5, T * .5); c.restore();
+    c.save(); c.globalAlpha = a; iconSettings(c, r.x + r.w - T * .3, r.y + r.h - T * .3, T * .4); c.restore();
   }
 
   function thumbnailToday(c, slot, a, placeholder, L) {
     if (placeholder) {
-      c.fillStyle = "rgba(255,255,255,.16)"; rr(c, slot.x + 3, slot.y + 3, T - 6, T - 6, 10); c.fill(); iconSettings(c, slot.x + T * .2, slot.y + T * .2, T * .6);
+      c.fillStyle = "rgba(255,255,255,.16)"; rr(c, slot.x + 3, slot.y + 3, T - 6, T - 6, 10); c.fill(); iconSettings(c, slot.x + (T - B * .6) / 2, slot.y + (T - B * .6) / 2, B * .6);
       return;
     }
     if (a <= 0) return;
-    const r = thumbRect(slot);
+    const r = thumbRect(slot, false);
     c.save(); c.globalAlpha = .78 * a; c.drawImage(snap, r.x, r.y, r.w, r.h); c.restore();
     c.strokeStyle = "rgba(255,255,255,.5)"; c.lineWidth = 1; c.beginPath(); c.moveTo(r.x, L.barY + 1.5); c.lineTo(r.x + r.w, L.barY + 1.5); c.stroke();
-    iconSettings(c, slot.x + T * .56, slot.y + T * .5, T * .5);
+    iconSettings(c, slot.x + T * .6, slot.y + T * .55, T * .4);
   }
 
   function render() {
     const {mode, dir, t} = S, target = mode === "target", p = dir === "min" ? t : 1 - t;
     const f = target ? (dir === "min" ? ease(clamp(t / .8)) : 1 - ease(clamp(t / .8))) : (dir === "min" ? 1 : (t <= 0 ? 1 : 0));
     const alpha = target ? (dir === "min" ? clamp((t - .92) / .08) : clamp(1 - t / .08)) : (dir === "min" ? (t >= 1 ? 1 : 0) : (t <= 0 ? 1 : 0));
-    const L = layout(f), L1 = layout(1), slot = slotRect(L), goal = target ? thumbRect(slotRect(L1)) : slotRect(L1);
+    const sw = slotWidth(target), L = layout(f, sw), L1 = layout(1, sw), slot = slotRect(L), goal = target ? thumbRect(slotRect(L1), true) : slotRect(L1);
     const flying = p > 0 && p < 1;
 
     bx.setTransform(dpr, 0, 0, dpr, 0, 0); bx.clearRect(0, 0, W, H);
@@ -312,7 +320,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, W, H);
     cx.drawImage(bg, 0, 0, W, H);
     dockGlass(cx, L);
-    dockIcons(cx, L);
+    dockIcons(cx, L, target);
     if (target) thumbnailTarget(cx, slot, alpha);
     else thumbnailToday(cx, slot, alpha, dir === "min" && t < 1, L);
     if (target && flying) genie(cx, p, goal);
@@ -324,7 +332,8 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     ["El genie va por encima del Dock", "La ventana nace de la miniatura y se ve entera al cruzar la barra.", "El cristal del Dock lo cubre: la ventana parece salir de detrás."],
     ["El Dock abre su hueco", "El mosaico crece de 0 a 1 mientras baja el genie y las demás miniaturas se apartan. Al restaurar, se cierra.", "El hueco aparece de golpe al empezar; no hay sitio preparado."],
     ["El genie aterriza en la miniatura", "El destino es el rectángulo de la miniatura, con la proporción de la ventana.", "El destino es el cuadrado del hueco: la ventana se aplasta y luego aparece la miniatura."],
-    ["La miniatura es una ventana pequeña", "Opaca, esquinas redondeadas, borde de un píxel, sombra e insignia de la app.", "Translúcida, de esquinas rectas y con la línea del Dock cruzándola."]
+    ["La miniatura es la ventana en pequeño", "Opaca, con el redondeo de la ventana y sin borde. Una sombra suave y la insignia de la app.", "Translúcida, de esquinas rectas y con la línea del Dock cruzándola."],
+    ["Todo del alto del icono de Ajustes", "La miniatura y la carpeta de Descargas miden lo mismo que el icono de Ajustes. La miniatura es más ancha porque conserva la proporción de la ventana, y su hueco también.", "La carpeta sobresale por encima de los iconos de las apps y la miniatura es más pequeña que ellos."]
   ];
   const TRACKS = {
     "target-min": [["Hueco del Dock", 0, .8, "--bar-a"], ["Genie sobre el Dock", 0, 1, "--bar-b"], ["Aparece la miniatura", .92, 1, "--bar-c"]],
