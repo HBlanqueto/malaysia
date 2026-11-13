@@ -47,9 +47,7 @@ use serde::{Deserialize, Serialize};
 use torin::prelude::{Gaps, Position};
 
 use crate::desktop::{self, DesktopEntry};
-use crate::launcher::{
-    ICON_SIZES, IconData, app_icon, forget_icons, launch, load_icon_in, styled_app_icon,
-};
+use crate::launcher::{ICON_SIZES, IconData, app_icon, forget_icons, launch, load_icon_in};
 use crate::launcher_entry::{self, Entries, Entry};
 use crate::localize::tr;
 use crate::menubar::{find_entry, resolve_app_name};
@@ -139,19 +137,16 @@ fn placed((x, y, width, height): Area) -> Rect {
         .height(Size::px(height))
 }
 
-// macOS draws every icon on one 1024 grid with an 824 body. The app icons of the Malaysia themes
-// already are; other themes' icons and the places fill their canvas, so they shrink to the body.
+// macOS draws every icon on one 1024 grid with an 824 body. An app icon already sits on it: a Malaysia
+// theme draws it so, and the kit puts any other on a plate. The places fill their canvas, so they shrink to the body.
 fn on_grid(icon: Option<&IconData>, name: &str, size: f32) -> Element {
-    let gridded = icon.is_some_and(|icon| {
-        let path = icon.path.to_string_lossy();
-        path.contains("/icons/Malaysia") && path.contains("/apps/")
-    });
+    let gridded = icon.is_some_and(|icon| icon.app);
     let drawn = if gridded { size } else { size * DOCK_ICON_BODY };
     rect()
         .width(Size::px(size))
         .height(Size::px(size))
         .center()
-        .child(styled_app_icon(icon, name, drawn))
+        .child(app_icon(icon, name, drawn))
         .into_element()
 }
 

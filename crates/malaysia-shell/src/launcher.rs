@@ -34,6 +34,8 @@ use bk::theme;
 pub(crate) struct IconData {
     pub(crate) path: PathBuf,
     pub(crate) svg: Option<Bytes>,
+    raster: Option<Bytes>,
+    pub(crate) app: bool,
 }
 
 #[derive(Clone)]
@@ -241,15 +243,17 @@ const ICON_RASTER_AGE: Duration = Duration::from_secs(10);
 
 pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
     match icon {
+        Some(icon) if icon.app => app_image(icon, size),
         Some(IconData {
             path,
             svg: Some(bytes),
+            ..
         }) => SvgViewer::new((path.clone(), bytes.clone()))
             .asset_age(ICON_RASTER_AGE)
             .width(Size::px(size))
             .height(Size::px(size))
             .into_element(),
-        Some(IconData { path, svg: None }) => ImageViewer::new(path.clone())
+        Some(IconData { path, .. }) => ImageViewer::new(path.clone())
             .decode_mode(DecodeMode::Source)
             .width(Size::px(size))
             .height(Size::px(size))
@@ -275,19 +279,21 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
     }
 }
 
-pub(crate) fn styled_app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
-    match (icon, theme::resolved().icon_style) {
-        (
-            Some(IconData {
-                svg: Some(bytes), ..
-            }),
-            style,
-        ) if style != IconStyle::Default => Image::data(bytes.clone())
-            .icon_style(style)
-            .size(size)
-            .into_element(),
-        _ => app_icon(icon, name, size),
+// An icon of a Malaysia theme already is a plate; any other app icon gets one from the kit.
+fn app_image(icon: &IconData, size: f32) -> Element {
+    let Some(bytes) = icon.svg.clone().or_else(|| icon.raster.clone()) else {
+        return ImageViewer::new(icon.path.clone())
+            .width(Size::px(size))
+            .height(Size::px(size))
+            .into_element();
+    };
+    let image = Image::data(bytes).size(size);
+    if icon.path.to_string_lossy().contains("/icons/Malaysia") {
+        image.icon_style(theme::resolved().icon_style)
+    } else {
+        image.app_icon()
     }
+    .into_element()
 }
 
 fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> Element {
@@ -416,8 +422,9 @@ pub(crate) fn load_icon_in(
 ) -> Option<IconData> {
     let icon = icon?;
     let direct = PathBuf::from(icon);
+    let app = contexts.contains(&"apps");
     if direct.is_absolute() && direct.is_file() {
-        return icon_data(&direct);
+        return icon_data(&direct, app);
     }
     THEMED_ICONS.with_borrow_mut(|found| {
         found
@@ -441,7 +448,7 @@ fn find_themed(icon: &str, sizes: &[&str], contexts: &[&str]) -> Option<IconData
                     for extension in ["svg", "png"] {
                         let candidate = context_dir.join(format!("{icon}.{extension}"));
                         if candidate.is_file()
-                            && let Some(data) = icon_data(&candidate)
+                            && let Some(data) = icon_data(&candidate, contexts.contains(&"apps"))
                         {
                             return Some(data);
                         }
@@ -454,7 +461,7 @@ fn find_themed(icon: &str, sizes: &[&str], contexts: &[&str]) -> Option<IconData
         for extension in ["svg", "png"] {
             let candidate = dir.join("pixmaps").join(format!("{icon}.{extension}"));
             if candidate.is_file() {
-                return icon_data(&candidate);
+                return icon_data(&candidate, contexts.contains(&"apps"));
             }
         }
     }
@@ -483,15 +490,14 @@ fn lookup_order(theme: &str, data_dirs: &[PathBuf], order: &mut Vec<String>) {
     }
 }
 
-fn icon_data(path: &std::path::Path) -> Option<IconData> {
-    let svg = if path.extension().is_some_and(|ext| ext == "svg") {
-        Some(Bytes::from(std::fs::read(path).ok()?))
-    } else {
-        None
-    };
+fn icon_data(path: &std::path::Path, app: bool) -> Option<IconData> {
+    let bytes = Bytes::from(std::fs::read(path).ok()?);
+    let svg = path.extension().is_some_and(|ext| ext == "svg");
     Some(IconData {
         path: path.to_path_buf(),
-        svg,
+        svg: svg.then(|| bytes.clone()),
+        raster: (!svg).then_some(bytes),
+        app,
     })
 }
 
