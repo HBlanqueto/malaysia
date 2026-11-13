@@ -53,9 +53,7 @@
   figcaption b { font: 600 15px var(--font-head); }
   figcaption span { font: 12.5px/1.5 var(--font-mono); color: var(--muted); }
   canvas { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); background: #000; }
-  .groups { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
-  @media (max-width: 1100px) { .groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 640px) { .groups { grid-template-columns: minmax(0, 1fr); } }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 20px; }
   .tuning { display: grid; gap: 8px; align-content: start; }
   .tuning p { font-size: 12.5px; }
   .slider { display: grid; grid-template-columns: 96px minmax(0, 1fr) 44px; gap: 8px; align-items: center; font-size: 13px; }
@@ -72,7 +70,7 @@
   <header>
     <div class="eyebrow">Malaysia · ADR 0078</div>
     <h1>Ajuste de la sidebar</h1>
-    <p>La sidebar como isla, sobre el mismo fondo, con lo que lleva el compositor, con la propuesta medida en macOS y con tus valores, en oscuro y en claro. Cada modo guarda sus valores: cambia de modo y sigue ajustando. Los valores que salen abajo, los dos modos juntos, son los que confirmas.</p>
+    <p>La sidebar como isla, sobre el mismo fondo, con lo que lleva el compositor, con la propuesta medida en macOS y con tus valores, en oscuro y en claro. «Tu ajuste» arranca con los que dejaste en la versión anterior. Cada modo guarda sus valores: cambia de modo y sigue ajustando. Los valores que salen abajo, los dos modos juntos, son los que confirmas.</p>
   </header>
 
   <section class="panel controls" aria-label="Escena">
@@ -128,7 +126,8 @@
       <li><b>Pasadas</b> es el ancho del desenfoque: cada una lo duplica, con un sigma de 53 px con 5, 107 con 6 y 213 con 7 en una pantalla de 1080 px de alto. Solo se ve si dejas pasar croma o claridad del fondo en el centro; con los dos en 0 el centro es un sólido plano.</li>
       <li><b>Croma</b> y <b>claridad</b> del fondo son cuánto del color y de la luminosidad de lo de detrás atraviesan el centro. <b>Tope</b> limita hasta dónde satura un fondo muy vivo.</li>
       <li>La <b>rampa del borde</b> es el color del fondo que asoma junto a los bordes izquierdo, superior e inferior de la sidebar. En macOS cae de forma exponencial en unos 46 px de captura y no existe en el borde que mira al contenido. Intensidad 0.70 es más sólido que lo medido; 1.00 es lo medido.</li>
-      <li>La <b>línea del borde</b> es un trazo blanco de 1 px, más claro que el relleno y teñido con el fondo. La opacidad oscura (0.12) sale de la captura; la clara (0.60) no está medida.</li>
+      <li>La <b>línea del borde</b> es un trazo de 1 px más claro que el relleno. En oscuro es blanca y teñida (captura de Ajustes). En claro es casi blanca y apenas teñida: L 0.98–0.99 y croma 0.004–0.017 (captura de Libros).</li>
+      <li>El <b>marco</b> es la franja de 8 px de la ventana alrededor de la isla. En claro con foco es sólida, gris (L 0.90–0.93) y apenas teñida (croma 0.00–0.02). Sin foco es blanca (255) y la isla es un gris neutro de 247 (capturas de Libros y Apple TV). No está dibujada la sombra suave que la isla echa hacia el contenido con foco.</li>
       <li>El <b>grano</b> empieza en 0: en la captura de macOS el relleno varía 0.5 sobre 255, así que no tiene grano visible.</li>
       <li>El <b>color del borde</b> puede salir de lo que hay justo fuera de la ventana o justo dentro; no se sabe cuál hace macOS. Con el fondo de prueba se ve la diferencia: fuera da un borde oscuro, dentro uno claro.</li>
     </ul>
@@ -153,8 +152,12 @@
   const RIM_NOW = { dark: [255, 255, 255, 0.078], light: [111, 118, 134, 0.3] };
   const RIM_NOW_CHROMA = 0.65;
   const DEFAULTS = {
-    dark: { passes: 6, chroma: 0, lightness: 0, cap: 0.06, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.65, edgeLightness: 0.22, edgeCap: 0.12, source: 'outside', rim: 0.12, rimChroma: 0.3, noise: 0 },
-    light: { passes: 6, chroma: 0, lightness: 0, cap: 0.03, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.45, edgeLightness: 0.15, edgeCap: 0.09, source: 'outside', rim: 0.6, rimChroma: 0.3, noise: 0 },
+    dark: { passes: 6, chroma: 0, lightness: 0, cap: 0.06, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.65, edgeLightness: 0.22, edgeCap: 0.12, source: 'outside', rim: 0.12, rimChroma: 0.3, noise: 0, frameTone: 0.256, frameChroma: 0 },
+    light: { passes: 6, chroma: 0, lightness: 0, cap: 0.03, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.45, edgeLightness: 0, edgeCap: 0.04, source: 'outside', rim: 0.8, rimChroma: 0.1, noise: 0, frameTone: 0.92, frameChroma: 0.15 },
+  };
+  const CONFIRMED = {
+    dark: { passes: 4, chroma: 0.05, lightness: 0, cap: 0.02, edge: 0.4, span: 114, edgePasses: 6, edgeChroma: 0.55, edgeLightness: 0.1, edgeCap: 0.18, source: 'outside', rim: 0.03, rimChroma: 1, noise: 0, frameTone: 0.256, frameChroma: 0 },
+    light: { passes: 8, chroma: 0, lightness: 0, cap: 0.03, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.45, edgeLightness: 0, edgeCap: 0.04, source: 'outside', rim: 0.8, rimChroma: 0, noise: 0, frameTone: 0.92, frameChroma: 0.15 },
   };
   const GROUPS = [
     { title: 'Desenfoque y centro', note: 'Con croma y claridad en 0 el centro es sólido y el desenfoque no se ve.', sliders: [
@@ -172,16 +175,20 @@
       { key: 'edgeCap', label: 'Tope', min: 0.02, max: 0.2, step: 0.01, digits: 2 },
       { key: 'source', label: 'Toma el color de', options: [['outside', 'fuera de la ventana'], ['inside', 'dentro de la ventana']] },
     ] },
-    { title: 'Línea del borde', note: 'Un trazo blanco de 1 px.', sliders: [
+    { title: 'Línea del borde', note: 'Un trazo de 1 px más claro que el relleno.', sliders: [
       { key: 'rim', label: 'Opacidad', min: 0, max: 0.8, step: 0.01, digits: 2 },
       { key: 'rimChroma', label: 'Tinte', min: 0, max: 1, step: 0.05, digits: 2 },
+    ] },
+    { title: 'Marco de la isla', note: 'La franja de la ventana alrededor de la isla. Sin foco es blanca en claro.', sliders: [
+      { key: 'frameTone', label: 'Claridad', min: 0.2, max: 1, step: 0.01, digits: 2 },
+      { key: 'frameChroma', label: 'Tinte del fondo', min: 0, max: 0.5, step: 0.01, digits: 2 },
     ] },
     { title: 'Grano', note: 'En macOS no se ve.', sliders: [
       { key: 'noise', label: 'Cantidad', min: 0, max: 0.06, step: 0.002, digits: 3 },
     ] },
   ];
 
-  const state = { scheme: 'dark', focused: true, wallpaper: 'tahoe', params: { dark: { ...DEFAULTS.dark }, light: { ...DEFAULTS.light } } };
+  const state = { scheme: 'dark', focused: true, wallpaper: 'tahoe', params: { dark: { ...CONFIRMED.dark }, light: { ...CONFIRMED.light } } };
   const current = () => state.params[state.scheme];
   const $ = id => document.getElementById(id);
 
@@ -390,6 +397,14 @@
     }
   }
 
+  // The window's own strip around the island: a solid tone with a trace of the wallpaper; white without focus in light.
+  function drawFrame(ctx, cfg) {
+    if (cfg.legacy || (!state.focused && state.scheme === 'light')) return;
+    const [r, g, b] = takeTint([cfg.frameTone, 0, 0], scene(state.wallpaper).mean, cfg.frameChroma, 0, 0.1);
+    ctx.save(); ctx.beginPath(); ctx.roundRect(WIN.x, WIN.y, WIN.w, WIN.h, WIN.r); ctx.clip();
+    ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.fillRect(WIN.x, WIN.y, PANEL.x + PANEL.w + INSET - WIN.x, WIN.h); ctx.restore();
+  }
+
   function render(canvas, cfg) {
     const { scheme } = state, ctx = canvas.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -397,6 +412,7 @@
     ctx.setTransform(S, 0, 0, S, 0, 0);
     ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 28; ctx.shadowOffsetY = 10;
     ctx.fillStyle = WINDOW[scheme]; ctx.beginPath(); ctx.roundRect(WIN.x, WIN.y, WIN.w, WIN.h, WIN.r); ctx.fill(); ctx.restore();
+    drawFrame(ctx, cfg);
     drawGlass(ctx, cfg);
     ctx.strokeStyle = scheme === 'dark' ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(WIN.x + 0.5, WIN.y + 0.5, WIN.w - 1, WIN.h - 1, WIN.r); ctx.stroke();
@@ -404,7 +420,7 @@
   }
 
   const fixed = p => p.toFixed(2);
-  const summary = p => `fondo en el centro: croma ${fixed(p.chroma)}, claridad ${fixed(p.lightness)} · borde al ${Math.round(p.edge * 100)} % · línea ${fixed(p.rim)} · grano ${p.noise.toFixed(3)}`;
+  const summary = p => `fondo en el centro: croma ${fixed(p.chroma)}, claridad ${fixed(p.lightness)} · borde al ${Math.round(p.edge * 100)} % · línea ${fixed(p.rim)} · marco ${fixed(p.frameTone)} · grano ${p.noise.toFixed(3)}`;
   const readout = () => ['dark', 'light'].map(modeReadout).join('\n\n');
   function modeReadout(scheme) {
     const p = state.params[scheme];
@@ -412,6 +428,7 @@
       `centro: desenfoque ${p.passes} pasadas · croma ${fixed(p.chroma)} · claridad ${fixed(p.lightness)} · tope ${fixed(p.cap)}`,
       `borde: intensidad ${fixed(p.edge)} · caída ${p.span} px · desenfoque ${p.edgePasses} pasadas · croma ${fixed(p.edgeChroma)} · claridad ${fixed(p.edgeLightness)} · tope ${fixed(p.edgeCap)} · color de ${p.source === 'outside' ? 'fuera' : 'dentro'}`,
       `línea: opacidad ${fixed(p.rim)} · tinte ${fixed(p.rimChroma)}`,
+      `marco: claridad ${fixed(p.frameTone)} · tinte del fondo ${fixed(p.frameChroma)}`,
       `grano: ${p.noise.toFixed(3)}`].join('\n');
   }
 
