@@ -1,0 +1,385 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Borde de la isla</title>
+<style>
+  /* Una mesa de comparación del borde de la isla en oscuro: lo medido en macOS, lo medido en Malaysia y el modelo con sus dos algoritmos, en cortes de un píxel y en la esquina. */
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --fg: #15181d;
+    --muted: #5d6673;
+    --line: #d9dde3;
+    --accent: #0a6cf0;
+    --accent-ink: #ffffff;
+    --soft: #e8ecf2;
+    --ok: #17803d;
+    --font-text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111419; --panel: #1a1e25; --fg: #eceff4; --muted: #9aa3b0; --line: #2c333d;
+      --accent: #5aa2ff; --accent-ink: #07131f; --soft: #232a34; --ok: #5fcf86;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111419; --panel: #1a1e25; --fg: #eceff4; --muted: #9aa3b0; --line: #2c333d;
+    --accent: #5aa2ff; --accent-ink: #07131f; --soft: #232a34; --ok: #5fcf86;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-text); line-height: 1.5;
+    padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+  .eyebrow { font: 600 12px/1 var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font: 700 34px/1.1 var(--font-head); margin: 8px 0 10px; text-wrap: balance; }
+  h2 { font: 600 16px/1.3 var(--font-head); margin: 0 0 10px; }
+  h3 { font: 600 13px/1.3 var(--font-head); margin: 0; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
+  p { margin: 0; max-width: 76ch; color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; }
+  .group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .label { font-size: 12px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  select, button { font: 500 14px var(--font-text); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .algos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 800px) { .algos { grid-template-columns: minmax(0, 1fr); } }
+  .algos ol { margin: 8px 0 0; padding-left: 18px; color: var(--muted); display: grid; gap: 4px; font-size: 14px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  code { font: 12.5px var(--font-mono); background: var(--soft); border-radius: 4px; padding: 1px 5px; color: var(--fg); }
+  .strips { display: grid; gap: 14px; }
+  .strip-row { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 12px; align-items: center; }
+  @media (max-width: 800px) { .strip-row { grid-template-columns: minmax(0, 1fr); } }
+  .strip-name { font: 600 14px var(--font-head); }
+  .strip-name span { display: block; font: 12px var(--font-mono); color: var(--muted); font-weight: 400; }
+  .cells { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); height: 44px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+  .cells i { display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.num { font-family: var(--font-mono); }
+  .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .trio { grid-template-columns: minmax(0, 1fr); } }
+  figure { margin: 0; display: grid; gap: 8px; min-width: 0; }
+  figcaption { display: grid; gap: 2px; }
+  figcaption b { font: 600 15px var(--font-head); }
+  figcaption span { font: 12.5px/1.5 var(--font-mono); color: var(--muted); }
+  canvas { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); background: #000; image-rendering: pixelated; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 20px; }
+  .tuning { display: grid; gap: 8px; align-content: start; }
+  .tuning p { font-size: 12.5px; }
+  .slider { display: grid; grid-template-columns: 110px minmax(0, 1fr) 48px; gap: 8px; align-items: center; font-size: 13px; }
+  .slider input { width: 100%; accent-color: var(--accent); }
+  .slider output { font: 12.5px var(--font-mono); text-align: right; }
+  .copy { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+  .readout { font: 12.5px/1.6 var(--font-mono); background: var(--soft); border-radius: 8px; padding: 10px 12px; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 10px; }
+  .status { font-size: 13px; color: var(--ok); min-height: 1.2em; }
+  ul.notes { margin: 0; padding-left: 18px; color: var(--muted); max-width: 78ch; display: grid; gap: 6px; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Malaysia · ADR 0078 · modo oscuro</div>
+    <h1>Borde de la isla</h1>
+    <p>La línea alrededor de la isla de la sidebar y lo que la rodea, en oscuro. Arriba, un corte de un píxel a través del borde con lo medido en una captura de macOS (Atajos) y en una de Malaysia (Ajustes), y el modelo con sus dos algoritmos. Abajo, la esquina y los controles. Los valores que salen al final son los que confirmas.</p>
+  </header>
+
+  <section class="algos">
+    <div class="panel">
+      <h2>Algoritmo actual: capa encima</h2>
+      <ol>
+        <li>La línea parte de un color base, blanco por defecto (<code>rim</code>).</li>
+        <li>Toma el croma del fondo con <code>tinte</code>, limitado por el tope de croma del vidrio (<code>chroma-cap</code>, 0.02 en oscuro).</li>
+        <li>Se mezcla sobre el relleno con la opacidad del token (0.03). No sabe qué color tiene el relleno.</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h2>Algoritmo derivado: como mide macOS</h2>
+      <ol>
+        <li>Calcula el color del relleno en ese punto, con las mismas cuentas del material.</li>
+        <li>La línea es ese color, más claro y más saturado: <code>L = L del relleno + sube</code> y <code>croma = croma del relleno × croma×</code>, con su propio tope y el mismo tono.</li>
+        <li>Es sólida: opacidad 1. En la captura de Atajos: relleno L 0.254, croma 0.058, tono 279°; línea L 0.350, croma 0.082, tono 280°. Es decir, sube 0.096 y el croma ×1.41.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="panel controls" aria-label="Escena">
+    <div class="group">
+      <label class="label" for="algo">Algoritmo de «Tu ajuste»</label>
+      <select id="algo">
+        <option value="overlay">Capa encima (actual)</option>
+        <option value="derived">Derivado del relleno</option>
+      </select>
+    </div>
+    <div class="group">
+      <label class="label" for="wallpaper">Fondo</label>
+      <select id="wallpaper">
+        <option value="violet">Azul y violeta (como las capturas)</option>
+        <option value="landscape">Paisaje (Tahoe)</option>
+      </select>
+    </div>
+    <div class="group" role="group" aria-label="Punto de partida">
+      <span class="label">Partir de</span>
+      <button type="button" id="from-now">Lo de ahora</button>
+      <button type="button" id="from-macos">Como macOS</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Corte del borde, un píxel por celda</h2>
+    <div class="strips" id="strips"></div>
+    <div class="legend" style="margin-top:12px">
+      <span>De izquierda a derecha: fondo, trazo oscuro de la ventana, contorno claro, marco, línea de la isla, relleno.</span>
+      <span>La captura de macOS está a la mitad de escala: su marco es de 4 celdas y su línea de 2, y en Malaysia son 7 y 1.</span>
+    </div>
+    <div class="scroll" style="margin-top:12px">
+      <table>
+        <thead><tr><th>Fuente</th><th>Marco (L · croma)</th><th>Línea (L · croma · tono)</th><th>Relleno (L · croma · tono)</th><th>Línea − relleno</th></tr></thead>
+        <tbody id="metrics"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="trio" aria-label="Esquina">
+    <figure>
+      <canvas id="now" role="img" aria-label="Esquina de la isla con lo que lleva Malaysia ahora"></canvas>
+      <figcaption><b>Ahora en el compositor</b><span id="now-values"></span></figcaption>
+    </figure>
+    <figure>
+      <canvas id="macos" role="img" aria-label="Esquina de la isla con el algoritmo derivado y los valores de macOS"></canvas>
+      <figcaption><b>Derivado, como macOS</b><span id="macos-values"></span></figcaption>
+    </figure>
+    <figure>
+      <canvas id="custom" role="img" aria-label="Esquina de la isla con tu ajuste"></canvas>
+      <figcaption><b>Tu ajuste</b><span id="custom-values"></span></figcaption>
+    </figure>
+  </section>
+
+  <section class="panel">
+    <h2>Tu ajuste</h2>
+    <div class="groups" id="groups"></div>
+    <div class="copy">
+      <button type="button" id="copy">Copiar valores</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+    <div class="readout" id="readout"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Cómo leerlo</h2>
+    <ul class="notes">
+      <li>Las dos capturas usan fondos azul y violeta con croma parecido (0.18 a 0.22), así que se pueden comparar, pero son de apps distintas. Compara las relaciones, no los colores absolutos: cuánto más clara y más saturada es la línea que el relleno, y cuánto más oscuro es el marco.</li>
+      <li>El modelo dibuja un fondo propio en degradado. Con él, el relleno sale con el croma y el tono que le da el fondo, igual que en el compositor.</li>
+      <li>La rampa del borde del relleno queda con tus valores de oscuro (intensidad 0.70, caída 28 px, croma 0.25, claridad 0.10, tope 0.18) y no se edita aquí.</li>
+      <li>En el algoritmo derivado el tope de la línea corta el croma de golpe, sin suavizarlo, para que el valor sea el que escribes.</li>
+      <li>Para llevar el derivado al compositor, el shader de la línea calcularía el relleno con los mismos valores del material, y habría tokens nuevos para el tope de la línea, lo que sube y el factor de croma. Lo de ahora (capa encima) no los necesita, pero su tope es el del vidrio.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  const PW = 140, PH = 112, Z = 4;
+  const WINDOW_BOX = { x: 24, y: PH - 20 - 800, w: 800, h: 800 }, WINDOW_R = 26;
+  const ISLAND_BOX = { x: 32, y: PH - 28 - 780, w: 224, h: 780 }, ISLAND_R = 18;
+  const EDGE = { intensity: 0.7, span: 28, chroma: 0.25, lightness: 0.1, cap: 0.18, offset: 11 };
+  const SOLID_TINT = 0.3;
+  const STRIP_X = 20, STRIP_Y = 40.5;
+  const SCENES = {
+    violet: { top: [84, 48, 208], bottom: [6, 36, 160] },
+    landscape: { top: [63, 143, 203], bottom: [14, 111, 144] },
+  };
+  const NOW = { algo: 'overlay', baseL: 0.273, chroma: 0.05, cap: 0.02, alpha: 0.03, width: 1, tint: 1, rimCap: 0.02, rimL: 1, lift: 0.096, boost: 1.41, frameL: 0.257, frameTint: 0.1 };
+  const MACOS = { algo: 'derived', baseL: 0.251, chroma: 0.3, cap: 0.06, alpha: 1, width: 1, tint: 1, rimCap: 0.25, rimL: 1, lift: 0.096, boost: 1.41, frameL: 0.234, frameTint: 0.19 };
+  const MEASURED = [
+    { name: 'macOS, Atajos', note: 'captura a media escala', frame: [5, 8], line: [9, 10], fill: [13, 19],
+      cells: [[2, 16, 82], [3, 13, 80], [4, 12, 66], [9, 14, 41], [56, 60, 76], [25, 28, 47], [24, 28, 47], [23, 29, 46], [23, 28, 53], [32, 34, 79], [51, 52, 100], [25, 28, 64], [30, 34, 62], [29, 32, 59], [29, 31, 60], [29, 31, 62], [29, 30, 64], [29, 30, 64], [29, 30, 64], [29, 31, 62]] },
+    { name: 'Malaysia, Ajustes', note: 'captura de la pantalla', frame: [5, 10], line: [12, 12], fill: [14, 19],
+      cells: [[20, 52, 122], [24, 50, 110], [29, 47, 89], [0, 5, 30], [52, 57, 68], [32, 35, 41], [33, 34, 43], [33, 34, 43], [32, 35, 45], [32, 35, 45], [30, 36, 43], [27, 35, 44], [41, 50, 65], [33, 41, 59], [33, 41, 61], [33, 41, 61], [33, 41, 59], [33, 41, 59], [33, 40, 58], [33, 40, 58]] },
+  ];
+  const MODEL_RANGES = { frame: [5, 11], line: [12, 12], fill: [14, 19] };
+
+  const state = { wallpaper: 'violet', params: { ...MACOS } };
+  const $ = id => document.getElementById(id);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const mix = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
+
+  const toLin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const toSrgb = c => { c = clamp(c, 0, 1); return 255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055); };
+  function toLab([r, g, b]) {
+    const R = toLin(r), G = toLin(g), B = toLin(b);
+    const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+    const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+    const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  }
+  function toRgb([L, a, b]) {
+    const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
+    const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
+    const s = Math.pow(L - 0.0894841775 * a - 1.291485548 * b, 3);
+    return [toSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      toSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      toSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+  }
+  // Same steps as grade-graphics/oklab.glsl take_tint, on Oklab values.
+  function tintLab(base, q, chroma, lightness, cap) {
+    const a = base[1] + (q[1] - base[1]) * chroma, b = base[2] + (q[2] - base[2]) * chroma;
+    const soft = 1 / Math.sqrt(1 + (a * a + b * b) / (cap * cap));
+    return [base[0] + (q[0] - base[0]) * lightness, a * soft, b * soft];
+  }
+  const lch = ([L, a, b]) => ({ L, C: Math.hypot(a, b), h: (Math.atan2(b, a) * 180 / Math.PI + 360) % 360 });
+
+  function boxSdf(px, py, box, r) {
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    const qx = Math.abs(px - cx) - (box.w / 2 - r), qy = Math.abs(py - cy) - (box.h / 2 - r);
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+  }
+  const cover = d => clamp(0.5 - d, 0, 1);
+
+  const wall = (px, py) => { const s = SCENES[state.wallpaper]; return mix(s.bottom, s.top, clamp(0.9 - (py / PH) * 0.9 + (px / PW) * 0.1, 0, 1)); };
+
+  function pixelColor(px, py, p) {
+    const meanLab = toLab(mix(SCENES[state.wallpaper].bottom, SCENES[state.wallpaper].top, 0.5));
+    const backdrop = wall(px, py), q = toLab(backdrop);
+    const frame = toRgb(tintLab([p.frameL, 0, 0], meanLab, p.frameTint, 0, 0.2));
+    const dW = boxSdf(px, py, WINDOW_BOX, WINDOW_R), dI = boxSdf(px, py, ISLAND_BOX, ISLAND_R);
+    let c = mix(backdrop, mix(backdrop, [0, 0, 0], 0.9), cover(dW - 1) - cover(dW));
+    c = mix(c, frame, cover(dW));
+    c = mix(c, mix(frame, [255, 255, 255], 0.1), cover(dW) - cover(dW + 1));
+    if (cover(dI) <= 0) return c;
+    const solid = tintLab([p.baseL, 0, 0], meanLab, SOLID_TINT, 0, p.cap);
+    const centre = p.chroma > 0 ? tintLab(solid, q, p.chroma, 0, p.cap) : solid;
+    const left = Math.exp(-Math.max(px - ISLAND_BOX.x, 0) / EDGE.span), bottom = Math.exp(-Math.max(ISLAND_BOX.y + ISLAND_BOX.h - py, 0) / EDGE.span);
+    const outside = [0, 1, 2].map(k => (left * toLab(wall(WINDOW_BOX.x - EDGE.offset, py))[k] + bottom * toLab(wall(px, WINDOW_BOX.y + WINDOW_BOX.h + EDGE.offset))[k]) / (left + bottom));
+    const edge = tintLab([p.baseL, 0, 0], outside, EDGE.chroma, EDGE.lightness, EDGE.cap);
+    const fill = mix(centre, edge, Math.max(left, bottom) * EDGE.intensity);
+    c = mix(c, toRgb(fill), cover(dI));
+    const band = cover(dI) - cover(dI + p.width);
+    if (band <= 0 || p.alpha <= 0) return c;
+    let rim;
+    if (p.algo === 'overlay') rim = toRgb(tintLab([p.rimL, 0, 0], q, p.tint, 0, p.rimCap));
+    else {
+      const chroma = Math.hypot(fill[1], fill[2]), target = Math.min(chroma * p.boost, p.rimCap), k = chroma > 1e-6 ? target / chroma : 0;
+      rim = toRgb([Math.min(1, fill[0] + p.lift), fill[1] * k, fill[2] * k]);
+    }
+    return mix(c, rim, band * p.alpha);
+  }
+
+  const stats = (cells, [from, to]) => {
+    const picked = cells.slice(from, to + 1).map(toLab), n = picked.length;
+    const mean = [0, 1, 2].map(k => picked.reduce((sum, lab) => sum + lab[k], 0) / n);
+    return lch(mean);
+  };
+  const brightest = (cells, [from, to]) => { const labs = cells.slice(from, to + 1).map(c => [c, toLab(c)[0]]); return labs.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]; };
+
+  function modelCells(p) { return Array.from({ length: 20 }, (_, i) => pixelColor(STRIP_X + i + 0.5, STRIP_Y, p).map(Math.round)); }
+  const f2 = v => v.toFixed(3), f0 = v => Math.round(v);
+  function row(name, note, cells, ranges) {
+    const frame = stats(cells, ranges.frame), fill = stats(cells, ranges.fill);
+    const line = lch(toLab(brightest(cells, ranges.line)));
+    return { frame, fill, line, html: `<tr><td>${name}<br><span class="muted">${note}</span></td><td class="num">${f2(frame.L)} · ${f2(frame.C)}</td><td class="num">${f2(line.L)} · ${f2(line.C)} · ${f0(line.h)}°</td><td class="num">${f2(fill.L)} · ${f2(fill.C)} · ${f0(fill.h)}°</td><td class="num">${line.L - fill.L >= 0 ? '+' : ''}${f2(line.L - fill.L)} · croma ×${(line.C / fill.C).toFixed(2)}</td></tr>` };
+  }
+  const swatches = cells => cells.map(c => `<i style="background:rgb(${c.map(Math.round).join(',')})"></i>`).join('');
+
+  function renderStrips() {
+    const rows = [
+      ...MEASURED.map(m => ({ name: m.name, note: m.note, cells: m.cells, ranges: m })),
+      { name: 'Modelo: ahora', note: 'capa encima, tokens', cells: modelCells(NOW), ranges: MODEL_RANGES },
+      { name: 'Modelo: derivado, como macOS', note: 'sube 0.096, croma ×1.41', cells: modelCells(MACOS), ranges: MODEL_RANGES },
+      { name: 'Modelo: tu ajuste', note: state.params.algo === 'overlay' ? 'capa encima' : 'derivado', cells: modelCells(state.params), ranges: MODEL_RANGES },
+    ];
+    $('strips').innerHTML = rows.map(r => `<div class="strip-row"><div class="strip-name">${r.name}<span>${r.note}</span></div><div class="cells" role="img" aria-label="${r.name}">${swatches(r.cells)}</div></div>`).join('');
+    $('metrics').innerHTML = rows.map(r => row(r.name, r.note, r.cells, r.ranges).html).join('');
+  }
+
+  function renderCorner(canvas, p) {
+    canvas.width = PW * Z; canvas.height = PH * Z;
+    const ctx = canvas.getContext('2d'), image = ctx.createImageData(PW * Z, PH * Z);
+    for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+      const [r, g, b] = pixelColor(x + 0.5, y + 0.5, p);
+      for (let dy = 0; dy < Z; dy++) for (let dx = 0; dx < Z; dx++) {
+        const o = (((y * Z + dy) * PW * Z) + x * Z + dx) * 4;
+        image.data[o] = r; image.data[o + 1] = g; image.data[o + 2] = b; image.data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  const f2s = v => v.toFixed(2);
+  const describe = p => p.algo === 'overlay'
+    ? `capa encima · opacidad ${f2s(p.alpha)} · tinte ${f2s(p.tint)} · tope ${f2s(p.rimCap)} · ancho ${p.width} px`
+    : `derivado · sube ${p.lift.toFixed(3)} · croma ×${f2s(p.boost)} · tope ${f2s(p.rimCap)} · opacidad ${f2s(p.alpha)} · ancho ${p.width} px`;
+
+  const SLIDERS = [
+    { title: 'Relleno', note: 'De él depende la línea derivada.', items: [
+      { key: 'baseL', label: 'Base (L)', min: 0.2, max: 0.32, step: 0.005, digits: 3 },
+      { key: 'chroma', label: 'Croma del fondo', min: 0, max: 1, step: 0.05, digits: 2 },
+      { key: 'cap', label: 'Tope de croma', min: 0.02, max: 0.2, step: 0.01, digits: 2 },
+    ] },
+    { title: 'Línea', note: 'Opacidad y ancho valen para los dos algoritmos.', items: [
+      { key: 'alpha', label: 'Opacidad', min: 0, max: 1, step: 0.01, digits: 2 },
+      { key: 'width', label: 'Ancho (px)', min: 1, max: 3, step: 1, digits: 0 },
+      { key: 'rimCap', label: 'Tope de croma', min: 0.02, max: 0.3, step: 0.01, digits: 2 },
+      { key: 'tint', label: 'Tinte', min: 0, max: 1, step: 0.05, digits: 2, algo: 'overlay' },
+      { key: 'rimL', label: 'Base de la línea (L)', min: 0, max: 1, step: 0.05, digits: 2, algo: 'overlay' },
+      { key: 'lift', label: 'Sube (L)', min: 0, max: 0.3, step: 0.005, digits: 3, algo: 'derived' },
+      { key: 'boost', label: 'Croma ×', min: 0, max: 3, step: 0.05, digits: 2, algo: 'derived' },
+    ] },
+    { title: 'Marco', note: 'La franja de la ventana entre su contorno y la isla.', items: [
+      { key: 'frameL', label: 'Claridad (L)', min: 0.15, max: 0.32, step: 0.005, digits: 3 },
+      { key: 'frameTint', label: 'Tinte del fondo', min: 0, max: 1, step: 0.05, digits: 2 },
+    ] },
+  ];
+
+  function readout() {
+    const p = state.params;
+    return [`modo oscuro · algoritmo ${p.algo === 'overlay' ? 'capa encima' : 'derivado'}`,
+      `relleno: base L ${p.baseL.toFixed(3)} · croma ${f2s(p.chroma)} · tope ${f2s(p.cap)}`,
+      `línea: opacidad ${f2s(p.alpha)} · ancho ${p.width} px · tope ${f2s(p.rimCap)}` + (p.algo === 'overlay' ? ` · tinte ${f2s(p.tint)} · base L ${f2s(p.rimL)}` : ` · sube ${p.lift.toFixed(3)} · croma ×${f2s(p.boost)}`),
+      `marco: L ${p.frameL.toFixed(3)} · tinte ${f2s(p.frameTint)}`].join('\n');
+  }
+
+  function renderAll() {
+    renderCorner($('now'), NOW); $('now-values').textContent = describe(NOW);
+    renderCorner($('macos'), MACOS); $('macos-values').textContent = describe(MACOS);
+    renderCustom();
+  }
+  let pending = 0;
+  function renderCustom() {
+    cancelAnimationFrame(pending);
+    pending = requestAnimationFrame(() => {
+      renderCorner($('custom'), state.params); $('custom-values').textContent = describe(state.params);
+      renderStrips(); $('readout').textContent = readout();
+      for (const group of SLIDERS) for (const s of group.items) $(s.key + '-out').textContent = state.params[s.key].toFixed(s.digits);
+    });
+  }
+
+  function buildControls() {
+    $('groups').innerHTML = SLIDERS.map(g => `<div class="tuning"><h3>${g.title}</h3><p>${g.note}</p>${g.items.map(s => `<label class="slider" for="${s.key}" ${s.algo ? `data-algo="${s.algo}"` : ''}>${s.label}<input type="range" id="${s.key}" min="${s.min}" max="${s.max}" step="${s.step}"><output id="${s.key}-out"></output></label>`).join('')}</div>`).join('');
+    for (const g of SLIDERS) for (const s of g.items) $(s.key).oninput = e => { state.params[s.key] = parseFloat(e.target.value); renderCustom(); };
+  }
+  function syncControls() {
+    for (const g of SLIDERS) for (const s of g.items) $(s.key).value = state.params[s.key];
+    $('algo').value = state.params.algo;
+    for (const el of document.querySelectorAll('[data-algo]')) el.hidden = el.dataset.algo !== state.params.algo;
+  }
+
+  $('algo').onchange = e => { state.params.algo = e.target.value; syncControls(); renderCustom(); };
+  $('wallpaper').onchange = e => { state.wallpaper = e.target.value; renderAll(); };
+  $('from-now').onclick = () => { state.params = { ...NOW }; syncControls(); renderCustom(); };
+  $('from-macos').onclick = () => { state.params = { ...MACOS }; syncControls(); renderCustom(); };
+  $('copy').onclick = async () => {
+    const status = $('status');
+    try { await navigator.clipboard.writeText(readout()); status.textContent = 'Valores copiados.'; }
+    catch { const range = document.createRange(); range.selectNodeContents($('readout')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range); status.textContent = 'Selecciónalos y cópialos.'; }
+    setTimeout(() => { status.textContent = ''; }, 2500);
+  };
+
+  buildControls(); syncControls(); renderAll();
+})();
+</script>
