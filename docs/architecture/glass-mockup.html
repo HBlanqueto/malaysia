@@ -68,7 +68,7 @@
   <header>
     <div class="eyebrow">Malaysia · ADR 0078</div>
     <h1>Vidrio de la sidebar</h1>
-    <p>La misma ventana sobre el mismo fondo con los valores de antes, los de ahora y los que ajustes tú. El material usa la misma cuenta que el shader: croma con tope y parte de la claridad de lo que hay detrás, en Oklab.</p>
+    <p>La misma ventana sobre el mismo fondo con los valores que lleva el compositor, la propuesta medida sobre una captura de macOS y los que ajustes tú. El material usa la misma cuenta que el shader, y las pasadas, el mismo ancho de desenfoque que el compositor.</p>
   </header>
 
   <section class="panel controls" aria-label="Escena">
@@ -80,22 +80,22 @@
     <div class="group">
       <label class="label" for="wallpaper">Fondo</label>
       <select id="wallpaper">
+        <option value="tahoe">Paisaje (Tahoe)</option>
         <option value="aurora">Aurora</option>
         <option value="waves">Ondas rojo y azul</option>
         <option value="coast">Costa azul</option>
       </select>
     </div>
-    <label class="check"><input type="checkbox" id="behind"> Ventana clara detrás de la sidebar</label>
   </section>
 
   <section class="trio" aria-label="Comparación">
     <figure>
       <canvas id="before" width="1120" height="720" role="img" aria-label="Ventana con los valores de antes"></canvas>
-      <figcaption><b>Antes</b><span id="before-values"></span></figcaption>
+      <figcaption><b>Ahora en el compositor</b><span id="before-values"></span></figcaption>
     </figure>
     <figure>
       <canvas id="after" width="1120" height="720" role="img" aria-label="Ventana con los valores de ahora"></canvas>
-      <figcaption><b>Ahora</b><span id="after-values"></span></figcaption>
+      <figcaption><b>Propuesta</b><span id="after-values"></span></figcaption>
     </figure>
     <figure>
       <canvas id="custom" width="1120" height="720" role="img" aria-label="Ventana con tu ajuste"></canvas>
@@ -104,7 +104,7 @@
         <label class="slider" for="chroma">Croma <input type="range" id="chroma" min="0" max="1" step="0.05"><output id="chroma-out"></output></label>
         <label class="slider" for="cap">Tope <input type="range" id="cap" min="0.02" max="0.2" step="0.01"><output id="cap-out"></output></label>
         <label class="slider" for="lightness">Claridad <input type="range" id="lightness" min="0" max="1" step="0.05"><output id="lightness-out"></output></label>
-        <label class="slider" for="passes">Pasadas <input type="range" id="passes" min="1" max="5" step="1"><output id="passes-out"></output></label>
+        <label class="slider" for="passes">Pasadas <input type="range" id="passes" min="3" max="8" step="1"><output id="passes-out"></output></label>
       </div>
       <div class="copy">
         <button type="button" id="copy">Copiar valores</button>
@@ -119,9 +119,10 @@
     <ul class="notes">
       <li><b>Croma</b> es cuánto del color de lo de detrás toma el panel; <b>tope</b>, hasta dónde satura un fondo muy vivo.</li>
       <li><b>Claridad</b> es la parte de la luminosidad de lo de detrás que atraviesa el vidrio. Con 0 el panel es de un solo tono, como antes.</li>
-      <li><b>Pasadas</b> es el ancho del desenfoque. Aquí se aproxima con un gaussiano; en el compositor son pasadas de Kawase, así que el parecido es orientativo.</li>
-      <li>La ventana clara detrás muestra lo que ocurre cuando hay otra ventana bajo el vidrio.</li>
-      <li>El panel de detalle sigue en color de ventana: en tu referencia de macOS también toma el color del fondo, y aún no lo hacemos.</li>
+      <li><b>Pasadas</b> es el ancho del desenfoque. Cada pasada lo duplica: sigma de 53 px con 5, 107 con 6 y 213 con 7, en una pantalla de 1080 px de alto. Aquí se dibuja con un gaussiano de ese sigma, escalado al tamaño del fondo.</li>
+      <li>La sidebar solo desenfoca el fondo de pantalla: en macOS una ventana con barra rojiza detrás no cambia nada.</li>
+      <li>Referencia medida en macOS (captura del 13-nov, paisaje de Tahoe): la sidebar queda casi plana, con L 0.28 y croma 0.02 entre el 20 % y el 85 % de su altura, y solo sube a L 0.30 y croma 0.05 arriba. El fondo de detrás va de L 0.3 a 0.8, así que el vidrio toma cerca de un 12 % de su claridad y un 25–30 % de su croma. Con claridad 0 queda en L 0.23: más oscuro que macOS.</li>
+      <li>El panel de detalle queda casi neutro en macOS (croma 0.01), como el nuestro.</li>
     </ul>
   </section>
 </main>
@@ -133,15 +134,16 @@
   const PANEL = { x: WIN.x + 8, y: WIN.y + 8, w: 168, h: WIN.h - 16, r: 12 };
   const DETAIL_X = PANEL.x + PANEL.w + 8;
 
-  const BEFORE = { dark: { chroma: 0.4, cap: 0.04, lightness: 0, passes: 4 }, light: { chroma: 0.25, cap: 0.05, lightness: 0, passes: 4 } };
-  const AFTER = { dark: { chroma: 0.85, cap: 0.12, lightness: 0.5, passes: 3 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 3 } };
+  const BEFORE = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5 } };
+  const AFTER = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 6 } };
   const RIM_CHROMA = 0.65;
+  const KAWASE_SIGMA = 5 / 3;
   const BASE = { dark: '#1e1e1f', light: '#eceef2' };
   const WINDOW = { dark: '#232323', light: '#ffffff' };
-  const RIM_BEFORE = { dark: [255, 255, 255, 0.078], light: [255, 255, 255, 0.65] };
+  const RIM_BEFORE = { dark: [255, 255, 255, 0.078], light: [111, 118, 134, 0.3] };
   const RIM_AFTER = { dark: [255, 255, 255, 0.078], light: [111, 118, 134, 0.3] };
 
-  const state = { scheme: 'dark', wallpaper: 'aurora', behind: false, custom: { ...AFTER.dark } };
+  const state = { scheme: 'dark', wallpaper: 'tahoe', custom: { ...AFTER.dark } };
   const $ = id => document.getElementById(id);
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -176,6 +178,24 @@
   function rng(seed) { return () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296; }
 
   const wallpapers = {
+    tahoe(c) {
+      const sky = c.createLinearGradient(0, 0, 0, H * 0.5);
+      sky.addColorStop(0, '#3f8fcb'); sky.addColorStop(0.7, '#6fb0d6'); sky.addColorStop(1, '#a9cfe0');
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      c.fillStyle = '#5d7fa0';
+      c.beginPath(); c.moveTo(0, H * 0.5); c.lineTo(W * 0.08, H * 0.43); c.lineTo(W * 0.2, H * 0.47); c.lineTo(W * 0.34, H * 0.42); c.lineTo(W * 0.5, H * 0.48);
+      c.lineTo(W * 0.66, H * 0.44); c.lineTo(W * 0.82, H * 0.48); c.lineTo(W, H * 0.45); c.lineTo(W, H * 0.52); c.lineTo(0, H * 0.52); c.fill();
+      c.fillStyle = 'rgba(245,248,252,0.85)';
+      c.beginPath(); c.moveTo(W * 0.06, H * 0.45); c.lineTo(W * 0.08, H * 0.43); c.lineTo(W * 0.12, H * 0.46); c.moveTo(W * 0.3, H * 0.44); c.lineTo(W * 0.34, H * 0.42); c.lineTo(W * 0.4, H * 0.46); c.fill();
+      const lake = c.createLinearGradient(0, H * 0.52, 0, H);
+      lake.addColorStop(0, '#0e6f90'); lake.addColorStop(0.4, '#2aa2a8'); lake.addColorStop(1, '#6fc9b8');
+      c.fillStyle = lake; c.fillRect(0, H * 0.52, W, H * 0.48);
+      c.fillStyle = '#6b6258';
+      c.beginPath(); c.ellipse(W * 0.12, H * 0.9, W * 0.16, H * 0.2, 0, 0, 7); c.fill();
+      c.fillStyle = '#9a9a96';
+      c.beginPath(); c.ellipse(W * 0.88, H * 0.82, W * 0.2, H * 0.24, 0, 0, 7); c.fill();
+      c.fillStyle = '#2f5a3a'; c.fillRect(W * 0.8, H * 0.4, W * 0.012, H * 0.3); c.beginPath(); c.arc(W * 0.806, H * 0.46, W * 0.05, 0, 7); c.fill();
+    },
     aurora(c) {
       const sky = c.createLinearGradient(0, 0, 0, H);
       sky.addColorStop(0, '#0a1838'); sky.addColorStop(0.38, '#14506a'); sky.addColorStop(0.58, '#3c9aa0');
@@ -223,15 +243,9 @@
     },
   };
 
-  function paintBehind(ctx, kind, withWindow) {
+  function paintBehind(ctx, kind) {
     ctx.setTransform(S, 0, 0, S, 0, 0);
     wallpapers[kind](ctx);
-    if (!withWindow) return;
-    ctx.fillStyle = '#f4f4f6'; ctx.beginPath(); ctx.roundRect(6, 70, 220, 230, 10); ctx.fill();
-    ctx.fillStyle = '#ffcf3a'; ctx.fillRect(6, 70, 220, 26);
-    [['#e0434e', 80], ['#2fae6a', 120], ['#2f6fe4', 60], ['#8a4fd8', 100]].forEach(([color, h], i) => {
-      ctx.fillStyle = color; ctx.fillRect(22 + i * 48, 292 - h, 30, h);
-    });
   }
 
   function boxPass(src, dst, w, h, r, horizontal) {
@@ -265,12 +279,12 @@
 
   const blurCache = new Map();
   function blurred(passes) {
-    const key = [state.wallpaper, state.behind, passes].join('|');
+    const key = [state.wallpaper, passes].join('|');
     if (!blurCache.has(key)) {
       const base = document.createElement('canvas'); base.width = W * S; base.height = H * S;
-      const bc = base.getContext('2d'); paintBehind(bc, state.wallpaper, state.behind);
+      const bc = base.getContext('2d'); paintBehind(bc, state.wallpaper);
       const image = bc.getImageData(0, 0, W * S, H * S);
-      blurCache.set(key, { plain: base, blur: gaussian(image, 3 * Math.pow(2, passes) / 2 * S) });
+      blurCache.set(key, { plain: base, blur: gaussian(image, KAWASE_SIGMA * Math.pow(2, passes) * (H / 1080) * S) });
     }
     return blurCache.get(key);
   }
@@ -370,7 +384,6 @@
   $('dark').onclick = () => setScheme('dark');
   $('light').onclick = () => setScheme('light');
   $('wallpaper').onchange = e => { state.wallpaper = e.target.value; renderAll(); };
-  $('behind').onchange = e => { state.behind = e.target.checked; renderAll(); };
   for (const key of ['chroma', 'cap', 'lightness', 'passes']) $(key).oninput = e => { state.custom[key] = Number(e.target.value); renderCustom(); };
   $('copy').onclick = async () => {
     const text = $('readout').textContent;
