@@ -10,7 +10,7 @@
       inputs.crane.follows = "crane";
     };
     malaysia-icon-theme = {
-      url = "github:HBlanqueto/malaysia-icon-theme/221d2d6d9bd142611c41f2b36f3af6bcfbdb625f";
+      url = "github:HBlanqueto/malaysia-icon-theme/e987d0726a25fa58174d0f295d9580b83a09c941";
       flake = false;
     };
   };
