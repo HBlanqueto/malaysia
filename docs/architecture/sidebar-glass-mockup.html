@@ -1,0 +1,432 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Sidebar de Tahoe</title>
+<style>
+  /* Una mesa de prueba: la misma sidebar sobre el mismo fondo con las dos formas posibles de dibujar su borde, junto a lo que se midió en macOS. */
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --fg: #15181d;
+    --muted: #5d6673;
+    --line: #d9dde3;
+    --accent: #0a6cf0;
+    --accent-ink: #ffffff;
+    --soft: #e8ecf2;
+    --measured: #c2410c;
+    --font-text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111419; --panel: #1a1e25; --fg: #eceff4; --muted: #9aa3b0; --line: #2c333d;
+      --accent: #5aa2ff; --accent-ink: #07131f; --soft: #232a34; --measured: #fb923c;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111419; --panel: #1a1e25; --fg: #eceff4; --muted: #9aa3b0; --line: #2c333d;
+    --accent: #5aa2ff; --accent-ink: #07131f; --soft: #232a34; --measured: #fb923c;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-text); line-height: 1.5;
+    padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+  .eyebrow { font: 600 12px/1 var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font: 700 34px/1.1 var(--font-head); margin: 8px 0 10px; text-wrap: balance; }
+  h2 { font: 600 16px/1.3 var(--font-head); margin: 0 0 10px; }
+  p { margin: 0; max-width: 72ch; color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; }
+  .group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .label { font-size: 12px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  select, button { font: 500 14px var(--font-text); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; }
+  button { cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .trio { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) { h1 { font-size: 28px; } }
+  figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+  figcaption { display: grid; gap: 2px; }
+  figcaption b { font: 600 15px var(--font-head); }
+  figcaption span { font: 12.5px/1.5 var(--font-mono); color: var(--muted); }
+  canvas { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); background: #000; }
+  .duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .duo { grid-template-columns: minmax(0, 1fr); } }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.num { font-family: var(--font-mono); }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--muted); font: 11px var(--font-mono); }
+  .axis { stroke: var(--line); stroke-width: 1; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  ul.notes { margin: 0; padding-left: 18px; color: var(--muted); max-width: 76ch; display: grid; gap: 6px; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Malaysia · ADR 0078</div>
+    <h1>Sidebar de Tahoe</h1>
+    <p>La sidebar de Ajustes de macOS es plana en el centro y deja asomar el fondo solo junto a los bordes exteriores de la ventana. Aquí está dibujada con lo que ya lleva el compositor y con las dos formas posibles de dibujar ese borde, contra las cifras medidas en una captura.</p>
+  </header>
+
+  <section class="panel controls" aria-label="Escena">
+    <div class="group" role="group" aria-label="Modo de color">
+      <span class="label">Modo</span>
+      <button type="button" id="dark" aria-pressed="true">Oscuro</button>
+      <button type="button" id="light" aria-pressed="false">Claro</button>
+    </div>
+    <div class="group" role="group" aria-label="Foco de la ventana">
+      <span class="label">Foco</span>
+      <button type="button" id="focused" aria-pressed="true">Con foco</button>
+      <button type="button" id="unfocused" aria-pressed="false">Sin foco</button>
+    </div>
+    <div class="group">
+      <label class="label" for="wallpaper">Fondo</label>
+      <select id="wallpaper">
+        <option value="tahoe">Paisaje (Tahoe)</option>
+        <option value="waves">Ondas rojo y azul</option>
+        <option value="test">Prueba: blanco dentro, negro fuera</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="trio" aria-label="Comparación">
+    <figure>
+      <canvas id="now" width="1120" height="720" role="img" aria-label="Sidebar con los valores del compositor"></canvas>
+      <figcaption><b>Ahora en el compositor</b><span id="now-values"></span></figcaption>
+    </figure>
+    <figure>
+      <canvas id="outside" width="1120" height="720" role="img" aria-label="Sidebar cuyo borde toma el fondo de fuera de la ventana"></canvas>
+      <figcaption><b>El borde toma lo de fuera</b><span id="outside-values"></span></figcaption>
+    </figure>
+    <figure>
+      <canvas id="inside" width="1120" height="720" role="img" aria-label="Sidebar cuyo borde toma el fondo de dentro de la ventana"></canvas>
+      <figcaption><b>El borde toma lo de dentro</b><span id="inside-values"></span></figcaption>
+    </figure>
+  </section>
+
+  <section class="duo">
+    <div class="panel">
+      <h2>Medido en macOS, sidebar oscura</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Borde</th><th>Fondo fuera</th><th>Dentro, en el borde</th><th>Plano desde</th></tr></thead>
+          <tbody>
+            <tr><td>Izquierdo, arriba</td><td class="num">(97,145,174)</td><td class="num">L 0.343 · C 0.048</td><td class="num">125 px</td></tr>
+            <tr><td>Izquierdo, abajo</td><td class="num">(41,48,52)</td><td class="num">L 0.308 · C 0.026</td><td class="num">45 px</td></tr>
+            <tr><td>Superior</td><td class="num">(56,132,185)</td><td class="num">L 0.330 · C 0.068</td><td class="num">200 px</td></tr>
+            <tr><td>Inferior</td><td class="num">(57,79,72)</td><td class="num">L 0.314 · C 0.030</td><td class="num">60–80 px</td></tr>
+            <tr><td>Derecho</td><td class="num">n/a</td><td class="num">L 0.275 · C 0.019</td><td class="num">sin rampa</td></tr>
+            <tr><td>Centro</td><td class="num">n/a</td><td class="num">L 0.273 · C 0.022</td><td class="num">(29,41,49)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:10px">Medianas sobre filas y columnas sin texto ni iconos. Distancias en píxeles de la captura.</p>
+    </div>
+    <div class="panel">
+      <h2>Caída de la rampa</h2>
+      <svg id="decay" viewBox="0 0 520 230" role="img" aria-label="Exceso de croma medido frente a la curva exponencial del modelo"></svg>
+      <div class="legend">
+        <span><b style="color:var(--measured)">●</b> izquierdo, medido</span>
+        <span><b style="color:var(--measured)">■</b> superior, medido</span>
+        <span><b style="color:var(--accent)">—</b> exp(−d / 46 px)</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Cómo leerlo</h2>
+    <ul class="notes">
+      <li>La sidebar solo desenfoca el fondo de pantalla, con unas 6 pasadas: casi uniforme y neutra. En oscuro, el centro es L 0.273 y croma 0.022; en claro, (235,237,238) con foco y un gris plano de (242,242,242) sin foco.</li>
+      <li>El fondo asoma solo junto a los bordes exteriores de la ventana (izquierdo, superior e inferior). En el borde derecho, el que toca el panel de contenido, no hay rampa.</li>
+      <li>El borde toma el color del fondo cercano, no el del fondo muy desenfocado. Arriba, con cielo azul fuera, sale azulado (croma 0.068); abajo, con fondo oscuro, sale débil (0.030). Por eso aquí no hay un factor aparte para el borde inferior.</li>
+      <li>La caída es exponencial, de unos 46 px de captura (26 px de aquí), en horizontal y en vertical.</li>
+      <li>No se sabe si el borde toma lo que hay justo fuera de la ventana (por ejemplo, la refracción del cristal en su borde) o lo que hay justo dentro (un desenfoque confinado a la ventana). Las dos columnas de la derecha dibujan cada caso. Con el fondo de prueba, la primera da un borde oscuro y la segunda uno claro: es lo que deberías ver en macOS, con la ventana puesta sobre un fondo así, para decidir.</li>
+      <li>Sin foco, la sidebar es un sólido plano, sin borde ni rampa. En claro se midió (242,242,242). En oscuro aún no hay medida y se deja el sólido que ya funde el compositor.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  const S = 2, W = 560, H = 360;
+  const WIN = { x: 36, y: 28, w: 488, h: 304, r: 14 };
+  const PANEL = { x: WIN.x, y: WIN.y, w: 176, h: WIN.h };
+  const KAWASE_SIGMA = 5 / 3;
+  const LOCAL_PASSES = 3;
+  const SAMPLE_OFFSET = 6;
+  const EDGE_SPAN = 46 * 0.56;
+  const NOW = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5 } };
+  const MACOS = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6 }, light: { chroma: 0.02, cap: 0.03, lightness: 0, passes: 6, solid: '#f2f2f2' } };
+  const EDGE = { dark: { chroma: 0.65, lightness: 0.22, cap: 0.12 }, light: { chroma: 0.45, lightness: 0.15, cap: 0.09 } };
+  const SOLID_TINT = { dark: 0.15 * 2, light: 0.12 * 2 };
+  const RIM_CHROMA = 0.65;
+  const RIM = { dark: [255, 255, 255, 0.078], light: [111, 118, 134, 0.3] };
+  const BASE = { dark: '#1e1e1f', light: '#eceef2' };
+  const WINDOW = { dark: '#232323', light: '#ffffff' };
+  const MEASURED = {
+    left: [[2, 1], [10, 1], [22, 0.73], [34, 0.58], [46, 0.31], [66, 0.19], [86, 0.15], [106, 0.08], [126, 0]],
+    top: [[4, 1], [12, 0.85], [20, 0.74], [28, 0.61], [36, 0.52], [48, 0.46], [108, 0.09], [148, 0.04]],
+  };
+
+  const state = { scheme: 'dark', focused: true, wallpaper: 'tahoe' };
+  const $ = id => document.getElementById(id);
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const toLin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const toSrgb = c => { c = clamp(c, 0, 1); return 255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055); };
+  function toOklab(r, g, b) {
+    const R = toLin(r), G = toLin(g), B = toLin(b);
+    const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+    const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+    const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  }
+  function fromOklab(L, a, b) {
+    const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
+    const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
+    const s = Math.pow(L - 0.0894841775 * a - 1.291485548 * b, 3);
+    return [toSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      toSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      toSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+  }
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+
+  // Same steps as grade-graphics/oklab.glsl take_tint.
+  function takeTint(base, q, chroma, lightness, cap) {
+    const a = base[1] + (q[1] - base[1]) * chroma, b = base[2] + (q[2] - base[2]) * chroma;
+    const soft = 1 / Math.sqrt(1 + (a * a + b * b) / (cap * cap));
+    return fromOklab(base[0] + (q[0] - base[0]) * lightness, a * soft, b * soft);
+  }
+
+  const wallpapers = {
+    tahoe(c) {
+      const sky = c.createLinearGradient(0, 0, 0, H * 0.5);
+      sky.addColorStop(0, '#3f8fcb'); sky.addColorStop(0.7, '#6fb0d6'); sky.addColorStop(1, '#a9cfe0');
+      c.fillStyle = sky; c.fillRect(0, 0, W, H);
+      c.fillStyle = '#5d7fa0';
+      c.beginPath(); c.moveTo(0, H * 0.5); c.lineTo(W * 0.08, H * 0.43); c.lineTo(W * 0.2, H * 0.47); c.lineTo(W * 0.34, H * 0.42); c.lineTo(W * 0.5, H * 0.48);
+      c.lineTo(W * 0.66, H * 0.44); c.lineTo(W * 0.82, H * 0.48); c.lineTo(W, H * 0.45); c.lineTo(W, H * 0.52); c.lineTo(0, H * 0.52); c.fill();
+      c.fillStyle = 'rgba(245,248,252,0.85)';
+      c.beginPath(); c.moveTo(W * 0.06, H * 0.45); c.lineTo(W * 0.08, H * 0.43); c.lineTo(W * 0.12, H * 0.46); c.moveTo(W * 0.3, H * 0.44); c.lineTo(W * 0.34, H * 0.42); c.lineTo(W * 0.4, H * 0.46); c.fill();
+      const lake = c.createLinearGradient(0, H * 0.52, 0, H);
+      lake.addColorStop(0, '#0e6f90'); lake.addColorStop(0.4, '#2aa2a8'); lake.addColorStop(1, '#6fc9b8');
+      c.fillStyle = lake; c.fillRect(0, H * 0.52, W, H * 0.48);
+      c.fillStyle = '#6b6258';
+      c.beginPath(); c.ellipse(W * 0.12, H * 0.9, W * 0.16, H * 0.2, 0, 0, 7); c.fill();
+      c.fillStyle = '#9a9a96';
+      c.beginPath(); c.ellipse(W * 0.88, H * 0.82, W * 0.2, H * 0.24, 0, 0, 7); c.fill();
+      c.fillStyle = '#2f5a3a'; c.fillRect(W * 0.8, H * 0.4, W * 0.012, H * 0.3); c.beginPath(); c.arc(W * 0.806, H * 0.46, W * 0.05, 0, 7); c.fill();
+    },
+    waves(c) {
+      c.fillStyle = '#2a6fd8'; c.fillRect(0, 0, W, H);
+      const blue = c.createLinearGradient(W, 0, W * 0.4, H); blue.addColorStop(0, '#1d86e0'); blue.addColorStop(1, '#5b7cf0');
+      c.fillStyle = blue; c.fillRect(0, 0, W, H);
+      const red = c.createLinearGradient(0, 0, W * 0.5, H); red.addColorStop(0, '#ff5a52'); red.addColorStop(0.6, '#e0245e'); red.addColorStop(1, '#9a1f8c');
+      c.fillStyle = red; c.beginPath(); c.moveTo(0, 0); c.lineTo(W * 0.42, 0);
+      c.bezierCurveTo(W * 0.52, H * 0.28, W * 0.3, H * 0.5, W * 0.62, H * 0.78);
+      c.bezierCurveTo(W * 0.72, H * 0.9, W * 0.6, H, W * 0.5, H); c.lineTo(0, H); c.fill();
+      const orange = c.createLinearGradient(W, H * 0.4, W * 0.5, H); orange.addColorStop(0, '#ffb43c'); orange.addColorStop(1, '#ff7a3c');
+      c.fillStyle = orange; c.beginPath(); c.moveTo(W, H * 0.46);
+      c.bezierCurveTo(W * 0.82, H * 0.5, W * 0.78, H * 0.72, W * 0.6, H * 0.86); c.bezierCurveTo(W * 0.55, H * 0.92, W * 0.58, H, W * 0.62, H); c.lineTo(W, H); c.fill();
+      const violet = c.createLinearGradient(0, H * 0.7, W, H); violet.addColorStop(0, 'rgba(120,50,170,0)'); violet.addColorStop(1, 'rgba(70,60,200,0.7)');
+      c.fillStyle = violet; c.fillRect(0, H * 0.7, W, H * 0.3);
+    },
+    test(c) {
+      c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+      c.fillStyle = '#fff'; c.beginPath(); c.roundRect(WIN.x, WIN.y, WIN.w, WIN.h, WIN.r); c.fill();
+    },
+  };
+
+  function boxPass(src, dst, w, h, r, horizontal) {
+    const n = horizontal ? w : h, lines = horizontal ? h : w, step = horizontal ? 1 : w, size = 2 * r + 1;
+    for (let line = 0; line < lines; line++) {
+      const start = horizontal ? line * w : line;
+      for (let c = 0; c < 3; c++) {
+        let sum = 0;
+        for (let i = -r; i <= r; i++) sum += src[(start + clamp(i, 0, n - 1) * step) * 4 + c];
+        for (let i = 0; i < n; i++) {
+          dst[(start + i * step) * 4 + c] = sum / size;
+          sum += src[(start + clamp(i + r + 1, 0, n - 1) * step) * 4 + c] - src[(start + clamp(i - r, 0, n - 1) * step) * 4 + c];
+        }
+      }
+    }
+  }
+
+  // Three box passes approximate a gaussian of the given sigma.
+  function gaussian(image, sigma) {
+    const { width: w, height: h } = image;
+    let a = new Uint8ClampedArray(image.data), b = new Uint8ClampedArray(image.data);
+    const ideal = Math.sqrt(12 * sigma * sigma / 3 + 1);
+    let lower = Math.floor(ideal); if (lower % 2 === 0) lower--;
+    const upper = lower + 2, m = Math.round((12 * sigma * sigma - 3 * lower * lower - 12 * lower - 9) / (-4 * lower - 4));
+    for (let i = 0; i < 3; i++) {
+      const r = ((i < m ? lower : upper) - 1) / 2;
+      boxPass(a, b, w, h, r, true); boxPass(b, a, w, h, r, false);
+    }
+    return new ImageData(a, w, h);
+  }
+
+  const sigmaOf = passes => KAWASE_SIGMA * Math.pow(2, passes) * (H / 1080) * S;
+  const cache = new Map();
+  function sources(wallpaper, passes) {
+    const key = wallpaper + '|' + passes;
+    if (!cache.has(key)) {
+      const plain = document.createElement('canvas'); plain.width = W * S; plain.height = H * S;
+      const c = plain.getContext('2d'); c.setTransform(S, 0, 0, S, 0, 0); wallpapers[wallpaper](c);
+      const image = c.getImageData(0, 0, W * S, H * S);
+      cache.set(key, { plain, blur: gaussian(image, sigmaOf(passes)), local: gaussian(image, sigmaOf(LOCAL_PASSES)), mean: meanOklab(image.data) });
+    }
+    return cache.get(key);
+  }
+  function meanOklab(data) {
+    let r = 0, g = 0, b = 0;
+    const n = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
+    return toOklab(r / n, g / n, b / n);
+  }
+  function pixel(image, x, y) {
+    const i = (clamp(Math.round(y), 0, image.height - 1) * image.width + clamp(Math.round(x), 0, image.width - 1)) * 4;
+    return toOklab(image.data[i], image.data[i + 1], image.data[i + 2]);
+  }
+
+  function windowSdf(px, py) {
+    const cx = WIN.x + WIN.w / 2, cy = WIN.y + WIN.h / 2;
+    const qx = Math.abs(px - cx) - (WIN.w / 2 - WIN.r), qy = Math.abs(py - cy) - (WIN.h / 2 - WIN.r);
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - WIN.r;
+  }
+  const coverage = d => clamp(0.5 - d, 0, 1);
+
+  // Where the edge takes its colour from: just outside the window or just inside it, at the nearest point of each outer edge.
+  function edgeSource(local, sx, sy, side) {
+    const o = SAMPLE_OFFSET * S * (side === 'outside' ? -1 : 1);
+    const left = WIN.x * S, top = WIN.y * S, bottom = (WIN.y + WIN.h) * S;
+    const wl = Math.exp(-Math.max(0, sx - left) / (EDGE_SPAN * S));
+    const wt = Math.exp(-Math.max(0, sy - top) / (EDGE_SPAN * S));
+    const wb = Math.exp(-Math.max(0, bottom - sy) / (EDGE_SPAN * S));
+    const l = pixel(local, left + o, sy), t = pixel(local, sx, top + o), b = pixel(local, sx, bottom - o);
+    const sum = wl + wt + wb;
+    return { strength: Math.max(wl, wt, wb), color: [0, 1, 2].map(k => (wl * l[k] + wt * t[k] + wb * b[k]) / sum) };
+  }
+
+  function drawGlass(ctx, variant) {
+    const { scheme, focused } = state;
+    const params = variant === 'now' ? NOW[scheme] : MACOS[scheme];
+    const base = toOklab(...hex(BASE[scheme])), rim = RIM[scheme];
+    const src = sources(state.wallpaper, params.passes), local = sources(state.wallpaper, params.passes).local;
+    const flat = focused ? null : params.solid ? hex(params.solid) : takeTint(base, src.mean, SOLID_TINT[scheme], 0, params.cap);
+    const x0 = Math.floor(PANEL.x * S) - 2, y0 = Math.floor(PANEL.y * S) - 2;
+    const w = Math.ceil(PANEL.w * S) + 4, h = Math.ceil(PANEL.h * S) + 4;
+    const out = new ImageData(w, h), stride = src.blur.width, panelRight = (PANEL.x + PANEL.w) * S;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const sx = x0 + x, sy = y0 + y;
+      const d = Math.max(windowSdf((sx + 0.5) / S, (sy + 0.5) / S) * S, sx + 0.5 - panelRight), cover = coverage(d);
+      if (cover <= 0) continue;
+      const i = (sy * stride + sx) * 4, q = toOklab(src.blur.data[i], src.blur.data[i + 1], src.blur.data[i + 2]);
+      let color = flat ?? takeTint(base, q, params.chroma, params.lightness, params.cap);
+      if (focused && variant !== 'now') {
+        const edge = edgeSource(local, sx, sy, variant), tint = EDGE[scheme];
+        const edgeColor = takeTint(base, edge.color, tint.chroma, tint.lightness, tint.cap);
+        color = color.map((c, k) => c + (edgeColor[k] - c) * edge.strength);
+      }
+      const ring = coverage(d) - coverage(d + S);
+      if (focused && ring > 0) {
+        const tint = takeTint(toOklab(rim[0], rim[1], rim[2]), q, RIM_CHROMA, 0, params.cap), alpha = rim[3] * ring;
+        color = color.map((c, k) => c * (1 - alpha) + tint[k] * alpha);
+      }
+      const o = (y * w + x) * 4; out.data[o] = color[0]; out.data[o + 1] = color[1]; out.data[o + 2] = color[2]; out.data[o + 3] = 255 * cover;
+    }
+    const layer = document.createElement('canvas'); layer.width = w; layer.height = h;
+    layer.getContext('2d').putImageData(out, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layer, x0, y0);
+    ctx.setTransform(S, 0, 0, S, 0, 0);
+  }
+
+  function drawContent(ctx) {
+    const { scheme } = state;
+    const ink = scheme === 'dark' ? '#eceff4' : '#1d1d1f', soft = scheme === 'dark' ? 'rgba(236,239,244,.62)' : 'rgba(29,29,31,.55)';
+    ctx.font = '600 11px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    [['#ff5f57', 0], ['#febc2e', 1], ['#28c840', 2]].forEach(([color, i]) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(PANEL.x + 20 + i * 16, PANEL.y + 18, 5, 0, 7); ctx.fill(); });
+    ctx.fillStyle = scheme === 'dark' ? 'rgba(255,255,255,.1)' : 'rgba(0,0,0,.06)';
+    ctx.beginPath(); ctx.roundRect(PANEL.x + 12, PANEL.y + 36, PANEL.w - 24, 20, 7); ctx.fill();
+    ctx.fillStyle = soft; ctx.font = '11px system-ui, sans-serif'; ctx.fillText('Buscar', PANEL.x + 28, PANEL.y + 46);
+    const rows = [['Wi-Fi', '#2f7cf6'], ['Bluetooth', '#2f7cf6'], ['Red', '#2f7cf6'], ['Batería', '#34c759'], ['Apariencia', '#222'], ['Fondo de pantalla', '#3a86f0'], ['Notificaciones', '#ff453a'], ['Concentración', '#7d5ce0']];
+    rows.forEach(([name, color], i) => {
+      const y = PANEL.y + 70 + i * 25, selected = name === 'Apariencia';
+      if (selected) { ctx.fillStyle = '#2f6fe4'; ctx.beginPath(); ctx.roundRect(PANEL.x + 10, y - 11, PANEL.w - 20, 23, 7); ctx.fill(); }
+      ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(PANEL.x + 16, y - 8, 16, 16, 4.5); ctx.fill();
+      ctx.fillStyle = selected ? '#fff' : ink; ctx.font = '12px system-ui, sans-serif'; ctx.fillText(name, PANEL.x + 40, y);
+    });
+    const detail = PANEL.x + PANEL.w;
+    ctx.fillStyle = ink; ctx.font = '600 13px system-ui, sans-serif'; ctx.fillText('Apariencia', detail + 18, WIN.y + 22);
+    for (let i = 0; i < 5; i++) {
+      const y = WIN.y + 48 + i * 40;
+      ctx.fillStyle = scheme === 'dark' ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.05)';
+      ctx.beginPath(); ctx.roundRect(detail + 12, y, WIN.x + WIN.w - detail - 24, 32, 8); ctx.fill();
+      ctx.fillStyle = ink; ctx.font = '12px system-ui, sans-serif'; ctx.fillText(['Apariencia', 'Idioma', 'Color de acento', 'Teñir las ventanas', 'Semáforos'][i], detail + 24, y + 16);
+    }
+  }
+
+  function render(canvas, variant) {
+    const { scheme } = state, ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(sources(state.wallpaper, 3).plain, 0, 0);
+    ctx.setTransform(S, 0, 0, S, 0, 0);
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 28; ctx.shadowOffsetY = 10;
+    ctx.fillStyle = WINDOW[scheme]; ctx.beginPath(); ctx.roundRect(WIN.x, WIN.y, WIN.w, WIN.h, WIN.r); ctx.fill(); ctx.restore();
+    drawGlass(ctx, variant);
+    ctx.strokeStyle = scheme === 'dark' ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(WIN.x + 0.5, WIN.y + 0.5, WIN.w - 1, WIN.h - 1, WIN.r); ctx.stroke();
+    drawContent(ctx);
+  }
+
+  const describe = p => `croma ${p.chroma.toFixed(2)} · tope ${p.cap.toFixed(2)} · claridad ${p.lightness.toFixed(2)} · ${p.passes} pasadas`;
+  const describeEdge = e => ` · borde: croma ${e.chroma.toFixed(2)}, claridad ${e.lightness.toFixed(2)}, caída ${Math.round(EDGE_SPAN / 0.56)} px`;
+  function renderAll() {
+    const { scheme } = state;
+    $('now-values').textContent = describe(NOW[scheme]) + ' · sin borde';
+    $('outside-values').textContent = describe(MACOS[scheme]) + describeEdge(EDGE[scheme]);
+    $('inside-values').textContent = describe(MACOS[scheme]) + describeEdge(EDGE[scheme]);
+    render($('now'), 'now'); render($('outside'), 'outside'); render($('inside'), 'inside');
+  }
+
+  function drawDecay() {
+    const x = d => 40 + d * 2.8, y = v => 190 - v * 160, el = $('decay');
+    let svg = '';
+    for (const v of [0, 0.5, 1]) svg += `<line class="axis" x1="40" x2="488" y1="${y(v)}" y2="${y(v)}"/><text x="32" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+    for (const d of [0, 40, 80, 120, 160]) svg += `<text x="${x(d)}" y="210" text-anchor="middle">${d}</text>`;
+    svg += '<text x="270" y="226" text-anchor="middle">distancia al borde de la ventana (px de la captura)</text>';
+    let path = '';
+    for (let d = 0; d <= 150; d += 3) path += `${d ? 'L' : 'M'}${x(d)} ${y(Math.exp(-d / 46))}`;
+    svg += `<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+    for (const [d, v] of MEASURED.left) svg += `<circle cx="${x(d)}" cy="${y(v)}" r="4" fill="var(--measured)"/>`;
+    for (const [d, v] of MEASURED.top) svg += `<rect x="${x(d) - 3.5}" y="${y(v) - 3.5}" width="7" height="7" fill="var(--measured)"/>`;
+    el.innerHTML = svg;
+  }
+
+  function setScheme(scheme) {
+    state.scheme = scheme;
+    $('dark').setAttribute('aria-pressed', scheme === 'dark'); $('light').setAttribute('aria-pressed', scheme === 'light');
+    renderAll();
+  }
+  function setFocus(focused) {
+    state.focused = focused;
+    $('focused').setAttribute('aria-pressed', focused); $('unfocused').setAttribute('aria-pressed', !focused);
+    renderAll();
+  }
+  $('dark').onclick = () => setScheme('dark');
+  $('light').onclick = () => setScheme('light');
+  $('focused').onclick = () => setFocus(true);
+  $('unfocused').onclick = () => setFocus(false);
+  $('wallpaper').onchange = e => { state.wallpaper = e.target.value; renderAll(); };
+
+  drawDecay();
+  renderAll();
+})();
+</script>
