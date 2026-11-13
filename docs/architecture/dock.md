@@ -31,7 +31,7 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 2. **Size.** `dock/geometry.rs` fits `tilesize` (16–128 px) to the screen:
    the Dock never crosses the edge, so with many items the largest size
    drops. Each icon takes a square slot of that size; a separator takes
-   `DOCK_SEPARATOR` of it, drawn with `shell.dock_separator`: white at 30 % in dark, black at 25 % in light. The bar is the slots plus a padding of
+   `DOCK_SEPARATOR` of it, drawn with `resolved.dock.divider`. The bar is the slots plus a padding of
    `DOCK_PADDING` + `DOCK_PADDING_SCALE` × size, `DOCK_EDGE_MARGIN` from the
    screen edge.
 3. **Magnification.** While the pointer is on the bar, each icon grows to
@@ -50,24 +50,23 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    namespace (`DOCK_LAYER_NAMESPACE`) and gives that card only the blur of
    `set_blur_region`, clipped to the corner, and no shadow: it would show
    through the translucent fill. The Dock
-   draws only its rim itself, with `bk::style::glass_edge`: no dark outer
-   border and no inward glow, under its icons, so magnified icons rise over the
-   bar's edge. As in macOS the rim is not a fixed white line. It is light tinted
-   by the wallpaper just outside each stretch of the edge: `dock/rim.rs` reads
-   that wallpaper every `SEGMENT` pixels and `ctdesign::dock_rim` gives each
-   stretch its colour, nearly transparent over a dark backdrop and whitish over
-   a bright one, so it fades and comes back along the bar
-   ([`dock-rim-mockup.html`](dock-rim-mockup.html)). Down the bar the rim fades too
-   (`ctdesign::dock_rim_fade`): full on top, thinner along the sides, gone
-   around the lower corners and back, weaker, along the bottom edge. A soft
-   line, blurred by `DOCK_RIM_BLUR` pixels. A Dock on the left or right takes one
-   colour from the wallpaper around the whole bar. The fill is the translucent
-   `shell.dock`, a little white over the blur in light (12 %) and the usual
-   dark smoke in dark: as in
-   macOS, the wallpaper and the windows that pass behind the Dock show through
-   the blur (ADR 0071, `"behind"`). It takes the bar tint only
-   with `bars` in `appearance.tint_parts`, and is opaque with
-   `appearance.reduce_transparency`.
+   draws its glass and its frame itself, with `bk::style::glass_edge`, under its
+   icons, so magnified icons rise over the bar's edge. The frame is two lines, as
+   macOS draws it ([`dock-macos-measured.html`](dock-macos-measured.html) shows
+   four captures next to their reproduction): a dark outline one pixel outside
+   the glass, strongest on the sides, and a light rim one pixel inside it, with a
+   glow that dies away over a few pixels, strongest on top and bottom. Around the
+   corners the outline hands over to the rim (`ctdesign::dock_rim_dark_share`).
+   The rim is not a fixed white: `dock/rim.rs` reads the wallpaper just outside
+   each `SEGMENT` pixels of the edge and `ctdesign::dock_rim` tints the rim with
+   it and fades it where the wallpaper is dark, so it comes and goes along the
+   bar. A Dock on the left or right takes one colour from the wallpaper around
+   the whole bar. The glass, rim, outline and divider are `ctdesign::DockSurface`
+   (`resolved.dock`), measured for light and dark, with and without transparency:
+   with `appearance.reduce_transparency` the glass is a solid grey. As in macOS
+   the glass is a thin veil over the blur, so the wallpaper and the windows that
+   pass behind the Dock show through (ADR 0071, `"behind"`). It takes the bar
+   tint only with `bars` in `appearance.tint_parts`.
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon_in`),
    with the `LauncherEntry` badge and progress. A minimized window's tile is
    a picture of the window, taken once with `capture_window` when it

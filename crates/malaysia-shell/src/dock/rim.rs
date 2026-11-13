@@ -2,7 +2,7 @@ use bk::style::GlassRim;
 use ctappearance::WallpaperState;
 use ctappearance::dock::DockOrientation;
 use ctappearance::tinting::WallpaperGrid;
-use ctdesign::{Rgba, dock_rim};
+use ctdesign::{DockSurface, Rgba, dock_rim};
 
 type Area = (f32, f32, f32, f32);
 
@@ -16,8 +16,8 @@ const NEUTRAL: Rgba = Rgba {
     a: 1.0,
 };
 
-// The Dock's rim, as macOS draws it: light tinted by the wallpaper just outside each stretch of
-// the edge. `bar` is the bar's rectangle in the Dock's surface, which spans the output along the
+// The Dock's frame, as macOS draws it: the rim's light tinted by the wallpaper just outside each
+// stretch of the edge, and the outline. `bar` is the bar's rectangle in the Dock's surface, which spans the output along the
 // Dock's edge. A Dock on the left or right takes the colour of the whole bar's surroundings.
 pub(crate) fn glass_rim(
     wallpaper: &WallpaperState,
@@ -25,17 +25,25 @@ pub(crate) fn glass_rim(
     orientation: DockOrientation,
     surface: (f32, f32),
     bar: Area,
+    dock: DockSurface,
 ) -> GlassRim {
     rim_around(
         backdrop(wallpaper, desktop, orientation, surface),
         orientation == DockOrientation::Bottom,
         bar,
+        dock,
     )
 }
 
-fn rim_around(backdrop: impl Fn(Area) -> Option<Rgba>, varies: bool, bar: Area) -> GlassRim {
+fn rim_around(
+    backdrop: impl Fn(Area) -> Option<Rgba>,
+    varies: bool,
+    bar: Area,
+    dock: DockSurface,
+) -> GlassRim {
     let (x, y, width, height) = bar;
-    let read = |area: Area| dock_rim(backdrop(area).unwrap_or(NEUTRAL));
+    let lit = |colour: Rgba| dock_rim(colour, dock.rim);
+    let read = |area: Area| lit(backdrop(area).unwrap_or(NEUTRAL));
     let around = read((x - READ, y - READ, width + 2.0 * READ, height + 2.0 * READ));
     let stretches = if varies {
         ((width / SEGMENT).round() as usize).clamp(8, 96)
@@ -52,7 +60,7 @@ fn rim_around(backdrop: impl Fn(Area) -> Option<Rgba>, varies: bool, bar: Area) 
                 let start = x + index as f32 * length;
                 backdrop((start, edge_y, length, READ))
                     .or_else(|| backdrop((start, edge_y + inward, length, READ)))
-                    .map_or(around, dock_rim)
+                    .map_or(around, lit)
             })
             .collect()
     };
@@ -68,6 +76,7 @@ fn rim_around(backdrop: impl Fn(Area) -> Option<Rgba>, varies: bool, bar: Area) 
         bottom: along(y + height, -READ),
         left: side(x - READ),
         right: side(x + width),
+        outline: dock.outline,
     }
 }
 
@@ -127,9 +136,36 @@ mod tests {
 
     const BAR: Area = (100.0, 40.0, 400.0, 70.0);
 
+    const DOCK: DockSurface = DockSurface {
+        glass: Rgba {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 0.24,
+        },
+        rim: Rgba {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 0.22,
+        },
+        outline: Rgba {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 0.6,
+        },
+        divider: Rgba {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 0.6,
+        },
+    };
+
     #[test]
     fn each_stretch_of_the_edge_takes_the_light_of_the_wallpaper_beside_it() {
-        let rim = rim_around(split, true, BAR);
+        let rim = rim_around(split, true, BAR, DOCK);
         assert_eq!(rim.top.len(), 40);
         assert!(rim.top.first().unwrap().a < rim.top.last().unwrap().a);
         assert!(rim.bottom.first().unwrap().a < rim.bottom.last().unwrap().a);
@@ -138,7 +174,7 @@ mod tests {
 
     #[test]
     fn a_dock_on_the_side_has_one_colour_all_round() {
-        let rim = rim_around(split, false, BAR);
+        let rim = rim_around(split, false, BAR, DOCK);
         assert_eq!(rim.top.len(), 1);
         assert_eq!(rim.top[0], rim.bottom[0]);
         assert_eq!(rim.top[0], rim.left);
@@ -146,16 +182,25 @@ mod tests {
     }
 
     #[test]
+    fn the_outline_is_the_docks() {
+        assert_eq!(rim_around(split, true, BAR, DOCK).outline, DOCK.outline);
+    }
+
+    #[test]
     fn without_a_wallpaper_the_rim_is_neutral_and_still_there() {
-        let rim = rim_around(|_| None, true, BAR);
-        assert!(rim.top.iter().all(|colour| *colour == dock_rim(NEUTRAL)));
-        assert_eq!(rim.left, dock_rim(NEUTRAL));
+        let rim = rim_around(|_| None, true, BAR, DOCK);
+        assert!(
+            rim.top
+                .iter()
+                .all(|colour| *colour == dock_rim(NEUTRAL, DOCK.rim))
+        );
+        assert_eq!(rim.left, dock_rim(NEUTRAL, DOCK.rim));
     }
 
     #[test]
     fn the_bottom_edge_falls_back_to_the_wallpaper_inside_it() {
         let screen_edge = |area: Area| (area.1 + area.3 <= 110.0).then(|| colour(0.2, 0.5, 0.86));
-        let rim = rim_around(screen_edge, true, BAR);
-        assert_eq!(rim.bottom[0], dock_rim(colour(0.2, 0.5, 0.86)));
+        let rim = rim_around(screen_edge, true, BAR, DOCK);
+        assert_eq!(rim.bottom[0], dock_rim(colour(0.2, 0.5, 0.86), DOCK.rim));
     }
 }

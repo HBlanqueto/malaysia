@@ -49,7 +49,7 @@
   <section class="panel">
     <h2>Valores medidos</h2>
     <div class="scroll"><table id="table"></table></div>
-    <p class="note" style="margin-top:10px">Las capturas de modo sin transparencia tenían el fondo vacío; aquí se ven sobre el mismo gris que las otras dos. El modo (claro u oscuro) de cada captura lo deduzco por el color del divisor y del interior: pídeme el cambio si alguna está al revés. En los estados sin transparencia la línea de los lados es negra del todo y queda un píxel por fuera del borde.</p>
+    <p class="note" style="margin-top:10px">Las capturas de modo sin transparencia tenían el fondo vacío; aquí se ven sobre el mismo gris que las otras dos. El modo (claro u oscuro) de cada captura lo deduzco por el color del divisor y del interior: pídeme el cambio si alguna está al revés. En los estados sin transparencia el anillo negro es del todo negro; en los otros se mide contra el fondo de fuera, no contra el vidrio.</p>
   </section>
 </main>
 <script>
@@ -59,30 +59,44 @@
   // glow: opacidad del brillo en cada píxel hacia dentro. side: opacidad negra de la línea de los lados. divider: color y opacidad.
   const BACKDROP = [189, 190, 195];
   const STATES = [
-    { key: "lightTransl", title: "Claro, con transparencia", fill: [0, 0, 0, .05], rim: .81, glow: [.18, .11, .07, .04, .03], side: .40, divider: [0, 0, 0, .32], dot: [30, 30, 30] },
-    { key: "darkTransl", title: "Oscuro, con transparencia", fill: [0, 0, 0, .24], rim: .22, glow: [.045, .027, .018, .009, .009], side: .47, divider: [255, 255, 255, .60], dot: [255, 255, 255] },
-    { key: "lightOpaque", title: "Claro, sin transparencia", fill: [117, 117, 117, 1], rim: .43, glow: [.094, .058, .036, .022, .015, .007, .004], side: 1, outside: true, divider: [0, 0, 0, .50], dot: [30, 30, 30] },
-    { key: "darkOpaque", title: "Oscuro, sin transparencia", fill: [10, 10, 10, 1], rim: .29, glow: [.065, .037, .025, .016, .008, .004], side: 1, outside: true, divider: [255, 255, 255, .27], dot: [255, 255, 255] },
+    { key: "lightTransl", title: "Claro, con transparencia", fill: [0, 0, 0, .05], rim: .81, glow: [.18, .11, .07, .04, .03], side: .43, divider: [0, 0, 0, .32], dot: [30, 30, 30] },
+    { key: "darkTransl", title: "Oscuro, con transparencia", fill: [0, 0, 0, .24], rim: .22, glow: [.045, .027, .018, .009, .009], side: .60, divider: [255, 255, 255, .60], dot: [255, 255, 255] },
+    { key: "lightOpaque", title: "Claro, sin transparencia", fill: [117, 117, 117, 1], rim: .43, glow: [.094, .058, .036, .022, .015, .007, .004], side: 1, divider: [0, 0, 0, .50], dot: [30, 30, 30] },
+    { key: "darkOpaque", title: "Oscuro, sin transparencia", fill: [10, 10, 10, 1], rim: .29, glow: [.065, .037, .025, .016, .008, .004], side: 1, divider: [255, 255, 255, .27], dot: [255, 255, 255] },
   ];
-  const BAR = { x: 9, y: 9, h: 106, r: 24 }, W = 320, H = 124;
+  // La esquina de Apple no es un arco: se ajusta a una superelipse de exponente 3 que ocupa 40 px (0,38 de la altura) en cada dirección.
+  const BAR = { x: 9, y: 9, h: 106, r: 40, n: 3 }, W = 320, H = 124;
+  const squircle = (c, x, y, w, h, e, n = BAR.n) => {
+    const k = 2 / n;
+    const cs = Math.cos, sn = Math.sin; c.beginPath(); c.moveTo(x + e, y);
+    for (let i = 0; i <= 24; i++) { const t = i / 24 * Math.PI / 2, u = sn(t) ** k, v = cs(t) ** k; c.lineTo(x + w - e + e * u, y + e - e * v); }
+    for (let i = 0; i <= 24; i++) { const t = i / 24 * Math.PI / 2, u = cs(t) ** k, v = sn(t) ** k; c.lineTo(x + w - e + e * u, y + h - e + e * v); }
+    for (let i = 0; i <= 24; i++) { const t = i / 24 * Math.PI / 2, u = sn(t) ** k, v = cs(t) ** k; c.lineTo(x + e - e * u, y + h - e + e * v); }
+    for (let i = 0; i <= 24; i++) { const t = i / 24 * Math.PI / 2, u = cs(t) ** k, v = sn(t) ** k; c.lineTo(x + e - e * u, y + e - e * v); }
+    c.closePath();
+  };
   const rr = (c, x, y, w, h, r) => { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
-  // Perfil del anillo de arriba abajo: 1 = línea clara, 0 = línea oscura (posiciones como fracción de la altura).
-  const RAMP = [[0, 1], [.19, 1], [.43, 0], [.57, 0], [.81, 1], [1, 1]];
+  // El borde son dos anillos: uno negro por fuera, fuerte en los lados, y uno blanco por dentro, fuerte arriba y abajo. A lo largo de las
+  // esquinas uno se apaga mientras el otro se enciende. RAMP.from y RAMP.to son la altura (como fracción) donde empieza y acaba el cambio.
+  const RAMP = { from: .2, to: .42 };
+  const smooth = v => v * v * (3 - 2 * v);
+  const dark = t => { const u = Math.min(t, 1 - t); return smooth(Math.min(1, Math.max(0, (u - RAMP.from) / (RAMP.to - RAMP.from)))); };
+  const stops = (g, fn) => { for (let i = 0; i <= 40; i++) { const t = i / 40, [r, gg, b, a] = fn(t); g.addColorStop(t, `rgba(${r},${gg},${b},${a})`); } };
 
   function draw(c, s) {
     c.fillStyle = `rgb(${BACKDROP})`; c.fillRect(0, 0, W, H);
     const w = 900, { x, y, h, r } = BAR;
     const [fr, fg, fb, fa] = s.fill;
-    c.save(); rr(c, x, y, w, h, r); c.clip();
+    c.save(); squircle(c, x, y, w, h, r); c.clip();
     c.fillStyle = `rgba(${fr},${fg},${fb},${fa})`; c.fillRect(x, y, w, h);
     // brillo hacia dentro, solo arriba y abajo
     s.glow.forEach((a, i) => { c.fillStyle = `rgba(255,255,255,${a})`; c.fillRect(x, y + 1 + i, w, 1); c.fillRect(x, y + h - 2 - i, w, 1); });
     c.restore();
-    // línea del contorno: clara arriba y abajo, oscura por los lados
-    const g = c.createLinearGradient(0, y, 0, y + h);
-    RAMP.forEach(([t, k]) => { const light = [255, 255, 255, s.rim], dark = [0, 0, 0, s.side]; const col = k ? light : dark; g.addColorStop(t, `rgba(${col[0]},${col[1]},${col[2]},${col[3]})`); });
-    const o = s.outside ? 1 : 0;
-    c.lineWidth = 1; c.strokeStyle = g; rr(c, x + .5 - o, y + .5 - o * 0, w - 1 + 2 * o, h - 1 + o * 0, r - .5 + o); c.stroke();
+    // anillo blanco por dentro y anillo negro por fuera, cada uno con su opacidad de arriba abajo
+    const gw = c.createLinearGradient(0, y, 0, y + h), gd = c.createLinearGradient(0, y, 0, y + h);
+    stops(gw, t => [255, 255, 255, (s.rim * (1 - dark(t))).toFixed(3)]); stops(gd, t => [0, 0, 0, (s.side * dark(t)).toFixed(3)]);
+    c.lineWidth = 1; c.strokeStyle = gw; squircle(c, x + .5, y + .5, w - 1, h - 1, r - .5); c.stroke();
+    c.strokeStyle = gd; squircle(c, x - .5, y - .5, w + 1, h + 1, r + .5); c.stroke();
     // icono y punto
     c.fillStyle = "#58a8f6"; rr(c, x + 19, y + 19, 70, 70, 16); c.fill();
     c.fillStyle = `rgb(${s.dot})`; c.beginPath(); c.arc(x + 54, y + 98, 2.2, 0, 7); c.fill();
@@ -98,13 +112,14 @@
   const pct = v => Math.round(v * 100) + " %";
   const rows = [
     ["Interior", s => s.fill[3] === 1 ? `opaco, gris ${s.fill[0]}` : `negro ${pct(s.fill[3])} sobre el fondo`],
-    ["Línea arriba y abajo", s => `blanco ${pct(s.rim)}`],
+    ["Anillo blanco de dentro (arriba y abajo)", s => `blanco ${pct(s.rim)}`],
     ["Brillo hacia dentro", s => s.glow.map(pct).join(" · ")],
-    ["Línea de los lados", s => `negro ${pct(s.side)}${s.outside ? ", 1 px por fuera" : ""}`],
+    ["Anillo negro de fuera (lados)", s => `negro ${pct(s.side)}`],
     ["Divisor", s => `${s.divider[0] ? "blanco" : "negro"} ${pct(s.divider[3])}`],
   ];
   document.getElementById("table").innerHTML = `<thead><tr><th></th>${STATES.map(s => `<th>${s.title}</th>`).join("")}</tr></thead><tbody>` +
     rows.map(([name, f]) => `<tr><td>${name}</td>${STATES.map(s => `<td class="num">${f(s)}</td>`).join("")}</tr>`).join("") + "</tbody>";
   window.__states = STATES;
+  window.__ramp = (from, to) => { RAMP.from = from; RAMP.to = to; STATES.forEach(s => draw(s.canvas.getContext("2d"), s)); };
 })();
 </script>

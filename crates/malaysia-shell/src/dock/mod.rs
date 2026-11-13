@@ -576,14 +576,13 @@ impl App for DockApp {
         }
 
         let resolved = bk::theme::resolved();
+        let dock = resolved.dock;
         let glass_rgba = resolved
             .bar_tint
-            .map_or(resolved.shell.dock, |(tint, factor)| {
-                resolved.shell.dock.mix(tint, factor)
-            });
+            .map_or(dock.glass, |(tint, factor)| dock.glass.mix(tint, factor));
         let label_fill = theme::color(resolved.shell.bar);
         let ink = theme::color(resolved.shell.text);
-        let separator_ink = theme::color(resolved.shell.dock_separator);
+        let separator_ink = theme::color(dock.divider);
         let progress_track = theme::color(resolved.shell.tile);
         let progress_fill = theme::color(resolved.shell.tile_active);
         let dot = (tile * DOCK_DOT).clamp(DOCK_DOT_MIN, DOCK_DOT_MAX);
@@ -639,7 +638,7 @@ impl App for DockApp {
             placed(bar)
                 .layer(DOCK_BAR_LAYER)
                 .child(bk::style::glass_edge(
-                    rect().width(Size::px(bar.2)).height(Size::px(bar.3)),
+                    (bar.2, bar.3),
                     radius,
                     glass_rgba,
                     rim::glass_rim(
@@ -648,6 +647,7 @@ impl App for DockApp {
                         config.orientation,
                         (width, height),
                         bar,
+                        dock,
                     ),
                 ))
                 .into_element(),
