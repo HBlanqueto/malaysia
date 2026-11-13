@@ -108,8 +108,15 @@ with `grade-graphics/src/minimize.frag` for `DOCK_MINIMIZE_MS`. The genie
 follows Wayfire's squeezimize (MIT, see `NOTICE`): the content slides toward
 the target while its sides narrow along a sigmoid. The window travels toward
 the screen edge nearest the target; without one it goes to the bottom
-centre. The effect is drawn over the Dock, so it leaves and reaches the tile
-in sight. While it restores, the window is drawn only by the effect; the frame
+centre. The target is the thumbnail the Dock will show: the window's shape at
+the height of the icon body (`DOCK_ICON_BODY`), centred on the slot the Dock
+sends, and the genie is exactly that wide from the target's edge inward. The
+rows of the window that cross the target's far edge are already part of the
+thumbnail, which the compositor draws with the corner of
+`DOCK_THUMBNAIL_RADIUS`: it fills from the Dock's edge while the window flows
+in and empties while it flows out, so there is no jump when the Dock's tile
+takes over. The effect is drawn over the Dock, so it leaves and reaches the
+tile in sight. While it restores, the window is drawn only by the effect; the frame
 where it ends already draws the window.
 
 A popup whose root parent is a layer surface, such as a Dock menu, is drawn

@@ -4,16 +4,20 @@ use ctappearance::dock::MinimizeEffect;
 use malaysia_scene::scene::WindowId;
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::damage::OutputDamageTracker;
-use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
+use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::element::TextureShaderElement;
 use smithay::backend::renderer::gles::{
     GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
 };
-use smithay::backend::renderer::{Bind, Offscreen};
-use smithay::utils::{Buffer as BufferCoord, Logical, Point, Rectangle, Scale, Size, Transform};
+use smithay::backend::renderer::utils::CommitCounter;
+use smithay::backend::renderer::{Bind, Offscreen, Texture};
+use smithay::utils::{
+    Buffer as BufferCoord, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
+};
 
 use crate::cursor::OutputRenderElement;
+use crate::effects::RoundedTextureElement;
 use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 use crate::state::State;
 
@@ -22,6 +26,8 @@ const DURATION: Duration = Duration::from_millis(ctdesign::DOCK_MINIMIZE_MS);
 pub(crate) struct Minimizing {
     pub(crate) window: WindowId,
     texture: TextureBuffer<GlesTexture>,
+    snapshot: GlesTexture,
+    thumbnail: Option<Id>,
     from: Rectangle<i32, Logical>,
     to: Rectangle<i32, Logical>,
     hiding: bool,
@@ -72,13 +78,19 @@ pub(crate) fn start_requested(state: &mut State, renderer: &mut GlesRenderer, sc
         let Some((texture, from)) = snapshot(state, renderer, window, scale) else {
             continue;
         };
-        let to = state
-            .minimize_hints
-            .get(&window)
-            .copied()
-            .unwrap_or_else(|| bottom_centre(state.logical_output_size()));
+        let output = state.logical_output_size();
+        let (to, thumbnail) = match state.minimize_hints.get(&window) {
+            Some(slot) if state.config.dock.minimize_to_application => (*slot, None),
+            Some(slot) => (
+                thumbnail_rect(*slot, from.size, travel(*slot, output)),
+                Some(Id::new()),
+            ),
+            None => (bottom_centre(output), None),
+        };
         state.minimizing.push(Minimizing {
             window,
+            snapshot: texture.clone(),
+            thumbnail,
             texture: TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None),
             from,
             to,
@@ -164,6 +176,12 @@ pub(crate) fn append<R: MalaysiaRenderer>(
         } else {
             1.0 - linear
         };
+        if let (Some(id), Some(clip)) = (&minimizing.thumbnail, state.rounded_clip.clone()) {
+            elements.extend(
+                built_thumbnail(minimizing, id, (progress as f32, output), clip, scale)
+                    .map(Into::into),
+            );
+        }
         elements.push(
             PrimaryGpu(bend(
                 &minimizing.texture,
@@ -176,6 +194,107 @@ pub(crate) fn append<R: MalaysiaRenderer>(
             .into(),
         );
     }
+}
+
+// What the Dock shows once the window is in: the window at the icons' height, centred on its slot.
+fn thumbnail_rect(
+    slot: Rectangle<i32, Logical>,
+    window: Size<i32, Logical>,
+    travel: Travel,
+) -> Rectangle<i32, Logical> {
+    let body = f64::from(slot.size.w.min(slot.size.h)) * f64::from(ctdesign::DOCK_ICON_BODY);
+    let aspect = f64::from(window.w.max(1)) / f64::from(window.h.max(1));
+    let (width, height) = match travel {
+        Travel::Down | Travel::Up => (body * aspect, body),
+        Travel::Left | Travel::Right => (body, body / aspect),
+    };
+    let centre = slot.loc.to_f64() + slot.size.to_f64().downscale(2.0).to_point();
+    Rectangle::new(
+        Point::from((
+            (centre.x - width / 2.0).round() as i32,
+            (centre.y - height / 2.0).round() as i32,
+        )),
+        Size::from((width.round() as i32, height.round() as i32)),
+    )
+}
+
+// The share of the window that has crossed the target's far edge, in the travel frame: the thumbnail
+// holds exactly that share, so it fills as the window flows in and empties as it flows out.
+fn entered(progress: f32, window_box: [f32; 4], target_box: [f32; 4]) -> f32 {
+    let height = (window_box[3] - window_box[1]).max(1e-4);
+    let span = (target_box[3] - window_box[1]).max(1e-4);
+    let crossed = |p: f32| ((p * p * span + height - span) / height).clamp(0.0, 1.0);
+    ((crossed(progress) - crossed(0.0)) / (1.0 - crossed(0.0)).max(1e-4)).clamp(0.0, 1.0)
+}
+
+// The part of the thumbnail nearest the far edge, as shares of its width and height.
+fn built_part(travel: Travel, entered: f32) -> [f32; 4] {
+    match travel {
+        Travel::Down => [0.0, 1.0 - entered, 1.0, 1.0],
+        Travel::Up => [0.0, 0.0, 1.0, entered],
+        Travel::Right => [1.0 - entered, 0.0, 1.0, 1.0],
+        Travel::Left => [0.0, 0.0, entered, 1.0],
+    }
+}
+
+fn built_thumbnail<R: MalaysiaRenderer>(
+    minimizing: &Minimizing,
+    id: &Id,
+    (progress, output): (f32, Size<i32, Logical>),
+    clip: GlesTexProgram,
+    scale: f64,
+) -> Option<RoundedTextureElement<R>> {
+    let to = minimizing.to;
+    let travel = travel(to, output);
+    let area = minimizing.from.merge(to);
+    let share = entered(
+        progress,
+        in_travel_frame(minimizing.from, area, travel),
+        in_travel_frame(to, area, travel),
+    );
+    if share <= 0.0 {
+        return None;
+    }
+    let [x0, y0, x1, y1] = built_part(travel, share);
+    let frame: Rectangle<i32, Physical> = to.to_f64().to_physical(scale).to_i32_round();
+    let part = |frame: Rectangle<f64, Physical>| {
+        Rectangle::<f64, Physical>::new(
+            Point::from((
+                frame.loc.x + f64::from(x0) * frame.size.w,
+                frame.loc.y + f64::from(y0) * frame.size.h,
+            )),
+            Size::from((
+                f64::from(x1 - x0) * frame.size.w,
+                f64::from(y1 - y0) * frame.size.h,
+            )),
+        )
+    };
+    let dst = part(frame.to_f64()).to_i32_round();
+    let texture = minimizing.snapshot.size();
+    let src = Rectangle::<f64, BufferCoord>::new(
+        Point::from((
+            f64::from(x0) * f64::from(texture.w),
+            f64::from(y0) * f64::from(texture.h),
+        )),
+        Size::from((
+            f64::from(x1 - x0) * f64::from(texture.w),
+            f64::from(y1 - y0) * f64::from(texture.h),
+        )),
+    );
+    let radius = (f64::from(ctdesign::DOCK_THUMBNAIL_RADIUS)
+        * f64::from(frame.size.w.min(frame.size.h)))
+    .round() as i32;
+    Some(RoundedTextureElement::from_texture(
+        minimizing.snapshot.clone(),
+        id.clone(),
+        CommitCounter::default(),
+        src,
+        dst,
+        frame,
+        radius,
+        ctdesign::WINDOW_CORNER.exponent,
+        clip,
+    ))
 }
 
 fn bend(
@@ -263,13 +382,10 @@ mod tests {
     use crate::test_support::try_test_renderer;
     use smithay::backend::renderer::ExportMem;
 
-    // Draws a red 120 × 80 window at (40, 20) on a 200 × 200 output, bent toward (90, 180).
-    fn bent_pixels(renderer: &mut GlesRenderer, effect: MinimizeEffect, progress: f32) -> Vec<u8> {
+    fn red_window(renderer: &mut GlesRenderer) -> GlesTexture {
         use smithay::backend::renderer::element::solid::{
             SolidColorBuffer, SolidColorRenderElement,
         };
-        let program = compile(renderer).expect("the minimize shader compiles");
-        let window = Size::<i32, BufferCoord>::from((120, 80));
         let red = SolidColorRenderElement::from_buffer(
             &SolidColorBuffer::new(Size::from((120, 80)), [1.0, 0.0, 0.0, 1.0]),
             Point::from((0, 0)),
@@ -277,8 +393,9 @@ mod tests {
             1.0,
             Kind::Unspecified,
         );
+        let size = Size::<i32, BufferCoord>::from((120, 80));
         let mut snapshot =
-            Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, window).unwrap();
+            Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, size).unwrap();
         {
             let mut target = renderer.bind(&mut snapshot).unwrap();
             let elements: Vec<OutputRenderElement<GlesRenderer>> = vec![red.into()];
@@ -293,17 +410,14 @@ mod tests {
             .wait()
             .unwrap();
         }
-        let texture = TextureBuffer::from_texture(renderer, snapshot, 1, Transform::Normal, None);
-        let output = Size::from((200, 200));
-        let element = bend(
-            &texture,
-            (rect(40, 20, 120, 80), rect(90, 180, 20, 20)),
-            output,
-            (effect, progress),
-            program,
-            1.0,
-        );
-        let elements: Vec<OutputRenderElement<GlesRenderer>> = vec![PrimaryGpu(element).into()];
+        snapshot
+    }
+
+    // Draws the elements on a transparent 200 × 200 output and reads its pixels back.
+    fn draw(
+        renderer: &mut GlesRenderer,
+        elements: &[OutputRenderElement<GlesRenderer>],
+    ) -> Vec<u8> {
         let size = Size::<i32, BufferCoord>::from((200, 200));
         let mut frame =
             Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, size).unwrap();
@@ -313,7 +427,7 @@ mod tests {
             Scale::from(1.0),
             Transform::Normal,
         )
-        .render_output(renderer, &mut target, 0, &elements, [0.0; 4])
+        .render_output(renderer, &mut target, 0, elements, [0.0; 4])
         .unwrap()
         .sync
         .wait()
@@ -322,6 +436,22 @@ mod tests {
             .copy_framebuffer(&target, Rectangle::from_size(size), Fourcc::Abgr8888)
             .unwrap();
         renderer.map_texture(&mapping).unwrap().to_vec()
+    }
+
+    // Draws a red 120 × 80 window at (40, 20) on a 200 × 200 output, bent toward (90, 180).
+    fn bent_pixels(renderer: &mut GlesRenderer, effect: MinimizeEffect, progress: f32) -> Vec<u8> {
+        let program = compile(renderer).expect("the minimize shader compiles");
+        let snapshot = red_window(renderer);
+        let texture = TextureBuffer::from_texture(renderer, snapshot, 1, Transform::Normal, None);
+        let element = bend(
+            &texture,
+            (rect(40, 20, 120, 80), rect(90, 180, 20, 20)),
+            Size::from((200, 200)),
+            (effect, progress),
+            program,
+            1.0,
+        );
+        draw(renderer, &[PrimaryGpu(element).into()])
     }
 
     fn red_at(pixels: &[u8], x: usize, y: usize) -> bool {
@@ -374,6 +504,119 @@ mod tests {
             let to = in_travel_frame(target, area, travel);
             assert!(to[3] > from[1], "{travel:?}: {from:?} {to:?}");
             assert!(from.iter().chain(&to).all(|v| (0.0..=1.0).contains(v)));
+        }
+    }
+
+    #[test]
+    fn the_thumbnail_is_as_tall_as_the_icon_body_and_keeps_the_window_shape() {
+        let slot = rect(900, 1000, 56, 56);
+        let body = (56.0 * ctdesign::DOCK_ICON_BODY).round() as i32;
+        let wide = thumbnail_rect(slot, Size::from((1600, 1000)), Travel::Down);
+        assert_eq!(wide.size.h, body);
+        assert_eq!(wide.size.w, (f64::from(body) * 1.6).round() as i32);
+        assert_eq!(wide.loc.x + wide.size.w / 2, 928);
+        let side = thumbnail_rect(slot, Size::from((1600, 1000)), Travel::Left);
+        assert_eq!(side.size.w, body);
+    }
+
+    #[test]
+    fn the_share_that_has_entered_goes_from_nothing_to_the_whole_window() {
+        let (window, target) = ([0.2, 0.1, 0.8, 0.5], [0.4, 0.9, 0.6, 0.98]);
+        assert_eq!(entered(0.0, window, target), 0.0);
+        assert!((entered(1.0, window, target) - 1.0).abs() < 1e-5);
+        let steps: Vec<f32> = (0..=10)
+            .map(|i| entered(i as f32 / 10.0, window, target))
+            .collect();
+        assert!(steps.windows(2).all(|pair| pair[0] <= pair[1]), "{steps:?}");
+        assert!(steps[9] > 0.0 && steps[9] < 1.0, "{steps:?}");
+    }
+
+    #[test]
+    fn the_thumbnail_fills_from_the_dock_edge_and_has_round_corners() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        let clip = crate::effects::compile_rounded_clip(&mut renderer).expect("the clip compiles");
+        let snapshot = red_window(&mut renderer);
+        let to = rect(60, 140, 60, 40);
+        let minimizing = Minimizing {
+            window: WindowId::new(1),
+            texture: TextureBuffer::from_texture(
+                &renderer,
+                snapshot.clone(),
+                1,
+                Transform::Normal,
+                None,
+            ),
+            snapshot,
+            thumbnail: Some(Id::new()),
+            from: rect(40, 20, 120, 80),
+            to,
+            hiding: true,
+            start: Instant::now(),
+        };
+        let output = Size::from((200, 200));
+        let built = |renderer: &mut GlesRenderer, progress: f32| {
+            let element = built_thumbnail::<GlesRenderer>(
+                &minimizing,
+                minimizing.thumbnail.as_ref().unwrap(),
+                (progress, output),
+                clip.clone(),
+                1.0,
+            );
+            draw(
+                renderer,
+                &element.into_iter().map(Into::into).collect::<Vec<_>>(),
+            )
+        };
+        assert!(
+            built(&mut renderer, 0.0)
+                .chunks(4)
+                .all(|pixel| pixel[3] == 0),
+            "nothing yet"
+        );
+        let half = built(&mut renderer, 0.9);
+        assert!(!red_at(&half, 90, 142), "the top is still outside");
+        assert!(red_at(&half, 90, 176), "the bottom came in first");
+        let full = built(&mut renderer, 1.0);
+        assert!(
+            red_at(&full, 90, 142) && red_at(&full, 90, 176),
+            "all of it is in"
+        );
+        assert!(!red_at(&full, 60, 140), "the corner is rounded");
+    }
+
+    #[test]
+    fn the_genie_never_leaves_the_width_of_the_thumbnail_inside_the_dock() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        let program = compile(&mut renderer).expect("the minimize shader compiles");
+        let texture = {
+            let snapshot = red_window(&mut renderer);
+            TextureBuffer::from_texture(&renderer, snapshot, 1, Transform::Normal, None)
+        };
+        let to = rect(80, 150, 40, 30);
+        for step in 1..=19 {
+            let element = bend(
+                &texture,
+                (rect(40, 20, 120, 80), to),
+                Size::from((200, 200)),
+                (MinimizeEffect::Genie, step as f32 / 20.0),
+                program.clone(),
+                1.0,
+            );
+            let pixels = draw(&mut renderer, &[PrimaryGpu(element).into()]);
+            for y in to.loc.y..to.loc.y + to.size.h {
+                for x in (0..to.loc.x - 1).chain(to.loc.x + to.size.w + 1..200) {
+                    assert!(
+                        !red_at(&pixels, x as usize, y as usize),
+                        "step {step}: the genie left the thumbnail at ({x}, {y})"
+                    );
+                }
+            }
         }
     }
 }

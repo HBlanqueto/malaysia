@@ -54,8 +54,9 @@ void main() {
         float pinch = suck ? progress : pow(clamp(progress, 0.0, 0.25) * 4.0, 2.0);
         float slide = progress * progress;
         float span = max(t.w - s.y, 1e-4);
-        float along = (c.y - s.y) / span;
-        float narrowing = pinch / (1.0 + exp(-(along * 15.0 - 10.0)));
+        // The narrowing is complete where the target begins, so inside it the window is exactly as wide as the target.
+        float along = (c.y - s.y) / max(t.y - s.y, 1e-4);
+        float narrowing = pinch * min(1.0, (1.0 / (1.0 + exp(-(along * 15.0 - 10.0)))) / (1.0 / (1.0 + exp(-5.0))));
         float x0 = mix(s.x, t.x, narrowing);
         float x1 = mix(s.z, t.z, narrowing);
         w.x = (c.x - x0) / max(x1 - x0, 1e-4);
