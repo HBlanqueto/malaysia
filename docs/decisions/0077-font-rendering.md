@@ -41,9 +41,10 @@ keeps that off by default; the CFF driver does the same. Both read
    wins.
 2. `shell_session::start` imports it into the systemd user manager, so the
    shell, the portal and D-Bus activated apps get it too.
-3. Regular text uses the Medium (500) face. `share/fontconfig/malaysia.conf`
-   includes `/etc/fonts/fonts.conf` and turns a request for `regular` into
-   `medium`; heavier weights stay as asked. The compositor wrapper sets
+3. Regular text stays Regular (400); weights are never remapped, so explicit
+   Semibold and Bold stay as asked. `share/fontconfig/malaysia.conf`
+   includes `/etc/fonts/fonts.conf` and makes `sans-serif` resolve to
+   Adwaita Sans. The compositor wrapper sets
    `FONTCONFIG_FILE` to it unless it is already set, and
    `shell_session::start` imports it. Skia asks fontconfig too, so `bk`
    follows. The dev shell includes the same file.
@@ -53,20 +54,18 @@ keeps that off by default; the CFF driver does the same. Both read
 - Text in GTK, Qt, Electron and `bk` looks heavier and closer to macOS.
 - FreeType documents darkening for linear blending; with gamma-encoded
   blending it is a bit stronger, which is the look this ADR wants.
-- Regular and Medium look the same; Semibold and Bold still stand out.
-- A font without a Medium face falls back to the nearest one, usually Regular.
-- Text that asks for no weight at all (rare: Pango, Qt and Skia always ask)
-  stays Regular, because fontconfig fills in the default after this rule.
+- Regular text is Adwaita Sans Regular in every toolkit, like the `ctdesign`
+  styles.
 - To go back to plain FreeType, set `FREETYPE_PROPERTIES=` (empty) in the
-  environment that starts the compositor. To keep regular weights, set
+  environment that starts the compositor. To use the system sans, set
   `FONTCONFIG_FILE=/etc/fonts/fonts.conf` there.
 
 ## Rejected alternatives
 
 - Fontconfig `embolden`: synthetic bold adds a fixed width at every size,
   far more than macOS.
-- Mapping regular to semibold: body text and headings would look the same
-  weight.
+- Mapping regular to medium or semibold: body text and headings would look
+  the same weight.
 - A system-wide rule in the NixOS module (`fonts.fontconfig.localConf`): it
   would change every session on the machine, not only Malaysia.
 - Raising the weights of the `ctdesign` tokens: it reaches only `bk`, not
