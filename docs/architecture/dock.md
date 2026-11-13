@@ -31,7 +31,7 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 2. **Size.** `dock/geometry.rs` fits `tilesize` (16–128 px) to the screen:
    the Dock never crosses the edge, so with many items the largest size
    drops. Each icon takes a square slot of that size; a separator takes
-   `DOCK_SEPARATOR` of it. The bar is the slots plus a padding of
+   `DOCK_SEPARATOR` of it, drawn with `shell.dock_separator`: white at 30 % in dark, black at 25 % in light. The bar is the slots plus a padding of
    `DOCK_PADDING` + `DOCK_PADDING_SCALE` × size, `DOCK_EDGE_MARGIN` from the
    screen edge.
 3. **Magnification.** While the pointer is on the bar, each icon grows to
