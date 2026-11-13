@@ -116,8 +116,14 @@ and the bottom.
    goes directly above the surface's elements and below the window's own border
    (ADR 0059). Both are part of the window, so offscreen fades, minimize and
    captures include them.
-7. **Values live in `ctdesign`.** `chroma` is 0.40 and `rim_chroma` 0.65, from
-   the measurements above. The rim's white and its width are the window
+7. **Values live in `ctdesign`.** `chroma` is 0.40 in dark and 0.15 in light,
+   `rim_chroma` 0.65, from the measurements above and the light mockup. The
+   panel's chroma saturates towards `chroma_cap` (0.016 dark, 0.03 light):
+   the measured panel stays at 0.008 to 0.013 and, over the vivid aurora
+   wallpaper, a System Settings sidebar stays almost uniform, while a plain
+   0.4 share of a vivid wallpaper looked like a see-through window. The glass
+   blurs the wallpaper `blur_passes` (4) times, one more than the other
+   blurs, in its own cache. The rim's white and its width are the window
    frame's own tokens. They are first values, to calibrate in phase 6.
 8. **Without this request** (another compositor, or version below 6) the kit
    keeps painting its opaque sidebar. Nothing else changes.

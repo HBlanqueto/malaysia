@@ -85,6 +85,8 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
             (f64::from(dst.size.w), f64::from(dst.size.h)).into(),
         )
     };
+    let scheme = state.config.appearance.color_scheme;
+    let (chroma, chroma_cap) = ctappearance::glass_chroma(scheme);
     let island = glass.radius > 0;
     // The material runs 1 logical pixel under the opaque ring around the panel: the antialiased edge
     // of the client's hole would otherwise show what is behind the window.
@@ -125,7 +127,8 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                 .with_uniforms(vec![
                     Uniform::new("base", glass.base),
                     Uniform::new("solid", glass.solid),
-                    Uniform::new("chroma", ctdesign::GLASS.chroma),
+                    Uniform::new("chroma", chroma),
+                    Uniform::new("chroma_cap", chroma_cap),
                     Uniform::new("settle", settle),
                 ])
                 .into(),
@@ -135,7 +138,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
             && settle < 1.0
             && let Some(dst) = panel.intersection(output)
         {
-            let line = rim_line(state.config.appearance.color_scheme);
+            let line = rim_line(scheme);
             rims.push(
                 RoundedTextureElement::from_texture(
                     texture.clone(),

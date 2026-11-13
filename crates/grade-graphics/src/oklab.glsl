@@ -32,6 +32,15 @@ vec3 linear_from_oklab(vec3 lab) {
     );
 }
 
+// Same saturation as ctappearance::backdrop::take_chroma_capped.
+vec3 take_chroma_capped(vec3 base, vec3 source, float amount, float cap) {
+    vec3 p = oklab_from_linear(linear_from_srgb(base));
+    vec3 q = oklab_from_linear(linear_from_srgb(source));
+    vec2 ab = mix(p.yz, q.yz, clamp(amount, 0.0, 1.0));
+    ab /= sqrt(1.0 + dot(ab, ab) / (cap * cap));
+    return clamp(srgb_from_linear(clamp(linear_from_oklab(vec3(p.x, ab)), 0.0, 1.0)), 0.0, 1.0);
+}
+
 vec3 take_chroma(vec3 base, vec3 source, float amount) {
     vec3 p = oklab_from_linear(linear_from_srgb(base));
     vec3 q = oklab_from_linear(linear_from_srgb(source));

@@ -486,6 +486,7 @@ pub(crate) fn compile_glass(renderer: &mut GlesRenderer) -> Option<GlesTexProgra
             UniformName::new("base", UniformType::_3f),
             UniformName::new("solid", UniformType::_3f),
             UniformName::new("chroma", UniformType::_1f),
+            UniformName::new("chroma_cap", UniformType::_1f),
             UniformName::new("settle", UniformType::_1f),
         ],
     )

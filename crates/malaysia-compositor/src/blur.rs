@@ -25,11 +25,12 @@ use crate::scene_elements::{
 use crate::state::State;
 
 // ADR 0071: dual Kawase (Bjørge, SIGGRAPH 2015), blurred again only when what it samples changes.
-// `wallpaper` is the Background layer; `behind` adds the windows, for the Dock's glass.
+// `wallpaper` is the Background layer; `glass` is the same, blurred wider for the sidebars (ADR 0078); `behind` adds the windows, for the Dock's glass.
 pub(crate) struct Blur {
     down: GlesTexProgram,
     up: GlesTexProgram,
     wallpaper: Option<Blurred>,
+    glass: Option<Blurred>,
     behind: Option<Blurred>,
 }
 
@@ -60,6 +61,7 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<Blur> {
         down: program(grade_graphics::shaders::BLUR_DOWN)?,
         up: program(grade_graphics::shaders::BLUR_UP)?,
         wallpaper: None,
+        glass: None,
         behind: None,
     })
 }
@@ -78,9 +80,13 @@ pub(crate) fn update(
     };
     if !drawn(state) {
         blur.wallpaper = None;
-    } else if requested(state) && blur.refresh(state, renderer, output_size).is_none() {
+        blur.glass = None;
+    } else if (requested(state) || glass_requested(state))
+        && blur.refresh(state, renderer, output_size).is_none()
+    {
         tracing::warn!("failed to blur the wallpaper");
         blur.wallpaper = None;
+        blur.glass = None;
     }
     if !drawn(state) || !behind_requested(state) {
         blur.behind = None;
@@ -240,15 +246,22 @@ fn blur_region(surface: &WlSurface) -> Vec<Rectangle<i32, Logical>> {
 }
 
 pub(crate) fn wallpaper_texture(state: &State) -> Option<(GlesTexture, CommitCounter)> {
-    let wallpaper = state.blur.as_ref()?.wallpaper.as_ref()?;
+    let wallpaper = state.blur.as_ref()?.glass.as_ref()?;
     drawn(state).then(|| (wallpaper.blurred.clone(), wallpaper.commit))
 }
 
+fn glass_requested(state: &State) -> bool {
+    state
+        .windows
+        .iter_visible(&state.minimized)
+        .any(|window| crate::window_style::glass(window.surface()).is_some())
+}
+
 fn requested(state: &State) -> bool {
-    let windows = state.windows.iter_visible(&state.minimized).any(|window| {
-        !blur_region(window.surface()).is_empty()
-            || crate::window_style::glass(window.surface()).is_some()
-    });
+    let windows = state
+        .windows
+        .iter_visible(&state.minimized)
+        .any(|window| !blur_region(window.surface()).is_empty());
     windows
         || [Layer::Background, Layer::Bottom, Layer::Top, Layer::Overlay]
             .into_iter()
@@ -277,11 +290,23 @@ impl Blur {
     ) -> Option<()> {
         let scale = state.scale.fractional_scale();
         let elements = wallpaper_elements(state, renderer, scale);
+        let programs = (&self.down, &self.up);
         render_blurred(
             &mut self.wallpaper,
-            (&self.down, &self.up),
+            programs,
             renderer,
-            (output_size, scale),
+            (output_size, scale, ctdesign::BACKGROUND_BLUR_PASSES),
+            &elements,
+        )?;
+        if !glass_requested(state) {
+            self.glass = None;
+            return Some(());
+        }
+        render_blurred(
+            &mut self.glass,
+            programs,
+            renderer,
+            (output_size, scale, ctdesign::GLASS.blur_passes),
             &elements,
         )
     }
@@ -301,7 +326,7 @@ fn refresh_behind(
         &mut blur.behind,
         (&blur.down, &blur.up),
         renderer,
-        (output_size, scale),
+        (output_size, scale, ctdesign::BACKGROUND_BLUR_PASSES),
         &elements,
     )
     .is_none()
@@ -316,15 +341,16 @@ fn render_blurred(
     cache: &mut Option<Blurred>,
     (down, up): (&GlesTexProgram, &GlesTexProgram),
     renderer: &mut GlesRenderer,
-    (output_size, scale): (Size<i32, Physical>, f64),
+    (output_size, scale, passes): (Size<i32, Physical>, f64, u32),
     elements: &[OutputRenderElement<GlesRenderer>],
 ) -> Option<()> {
     let stale = cache.as_ref().is_none_or(|blurred| {
         blurred.scale != scale
+            || blurred.levels.len() != passes as usize
             || blurred.source.size() != Size::from((output_size.w, output_size.h))
     });
     if stale {
-        *cache = Some(Blurred::new(renderer, output_size, scale)?);
+        *cache = Some(Blurred::new(renderer, output_size, scale, passes)?);
     }
     let blurred = cache.as_mut()?;
     let changed = {
@@ -418,11 +444,16 @@ fn wallpaper_elements(
 }
 
 impl Blurred {
-    fn new(renderer: &mut GlesRenderer, size: Size<i32, Physical>, scale: f64) -> Option<Self> {
+    fn new(
+        renderer: &mut GlesRenderer,
+        size: Size<i32, Physical>,
+        scale: f64,
+        passes: u32,
+    ) -> Option<Self> {
         let full = Size::<i32, BufferCoords>::from((size.w, size.h));
         let mut texture =
             |size| Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, size).ok();
-        let levels = (1..=ctdesign::BACKGROUND_BLUR_PASSES)
+        let levels = (1..=passes)
             .map(|pass| {
                 texture(Size::from((
                     (full.w >> pass).max(1),
@@ -549,7 +580,7 @@ mod tests {
             &mut cache,
             programs,
             &mut renderer,
-            (output(), 1.0),
+            (output(), 1.0, ctdesign::BACKGROUND_BLUR_PASSES),
             &with_window,
         )
         .unwrap();
@@ -562,7 +593,7 @@ mod tests {
             &mut cache,
             programs,
             &mut renderer,
-            (output(), 1.0),
+            (output(), 1.0, ctdesign::BACKGROUND_BLUR_PASSES),
             &with_window,
         )
         .unwrap();
@@ -572,7 +603,7 @@ mod tests {
             &mut cache,
             programs,
             &mut renderer,
-            (output(), 1.0),
+            (output(), 1.0, ctdesign::BACKGROUND_BLUR_PASSES),
             &[wallpaper()],
         )
         .unwrap();
