@@ -2,10 +2,12 @@ use ctdesign::{
     DOCK_MAGNIFY_RADIUS, DOCK_PADDING, DOCK_PADDING_SCALE, DOCK_SEPARATOR, DOCK_SIDE_MARGIN,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Slot {
     Tile,
     Separator,
+    // A minimized window's tile, as many tiles wide: it magnifies like a tile and keeps its shape.
+    Window(f32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -39,6 +41,7 @@ fn units(slots: &[Slot]) -> f32 {
         .map(|slot| match slot {
             Slot::Tile => 1.0,
             Slot::Separator => DOCK_SEPARATOR,
+            Slot::Window(width) => *width,
         })
         .sum()
 }
@@ -77,15 +80,19 @@ pub(crate) fn layout(
                 cursor += tile * DOCK_SEPARATOR;
                 (tile * DOCK_SEPARATOR, tile)
             }
-            Slot::Tile => {
-                let base_center = cursor + tile / 2.0;
-                cursor += tile;
+            Slot::Tile | Slot::Window(_) => {
+                let width = match slot {
+                    Slot::Window(width) => *width,
+                    _ => 1.0,
+                };
+                let base_center = cursor + tile * width / 2.0;
+                cursor += tile * width;
                 let grow = pointer
                     .map(|at| falloff((at - base_center).abs() / tile))
                     .unwrap_or(0.0)
                     * magnify;
                 let size = tile + (largesize.max(tile) - tile) * grow;
-                (size, size)
+                (size * width, size)
             }
         })
         .collect();
@@ -166,6 +173,33 @@ mod tests {
         }
         assert!(grown.bar_length > rest.bar_length);
         assert_eq!(rest.thickness, grown.thickness);
+    }
+
+    #[test]
+    fn a_window_slot_is_as_wide_as_its_share_of_tiles_and_magnifies_with_the_same_height() {
+        let slots = [Slot::Tile, Slot::Window(1.5), Slot::Tile];
+        let rest = layout(&slots, 40.0, 80.0, 100.0, None, 1.0);
+        assert_eq!(rest.placed[1].length, 60.0);
+        assert_eq!(rest.placed[1].size, 40.0);
+        let grown = layout(&slots, 40.0, 80.0, 100.0, Some(100.0), 1.0);
+        assert_eq!(grown.placed[1].size, 80.0);
+        assert_eq!(grown.placed[1].length, 120.0);
+    }
+
+    #[test]
+    fn the_centre_of_a_slot_does_not_depend_on_its_width() {
+        let centre = |width: f32| {
+            let layout = layout(
+                &[Slot::Tile, Slot::Tile, Slot::Window(width), Slot::Tile],
+                40.0,
+                40.0,
+                300.0,
+                None,
+                0.0,
+            );
+            layout.placed[2].start + layout.placed[2].length / 2.0
+        };
+        assert!((centre(1.0) - centre(2.5)).abs() < 0.01);
     }
 
     #[test]

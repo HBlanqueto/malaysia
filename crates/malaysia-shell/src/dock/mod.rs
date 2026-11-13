@@ -1,5 +1,6 @@
 mod geometry;
 mod items;
+mod motion;
 mod thumbnail;
 
 use std::{
@@ -29,11 +30,11 @@ use ctappearance::dock::{DockConfig, DockOrientation, MinimizeEffect};
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
     DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
-    DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X,
-    DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS,
-    DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_INK_MIX,
-    DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE,
-    DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
+    DOCK_FOLDER_CANVAS, DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP,
+    DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS,
+    DOCK_MAGNIFY_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_INK_MIX,
+    DOCK_SEPARATOR_LENGTH, DOCK_THUMBNAIL_RADIUS, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN,
+    DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
@@ -355,6 +356,7 @@ impl App for DockApp {
         let timers = Timers::get();
 
         let thumbnails = use_thumbnails(&windows);
+        let tiles = motion::use_tiles(&windows, config.minimize_to_application);
         let running = items::running(&windows, entries);
         let running_ids: Vec<String> = running.iter().map(|(id, _)| id.clone()).collect();
         let previous = use_hook(|| Rc::new(RefCell::new(Vec::<String>::new())));
@@ -433,11 +435,29 @@ impl App for DockApp {
             Some(drag) if drag.moved => &drag.order,
             _ => &dock_state.persistent_apps,
         };
-        let list = items::items(&config, kept_shown, &dock_state.recent_apps, &running);
+        let tile_windows: Vec<ToplevelInfo> =
+            tiles.iter().map(|tile| tile.window.clone()).collect();
+        let list = items::items(
+            &config,
+            kept_shown,
+            &dock_state.recent_apps,
+            &running,
+            &tile_windows,
+        );
         let slots: Vec<Slot> = list
             .iter()
             .map(|item| match item {
                 Item::Separator => Slot::Separator,
+                Item::Window(window) => Slot::Window(
+                    thumbnails
+                        .read()
+                        .get(&window.id)
+                        .map_or(1.0, |picture| thumbnail::units(picture.size))
+                        * tiles
+                            .iter()
+                            .find(|tile| tile.window.id == window.id)
+                            .map_or(1.0, |tile| tile.presence),
+                ),
                 _ => Slot::Tile,
             })
             .collect();
@@ -498,21 +518,48 @@ impl App for DockApp {
             });
             *applied_regions.borrow_mut() = Some(regions);
         }
+        // A window with no tile yet minimizes into the slot its tile will take before the Trash;
+        // the Dock is centred, so that slot's centre does not depend on how wide the tile ends up.
+        let future = list
+            .iter()
+            .position(|item| *item == Item::Trash)
+            .map(|trash| {
+                let mut slots = slots.clone();
+                slots.insert(trash, Slot::Window(1.0));
+                let tile = geometry::fit(config.tilesize(), frame.main_length(), &slots);
+                let layout = geometry::layout(
+                    &slots,
+                    tile,
+                    largesize,
+                    frame.main_length() / 2.0,
+                    pointer_at.map(|at| frame.canonical(at).0),
+                    magnify,
+                );
+                (layout, trash)
+            });
         let targets: Vec<MinimizeTarget> =
             items::minimize_slots(&list, config.minimize_to_application)
                 .into_iter()
-                .map(|(window, index)| {
+                .filter_map(|(window, index)| {
+                    let has_tile =
+                        matches!(list.get(index), Some(Item::Window(tile)) if tile.id == window);
+                    let (layout, index) = if has_tile || config.minimize_to_application {
+                        (&layout, index)
+                    } else {
+                        let (future, trash) = future.as_ref()?;
+                        (future, *trash)
+                    };
                     let slot = layout.placed[index];
                     let (x, y, width, height) = region(frame.area(
-                        slot.start,
+                        slot.start + slot.length / 2.0 - slot.size / 2.0,
                         DOCK_EDGE_MARGIN + layout.padding,
                         slot.size,
                         slot.size,
                     ));
-                    MinimizeTarget {
+                    Some(MinimizeTarget {
                         window,
                         rect: (x, y, width, height),
-                    }
+                    })
                 })
                 .collect();
         let sent_targets = use_hook(|| Rc::new(RefCell::new(Vec::<MinimizeTarget>::new())));
@@ -745,76 +792,96 @@ impl App for DockApp {
                     let close = toplevels.clone();
                     let id = window.id;
                     let key = items::app_key(window, entries);
+                    let arrived = tiles
+                        .iter()
+                        .find(|tile| tile.window.id == id)
+                        .is_some_and(|tile| tile.arrived);
+                    let area =
+                        placed(frame.area(slot.start, icon_cross, slot.length, slot.size)).center();
+                    if !arrived {
+                        children.push(area.into_element());
+                        continue;
+                    }
+                    let picture = thumbnails.read().get(&id).cloned();
                     children.push(
-                        placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
-                            .center()
-                            .child(match thumbnails.read().get(&id) {
-                                Some(picture) => {
-                                    let (width, height) =
-                                        thumbnail::fit(picture.size, slot.size * DOCK_ICON_BODY);
-                                    // Freya caches by id; a window minimized again has a new picture.
-                                    ImageViewer::new((id, picture.png.clone()))
-                                        .decode_mode(DecodeMode::Source)
-                                        .asset_age(Duration::ZERO)
-                                        .width(Size::px(width))
-                                        .height(Size::px(height))
-                                        .into_element()
-                                }
-                                None => rect()
-                                    .width(Size::px(slot.size * DOCK_WINDOW_FRAME))
-                                    .height(Size::px(slot.size * DOCK_WINDOW_FRAME))
-                                    .corner_radius(slot.size * DOCK_RADIUS / 2.0)
-                                    .background(progress_track)
-                                    .center()
-                                    .child(app_icon_named(&key, slot.size * DOCK_WINDOW_ICON))
-                                    .into_element(),
-                            })
-                            .maybe_child(thumbnails.read().contains_key(&id).then(|| {
+                        area.child(match &picture {
+                            Some(picture) => {
+                                let (width, height) = thumbnail::body(picture.size, slot.size);
+                                // Freya caches by id; a window minimized again has a new picture.
                                 rect()
-                                    .position(Position::new_absolute().right(0.0).bottom(0.0))
-                                    .child(app_icon_named(&key, slot.size * DOCK_WINDOW_BADGE))
-                            }))
-                            .on_press(move |_| {
-                                toplevels.unset_minimized(id);
-                                toplevels.activate(id);
-                            })
-                            .on_secondary_down({
-                                let anchor = menu.anchor(slot.start, slot.length, slot.size);
-                                move |_| {
-                                    let close = close.clone();
-                                    menu.open(
-                                        vec![MenuItem::action("close", tr!("menu-close-window"))],
-                                        anchor,
-                                        move |_: String| close.close(id),
+                                    .width(Size::px(width))
+                                    .height(Size::px(height))
+                                    .corner_radius(DOCK_THUMBNAIL_RADIUS * width.min(height))
+                                    .overflow(Overflow::Clip)
+                                    .child(
+                                        ImageViewer::new((id, picture.png.clone()))
+                                            .decode_mode(DecodeMode::Source)
+                                            .asset_age(Duration::ZERO)
+                                            .width(Size::px(width))
+                                            .height(Size::px(height)),
                                     )
-                                }
-                            })
-                            .into_element(),
+                                    .into_element()
+                            }
+                            None => rect()
+                                .width(Size::px(slot.size * DOCK_WINDOW_FRAME))
+                                .height(Size::px(slot.size * DOCK_WINDOW_FRAME))
+                                .corner_radius(slot.size * DOCK_RADIUS / 2.0)
+                                .background(progress_track)
+                                .center()
+                                .child(app_icon_named(&key, slot.size * DOCK_WINDOW_ICON))
+                                .into_element(),
+                        })
+                        .maybe_child(picture.is_some().then(|| {
+                            rect()
+                                .position(Position::new_absolute().right(0.0).bottom(0.0))
+                                .child(app_icon_named(&key, slot.size * DOCK_WINDOW_BADGE))
+                        }))
+                        .on_press(move |_| {
+                            toplevels.unset_minimized(id);
+                            toplevels.activate(id);
+                        })
+                        .on_secondary_down({
+                            let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                            move |_| {
+                                let close = close.clone();
+                                menu.open(
+                                    vec![MenuItem::action("close", tr!("menu-close-window"))],
+                                    anchor,
+                                    move |_: String| close.close(id),
+                                )
+                            }
+                        })
+                        .into_element(),
                     );
                 }
                 Item::Downloads => {
                     let folder = downloads_dir();
+                    let spill = slot.size * (DOCK_FOLDER_CANVAS - 1.0) / 2.0;
                     children.push(
-                        placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
-                            .child(on_grid(
-                                icon("folder-download", &["places"]).as_ref(),
-                                tr!("dock-downloads"),
-                                slot.size,
-                            ))
-                            .on_press({
+                        placed(frame.area(
+                            slot.start - spill,
+                            icon_cross - spill,
+                            slot.size * DOCK_FOLDER_CANVAS,
+                            slot.size * DOCK_FOLDER_CANVAS,
+                        ))
+                        .center()
+                        .child(app_icon(
+                            icon("folder-download", &["places"]).as_ref(),
+                            tr!("dock-downloads"),
+                            slot.size * DOCK_FOLDER_CANVAS,
+                        ))
+                        .on_press({
+                            let folder = folder.clone();
+                            move |_| xdg_open(&folder)
+                        })
+                        .on_secondary_down({
+                            let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                            move |_| {
                                 let folder = folder.clone();
-                                move |_| xdg_open(&folder)
-                            })
-                            .on_secondary_down({
-                                let anchor = menu.anchor(slot.start, slot.length, slot.size);
-                                move |_| {
-                                    let folder = folder.clone();
-                                    menu.open(open_menu(), anchor, move |_: String| {
-                                        xdg_open(&folder)
-                                    })
-                                }
-                            })
-                            .into_element(),
+                                menu.open(open_menu(), anchor, move |_: String| xdg_open(&folder))
+                            }
+                        })
+                        .into_element(),
                     );
                 }
                 Item::Trash => {

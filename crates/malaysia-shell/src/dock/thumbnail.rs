@@ -42,10 +42,19 @@ fn shrink(image: &WindowImage, longest: u32) -> WindowImage {
     }
 }
 
-pub(crate) fn fit(image: (u32, u32), box_side: f32) -> (f32, f32) {
-    let (width, height) = (image.0.max(1) as f32, image.1.max(1) as f32);
-    let scale = box_side / width.max(height);
-    (width * scale, height * scale)
+fn aspect(image: (u32, u32)) -> f32 {
+    image.0.max(1) as f32 / image.1.max(1) as f32
+}
+
+// The picture is as tall as an icon's body and as wide as its window's shape asks.
+pub(crate) fn body(image: (u32, u32), slot: f32) -> (f32, f32) {
+    let height = slot * ctdesign::DOCK_ICON_BODY;
+    (height * aspect(image), height)
+}
+
+// A tile's width in tiles: the picture's, plus the margin an icon has around its body.
+pub(crate) fn units(image: (u32, u32)) -> f32 {
+    ctdesign::DOCK_ICON_BODY * aspect(image) + (1.0 - ctdesign::DOCK_ICON_BODY)
 }
 
 #[cfg(test)]
@@ -65,8 +74,15 @@ mod tests {
     }
 
     #[test]
-    fn a_picture_fits_its_box_by_the_longer_side() {
-        assert_eq!(fit((1600, 1000), 64.0), (64.0, 40.0));
-        assert_eq!(fit((500, 1000), 64.0), (32.0, 64.0));
+    fn a_picture_is_as_tall_as_the_icon_body_and_keeps_its_shape() {
+        let (width, height) = body((1600, 1000), 56.0);
+        assert!((height - 56.0 * ctdesign::DOCK_ICON_BODY).abs() < 1e-4);
+        assert!((width / height - 1.6).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_square_picture_takes_one_tile_and_a_wide_one_takes_more() {
+        assert!((units((500, 500)) - 1.0).abs() < 1e-6);
+        assert!(units((1600, 1000)) > 1.0);
     }
 }

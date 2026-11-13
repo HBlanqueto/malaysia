@@ -50,6 +50,7 @@ pub(crate) fn items(
     kept: &[String],
     recent: &[String],
     running: &[(String, Vec<ToplevelInfo>)],
+    tiles: &[ToplevelInfo],
 ) -> Vec<Item> {
     let windows_of = |id: &str| {
         running
@@ -100,16 +101,7 @@ pub(crate) fn items(
     if !config.static_only {
         items.push(Item::Downloads);
     }
-    if !config.minimize_to_application {
-        items.extend(
-            running
-                .iter()
-                .flat_map(|(_, windows)| windows)
-                .filter(|window| window.minimized)
-                .cloned()
-                .map(Item::Window),
-        );
-    }
+    items.extend(tiles.iter().cloned().map(Item::Window));
     items.push(Item::Trash);
     items
 }
@@ -134,7 +126,7 @@ pub(crate) fn minimize_slots(items: &[Item], into_app: bool) -> Vec<(u64, usize)
                     }
                 })
                 .collect(),
-            Item::Window(window) => vec![(window.id, index)],
+            Item::Window(window) if window.minimized => vec![(window.id, index)],
             _ => Vec::new(),
         })
         .collect()
@@ -208,7 +200,7 @@ mod tests {
         let groups = running(&[window(1, "mail", false), window(2, "maps", false)], &[]);
         let kept = vec!["files".to_string(), "mail".to_string()];
         let recent = vec!["calc".to_string(), "notes".to_string(), "music".to_string()];
-        let items = items(&DockConfig::default(), &kept, &recent, &groups);
+        let items = items(&DockConfig::default(), &kept, &recent, &groups, &[]);
         assert_eq!(
             ids(&items),
             [
@@ -232,26 +224,26 @@ mod tests {
             static_only: true,
             ..DockConfig::default()
         };
-        let items = items(&config, &["files".to_string()], &[], &groups);
+        let items = items(&config, &["files".to_string()], &[], &groups, &[]);
         assert_eq!(ids(&items), ["app:mail", "separator", "trash"]);
     }
 
     #[test]
-    fn minimized_windows_get_a_tile_unless_they_go_into_the_app_icon() {
+    fn the_tiles_of_windows_go_between_downloads_and_the_trash() {
         let groups = running(&[window(7, "mail", true)], &[]);
-        let into_slots = items(&DockConfig::default(), &[], &[], &groups);
-        assert!(ids(&into_slots).contains(&"window:7".to_string()));
-        let config = DockConfig {
-            minimize_to_application: true,
-            ..DockConfig::default()
-        };
-        assert!(!ids(&items(&config, &[], &[], &groups)).contains(&"window:7".to_string()));
+        let tiles = [window(7, "mail", true), window(8, "mail", false)];
+        let items = items(&DockConfig::default(), &[], &[], &groups, &tiles);
+        assert_eq!(
+            ids(&items)[ids(&items).len() - 4..],
+            ["downloads", "window:7", "window:8", "trash"]
+        );
     }
 
     #[test]
     fn a_window_minimizes_into_its_own_tile_or_into_the_app_icon() {
         let groups = running(&[window(1, "mail", false), window(2, "mail", true)], &[]);
-        let slots = items(&DockConfig::default(), &[], &[], &groups);
+        let tiles = [window(2, "mail", true)];
+        let slots = items(&DockConfig::default(), &[], &[], &groups, &tiles);
         let trash = slots.len() - 1;
         let tile = slots
             .iter()
@@ -262,7 +254,7 @@ mod tests {
             minimize_to_application: true,
             ..DockConfig::default()
         };
-        let slots = items(&config, &[], &[], &groups);
+        let slots = items(&config, &[], &[], &groups, &[]);
         let app = slots
             .iter()
             .position(|item| matches!(item, Item::App(_)))

@@ -24,7 +24,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    `~/.local/share/malaysia/dock.state`), a separator, the open apps that are
    not kept and up to `DOCK_RECENTS` recent apps (`recent-apps`, with
    `show-recents`), a separator, Downloads, one tile per minimized window
-   (unless `minimize-to-application`) and the Trash. `static-only` keeps only
+   (unless `minimize-to-application`) and the Trash. `dock/motion.rs` keeps the
+   tiles: a new one opens its slot in `DOCK_SLOT_MS` and a window that leaves
+   keeps its tile, empty, until its slot is shut. `static-only` keeps only
    the open apps.
 2. **Size.** `dock/geometry.rs` fits `tilesize` (16–128 px) to the screen:
    the Dock never crosses the edge, so with many items the largest size
@@ -57,7 +59,12 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon_in`),
    with the `LauncherEntry` badge and progress. A minimized window's tile is
    a picture of the window, taken once with `capture_window` when it
-   minimizes, with the app icon at its corner. Every icon sits on macOS's
+   minimizes, with the app icon at its corner. The picture is as tall as an
+   icon's body (`DOCK_ICON_BODY`), as wide as its window's shape asks, with the
+   corner of `DOCK_THUMBNAIL_RADIUS` and no border; its slot is as wide as the
+   picture plus the margin of an icon. The picture shows when the genie is over,
+   not before. Downloads is drawn on `DOCK_FOLDER_CANVAS` of its slot so that
+   the folder is as tall as an icon's body. Every icon sits on macOS's
    grid: Malaysia's app icons already keep the 824-on-1024 body; any other
    icon, and the places, is drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon marks an
    open app (`show-process-indicators`). The name label shows over the icon
@@ -91,8 +98,11 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 10. **Minimize target.** The Dock sends each window's slot with
     `set_minimize_target` (`zwlr_foreign_toplevel_handle_v1.set_rectangle`):
     the app's icon with `minimize-to-application`, otherwise the window's own
-    tile, or the slot before the Trash where that tile will appear. The slot
-    is the one drawn now: with the pointer on the Dock, the magnified tile.
+    tile, or the slot before the Trash where that tile will appear. The Dock
+    sends the square the tile has at its centre, as drawn now: with the pointer
+    on the Dock, magnified. The Dock is centred, so a slot's centre does not
+    depend on how wide its tile ends up, and the compositor works the
+    thumbnail's width out from the window's shape.
 11. **Hiding.** With `autohide`, the bar slides off the edge when the pointer
    leaves. A strip of `DOCK_REVEAL_STRIP` px at the edge takes the pointer;
    after `autohide-delay` seconds the bar slides back in. The slide lasts
