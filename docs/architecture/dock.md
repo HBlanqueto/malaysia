@@ -62,7 +62,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    around the lower corners and back, weaker, along the bottom edge. A soft
    line, blurred by `DOCK_RIM_BLUR` pixels. A Dock on the left or right takes one
    colour from the wallpaper around the whole bar. The fill is the translucent
-   `shell.dock`, a little white over the blur (12 % in light, 6 % in dark): as in
+   `shell.dock`, a little white over the blur in light (12 %) and the usual
+   dark smoke in dark: as in
    macOS, the wallpaper and the windows that pass behind the Dock show through
    the blur (ADR 0071, `"behind"`). It takes the bar tint only
    with `bars` in `appearance.tint_parts`, and is opaque with

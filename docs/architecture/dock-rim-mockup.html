@@ -276,7 +276,7 @@
     mc.drawImage(wp, 0, 0);
     mc.save(); rr(mc, BAR.x, BAR.y, BAR.w, BAR.h, BAR.r); mc.clip();
     mc.filter = "blur(12px)"; mc.drawImage(wp, 0, 0); mc.filter = "none";
-    mc.fillStyle = state.apple ? "rgba(255,255,255,.12)" : "rgba(26,26,30,.34)"; mc.fillRect(BAR.x, BAR.y, BAR.w, BAR.h); mc.restore();
+    mc.fillStyle = "rgba(30,30,30,.45)"; mc.fillRect(BAR.x, BAR.y, BAR.w, BAR.h); mc.restore();
     const rim = state.apple ? appleRim() : null;
     const { T, al: own } = rimLayer(segs, glob, rim), al = rim ? appleSegments(rim) : own;
     mc.save(); mc.filter = "blur(.7px)"; mc.setTransform(1, 0, 0, 1, 0, 0); mc.drawImage(T, 0, 0); mc.restore();
