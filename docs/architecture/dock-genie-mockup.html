@@ -280,7 +280,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
 
   // The kit's glass_edge: only the inner line, light over the wallpaper. Its opacity runs from DOCK_RIM_DARK to
   // DOCK_RIM_BRIGHT with the HSL lightness of the wallpaper behind the bar; the palette gives 10 % on the sides, 26 % on the edges.
-  const RIM = {dark: .6, bright: 3, sides: .1, edges: .26, glow: .07};
+  const RIM = {dark: .6, bright: 3, sides: .1, edges: .26};
   function lightnessBehind(L) {
     const x = Math.max(0, Math.floor(L.barX * dpr)), y = Math.floor(L.barY * dpr);
     const w = Math.min(bg.width - x, Math.ceil(L.barW * dpr)), h = Math.min(bg.height - y, Math.ceil(L.barH * dpr));
@@ -301,14 +301,10 @@ input[type=range]{accent-color:var(--accent);min-width:0}
       return;
     }
     const light = lightnessBehind(L), k = RIM.dark + (RIM.bright - RIM.dark) * light, a = v => Math.min(1, v * k);
-    c.save(); rr(c, L.barX, L.barY, L.barW, L.barH, radius); c.clip();
-    const glow = c.createLinearGradient(0, L.barY, 0, L.barY + L.barH), depth = 12 / L.barH;
-    [[0, a(RIM.glow)], [depth, 0], [1 - depth, 0], [1, a(RIM.glow)]].forEach(([o, al]) => glow.addColorStop(o, `rgba(255,255,255,${al})`));
-    c.fillStyle = glow; c.fillRect(L.barX, L.barY, L.barW, L.barH); c.restore();
     const line = c.createLinearGradient(0, L.barY, 0, L.barY + L.barH), curve = radius / L.barH;
     [[0, a(RIM.edges)], [curve, a(RIM.sides)], [1 - curve, a(RIM.sides)], [1, a(RIM.edges)]].forEach(([o, al]) => line.addColorStop(o, `rgba(255,255,255,${al})`));
     c.strokeStyle = line; c.lineWidth = 1; rr(c, L.barX + .5, L.barY + .5, L.barW - 1, L.barH - 1, radius - .5); c.stroke();
-    $("rim").textContent = `Fondo con claridad ${Math.round(light * 100)} %: línea ×${k.toFixed(2)}, lados ${Math.round(a(RIM.sides) * 100)} %, arriba y abajo ${Math.round(a(RIM.edges) * 100)} %, sin trazo negro`;
+    $("rim").textContent = `Fondo con claridad ${Math.round(light * 100)} %: línea ×${k.toFixed(2)}, lados ${Math.round(a(RIM.sides) * 100)} %, arriba y abajo ${Math.round(a(RIM.edges) * 100)} %, sin trazo negro ni resplandor`;
   }
 
   function dockIcons(c, L, target) {
@@ -385,7 +381,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   /* ---------- Rules, timeline and transport ---------- */
   const RULES = [
     ["El genie va por encima del Dock", "La ventana nace de la miniatura y se ve entera al cruzar la barra.", "El cristal del Dock lo cubre: la ventana parece salir de detrás."],
-    ["Solo la línea interior, como en macOS", "Sin trazo negro. La línea es blanca y translúcida: tenue sobre un fondo oscuro y casi blanca sobre uno claro o plano, y más fuerte arriba y abajo que a los lados. Cambia el fondo para verlo.", "Trazo negro exterior y una línea blanca fija del 20 %."],
+    ["Solo la línea interior, como en macOS", "Sin trazo negro y sin resplandor. Solo la línea, blanca y translúcida: tenue sobre un fondo oscuro y casi blanca sobre uno claro o plano, y más fuerte arriba y abajo que a los lados. Cambia el fondo para verlo.", "Trazo negro exterior y una línea blanca fija del 20 %."],
     ["El Dock abre su hueco", "El mosaico crece de 0 a 1 mientras baja el genie y las demás miniaturas se apartan. Al restaurar, se cierra.", "El hueco aparece de golpe al empezar; no hay sitio preparado."],
     ["El genie sale de la anchura de la miniatura",
       "La miniatura tiene un ancho fijo, el de su ventana al alto del icono. El genie se estrecha hasta esa anchura exacta antes de llegar al Dock y no la rebasa. Activa «Ancho de la miniatura» para ver las guías.",

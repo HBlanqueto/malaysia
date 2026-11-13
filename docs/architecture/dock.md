@@ -49,7 +49,7 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    `set_blur_region`, clipped to the corner, and no shadow: it would show
    through the translucent fill. The Dock
    draws only the inner line itself, with `bk::style::glass_edge`: no dark outer
-   border, the compositor's panel colours, one physical pixel wide like them, under
+   border and no inward glow, the compositor's panel colours, one physical pixel wide like them, under
    its icons, so magnified icons rise over the bar's edge. As in macOS the line
    is light over the wallpaper and not fixed: `dock/rim.rs` multiplies its
    opacity by `DOCK_RIM_DARK` to `DOCK_RIM_BRIGHT` by the lightness of the
