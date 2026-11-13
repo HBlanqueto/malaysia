@@ -86,6 +86,13 @@
         <option value="color">Colorido</option>
       </select>
     </div>
+    <div class="group">
+      <label class="label" for="scheme">Modo del Dock</label>
+      <select id="scheme">
+        <option value="dark" selected>Oscuro</option>
+        <option value="light">Claro</option>
+      </select>
+    </div>
     <div class="group" role="group" aria-label="Preajuste">
       <button id="preset-today" type="button" aria-pressed="false">Hoy</button>
       <button id="preset-new" type="button" aria-pressed="false">Propuesta</button>
@@ -124,7 +131,8 @@
       <li><b>Base por borde.</b> Arriba, abajo y lados tienen su propia curva medida en las capturas. Apagado, usa 26 % arriba y abajo y 10 % en los lados, por la fuerza global.</li>
       <li><b>Tono del fondo.</b> La línea es el color del fondo aclarado, no blanco puro. Apagado, es blanca.</li>
       <li><b>Como Apple.</b> Además de seguir al fondo, la línea se desvanece de arriba abajo: fuerte arriba y en las esquinas de arriba, tenue en el medio del lado y casi invisible en las esquinas de abajo. La línea es luz blanca teñida por el fondo de fuera: casi transparente donde ese fondo es oscuro y blanquecina donde es claro, y vuelve a empezar con cada franja. El vidrio de dentro es más claro que el fondo, como en las capturas. Con «Aurora pintada» se ve el ciclo.</li>
-      <li>El blur de 0,7 px de la línea está siempre activo. Los iconos son marcadores; el vidrio es el desenfoque del propio fondo más un velo oscuro.</li>
+      <li><b>Modo del Dock.</b> En oscuro el interior es humo (<code>#1e1e1e73</code>) y el divisor blanco al 30 %. En claro el interior es un 12 % de blanco sobre el desenfoque, más claro que el fondo, y el divisor es negro al 25 %. La línea del borde se calcula igual en los dos.</li>
+      <li>El blur de 0,7 px de la línea está siempre activo. Los iconos son marcadores; el vidrio es el desenfoque del propio fondo más el velo del modo elegido.</li>
     </ul>
   </section>
 
@@ -160,7 +168,7 @@
   const BAR = { w: 580, h: 78, r: 19, bottom: 16 };
   BAR.x = (W - BAR.w) / 2; BAR.y = H - BAR.bottom - BAR.h;
   const SEG = 58, SEGW = BAR.w / SEG;
-  const state = { wall: "paint", local: true, edge: true, tone: true, apple: true };
+  const state = { wall: "paint", local: true, edge: true, tone: true, apple: true, scheme: "dark" };
   let wp, wpData, wpFull, probe = null;
 
   // ---------- fondos ----------
@@ -268,6 +276,8 @@
     return { T, al };
   }
 
+  // Los tokens del kit: dock-bar (humo #1e1e1e73 en oscuro, blanco al 12 % en claro) y dock-separator (blanco al 30 % / negro al 25 %).
+  const GLASS = { dark: "rgba(30,30,30,.45)", light: "rgba(255,255,255,.12)" }, DIVIDER = { dark: "rgba(255,255,255,.30)", light: "rgba(0,0,0,.25)" };
   const ICONS = ["#ff8a3d", "#c9ccd4", "#4c8dff", "#35c26b", "#a066f0", "#f2c230", "#e8566c", "#4cc9d0"];
   function render() {
     if (!wpData) return;
@@ -276,13 +286,14 @@
     mc.drawImage(wp, 0, 0);
     mc.save(); rr(mc, BAR.x, BAR.y, BAR.w, BAR.h, BAR.r); mc.clip();
     mc.filter = "blur(12px)"; mc.drawImage(wp, 0, 0); mc.filter = "none";
-    mc.fillStyle = "rgba(30,30,30,.45)"; mc.fillRect(BAR.x, BAR.y, BAR.w, BAR.h); mc.restore();
+    mc.fillStyle = GLASS[state.scheme]; mc.fillRect(BAR.x, BAR.y, BAR.w, BAR.h); mc.restore();
     const rim = state.apple ? appleRim() : null;
     const { T, al: own } = rimLayer(segs, glob, rim), al = rim ? appleSegments(rim) : own;
     mc.save(); mc.filter = "blur(.7px)"; mc.setTransform(1, 0, 0, 1, 0, 0); mc.drawImage(T, 0, 0); mc.restore();
     mc.setTransform(S, 0, 0, S, 0, 0);
     const tile = 52, gap = 14, n = ICONS.length, total = n * tile + (n - 1) * gap, x0 = BAR.x + (BAR.w - total) / 2, y0 = BAR.y + (BAR.h - tile) / 2;
     ICONS.forEach((c, i) => { const x = x0 + i * (tile + gap); mc.fillStyle = c; rr(mc, x, y0, tile, tile, 12); mc.fill(); mc.fillStyle = "rgba(255,255,255,.22)"; rr(mc, x, y0, tile, tile * .5, 12); mc.fill(); });
+    const dx = x0 + 4 * (tile + gap) - gap / 2; mc.fillStyle = DIVIDER[state.scheme]; mc.fillRect(Math.round(dx) - .5, BAR.y + 14, 1, BAR.h - 28);
     drawChart(segs, glob, al);
     drawLoupe(segs, glob, al);
   }
@@ -331,6 +342,7 @@
   $("preset-new").addEventListener("click", () => apply(true, true, true));
   [["c-local", "local"], ["c-edge", "edge"], ["c-tone", "tone"]].forEach(([id, key]) => $(id).addEventListener("change", e => { state[key] = e.target.checked; state.apple = false; sync(); render(); }));
   $("wall").addEventListener("change", e => setWall(e.target.value));
+  $("scheme").addEventListener("change", e => { state.scheme = e.target.value; render(); });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
   new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   sync(); setWall("paint");
