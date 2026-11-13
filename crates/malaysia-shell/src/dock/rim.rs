@@ -3,8 +3,8 @@ use ctappearance::dock::DockOrientation;
 use ctappearance::tinting::WallpaperGrid;
 use ctdesign::{DOCK_RIM_BRIGHT, DOCK_RIM_DARK};
 
-// macOS draws the Dock's edge as light over the wallpaper: faint over a dark one, nearly white
-// over a light or flat one. `bar` is the bar's rectangle in the Dock's surface, which spans the
+// The Dock's edge is as translucent as the palette's line over a light or flat wallpaper, and
+// fainter over a dark one. `bar` is the bar's rectangle in the Dock's surface, which spans the
 // output along the Dock's edge.
 pub(crate) fn strength(
     wallpaper: &WallpaperState,
@@ -60,7 +60,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_line_is_fainter_than_the_palette_over_black_and_stronger_over_white() {
+    fn the_line_is_fainter_than_the_palette_over_black_and_never_stronger_over_white() {
         assert_eq!(strength_for(0.0), DOCK_RIM_DARK);
         assert_eq!(strength_for(1.0), DOCK_RIM_BRIGHT);
         const { assert!(DOCK_RIM_DARK < 1.0 && DOCK_RIM_BRIGHT > 1.0) };

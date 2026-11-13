@@ -55,8 +55,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    its icons, so magnified icons rise over the bar's edge. As in macOS the line
    is light over the wallpaper and not fixed: `dock/rim.rs` multiplies its
    opacity by `DOCK_RIM_DARK` to `DOCK_RIM_BRIGHT` by the lightness of the
-   wallpaper behind the bar, so it is faint over a dark wallpaper and nearly
-   white over a light or flat one. The fill is the translucent `shell.dock`: as in
+   wallpaper behind the bar, so it is faint over a dark wallpaper and, over a
+   light or flat one, as translucent as the palette's line (10 % on the sides,
+   26 % on the top and bottom), never more. The fill is the translucent `shell.dock`: as in
    macOS, the wallpaper and the windows that pass behind the Dock show through
    the blur (ADR 0071, `"behind"`). It takes the bar tint only
    with `bars` in `appearance.tint_parts`, and is opaque with
