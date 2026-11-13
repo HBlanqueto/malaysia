@@ -143,7 +143,8 @@
     <h2>Cómo leerlo</h2>
     <ul class="notes">
       <li>La sidebar solo desenfoca el fondo de pantalla, con unas 6 pasadas: casi uniforme y neutra. En oscuro, el centro es L 0.273 y croma 0.022; en claro, (235,237,238) con foco y un gris plano de (242,242,242) sin foco.</li>
-      <li>El centro de la sidebar oscura es casi sólido. A lo largo de su alto, el fondo que asoma junto a la ventana varía 0.135 en luminosidad ya desenfocado, y el centro de la sidebar solo 0.010, sin relación con el fondo; en el eje azul-amarillo varía una décima parte que el fondo. Por eso el vidrio oscuro no deja pasar luminosidad (claridad 0) y su base es un gris de L 0.273, no el de ahora (L 0.235). El fondo de al lado es solo una aproximación de lo que hay debajo.</li>
+      <li>El centro de la sidebar es un sólido plano. A lo largo de su alto, el fondo que asoma junto a la ventana varía 0.135 en luminosidad ya desenfocado y el centro oscuro solo 0.010, sin relación con el fondo. Tampoco hay grano: en la captura el relleno varía 0.5 sobre 255. Por eso el centro ya no toma el fondo local: es la base (L 0.273 en oscuro) con el tinte del color medio del fondo, que encaja con la opción de teñir las ventanas; en claro es (235,237,238). El fondo solo se ve en la rampa del borde. El fondo de al lado es una aproximación de lo que hay debajo.</li>
+      <li>Más sólida que lo medido: la rampa va al 70 % y el color del borde se desenfoca con 4 pasadas en vez de 3. El resto de los valores sale de la captura.</li>
       <li>El borde de la sidebar es una línea blanca de 1 px, un poco más clara que el relleno (L 0.41 frente a 0.33 en oscuro) y teñida con el fondo, justo dentro de un trazo negro de 1 px que es el de la ventana. El rim de ahora es blanco al 8 % y muy teñido; el nuevo, al 12 % y más blanco. En claro es blanco al 60 %, sin medida. El trazo negro de la ventana no está dibujado aquí.</li>
       <li>El fondo asoma solo junto a los bordes exteriores de la sidebar (izquierdo, superior e inferior). En el borde derecho, el que mira al contenido, no hay rampa.</li>
       <li>En la captura de Ajustes la sidebar llega hasta el borde de la ventana. En la isla, la caída se cuenta desde el borde del panel de vidrio, que queda 8 pt dentro, y el color se toma en el borde de la ventana, justo fuera o justo dentro. La esquina del panel es de 18 pt, concentrica con la de 26 de la ventana.</li>
@@ -163,11 +164,12 @@
   const INSET = 8 * K;
   const PANEL = { x: WIN.x + INSET, y: WIN.y + INSET, w: 152, h: WIN.h - 2 * INSET, r: 18 * K };
   const KAWASE_SIGMA = 5 / 3;
-  const LOCAL_PASSES = 3;
+  const LOCAL_PASSES = 4;
+  const EDGE_SCALE = 0.7;
   const SAMPLE_OFFSET = 6;
   const EDGE_SPAN = 46 * K;
   const NOW = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5 } };
-  const MACOS = { dark: { chroma: 0.3, cap: 0.06, lightness: 0, passes: 6, base: '#272727' }, light: { chroma: 0.02, cap: 0.03, lightness: 0, passes: 6, solid: '#f2f2f2' } };
+  const MACOS = { dark: { cap: 0.06, passes: 6, base: '#272727' }, light: { cap: 0.03, passes: 6, centre: '#ebedee', solid: '#f2f2f2' } };
   const EDGE = { dark: { chroma: 0.65, lightness: 0.22, cap: 0.12 }, light: { chroma: 0.45, lightness: 0.15, cap: 0.09 } };
   const SOLID_TINT = { dark: 0.15 * 2, light: 0.12 * 2 };
   const RIM_CHROMA = { now: 0.65, macos: 0.3 };
@@ -328,6 +330,7 @@
     const base = toOklab(...hex(params.base ?? BASE[scheme])), rim = (variant === 'now' ? RIM_NOW : RIM)[scheme];
     const src = sources(state.wallpaper, params.passes), local = sources(state.wallpaper, params.passes).local;
     const flat = focused ? null : params.solid ? hex(params.solid) : takeTint(base, src.mean, SOLID_TINT[scheme], 0, params.cap);
+    const centre = params.centre ? hex(params.centre) : takeTint(base, src.mean, SOLID_TINT[scheme], 0, params.cap);
     const x0 = Math.floor(PANEL.x * S) - 2, y0 = Math.floor(PANEL.y * S) - 2;
     const w = Math.ceil(PANEL.w * S) + 4, h = Math.ceil(PANEL.h * S) + 4;
     const out = new ImageData(w, h), stride = src.blur.width;
@@ -336,11 +339,11 @@
       const d = panelSdf((sx + 0.5) / S, (sy + 0.5) / S) * S, cover = coverage(d);
       if (cover <= 0) continue;
       const i = (sy * stride + sx) * 4, q = toOklab(src.blur.data[i], src.blur.data[i + 1], src.blur.data[i + 2]);
-      let color = flat ?? takeTint(base, q, params.chroma, params.lightness, params.cap);
+      let color = flat ?? (variant === 'now' ? takeTint(base, q, params.chroma, params.lightness, params.cap) : centre);
       if (focused && variant !== 'now') {
         const edge = edgeSource(local, sx, sy, variant), tint = EDGE[scheme];
         const edgeColor = takeTint(base, edge.color, tint.chroma, tint.lightness, tint.cap);
-        color = color.map((c, k) => c + (edgeColor[k] - c) * edge.strength);
+        color = color.map((c, k) => c + (edgeColor[k] - c) * edge.strength * EDGE_SCALE);
       }
       const ring = coverage(d) - coverage(d + S);
       if (focused && ring > 0) {
@@ -394,12 +397,12 @@
   }
 
   const describe = p => `croma ${p.chroma.toFixed(2)} · tope ${p.cap.toFixed(2)} · claridad ${p.lightness.toFixed(2)} · ${p.passes} pasadas`;
-  const describeEdge = e => ` · borde: croma ${e.chroma.toFixed(2)}, claridad ${e.lightness.toFixed(2)}, caída ${Math.round(EDGE_SPAN / 0.56)} px`;
+  const describeEdge = e => ` · borde: croma ${e.chroma.toFixed(2)}, claridad ${e.lightness.toFixed(2)}, caída ${Math.round(EDGE_SPAN / 0.56)} px, al ${Math.round(EDGE_SCALE * 100)} %, ${LOCAL_PASSES} pasadas`;
   function renderAll() {
     const { scheme } = state;
     $('now-values').textContent = describe(NOW[scheme]) + ' · sin borde';
-    $('outside-values').textContent = describe(MACOS[scheme]) + describeEdge(EDGE[scheme]);
-    $('inside-values').textContent = describe(MACOS[scheme]) + describeEdge(EDGE[scheme]);
+    $('outside-values').textContent = 'centro plano' + describeEdge(EDGE[scheme]);
+    $('inside-values').textContent = 'centro plano' + describeEdge(EDGE[scheme]);
     render($('now'), 'now'); render($('outside'), 'outside'); render($('inside'), 'inside');
   }
 
