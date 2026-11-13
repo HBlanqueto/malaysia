@@ -142,6 +142,7 @@
     <h2>Cómo leerlo</h2>
     <ul class="notes">
       <li>La sidebar solo desenfoca el fondo de pantalla, con unas 6 pasadas: casi uniforme y neutra. En oscuro, el centro es L 0.273 y croma 0.022; en claro, (235,237,238) con foco y un gris plano de (242,242,242) sin foco.</li>
+      <li>El centro de la sidebar oscura es casi sólido. A lo largo de su alto, el fondo que asoma junto a la ventana varía 0.135 en luminosidad ya desenfocado, y el centro de la sidebar solo 0.010, sin relación con el fondo; en el eje azul-amarillo varía una décima parte que el fondo. Por eso el vidrio oscuro no deja pasar luminosidad (claridad 0) y su base es un gris de L 0.273, no el de ahora (L 0.235). El fondo de al lado es solo una aproximación de lo que hay debajo.</li>
       <li>El fondo asoma solo junto a los bordes exteriores de la sidebar (izquierdo, superior e inferior). En el borde derecho, el que mira al contenido, no hay rampa.</li>
       <li>En la captura de Ajustes la sidebar llega hasta el borde de la ventana. En la isla, la caída se cuenta desde el borde del panel de vidrio, que queda 8 pt dentro, y el color se toma en el borde de la ventana, justo fuera o justo dentro. La esquina del panel es de 18 pt, concentrica con la de 26 de la ventana.</li>
       <li>El borde toma el color del fondo cercano, no el del fondo muy desenfocado. Arriba, con cielo azul fuera, sale azulado (croma 0.068); abajo, con fondo oscuro, sale débil (0.030). Por eso aquí no hay un factor aparte para el borde inferior.</li>
@@ -164,7 +165,7 @@
   const SAMPLE_OFFSET = 6;
   const EDGE_SPAN = 46 * K;
   const NOW = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5 } };
-  const MACOS = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6 }, light: { chroma: 0.02, cap: 0.03, lightness: 0, passes: 6, solid: '#f2f2f2' } };
+  const MACOS = { dark: { chroma: 0.3, cap: 0.06, lightness: 0, passes: 6, base: '#272727' }, light: { chroma: 0.02, cap: 0.03, lightness: 0, passes: 6, solid: '#f2f2f2' } };
   const EDGE = { dark: { chroma: 0.65, lightness: 0.22, cap: 0.12 }, light: { chroma: 0.45, lightness: 0.15, cap: 0.09 } };
   const SOLID_TINT = { dark: 0.15 * 2, light: 0.12 * 2 };
   const RIM_CHROMA = 0.65;
@@ -321,7 +322,7 @@
   function drawGlass(ctx, variant) {
     const { scheme, focused } = state;
     const params = variant === 'now' ? NOW[scheme] : MACOS[scheme];
-    const base = toOklab(...hex(BASE[scheme])), rim = RIM[scheme];
+    const base = toOklab(...hex(params.base ?? BASE[scheme])), rim = RIM[scheme];
     const src = sources(state.wallpaper, params.passes), local = sources(state.wallpaper, params.passes).local;
     const flat = focused ? null : params.solid ? hex(params.solid) : takeTint(base, src.mean, SOLID_TINT[scheme], 0, params.cap);
     const x0 = Math.floor(PANEL.x * S) - 2, y0 = Math.floor(PANEL.y * S) - 2;
