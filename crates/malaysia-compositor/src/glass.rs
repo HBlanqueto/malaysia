@@ -130,6 +130,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     };
     let scheme = state.config.appearance.color_scheme;
     let (_, chroma_cap) = ctappearance::glass_chroma(scheme);
+    let lightness = ctappearance::glass_lightness(scheme);
     let island = glass.radius > 0;
     // The material runs 1 logical pixel under the opaque ring around the panel: the antialiased edge
     // of the client's hole would otherwise show what is behind the window.
@@ -193,6 +194,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                     Uniform::new("solid", glass.solid),
                     Uniform::new("chroma", glass.chroma),
                     Uniform::new("chroma_cap", chroma_cap),
+                    Uniform::new("lightness", lightness),
                     Uniform::new("settle", settle),
                 ])
                 .into(),

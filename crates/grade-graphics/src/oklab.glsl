@@ -32,13 +32,18 @@ vec3 linear_from_oklab(vec3 lab) {
     );
 }
 
-// Same saturation as ctappearance::backdrop::take_chroma_capped.
-vec3 take_chroma_capped(vec3 base, vec3 source, float amount, float cap) {
+// Same saturation as ctappearance::backdrop::take_chroma_capped; `lightness` is how much of the source's lightness the base takes.
+vec3 take_tint(vec3 base, vec3 source, float amount, float lightness, float cap) {
     vec3 p = oklab_from_linear(linear_from_srgb(base));
     vec3 q = oklab_from_linear(linear_from_srgb(source));
     vec2 ab = mix(p.yz, q.yz, clamp(amount, 0.0, 1.0));
     ab /= sqrt(1.0 + dot(ab, ab) / (cap * cap));
-    return clamp(srgb_from_linear(clamp(linear_from_oklab(vec3(p.x, ab)), 0.0, 1.0)), 0.0, 1.0);
+    float l = mix(p.x, q.x, clamp(lightness, 0.0, 1.0));
+    return clamp(srgb_from_linear(clamp(linear_from_oklab(vec3(l, ab)), 0.0, 1.0)), 0.0, 1.0);
+}
+
+vec3 take_chroma_capped(vec3 base, vec3 source, float amount, float cap) {
+    return take_tint(base, source, amount, 0.0, cap);
 }
 
 vec3 take_chroma(vec3 base, vec3 source, float amount) {

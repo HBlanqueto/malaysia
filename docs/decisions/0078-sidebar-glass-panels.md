@@ -131,13 +131,16 @@ and the bottom.
    so the hole never shows the wallpaper sharp.
 7. **Values live in `ctdesign`.** The kit sends `chroma` with the request;
    with an accent as window color `base` is the accent-tinted tone and `chroma`
-   is `accent_share` (0.35) of the usual one. `chroma` is 0.40 in dark and 0.25 in light,
-   `rim_chroma` 0.65, from the measurements above and the light mockup. The
-   panel's chroma saturates towards `chroma_cap` (0.04 dark, 0.05 light), so a
-   plain 0.4 share of a vivid wallpaper does not look like a see-through
-   window. The glass
-   blurs the wallpaper `blur_passes` (4) times, one more than the other
-   blurs, in its own cache. The rim's color (`sidebar-glass-rim`) and its width are tokens. They are first values, to calibrate in phase 6.
+   is `accent_share` (0.35) of the usual one. `chroma` is 0.85 in dark and 0.60 in
+   light, `rim_chroma` 0.65. The panel's chroma saturates towards `chroma_cap`
+   (0.12 dark, 0.09 light) and takes `lightness` of what is behind it (0.50 dark,
+   0.20 light), so the shapes and colors behind the window stay readable. The
+   first values, taken from the measurements above, left the sidebar one flat tone
+   (the owner's report, 2026-11-13, with macOS references where the sidebar follows
+   the wallpaper's reds and blues). The glass blurs what is behind it
+   `blur_passes` (3) times, in its own cache. The rim's color
+   (`sidebar-glass-rim`) and its width are tokens. They are first values, to
+   calibrate in phase 6.
    Reference for that calibration, read by eye from macOS screenshots over the
    vivid Sonoma wallpaper (not measured): in dark the sidebar reaches a chroma
    of about 0.035 to 0.05, blue above and green below; in light it is a clear

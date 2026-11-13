@@ -355,7 +355,21 @@ impl<R: MalaysiaRenderer> RenderElement<R> for RoundedTextureElement<R> {
 mod tests {
     use smithay::utils::{Logical, Physical, Point, Rectangle, Scale, Size};
 
-    use super::{frame_to_texture_geometry, opaque_inside_frame, shader_area, texture_radius};
+    use super::{
+        compile_glass, compile_glass_rim, frame_to_texture_geometry, opaque_inside_frame,
+        shader_area, texture_radius,
+    };
+    use crate::test_support::try_test_renderer;
+
+    #[test]
+    fn the_glass_shaders_compile() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        assert!(compile_glass(&mut renderer).is_some());
+        assert!(compile_glass_rim(&mut renderer).is_some());
+    }
 
     #[test]
     fn opaque_regions_stop_at_the_frame_and_skip_the_rounded_corners() {
@@ -487,6 +501,7 @@ pub(crate) fn compile_glass(renderer: &mut GlesRenderer) -> Option<GlesTexProgra
             UniformName::new("solid", UniformType::_3f),
             UniformName::new("chroma", UniformType::_1f),
             UniformName::new("chroma_cap", UniformType::_1f),
+            UniformName::new("lightness", UniformType::_1f),
             UniformName::new("settle", UniformType::_1f),
         ],
     )
