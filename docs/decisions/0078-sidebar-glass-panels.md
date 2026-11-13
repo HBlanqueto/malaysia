@@ -97,8 +97,9 @@ and the bottom.
    measurable, so `appearance.blur_behind` does not apply to panels.
 4. **The rim** is the inner border of the window frame, around each panel and
    on the same corner, with no shadow and no outer border. It is the line
-   `set_cards` already gets (ADR 0068), drawn above the surface. It is a white
-   line with `rim_chroma` of the chroma of B(p), the blurred wallpaper behind
+   `set_cards` already gets (ADR 0068), drawn above the surface. It is a line,
+   white in dark and gray in light (a white line does not show on the light
+   panel), with `rim_chroma` of the chroma of B(p), the blurred wallpaper behind
    that stretch, so its tint changes along the contour. It shows nothing of
    what is behind it. With an accent as window color the request's `rim` is
    the accent and the rim takes its chroma from it, not from the wallpaper, so
@@ -129,8 +130,7 @@ and the bottom.
    plain 0.4 share of a vivid wallpaper does not look like a see-through
    window. The glass
    blurs the wallpaper `blur_passes` (4) times, one more than the other
-   blurs, in its own cache. The rim's white and its width are the window
-   frame's own tokens. They are first values, to calibrate in phase 6.
+   blurs, in its own cache. The rim's color (`sidebar-glass-rim`) and its width are tokens. They are first values, to calibrate in phase 6.
    Reference for that calibration, read by eye from macOS screenshots over the
    vivid Sonoma wallpaper (not measured): in dark the sidebar reaches a chroma
    of about 0.035 to 0.05, blue above and green below; in light it is a clear
