@@ -87,6 +87,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
       <label class="f" for="speed">Velocidad
         <select id="speed"><option value="1">1×</option><option value="0.25" selected>¼×</option><option value="0.1">1/10×</option></select>
       </label>
+      <label class="f" for="guides"><input id="guides" type="checkbox"> Ancho de la miniatura</label>
       <label class="f" for="radius">Redondeo de la miniatura
         <input id="radius" type="range" min="0" max="30" value="16" aria-describedby="rv"><span id="rv" class="readout" style="margin:0">16 %</span>
       </label>
@@ -227,6 +228,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   }
 
   /* ---------- Genie: the fragment shader of crates/grade-graphics/src/minimize.frag, drawn row by row ---------- */
+  const logistic = v => 1 / (1 + Math.exp(-v));
   function genie(c, p, to) {
     const s = {x0: WIN.x, y0: WIN.y, x1: WIN.x + WIN.w, y1: WIN.y + WIN.h};
     const t = {x0: to.x, y0: to.y, x1: to.x + to.w, y1: to.y + to.h};
@@ -235,7 +237,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     const top = s.y0 + slide * span, rows = snap.height / winH;
     c.save(); c.imageSmoothingQuality = "high";
     for (let y = Math.floor(top); y < Math.min(t.y1, top + winH); y += 1) {
-      const along = (y - s.y0) / span, n = pinch / (1 + Math.exp(-(along * 15 - 10)));
+      const along = (y - s.y0) / Math.max(1e-4, t.y0 - s.y0), n = pinch * Math.min(1, logistic(along * 15 - 10) / logistic(5));
       const x0 = lerp(s.x0, t.x0, n), x1 = lerp(s.x1, t.x1, n), sy = (y - top) * rows;
       if (sy < 0 || sy >= snap.height) continue;
       c.drawImage(snap, 0, sy, snap.width, Math.max(1, rows), x0, y, Math.max(.5, x1 - x0), 1.6);
@@ -313,6 +315,14 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     iconSettings(c, slot.x + T * .6, slot.y + T * .55, T * .4);
   }
 
+  let guides = false;
+  // The genie narrows to exactly the thumbnail's width before it reaches the Dock.
+  function widthGuides(c, g) {
+    c.save(); c.strokeStyle = "#3be0ff"; c.lineWidth = 1; c.setLineDash([4, 3]);
+    c.beginPath(); c.moveTo(g.x + .5, g.y - 150); c.lineTo(g.x + .5, g.y + g.h); c.moveTo(g.x + g.w - .5, g.y - 150); c.lineTo(g.x + g.w - .5, g.y + g.h); c.stroke();
+    c.restore();
+  }
+
   function render() {
     const {mode, dir, t} = S, target = mode === "target", p = dir === "min" ? t : 1 - t;
     const f = target ? (dir === "min" ? ease(clamp(t / .8)) : 1 - ease(clamp(t / .8))) : (dir === "min" ? 1 : (t <= 0 ? 1 : 0));
@@ -330,6 +340,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     dockGlass(cx, L);
     dockIcons(cx, L, target);
     if (!target) thumbnailToday(cx, slot, alpha, dir === "min" && t < 1, L);
+    if (target && guides) widthGuides(cx, goal);
     if (target && flying) genie(cx, p, goal);
     if (target) thumbnailBuilt(cx, slot, filled(p, goal));
     ui();
@@ -339,6 +350,9 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   const RULES = [
     ["El genie va por encima del Dock", "La ventana nace de la miniatura y se ve entera al cruzar la barra.", "El cristal del Dock lo cubre: la ventana parece salir de detrás."],
     ["El Dock abre su hueco", "El mosaico crece de 0 a 1 mientras baja el genie y las demás miniaturas se apartan. Al restaurar, se cierra.", "El hueco aparece de golpe al empezar; no hay sitio preparado."],
+    ["El genie sale de la anchura de la miniatura",
+      "La miniatura tiene un ancho fijo, el de su ventana al alto del icono. El genie se estrecha hasta esa anchura exacta antes de llegar al Dock y no la rebasa. Activa «Ancho de la miniatura» para ver las guías.",
+      "Se estrecha tarde y se pasa unos píxeles por los lados al cruzar el Dock."],
     ["La miniatura se construye con lo que entra", "Las filas de la ventana que cruzan el borde inferior de la miniatura quedan ya dentro, a su escala. Se llena de abajo arriba y, al restaurar, se vacía de arriba abajo. No hay salto al final.", "El destino es el cuadrado del hueco: la ventana se aplasta y luego la miniatura aparece de golpe."],
     ["La miniatura es la ventana en pequeño", "Opaca, con el redondeo de la ventana y sin borde. Una sombra suave y la insignia de la app.", "Translúcida, de esquinas rectas y con la línea del Dock cruzándola."],
     ["Todo del alto del icono de Ajustes", "La miniatura y la carpeta de Descargas miden lo mismo que el icono de Ajustes. La miniatura es más ancha porque conserva la proporción de la ventana, y su hueco también.", "La carpeta sobresale por encima de los iconos de las apps y la miniatura es más pequeña que ellos."]
@@ -391,6 +405,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   $("b-res").onclick = () => play("restore");
   $("m-target").onclick = () => { S.mode = "target"; render(); };
   $("m-today").onclick = () => { S.mode = "today"; render(); };
+  $("guides").onchange = e => { guides = e.target.checked; render(); };
   $("speed").onchange = e => { S.speed = +e.target.value; };
   $("radius").oninput = e => { S.radius = e.target.value / 100; $("rv").textContent = e.target.value + " %"; render(); };
   $("scrub").oninput = e => { S.playing = false; S.t = e.target.value / 1000; render(); };
