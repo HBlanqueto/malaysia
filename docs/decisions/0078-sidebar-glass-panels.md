@@ -116,7 +116,9 @@ and the bottom.
    goes directly above the surface's elements and below the window's own border
    (ADR 0059). Both are part of the window, so offscreen fades, minimize and
    captures include them.
-7. **Values live in `ctdesign`.** `chroma` is 0.40 in dark and 0.25 in light,
+7. **Values live in `ctdesign`.** The kit sends `chroma` with the request;
+   with an accent as window color `base` is the accent-tinted tone and `chroma`
+   is `accent_share` (0.35) of the usual one. `chroma` is 0.40 in dark and 0.25 in light,
    `rim_chroma` 0.65, from the measurements above and the light mockup. The
    panel's chroma saturates towards `chroma_cap` (0.04 dark, 0.05 light), so a
    plain 0.4 share of a vivid wallpaper does not look like a see-through

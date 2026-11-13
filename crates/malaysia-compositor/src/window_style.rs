@@ -44,6 +44,7 @@ pub(crate) struct GlassPanels {
     pub(crate) rects: Vec<Rectangle<i32, Logical>>,
     pub(crate) base: [f32; 3],
     pub(crate) solid: [f32; 3],
+    pub(crate) chroma: f32,
 }
 
 impl Cacheable for GlassPanels {
@@ -165,6 +166,7 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 panels,
                 base,
                 solid,
+                chroma,
             } if is_kit_client(&surface) => {
                 let mut rects = card_rects(&panels);
                 rects.truncate(MAX_GLASS_PANELS);
@@ -175,6 +177,7 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                         rects,
                         base: unpack_rgb(base),
                         solid: unpack_rgb(solid),
+                        chroma: chroma as f32 / 1000.0,
                     };
                 });
                 state.request_redraw();
