@@ -57,7 +57,7 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    opacity by `DOCK_RIM_DARK` to `DOCK_RIM_BRIGHT` by the lightness of the
    wallpaper behind the bar, so it is faint over a dark wallpaper and, over a
    light or flat one, as translucent as the palette's line (10 % on the sides,
-   26 % on the top and bottom), never more. The fill is the translucent `shell.dock`: as in
+   26 % on the top and bottom), never more. The line is soft, not a hard stroke: `glass_edge` blurs it by `DOCK_RIM_BLUR` pixels. The fill is the translucent `shell.dock`: as in
    macOS, the wallpaper and the windows that pass behind the Dock show through
    the blur (ADR 0071, `"behind"`). It takes the bar tint only
    with `bars` in `appearance.tint_parts`, and is opaque with
@@ -69,8 +69,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    icon's body (`DOCK_ICON_BODY`), as wide as its window's shape asks, with
    square corners and no border; its slot is as wide as the
    picture plus the margin of an icon. The picture shows when the genie is over,
-   not before. Downloads is drawn on `DOCK_FOLDER_CANVAS` of its slot so that
-   the folder is as tall as an icon's body. Every icon sits on macOS's
+   not before. Downloads is `DOCK_FOLDER_CANVAS` tiles wide and drawn on all of it so that
+   the folder is as tall as an icon's body and keeps the icon margin from its
+   neighbours, as the picture does. Every icon sits on macOS's
    grid: Malaysia's app icons already keep the 824-on-1024 body; any other
    icon, and the places, is drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon marks an
    open app (`show-process-indicators`). The name label shows over the icon

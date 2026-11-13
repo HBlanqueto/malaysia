@@ -453,7 +453,7 @@ impl App for DockApp {
             .iter()
             .map(|item| match item {
                 Item::Separator => Slot::Separator,
-                Item::Window(window) => Slot::Window(
+                Item::Window(window) => Slot::Wide(
                     thumbnails
                         .read()
                         .get(&window.id)
@@ -463,6 +463,7 @@ impl App for DockApp {
                             .find(|tile| tile.window.id == window.id)
                             .map_or(1.0, |tile| tile.presence),
                 ),
+                Item::Downloads => Slot::Wide(DOCK_FOLDER_CANVAS),
                 _ => Slot::Tile,
             })
             .collect();
@@ -530,7 +531,7 @@ impl App for DockApp {
             .position(|item| *item == Item::Trash)
             .map(|trash| {
                 let mut slots = slots.clone();
-                slots.insert(trash, Slot::Window(1.0));
+                slots.insert(trash, Slot::Wide(1.0));
                 let tile = geometry::fit(config.tilesize(), frame.main_length(), &slots);
                 let layout = geometry::layout(
                     &slots,
@@ -885,9 +886,9 @@ impl App for DockApp {
                     let spill = slot.size * (DOCK_FOLDER_CANVAS - 1.0) / 2.0;
                     children.push(
                         placed(frame.area(
-                            slot.start - spill,
+                            slot.start,
                             icon_cross - spill,
-                            slot.size * DOCK_FOLDER_CANVAS,
+                            slot.length,
                             slot.size * DOCK_FOLDER_CANVAS,
                         ))
                         .center()
