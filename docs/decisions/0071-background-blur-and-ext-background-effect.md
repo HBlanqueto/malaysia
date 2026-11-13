@@ -1,7 +1,8 @@
 # 0071 — Background blur and ext-background-effect-v1
 
 Status: accepted (2026-11-11). Phase 1 is implemented (2026-11-11); the
-rest is in «Plan».
+rest is in «Plan». The sidebars of BarrierKit windows use
+[ADR 0078](0078-sidebar-glass-panels.md) instead of the plain region.
 
 ## Goal and scope
 
@@ -158,6 +159,7 @@ Read at `7f81a7f7` (2026-11-10):
       | Pop-up of any client (menus, popovers) | `xdg_popup` | `"behind"` |
       | BarrierKit dialog, sheet or alert | `is_kit_client` (ADR 0035) and a parent or `xdg_dialog_v1` | `"behind"` |
       | BarrierKit window | `is_kit_client`, no parent | `"wallpaper"` |
+      | BarrierKit sidebar panel | `set_glass` (ADR 0078) | `"wallpaper"` always, even with `"windows"` |
       | Any other toplevel, dialogs included (GTK, Qt, foot…) | not a kit client | `"wallpaper"` |
       | Dock and notifications | layer namespace `malaysia-dock`, `malaysia-notifications` | `"behind"` |
       | Menu bar | layer namespace `malaysia-menubar` | `"wallpaper"` |
@@ -307,7 +309,9 @@ Each phase updates [`options.md`](../configuration/options.md) and
   the compositor, and design values live in `ctdesign` (ADR 0011).
 - **A blur request in Infinity.** Our clients would need a private path for
   something every toolkit can already ask for in the standard way. The
-  role and `is_kit_client` already give the kit both modes.
+  role and `is_kit_client` already give the kit both modes. ADR 0078 adds
+  `set_glass` for sidebars only, because they need a corner and a material the
+  standard region cannot say. Plain blur stays standard.
 - **Letting GTK and Qt dialogs use `"behind"`.** Third-party apps get the
   cheap mode; only pop-ups, which always open over something, are the
   exception.

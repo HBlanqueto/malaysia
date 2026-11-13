@@ -443,6 +443,9 @@ searching `crates/malaysia-compositor/src`.
   The Dock's glass also blurs the windows behind it (`"behind"`, 2026-11-12).
   Pending: true transparency for the other surfaces (`"windows"`, pop-ups),
   general blur, the shell's own regions and their options in Settings.
+  Sidebars of BarrierKit windows get a glass panel with the wallpaper's
+  chroma and a local rim ([ADR 0078](decisions/0078-sidebar-glass-panels.md)),
+  accepted 2026-11-13, in six phases, none done.
 - **Shell:** supervision and overview (ADR 0023), notifications daemon,
   polkit agent, volume/network/battery/brightness
   indicators (network, Bluetooth and battery done, ADR 0069), OSD and

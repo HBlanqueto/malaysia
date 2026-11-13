@@ -77,6 +77,7 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0074](0074-lock-screen-and-lock-transition.md) | Lock screen over the wallpaper and the lock transition | accepted |
 | [0075](0075-menu-bar-styles-and-height.md) | Menu bar styles, height and blur by default | accepted |
 | [0077](0077-font-rendering.md) | Font rendering like macOS | accepted |
+| [0078](0078-sidebar-glass-panels.md) | Glass panels for BarrierKit sidebars | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.
 > ADR 0076 (lock screen clock fonts) was withdrawn: the clock uses the desktop font.
