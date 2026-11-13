@@ -48,10 +48,13 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    namespace (`DOCK_LAYER_NAMESPACE`) and gives that card only the blur of
    `set_blur_region`, clipped to the corner, and no shadow: it would show
    through the translucent fill. The Dock
-   draws the outer border and the inner line itself with
-   `bk::style::panel_edges`, in the compositor's panel colours and one
-   physical pixel wide like them, under its icons, so magnified icons rise
-   over the bar's edge. The fill is the translucent `shell.dock`: as in
+   draws only the inner line itself, with `bk::style::glass_edge`: no dark outer
+   border, the compositor's panel colours, one physical pixel wide like them, under
+   its icons, so magnified icons rise over the bar's edge. As in macOS the line
+   is light over the wallpaper and not fixed: `dock/rim.rs` multiplies its
+   opacity by `DOCK_RIM_DARK` to `DOCK_RIM_BRIGHT` by the lightness of the
+   wallpaper behind the bar, so it is faint over a dark wallpaper and nearly
+   white over a light or flat one. The fill is the translucent `shell.dock`: as in
    macOS, the wallpaper and the windows that pass behind the Dock show through
    the blur (ADR 0071, `"behind"`). It takes the bar tint only
    with `bars` in `appearance.tint_parts`, and is opaque with

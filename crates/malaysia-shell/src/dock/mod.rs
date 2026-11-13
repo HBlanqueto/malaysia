@@ -1,6 +1,7 @@
 mod geometry;
 mod items;
 mod motion;
+mod rim;
 mod thumbnail;
 
 use std::{
@@ -14,7 +15,9 @@ use std::{
 
 use bk::adornments::Badge;
 use bk::animation::use_switch_progress;
-use bk::app::{load_defaults, load_restoration, save_defaults, save_restoration, use_defaults};
+use bk::app::{
+    load_defaults, load_restoration, save_defaults, save_restoration, use_defaults, use_watched,
+};
 use bk::menu::{CheckState, MenuItem};
 use bk::platform::{PopupAnchor, Timers, modifier_flags};
 use bk::popup_button::pop_up_menu;
@@ -357,6 +360,7 @@ impl App for DockApp {
 
         let thumbnails = use_thumbnails(&windows);
         let tiles = motion::use_tiles(&windows, config.minimize_to_application);
+        let wallpaper = use_watched(ctappearance::load_wallpaper_state);
         let running = items::running(&windows, entries);
         let running_ids: Vec<String> = running.iter().map(|(id, _)| id.clone()).collect();
         let previous = use_hook(|| Rc::new(RefCell::new(Vec::<String>::new())));
@@ -635,10 +639,17 @@ impl App for DockApp {
         let mut children: Vec<Element> = vec![
             placed(bar)
                 .layer(-1)
-                .child(bk::style::panel_edges(
+                .child(bk::style::glass_edge(
                     rect().width(Size::px(bar.2)).height(Size::px(bar.3)),
                     radius,
                     glass_rgba,
+                    rim::strength(
+                        &wallpaper.read(),
+                        *toplevels.desktop.read(),
+                        config.orientation,
+                        (width, height),
+                        bar,
+                    ),
                 ))
                 .into_element(),
         ];
