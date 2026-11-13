@@ -78,7 +78,8 @@
     <div class="group">
       <label class="label" for="wall">Fondo</label>
       <select id="wall">
-        <option value="aurora" selected>Aurora oscura</option>
+        <option value="paint" selected>Aurora pintada</option>
+        <option value="aurora">Aurora suave</option>
         <option value="blue">Azul plano</option>
         <option value="light">Claro plano</option>
         <option value="ramp">Degradado claro a oscuro</option>
@@ -122,7 +123,7 @@
       <li><b>Por tramos.</b> La claridad del fondo se mide cada 10 px bajo la barra y la línea sigue esa medida. Apagado, usa una sola media para todo el Dock, como hoy.</li>
       <li><b>Base por borde.</b> Arriba, abajo y lados tienen su propia curva medida en las capturas. Apagado, usa 26 % arriba y abajo y 10 % en los lados, por la fuerza global.</li>
       <li><b>Tono del fondo.</b> La línea es el color del fondo aclarado, no blanco puro. Apagado, es blanca.</li>
-      <li><b>Referencia Apple.</b> La línea mezcla casi a partes iguales el fondo de fuera y el vidrio de dentro, y suma luz. Por eso toma el color del fondo, se apaga donde fuera es oscuro y se enciende donde es claro. Es más fuerte arriba que en los lados y abajo.</li>
+      <li><b>Referencia Apple.</b> La línea sigue sobre todo al fondo de fuera (0,48), algo al vidrio de dentro (0,33) y suma luz. Por eso pasa de blanquecina a casi transparente y vuelve a empezar según el fondo que tenga detrás, y toma su color. Con «Aurora pintada» se ve el ciclo.</li>
       <li>El blur de 0,7 px de la línea está siempre activo. Los iconos son marcadores; el vidrio es el desenfoque del propio fondo más un velo oscuro.</li>
     </ul>
   </section>
@@ -138,7 +139,7 @@
           <tr><td>Aurora oscura</td><td>Lados</td><td class="num">13 % a 17 %</td><td>Más fuertes que arriba con el mismo fondo.</td></tr>
           <tr><td>Azul plano</td><td>Superior / inferior</td><td class="num">≈ 29 % / ≈ 39 %</td><td>La fuerza crece con la claridad del fondo.</td></tr>
           <tr><td>Azul plano</td><td>Color</td><td class="num">+34 +40 +8 (RGB)</td><td>Suma luz y el canal azul se satura: no es un velo blanco.</td></tr>
-          <tr><td>Aurora oscura</td><td>Superior, cada 4 px</td><td class="num">+24 ± 12 niveles</td><td>Ajuste: línea = 0,37·dentro + 0,43·fuera + 33,5 (r = 0,57). Siempre más clara que el interior, pero entre 0 y +45: donde fuera es oscuro apenas se nota.</td></tr>
+          <tr><td>Aurora oscura</td><td>Superior, cada 4 px</td><td class="num">+24 ± 12 niveles</td><td>Ajuste fino: línea = 0,48·fuera + 0,33·dentro + 33 (r = 0,87). Siempre más clara que el interior, pero entre +3 y +49 según la zona: casi transparente donde fuera es oscuro, blanquecina donde es claro, y se repite con cada franja del fondo.</td></tr>
           <tr><td>Alta resolución (Apple)</td><td>Superior</td><td class="num">+64 a +39 por canal</td><td>Casi uniforme en 1 000 px de borde: 25 % de luz sumada sobre el azul oscuro, 16 % sobre el claro. Perfil de 3 px: núcleo de 1 px y hombros al 50 %.</td></tr>
           <tr><td>Alta resolución (Apple)</td><td>Inferior</td><td class="num">+48 a +27 por canal</td><td>Menos que arriba, también uniforme.</td></tr>
           <tr><td>Alta resolución (Apple)</td><td>Lado derecho</td><td class="num">+37 por canal</td><td>Se apaga hacia la esquina de abajo (un 40 % menos).</td></tr>
@@ -159,7 +160,7 @@
   const BAR = { w: 580, h: 78, r: 19, bottom: 16 };
   BAR.x = (W - BAR.w) / 2; BAR.y = H - BAR.bottom - BAR.h;
   const SEG = 58, SEGW = BAR.w / SEG;
-  const state = { wall: "aurora", local: true, edge: true, tone: true, apple: false };
+  const state = { wall: "paint", local: true, edge: true, tone: true, apple: false };
   let wp, wpData, wpFull, probe = null, tint = null;
 
   // ---------- fondos ----------
@@ -167,7 +168,17 @@
     const c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
     const lin = (x0, y0, x1, y1, stops) => { const g = x.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, col]) => g.addColorStop(o, col)); return g; };
     const glow = (cx, cy, rad, col) => { const g = x.createRadialGradient(cx, cy, 0, cx, cy, rad); g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, W, H); };
-    if (kind === "aurora") {
+    if (kind === "paint") {
+      // Pincelada vertical como la pintura de la aurora: franjas de 2 a 24 px que van de oscuras a claras, también a la altura del Dock.
+      let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      x.fillStyle = lin(0, 0, 0, H, [[0, "#06101c"], [.5, "#0d3446"], [.75, "#2c4a72"], [1, "#0a1a2c"]]); x.fillRect(0, 0, W, H);
+      const inks = ["#27d3a6", "#43b6e8", "#7b9cf5", "#d65fa0", "#f2829a", "#0a1f33", "#071420", "#12546b", "#3a2f66", "#e8c7a0"];
+      for (let k = 0; k < 430; k++) {
+        const w = 2 + rnd() * 22, px = rnd() * W, ink = inks[Math.floor(rnd() * inks.length)], a = .08 + rnd() * .3, y0 = rnd() * H * .5;
+        const g = x.createLinearGradient(0, y0, 0, y0 + H); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(.18, ink); g.addColorStop(.85, ink); g.addColorStop(1, "rgba(0,0,0,0)");
+        x.globalAlpha = a; x.fillStyle = g; x.fillRect(px, y0, w, H); }
+      x.globalAlpha = 1; x.fillStyle = lin(0, 0, 0, H, [[0, "rgba(0,0,0,0)"], [.55, "rgba(0,0,0,0)"], [1, "rgba(2,8,14,.45)"]]); x.fillRect(0, 0, W, H);
+    } else if (kind === "aurora") {
       x.fillStyle = lin(0, 0, 0, H, [[0, "#07121f"], [.36, "#0f3a50"], [.58, "#a95a7c"], [.7, "#2f6384"], [1, "#0a1d30"]]); x.fillRect(0, 0, W, H);
       glow(300, 90, 260, "rgba(48,214,170,.55)"); glow(520, 60, 200, "rgba(120,235,200,.35)");
       glow(800, 290, 170, "rgba(255,150,175,.85)"); glow(520, 292, 110, "rgba(240,150,170,.4)");
@@ -203,11 +214,11 @@
   // Modelo de la propuesta: ajustado a las medidas de las capturas (tabla de abajo).
   const proposal = l => ({ top: clamp(.62 * l, 0, .6), bottom: clamp(.12 + .6 * l, 0, .7), sides: clamp(.09 + .4 * l, 0, .5) });
   // Referencia de alta resolución (captura de Apple): luz que se suma, algo más fuerte sobre fondo oscuro; arriba > lados > abajo.
-  // Referencia Apple (captura de la aurora, ajuste por mínimos cuadrados): línea = 0,37 dentro + 0,43 fuera + 33,5 niveles, con r = 0,57.
-  // Dentro y fuera pesan casi igual y se suma luz: sobre fuera oscuro la línea sube poco sobre el vidrio, sobre fuera claro sube mucho.
-  const BOOST = { top: 34, sides: 27, bottom: 22 };
+  // Referencia Apple (borde superior de la captura de la aurora, mínimos cuadrados): línea = 0,48 fuera + 0,33 dentro + 33 niveles, r = 0,87.
+  // Sigue al fondo de fuera: se apaga donde es oscuro y se enciende donde es claro, y vuelve a empezar con cada franja.
+  const BOOST = { top: 33, sides: 28, bottom: 28 };
   const px = (d, w, x, y) => { const k = (Math.floor(y) * w + Math.floor(x)) * 4; return [d[k], d[k + 1], d[k + 2]]; };
-  const mean = (a, b) => a.map((v, i) => .4 * (v + b[i]));
+  const mean = (out, inside) => out.map((v, i) => .48 * v + .33 * inside[i]);
   const lift = (c, b) => c.map(v => clamp(v + b, 0, 255));
   const lvl = c => lum(...c) * 255;
   function smooth(arr, r) { return arr.map((_, i) => { let a = [0, 0, 0], n = 0; for (let j = Math.max(0, i - r); j <= Math.min(arr.length - 1, i + r); j++) { a = a.map((v, k) => v + arr[j][k]); n++; } return a.map(v => v / n); }); }
@@ -220,7 +231,7 @@
     }
     const sideAt = (xo, xi) => { let o = [0, 0, 0], q = [0, 0, 0], c = 0; for (let y = BAR.r; y < BAR.h - BAR.r; y += 4) { o = o.map((v, k) => v + px(wpFull.data, W, xo, BAR.y + y)[k]); q = q.map((v, k) => v + px(ins.data, ins.width, xi * S, y * S)[k]); c++; } return { rim: lift(mean(o.map(v => v / c), q.map(v => v / c)), BOOST.sides), inside: q.map(v => v / c) }; };
     const left = sideAt(BAR.x - 5, 6), right = sideAt(BAR.x + BAR.w + 5, BAR.w - 7);
-    const T = smooth(top, 3).map(c => lift(c, BOOST.top)), B = smooth(bot, 3).map(c => lift(c, BOOST.bottom));
+    const T = smooth(top, 1).map(c => lift(c, BOOST.top)), B = smooth(bot, 1).map(c => lift(c, BOOST.bottom));
     return { n, top: T, bot: B, inTop, inBot, left, right };
   }
   const apple = l => ({ top: clamp(.27 - .25 * l, .1, .3), bottom: clamp(.21 - .22 * l, .08, .25), sides: clamp(.17 - .05 * l, .1, .2) });
@@ -290,7 +301,7 @@
     const t = lum(...segs[i]), pct = v => `<b>${Math.round(v * 100)} %</b>`;
     if (rim) {
       const c = clamp(Math.floor(p.x - BAR.x), 0, rim.n - 1), up = p.y < BAR.y + BAR.h / 2, d = Math.round(lvl(up ? rim.top[c] : rim.bot[c]) - lvl(up ? rim.inTop[c] : rim.inBot[c]));
-      $("readout").innerHTML = `borde ${up ? "superior" : "inferior"}, columna ${c + 1}<br>la línea queda <b>${d >= 0 ? "+" + d : d}</b> niveles sobre el interior<br>${d < 0 ? "más oscura que el vidrio de dentro" : "más clara que el vidrio de dentro"}<br>0,4 fuera + 0,4 dentro + luz · referencia Apple`;
+      $("readout").innerHTML = `borde ${up ? "superior" : "inferior"}, columna ${c + 1}<br>la línea queda <b>${d >= 0 ? "+" + d : d}</b> niveles sobre el interior<br>${d < 0 ? "más oscura que el vidrio de dentro" : "más clara que el vidrio de dentro"}<br>0,48 fuera + 0,33 dentro + luz · referencia Apple`;
       return;
     }
     $("readout").innerHTML = `tramo ${i + 1} de ${SEG}, fondo ${Math.round(t * 100)} %<br>arriba ${pct(a.top)} · abajo ${pct(a.bottom)}<br>lados ${pct(a.sides)}<br>${state.local ? "medida local" : "media global " + Math.round(glob * 100) + " %"} · ${now}${state.apple ? "" : state.tone ? " · tono del fondo" : " · blanca"}`;
@@ -338,6 +349,6 @@
   $("wall").addEventListener("change", e => setWall(e.target.value));
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
   new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  sync(); setWall("aurora");
+  sync(); setWall("paint");
 })();
 </script>
