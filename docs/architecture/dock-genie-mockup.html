@@ -279,18 +279,25 @@ input[type=range]{accent-color:var(--accent);min-width:0}
       if (i.k === "settings") iconSettings(c, i.x + off, y, B);
       if (i.k === "downloads") iconDownloads(c, i.x, target ? y : L.iconY + (T - folder) / 2 - 4, folder);
       if (i.k === "trash") iconTrash(c, i.x, y, B);
-      if (i.k === "sep") { c.fillStyle = "rgba(255,255,255,.28)"; c.fillRect(i.x + i.px / 2 - .5, L.iconY + 6, 1, T - 12); }
+      if (i.k === "sep") { c.fillStyle = "rgba(255,255,255,.55)"; c.fillRect(i.x + i.px / 2 - .5, L.iconY + 4, 1, T - 8); }
       if (i.k === "browser" || i.k === "settings") { c.fillStyle = "rgba(255,255,255,.8)"; c.beginPath(); c.arc(i.x + T / 2, L.barY + L.barH - 5, 2, 0, 7); c.fill(); }
     });
   }
 
-  function thumbnailTarget(c, slot, a) {
-    if (a <= 0) return;
-    const r = thumbRect(slot, true), rad = Math.min(r.w, r.h) * S.radius;
-    c.save(); c.globalAlpha = a;
+  // The rows of the window that have crossed the thumbnail's bottom edge are already in the thumbnail, at its scale:
+  // it fills from the bottom up while the window flows in, and empties from the top down while it flows out.
+  function filled(p, goal) {
+    if (p <= 0) return 0;
+    const span = goal.y + goal.h - WIN.y, top = WIN.y + p * p * span;
+    return 1 - clamp((goal.y + goal.h - top) / WIN.h);
+  }
+  function thumbnailBuilt(c, slot, fill) {
+    if (fill <= 0) return;
+    const r = thumbRect(slot, true), rad = Math.min(r.w, r.h) * S.radius, level = r.y + (1 - fill) * r.h;
+    c.save(); c.beginPath(); c.rect(r.x - 12, level, r.w + 24, r.h + 24); c.clip();
     c.shadowColor = "rgba(0,0,0,.35)"; c.shadowBlur = 6; c.shadowOffsetY = 2; rr(c, r.x, r.y, r.w, r.h, rad); c.fillStyle = "#242427"; c.fill();
     c.shadowColor = "transparent"; rr(c, r.x, r.y, r.w, r.h, rad); c.clip(); c.imageSmoothingQuality = "high"; c.drawImage(snap, r.x, r.y, r.w, r.h); c.restore();
-    c.save(); c.globalAlpha = a; iconSettings(c, r.x + r.w - T * .3, r.y + r.h - T * .3, T * .4); c.restore();
+    c.save(); c.globalAlpha = clamp((fill - .8) / .2); iconSettings(c, r.x + r.w - T * .3, r.y + r.h - T * .3, T * .4); c.restore();
   }
 
   function thumbnailToday(c, slot, a, placeholder, L) {
@@ -308,7 +315,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   function render() {
     const {mode, dir, t} = S, target = mode === "target", p = dir === "min" ? t : 1 - t;
     const f = target ? (dir === "min" ? ease(clamp(t / .8)) : 1 - ease(clamp(t / .8))) : (dir === "min" ? 1 : (t <= 0 ? 1 : 0));
-    const alpha = target ? (dir === "min" ? clamp((t - .92) / .08) : clamp(1 - t / .08)) : (dir === "min" ? (t >= 1 ? 1 : 0) : (t <= 0 ? 1 : 0));
+    const alpha = dir === "min" ? (t >= 1 ? 1 : 0) : (t <= 0 ? 1 : 0);
     const sw = slotWidth(target), L = layout(f, sw), L1 = layout(1, sw), slot = slotRect(L), goal = target ? thumbRect(slotRect(L1), true) : slotRect(L1);
     const flying = p > 0 && p < 1;
 
@@ -321,9 +328,9 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     cx.drawImage(bg, 0, 0, W, H);
     dockGlass(cx, L);
     dockIcons(cx, L, target);
-    if (target) thumbnailTarget(cx, slot, alpha);
-    else thumbnailToday(cx, slot, alpha, dir === "min" && t < 1, L);
+    if (!target) thumbnailToday(cx, slot, alpha, dir === "min" && t < 1, L);
     if (target && flying) genie(cx, p, goal);
+    if (target) thumbnailBuilt(cx, slot, filled(p, goal));
     ui();
   }
 
@@ -331,13 +338,14 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   const RULES = [
     ["El genie va por encima del Dock", "La ventana nace de la miniatura y se ve entera al cruzar la barra.", "El cristal del Dock lo cubre: la ventana parece salir de detrás."],
     ["El Dock abre su hueco", "El mosaico crece de 0 a 1 mientras baja el genie y las demás miniaturas se apartan. Al restaurar, se cierra.", "El hueco aparece de golpe al empezar; no hay sitio preparado."],
-    ["El genie aterriza en la miniatura", "El destino es el rectángulo de la miniatura, con la proporción de la ventana.", "El destino es el cuadrado del hueco: la ventana se aplasta y luego aparece la miniatura."],
+    ["La miniatura se construye con lo que entra", "Las filas de la ventana que cruzan el borde inferior de la miniatura quedan ya dentro, a su escala. Se llena de abajo arriba y, al restaurar, se vacía de arriba abajo. No hay salto al final.", "El destino es el cuadrado del hueco: la ventana se aplasta y luego la miniatura aparece de golpe."],
     ["La miniatura es la ventana en pequeño", "Opaca, con el redondeo de la ventana y sin borde. Una sombra suave y la insignia de la app.", "Translúcida, de esquinas rectas y con la línea del Dock cruzándola."],
     ["Todo del alto del icono de Ajustes", "La miniatura y la carpeta de Descargas miden lo mismo que el icono de Ajustes. La miniatura es más ancha porque conserva la proporción de la ventana, y su hueco también.", "La carpeta sobresale por encima de los iconos de las apps y la miniatura es más pequeña que ellos."]
   ];
+  const BUILD_FROM = (() => { const span = H - EDGE - PAD - T + (T - B) / 2 + B - WIN.y; return Math.sqrt(Math.max(0, (span - WIN.h) / span)); })();
   const TRACKS = {
-    "target-min": [["Hueco del Dock", 0, .8, "--bar-a"], ["Genie sobre el Dock", 0, 1, "--bar-b"], ["Aparece la miniatura", .92, 1, "--bar-c"]],
-    "target-res": [["Desaparece la miniatura", 0, .08, "--bar-c"], ["Genie sobre el Dock", 0, 1, "--bar-b"], ["Se cierra el hueco", 0, .8, "--bar-a"]],
+    "target-min": [["Hueco del Dock", 0, .8, "--bar-a"], ["Genie sobre el Dock", 0, 1, "--bar-b"], ["Se construye la miniatura", BUILD_FROM, 1, "--bar-c"]],
+    "target-res": [["Se vacía la miniatura", 0, 1 - BUILD_FROM, "--bar-c"], ["Genie sobre el Dock", 0, 1, "--bar-b"], ["Se cierra el hueco", 0, .8, "--bar-a"]],
     "today-min": [["Hueco del Dock (de golpe)", 0, .02, "--bar-a"], ["Genie bajo el Dock", 0, 1, "--bar-b"], ["Aparece la miniatura (de golpe)", .98, 1, "--bar-c"]],
     "today-res": [["Mosaico quitado (de golpe)", 0, .02, "--bar-c"], ["Genie bajo el Dock", 0, 1, "--bar-b"], ["Se cierra el hueco (de golpe)", 0, .02, "--bar-a"]]
   };
