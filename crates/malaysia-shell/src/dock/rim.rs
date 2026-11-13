@@ -2,7 +2,7 @@ use bk::style::GlassRim;
 use ctappearance::WallpaperState;
 use ctappearance::dock::DockOrientation;
 use ctappearance::tinting::WallpaperGrid;
-use ctdesign::{DockSurface, Rgba, dock_rim};
+use ctdesign::{DockSurface, Rgba, dock_divider, dock_rim};
 
 type Area = (f32, f32, f32, f32);
 
@@ -35,6 +35,19 @@ pub(crate) fn glass_rim(
     )
 }
 
+// The divider's colour over the wallpaper behind its slot (`area`, in the Dock's surface).
+pub(crate) fn divider(
+    wallpaper: &WallpaperState,
+    desktop: Option<u32>,
+    orientation: DockOrientation,
+    surface: (f32, f32),
+    area: Area,
+    dock: DockSurface,
+) -> Rgba {
+    let behind = backdrop(wallpaper, desktop, orientation, surface)(area);
+    dock_divider(dock, behind.unwrap_or(NEUTRAL))
+}
+
 fn rim_around(
     backdrop: impl Fn(Area) -> Option<Rgba>,
     varies: bool,
@@ -42,7 +55,7 @@ fn rim_around(
     dock: DockSurface,
 ) -> GlassRim {
     let (x, y, width, height) = bar;
-    let lit = |colour: Rgba| dock_rim(colour, dock.rim);
+    let lit = |colour: Rgba| dock_rim(dock, colour);
     let read = |area: Area| lit(backdrop(area).unwrap_or(NEUTRAL));
     let around = read((x - READ, y - READ, width + 2.0 * READ, height + 2.0 * READ));
     let stretches = if varies {
@@ -138,16 +151,10 @@ mod tests {
 
     const DOCK: DockSurface = DockSurface {
         glass: Rgba {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-            a: 0.24,
-        },
-        rim: Rgba {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 0.22,
+            r: 0.15,
+            g: 0.15,
+            b: 0.15,
+            a: 0.3,
         },
         outline: Rgba {
             r: 0.0,
@@ -155,21 +162,18 @@ mod tests {
             b: 0.0,
             a: 0.6,
         },
-        divider: Rgba {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 0.6,
-        },
+        rim: [0.294, 0.64],
+        divider: 0.263,
     };
 
+    // In dark the rim lifts the glass less the brighter it is, so over the bright half it is fainter.
     #[test]
     fn each_stretch_of_the_edge_takes_the_light_of_the_wallpaper_beside_it() {
         let rim = rim_around(split, true, BAR, DOCK);
         assert_eq!(rim.top.len(), 40);
-        assert!(rim.top.first().unwrap().a < rim.top.last().unwrap().a);
-        assert!(rim.bottom.first().unwrap().a < rim.bottom.last().unwrap().a);
-        assert!(rim.left.a < rim.right.a);
+        assert!(rim.top.first().unwrap().a > rim.top.last().unwrap().a);
+        assert!(rim.bottom.first().unwrap().a > rim.bottom.last().unwrap().a);
+        assert!(rim.left.a > rim.right.a);
     }
 
     #[test]
@@ -192,15 +196,15 @@ mod tests {
         assert!(
             rim.top
                 .iter()
-                .all(|colour| *colour == dock_rim(NEUTRAL, DOCK.rim))
+                .all(|colour| *colour == dock_rim(DOCK, NEUTRAL))
         );
-        assert_eq!(rim.left, dock_rim(NEUTRAL, DOCK.rim));
+        assert_eq!(rim.left, dock_rim(DOCK, NEUTRAL));
     }
 
     #[test]
     fn the_bottom_edge_falls_back_to_the_wallpaper_inside_it() {
         let screen_edge = |area: Area| (area.1 + area.3 <= 110.0).then(|| colour(0.2, 0.5, 0.86));
         let rim = rim_around(screen_edge, true, BAR, DOCK);
-        assert_eq!(rim.bottom[0], dock_rim(colour(0.2, 0.5, 0.86), DOCK.rim));
+        assert_eq!(rim.bottom[0], dock_rim(DOCK, colour(0.2, 0.5, 0.86)));
     }
 }

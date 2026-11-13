@@ -57,16 +57,21 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    the glass, strongest on the sides, and a light rim one pixel inside it, with a
    glow that dies away over a few pixels, strongest on top and bottom. Around the
    corners the outline hands over to the rim (`ctdesign::dock_rim_dark_share`).
-   The rim is not a fixed white: `dock/rim.rs` reads the wallpaper just outside
-   each `SEGMENT` pixels of the edge and `ctdesign::dock_rim` tints the rim with
-   it and fades it where the wallpaper is dark, so it comes and goes along the
-   bar. A Dock on the left or right takes one colour from the wallpaper around
-   the whole bar. The glass, rim, outline and divider are `ctdesign::DockSurface`
-   (`resolved.dock`), measured for light and dark, with and without transparency:
-   with `appearance.reduce_transparency` the glass is a solid grey. As in macOS
-   the glass is a thin veil over the blur, so the wallpaper and the windows that
-   pass behind the Dock show through (ADR 0071, `"behind"`). It takes the bar
-   tint only with `bars` in `appearance.tint_parts`.
+   The rim and the dividers follow the glass: `ctdesign::dock_rim` and
+   `dock_divider` take the luminance the glass shows over the wallpaper and move
+   it (the rim's by `lift + share ×` that luminance, a fixed step in light and a
+   shrinking one in dark; the divider's by a fixed step), so they fade and
+   come back along the bar as the wallpaper changes. `dock/rim.rs` reads the
+   wallpaper just outside each `SEGMENT` pixels of the edge and behind each
+   divider. A Dock on the left or right takes one colour from the wallpaper
+   around the whole bar. The glass, outline and the two steps are
+   `ctdesign::DockSurface` (`resolved.dock`): a grey with some opacity in light
+   and in dark, solved from captures over black and over grey; with
+   `appearance.reduce_transparency` the glass is a solid grey, as in macOS, and
+   rim and divider come out of the same formulas. As in macOS the glass is a
+   thin veil over the blur, so the wallpaper and the windows that pass behind
+   the Dock show through (ADR 0071, `"behind"`). It takes the bar tint only
+   with `bars` in `appearance.tint_parts`.
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon_in`),
    with the `LauncherEntry` badge and progress. A minimized window's tile is
    a picture of the window, taken once with `capture_window` when it

@@ -582,7 +582,6 @@ impl App for DockApp {
             .map_or(dock.glass, |(tint, factor)| dock.glass.mix(tint, factor));
         let label_fill = theme::color(resolved.shell.bar);
         let ink = theme::color(resolved.shell.text);
-        let separator_ink = theme::color(dock.divider);
         let progress_track = theme::color(resolved.shell.tile);
         let progress_fill = theme::color(resolved.shell.tile_active);
         let dot = (tile * DOCK_DOT).clamp(DOCK_DOT_MIN, DOCK_DOT_MAX);
@@ -678,8 +677,17 @@ impl App for DockApp {
                         rect().width(Size::px(1.0)).height(Size::px(length))
                     };
                     let start_size = config.tilesize;
+                    let area = frame.area(slot.start, cross0, slot.length, layout.thickness);
+                    let separator_ink = theme::color(rim::divider(
+                        &wallpaper.read(),
+                        *toplevels.desktop.read(),
+                        config.orientation,
+                        (width, height),
+                        area,
+                        dock,
+                    ));
                     children.push(
-                        placed(frame.area(slot.start, cross0, slot.length, layout.thickness))
+                        placed(area)
                             .center()
                             .child(line.background(separator_ink))
                             .on_pointer_down(move |event: Event<PointerEventData>| {
