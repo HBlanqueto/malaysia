@@ -11,9 +11,7 @@ use smithay::backend::renderer::gles::{
     GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
 };
 use smithay::backend::renderer::{Bind, Offscreen, Texture};
-use smithay::utils::{
-    Buffer as BufferCoord, Logical, Point, Rectangle, Scale, Size, Transform,
-};
+use smithay::utils::{Buffer as BufferCoord, Logical, Point, Rectangle, Scale, Size, Transform};
 
 use crate::cursor::OutputRenderElement;
 use crate::renderer::{MalaysiaRenderer, PrimaryGpu};

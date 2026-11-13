@@ -916,12 +916,14 @@ fn bar_fill(look: &BarLook, shown_desktop: f32) -> Fill {
         .into()
 }
 
+type WallpaperSample<T> = fn(&WallpaperGrid, (f64, f64), (f64, f64, f64, f64)) -> Option<T>;
+
 fn wallpaper_under_bar<T>(
     wallpaper: &WallpaperState,
     desktop: Option<u32>,
     width: i32,
     height: i32,
-    sample: fn(&WallpaperGrid, (f64, f64), (f64, f64, f64, f64)) -> Option<T>,
+    sample: WallpaperSample<T>,
 ) -> Option<T> {
     let output = wallpaper
         .outputs
