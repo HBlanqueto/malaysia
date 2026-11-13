@@ -31,8 +31,9 @@ use ctdesign::{
     DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
     DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X,
     DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS,
-    DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX,
-    DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
+    DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_INK_MIX,
+    DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE,
+    DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
@@ -532,7 +533,8 @@ impl App for DockApp {
             });
         let label_fill = theme::color(resolved.shell.bar);
         let ink = theme::color(resolved.shell.text);
-        let separator_ink = theme::color(resolved.menu_separator(glass_rgba));
+        let separator_ink =
+            theme::color(glass_rgba.mix(resolved.shell.text, DOCK_SEPARATOR_INK_MIX));
         let progress_track = theme::color(resolved.shell.tile);
         let progress_fill = theme::color(resolved.shell.tile_active);
         let dot = (tile * DOCK_DOT).clamp(DOCK_DOT_MIN, DOCK_DOT_MAX);
