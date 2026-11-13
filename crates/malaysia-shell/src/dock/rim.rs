@@ -34,11 +34,11 @@ fn lightness_behind(
     let aspect = f64::from(output.width) / f64::from(output.height);
     let (surface_width, surface_height) = (f64::from(surface.0), f64::from(surface.1));
     let (width, height) = match orientation {
-        DockOrientation::Bottom | DockOrientation::Top => (surface_width, surface_width / aspect),
+        DockOrientation::Bottom => (surface_width, surface_width / aspect),
         DockOrientation::Left | DockOrientation::Right => (surface_height * aspect, surface_height),
     };
     let (x, y) = match orientation {
-        DockOrientation::Top | DockOrientation::Left => (0.0, 0.0),
+        DockOrientation::Left => (0.0, 0.0),
         DockOrientation::Bottom => (0.0, height - surface_height),
         DockOrientation::Right => (width - surface_width, 0.0),
     };
@@ -63,7 +63,7 @@ mod tests {
     fn the_line_is_fainter_than_the_palette_over_black_and_stronger_over_white() {
         assert_eq!(strength_for(0.0), DOCK_RIM_DARK);
         assert_eq!(strength_for(1.0), DOCK_RIM_BRIGHT);
-        assert!(DOCK_RIM_DARK < 1.0 && DOCK_RIM_BRIGHT > 1.0);
+        const { assert!(DOCK_RIM_DARK < 1.0 && DOCK_RIM_BRIGHT > 1.0) };
     }
 
     #[test]
