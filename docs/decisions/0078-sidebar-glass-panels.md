@@ -120,7 +120,7 @@ and the bottom.
    the measurements above. The rim's white and its width are the window
    frame's own tokens. They are first values, to calibrate in phase 6.
 8. **Without this request** (another compositor, or version below 6) the kit
-   paints `solid` opaque. Nothing else changes.
+   keeps painting its opaque sidebar. Nothing else changes.
 9. **No new configuration.** `appearance.reduce_transparency`,
    `appearance.contrast` and `appearance.blur_all_windows` keep their meaning.
 
@@ -145,8 +145,7 @@ describes what it changes, in its own commit.
 
 - A kit sidebar looks like a solid panel with the wallpaper's color. Only the
   compositor can draw that, because it is the only one that sees the wallpaper.
-- Other compositors get the opaque `solid` panel, with the wallpaper's tint but
-  without its local color.
+- Other compositors keep the opaque sidebar the kit paints today.
 - The cost is one textured quad per panel and its rim. The wallpaper is blurred
   once, as before.
 - The Infinity protocol grows by one request. Only kit clients use it.
@@ -162,7 +161,7 @@ describes what it changes, in its own commit.
   other surfaces' pixels, and a thumbnail of the wallpaper would have to be
   kept in step with every output and scale.
 - **Only the wallpaper's dominant color, on the client.** It is uniform: there
-  is no local color. It stays as the `solid` fallback.
+  is no local color. It is what the kit paints today and stays as the fallback.
 - **`"behind"` for panels.** The windows behind add nothing measurable and
   cost a blur per frame.
 - **A see-through rim.** It would show what is behind the sidebar. The measured
