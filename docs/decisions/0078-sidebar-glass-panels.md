@@ -39,11 +39,12 @@ a capture, [O] observed by the project owner on macOS, [I] inferred.
    | Panel color | Chroma 0.008 to 0.013, hue 220° to 254°. The wallpaper has chroma 0.019 to 0.034, hue 241° to 253°. The ratio is 0.38 to 0.43 at both ends. |
    | Ring | About 8 px of the window's own color. |
    | Rim | A line of 1 to 2 px, a cool white. Over the fill it adds on average 7, 8 and 12 levels of 255 in red, green and blue. A constant white alpha of 0.04 (0 to 0.08) explains it with a mean error of 2.9 of 255. |
-   | Rim and wallpaper | Following the luminance of the wallpaper beside the window lowers the error only to 2.5 (R² 0.24, 24 points, top and bottom edges). Along the left edge the rim reaches +0.09 of lightness near the top and almost nothing at the bottom; the capture does not explain that. |
+   | Rim and wallpaper | Its chroma is 0.70 of the chroma of the wallpaper beside the window (0.65 along the wallpaper's direction), against 0.40 for the fill. Its hue is 17° from the wallpaper's and 10° from the fill's (24 points, top and bottom edges). Its lightness follows the wallpaper's brightness only slightly: R² 0.24, and an error of 2.5 against 2.9 for a constant white. Along the left edge it reaches +0.09 of lightness near the top and almost nothing at the bottom; the capture does not explain that. |
 
    The lightness comes from the app's solid layer. From the wallpaper comes only
    chroma, about 0.4 of the local one. The rim is a white line, like the inner
-   border of the windows. It does not show what is behind it.
+   border of the windows. It does not show what is behind it, but it takes more
+   of the chroma of the wallpaper behind each stretch than the fill does.
 
 4. With the window not focused, the sidebar stops blurring and turns into a
    solid tone computed from the solid color and the wallpaper tint. In the
@@ -94,8 +95,10 @@ and the bottom.
    measurable, so `appearance.blur_behind` does not apply to panels.
 4. **The rim** is the inner border of the window frame, around each panel and
    on the same corner, with no shadow and no outer border. It is the line
-   `set_cards` already gets (ADR 0068), drawn above the surface. It is white,
-   it shows nothing of what is behind it and it has no wallpaper term.
+   `set_cards` already gets (ADR 0068), drawn above the surface. It is a white
+   line with `rim_chroma` of the chroma of B(p), the blurred wallpaper behind
+   that stretch, so its tint changes along the contour. It shows nothing of
+   what is behind it.
 5. **States**, decided by the compositor:
 
    | State | Panel | Rim |
@@ -113,9 +116,9 @@ and the bottom.
    goes directly above the surface's elements and below the window's own border
    (ADR 0059). Both are part of the window, so offscreen fades, minimize and
    captures include them.
-7. **Values live in `ctdesign`.** `chroma` is 0.40, from the measurement above.
-   The rim takes the window frame's own tokens. The first value is to calibrate
-   in phase 6.
+7. **Values live in `ctdesign`.** `chroma` is 0.40 and `rim_chroma` 0.65, from
+   the measurements above. The rim's white and its width are the window
+   frame's own tokens. They are first values, to calibrate in phase 6.
 8. **Without this request** (another compositor, or version below 6) the kit
    paints `solid` opaque. Nothing else changes.
 9. **No new configuration.** `appearance.reduce_transparency`,
@@ -130,7 +133,8 @@ and the bottom.
 3. **Material.** Parse and cache the panels, clip to the corner, fill with the
    flat `base`, the states and the fade.
 4. **Chroma.** The shader in `grade-graphics` and the sampling of the cache.
-5. **Rim.** The window frame's inner border, around each panel.
+5. **Rim.** The window frame's inner border around each panel, tinted with the
+   wallpaper's chroma.
 6. **Calibration.** Measure light mode, other wallpapers and the unfocused
    state on a Mac, and fix the values of step 7.
 
@@ -161,8 +165,7 @@ describes what it changes, in its own commit.
   is no local color. It stays as the `solid` fallback.
 - **`"behind"` for panels.** The windows behind add nothing measurable and
   cost a blur per frame.
-- **A rim that follows the wallpaper.** The measurement does not need it: a
-  constant white line fits almost as well, and a see-through rim shows what is
-  behind the sidebar.
+- **A see-through rim.** It would show what is behind the sidebar. The measured
+  rim is a line that takes the wallpaper's chroma, not its pixels.
 - **The kit paints the rim.** The compositor already draws the inner border of
   cards, and one line is enough.

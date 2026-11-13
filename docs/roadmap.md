@@ -444,7 +444,7 @@ searching `crates/malaysia-compositor/src`.
   Pending: true transparency for the other surfaces (`"windows"`, pop-ups),
   general blur, the shell's own regions and their options in Settings.
   Sidebars of BarrierKit windows get a glass panel with the wallpaper's
-  chroma and the window's inner line ([ADR 0078](decisions/0078-sidebar-glass-panels.md)),
+  chroma and a white line tinted by it ([ADR 0078](decisions/0078-sidebar-glass-panels.md)),
   accepted 2026-11-13, in six phases, none done.
 - **Shell:** supervision and overview (ADR 0023), notifications daemon,
   polkit agent, volume/network/battery/brightness
