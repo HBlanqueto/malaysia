@@ -136,6 +136,7 @@ pub(crate) enum FrameOwner {
 pub(crate) struct ChromeCache {
     entries: HashMap<WindowId, Cached>,
     tints: HashMap<WindowId, TintFade>,
+    settles: HashMap<WindowId, SettleFade>,
     shaders: HashMap<(FrameOwner, u8), CachedShader>,
     text: TextEngine,
 }
@@ -152,6 +153,18 @@ impl TintFade {
     fn current(&self, now: Instant) -> Rgba {
         self.from
             .mix(self.to, ease(progress(self.start, now, TINT_FADE)))
+    }
+}
+
+struct SettleFade {
+    from: f32,
+    to: f32,
+    start: Instant,
+}
+
+impl SettleFade {
+    fn current(&self, now: Instant) -> f32 {
+        self.from + (self.to - self.from) * ease(progress(self.start, now, TINT_FADE))
     }
 }
 
@@ -186,6 +199,7 @@ impl ChromeCache {
         Self {
             entries: HashMap::new(),
             tints: HashMap::new(),
+            settles: HashMap::new(),
             shaders: HashMap::new(),
             text: TextEngine::new(),
         }
@@ -195,6 +209,7 @@ impl ChromeCache {
         if let FrameOwner::Window(id) = owner {
             self.entries.remove(&id);
             self.tints.remove(&id);
+            self.settles.remove(&id);
         }
         self.shaders.retain(|(cached, _), _| *cached != owner);
     }
@@ -219,8 +234,29 @@ impl ChromeCache {
         color
     }
 
-    pub(crate) fn tint_fading(&self) -> bool {
+    pub(crate) fn fading_settle(&mut self, id: WindowId, target: f32, now: Instant) -> f32 {
+        let fade = self.settles.entry(id).or_insert(SettleFade {
+            from: target,
+            to: target,
+            start: now,
+        });
+        if fade.to != target {
+            *fade = SettleFade {
+                from: fade.current(now),
+                to: target,
+                start: now,
+            };
+        }
+        let value = fade.current(now);
+        if progress(fade.start, now, TINT_FADE) >= 1.0 {
+            fade.from = fade.to;
+        }
+        value
+    }
+
+    pub(crate) fn fading(&self) -> bool {
         self.tints.values().any(|fade| fade.from != fade.to)
+            || self.settles.values().any(|fade| fade.from != fade.to)
     }
 
     pub(crate) fn remove_cards(&mut self, id: u64) {

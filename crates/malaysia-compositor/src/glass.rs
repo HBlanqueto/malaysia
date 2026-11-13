@@ -55,7 +55,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     surface: &WlSurface,
     origin: Point<i32, Logical>,
     window: &Frame,
-    active: bool,
+    settle: f32,
     scale: f64,
 ) -> Layers<R> {
     let (Some(glass), Some((texture, commit)), Some(material), Some(rim)) = (
@@ -126,13 +126,13 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                     Uniform::new("base", glass.base),
                     Uniform::new("solid", glass.solid),
                     Uniform::new("chroma", ctdesign::GLASS.chroma),
-                    Uniform::new("settle", if active { 0.0_f32 } else { 1.0 }),
+                    Uniform::new("settle", settle),
                 ])
                 .into(),
             );
         }
         if let Some(dst) = Some(panel)
-            .filter(|_| island && active)
+            .filter(|_| island && settle < 1.0)
             .and_then(|dst| dst.intersection(output))
         {
             let line = rim_line(state.config.appearance.color_scheme);
@@ -149,7 +149,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                     rim.clone(),
                 )
                 .with_uniforms(vec![
-                    Uniform::new("line", [line.r, line.g, line.b, line.a]),
+                    Uniform::new("line", [line.r, line.g, line.b, line.a * (1.0 - settle)]),
                     Uniform::new("chroma", ctdesign::GLASS.rim_chroma),
                     Uniform::new(
                         "width",

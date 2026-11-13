@@ -801,6 +801,11 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         exponent,
         scale,
     );
+    let settle = state.chrome.fading_settle(
+        id,
+        if is_focused { 0.0 } else { 1.0 },
+        std::time::Instant::now(),
+    );
     let (material, rim) = crate::glass::panels(
         state,
         &data.surface,
@@ -810,7 +815,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
             radius: radius_physical,
             exponent,
         },
-        is_focused,
+        settle,
         scale,
     );
     backdrop.extend(material);
