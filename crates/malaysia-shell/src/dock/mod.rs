@@ -56,6 +56,7 @@ use geometry::Slot;
 use items::{AppTile, Item};
 
 const DOMAIN: &str = "dock";
+const DOCK_BAR_LAYER: i16 = -4;
 const TRASH: &str = "trash:///";
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -635,10 +636,11 @@ impl App for DockApp {
             })
         };
 
-        // Freya paints one layer in hash order, so the bar's body must sit below the icons' images.
+        // A node's layer is its parent's plus its own plus one, and nodes of one layer paint in hash
+        // order: the bar's body must sit below the deepest-nested icon image, however shallow its tree.
         let mut children: Vec<Element> = vec![
             placed(bar)
-                .layer(-1)
+                .layer(DOCK_BAR_LAYER)
                 .child(bk::style::glass_edge(
                     rect().width(Size::px(bar.2)).height(Size::px(bar.3)),
                     radius,
