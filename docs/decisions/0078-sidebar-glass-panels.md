@@ -74,8 +74,10 @@ and the bottom.
 
 ## Decision
 
-1. **Only sidebars of BarrierKit windows.** The detail, the title bar and the
-   inspector never get glass. Another client gets nothing: the compositor
+1. **Only BarrierKit windows, and only what the kit names a panel.** A sidebar
+   is a panel. So is a whole window with no sidebar, like the About windows
+   (`bk::WindowGlass`). The detail, the title bar and the inspector of a window
+   with a sidebar never get glass. Another client gets nothing: the compositor
    ignores `set_glass` from a surface that is not a kit toplevel. General blur
    stays a separate, optional mode (ADR 0071, step 4.1).
 2. **A new request in `infinity_window_style_v1`, version 6.**

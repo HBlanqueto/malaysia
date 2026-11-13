@@ -1,9 +1,10 @@
 use std::path::Path;
 use std::rc::Rc;
 
+use bk::WindowGlass;
 use bk::menu::measure_text_weight;
 use bk::patterns::about::AboutView;
-use bk::platform::{Timers, WindowControls};
+use bk::platform::Timers;
 use bk::prelude::*;
 use bk::shell::{
     Anchors, KeyboardInteractivity, Layer, LayerSpec, ToplevelInfo, Toplevels, run_layer,
@@ -717,7 +718,7 @@ struct AboutApp {
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
         bk::theme::use_shell_theme();
-        about_view(&self.info)
+        WindowGlass::new(about_view(&self.info))
     }
 }
 
@@ -763,7 +764,6 @@ fn spec_rows(info: &AboutInfo, palette: &Palette) -> Vec<Element> {
 }
 
 fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
-    let resolved = bk::theme::resolved();
     let palette = Palette::current();
     let drawing = if info.thinkpad {
         THINKPAD_SVG
@@ -781,7 +781,6 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
         .spacing(0.0)
         .width(Size::fill())
         .height(Size::fill())
-        .background(theme::color(resolved.surfaces.raised))
         .font_family(BODY.family)
         .content(Content::flex())
         .cross_align(Alignment::Center)
@@ -873,37 +872,32 @@ struct AboutAppInfo {
 impl App for AboutAppInfo {
     fn render(&self) -> impl IntoElement {
         bk::theme::use_shell_theme();
-        let resolved = bk::theme::resolved();
-        let focused = WindowControls::get().status.read().activated;
-        VStack::new()
-            .main_align(Alignment::Start)
-            .cross_align(Alignment::Start)
-            .spacing(0.0)
-            .width(Size::fill())
-            .height(Size::fill())
-            .background(theme::color(if focused {
-                resolved.surfaces.window
-            } else {
-                resolved.surfaces.titlebar_inactive
-            }))
-            .content(Content::flex())
-            .on_global_key_down(|event: Event<KeyboardEventData>| {
-                if matches!(event.key, Key::Named(NamedKey::Escape)) {
-                    close();
-                }
-            })
-            .child(Titlebar::new().close_only(true).title("").into_element())
-            .child(rect().width(Size::fill()).height(Size::flex(1.0)).child({
-                let about = AboutView::new(
-                    app_icon(self.icon.as_ref(), &self.name, ABOUT_APP_ICON),
-                    self.name.clone(),
-                    self.app_id.clone(),
-                );
-                match self.kind.clone() {
-                    Some(kind) => about.version(kind),
-                    None => about,
-                }
-            }))
+        WindowGlass::new(
+            VStack::new()
+                .main_align(Alignment::Start)
+                .cross_align(Alignment::Start)
+                .spacing(0.0)
+                .width(Size::fill())
+                .height(Size::fill())
+                .content(Content::flex())
+                .on_global_key_down(|event: Event<KeyboardEventData>| {
+                    if matches!(event.key, Key::Named(NamedKey::Escape)) {
+                        close();
+                    }
+                })
+                .child(Titlebar::new().close_only(true).title("").into_element())
+                .child(rect().width(Size::fill()).height(Size::flex(1.0)).child({
+                    let about = AboutView::new(
+                        app_icon(self.icon.as_ref(), &self.name, ABOUT_APP_ICON),
+                        self.name.clone(),
+                        self.app_id.clone(),
+                    );
+                    match self.kind.clone() {
+                        Some(kind) => about.version(kind),
+                        None => about,
+                    }
+                })),
+        )
     }
 }
 

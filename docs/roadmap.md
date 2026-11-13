@@ -235,7 +235,8 @@ fb02921^:docs/bloques/14-menu-global.md`) and the cited code.
     readable; and the system with its version (`NAME` and `VERSION` from
     `/etc/os-release`, e.g. «NixOS · 26.05 (Yarara)»). «More Info…» opens
     Settings (`crates/malaysia-shell/src/dialogs.rs`). It measures 280×547,
-    as on Tahoe.
+    as on Tahoe. The whole window is glass (`bk::WindowGlass`, ADR 0078), like
+    «About <app>».
 - Mnemonics, Space and scrolling: implemented 2026-11-01, still to accept in
   nested mode (barrierkit `bdbd583` and `a2394a6`, `menu.rs`).
   - dbusmenu and GTK turn `_` into `MNEMONIC_MARK` (U+2063, invisible and
