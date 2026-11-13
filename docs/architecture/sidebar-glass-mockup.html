@@ -70,7 +70,7 @@
   <header>
     <div class="eyebrow">Malaysia · ADR 0078</div>
     <h1>Sidebar de Tahoe</h1>
-    <p>La sidebar de Ajustes de macOS es plana en el centro y deja asomar el fondo solo junto a los bordes exteriores de la ventana. Aquí está dibujada con lo que ya lleva el compositor y con las dos formas posibles de dibujar ese borde, contra las cifras medidas en una captura.</p>
+    <p>La sidebar de Ajustes de macOS es plana en el centro y deja asomar el fondo solo junto a sus bordes exteriores. Aquí es una isla, como la de BarrierKit: un panel de vidrio a 8 pt de los bordes de la ventana. Está dibujada con lo que ya lleva el compositor y con las dos formas posibles de dibujar ese borde, contra las cifras medidas en una captura.</p>
   </header>
 
   <section class="panel controls" aria-label="Escena">
@@ -142,7 +142,8 @@
     <h2>Cómo leerlo</h2>
     <ul class="notes">
       <li>La sidebar solo desenfoca el fondo de pantalla, con unas 6 pasadas: casi uniforme y neutra. En oscuro, el centro es L 0.273 y croma 0.022; en claro, (235,237,238) con foco y un gris plano de (242,242,242) sin foco.</li>
-      <li>El fondo asoma solo junto a los bordes exteriores de la ventana (izquierdo, superior e inferior). En el borde derecho, el que toca el panel de contenido, no hay rampa.</li>
+      <li>El fondo asoma solo junto a los bordes exteriores de la sidebar (izquierdo, superior e inferior). En el borde derecho, el que mira al contenido, no hay rampa.</li>
+      <li>En la captura de Ajustes la sidebar llega hasta el borde de la ventana. En la isla, la caída se cuenta desde el borde del panel de vidrio, que queda 8 pt dentro, y el color se toma en el borde de la ventana, justo fuera o justo dentro. La esquina del panel es de 18 pt, concentrica con la de 26 de la ventana.</li>
       <li>El borde toma el color del fondo cercano, no el del fondo muy desenfocado. Arriba, con cielo azul fuera, sale azulado (croma 0.068); abajo, con fondo oscuro, sale débil (0.030). Por eso aquí no hay un factor aparte para el borde inferior.</li>
       <li>La caída es exponencial, de unos 46 px de captura (26 px de aquí), en horizontal y en vertical.</li>
       <li>No se sabe si el borde toma lo que hay justo fuera de la ventana (por ejemplo, la refracción del cristal en su borde) o lo que hay justo dentro (un desenfoque confinado a la ventana). Las dos columnas de la derecha dibujan cada caso. Con el fondo de prueba, la primera da un borde oscuro y la segunda uno claro: es lo que deberías ver en macOS, con la ventana puesta sobre un fondo así, para decidir.</li>
@@ -154,12 +155,14 @@
 <script>
 (() => {
   const S = 2, W = 560, H = 360;
-  const WIN = { x: 36, y: 28, w: 488, h: 304, r: 14 };
-  const PANEL = { x: WIN.x, y: WIN.y, w: 176, h: WIN.h };
+  const K = 0.56;
+  const WIN = { x: 36, y: 28, w: 488, h: 304, r: 26 * K };
+  const INSET = 8 * K;
+  const PANEL = { x: WIN.x + INSET, y: WIN.y + INSET, w: 152, h: WIN.h - 2 * INSET, r: 18 * K };
   const KAWASE_SIGMA = 5 / 3;
   const LOCAL_PASSES = 3;
   const SAMPLE_OFFSET = 6;
-  const EDGE_SPAN = 46 * 0.56;
+  const EDGE_SPAN = 46 * K;
   const NOW = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5 } };
   const MACOS = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6 }, light: { chroma: 0.02, cap: 0.03, lightness: 0, passes: 6, solid: '#f2f2f2' } };
   const EDGE = { dark: { chroma: 0.65, lightness: 0.22, cap: 0.12 }, light: { chroma: 0.45, lightness: 0.15, cap: 0.09 } };
@@ -296,21 +299,21 @@
     return toOklab(image.data[i], image.data[i + 1], image.data[i + 2]);
   }
 
-  function windowSdf(px, py) {
-    const cx = WIN.x + WIN.w / 2, cy = WIN.y + WIN.h / 2;
-    const qx = Math.abs(px - cx) - (WIN.w / 2 - WIN.r), qy = Math.abs(py - cy) - (WIN.h / 2 - WIN.r);
-    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - WIN.r;
+  function panelSdf(px, py) {
+    const cx = PANEL.x + PANEL.w / 2, cy = PANEL.y + PANEL.h / 2;
+    const qx = Math.abs(px - cx) - (PANEL.w / 2 - PANEL.r), qy = Math.abs(py - cy) - (PANEL.h / 2 - PANEL.r);
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - PANEL.r;
   }
   const coverage = d => clamp(0.5 - d, 0, 1);
 
-  // Where the edge takes its colour from: just outside the window or just inside it, at the nearest point of each outer edge.
+  // The ramp counts from the island's left, top and bottom edges; its colour is the wallpaper at the window's edge, just outside it or just inside it.
   function edgeSource(local, sx, sy, side) {
     const o = SAMPLE_OFFSET * S * (side === 'outside' ? -1 : 1);
-    const left = WIN.x * S, top = WIN.y * S, bottom = (WIN.y + WIN.h) * S;
+    const left = PANEL.x * S, top = PANEL.y * S, bottom = (PANEL.y + PANEL.h) * S;
     const wl = Math.exp(-Math.max(0, sx - left) / (EDGE_SPAN * S));
     const wt = Math.exp(-Math.max(0, sy - top) / (EDGE_SPAN * S));
     const wb = Math.exp(-Math.max(0, bottom - sy) / (EDGE_SPAN * S));
-    const l = pixel(local, left + o, sy), t = pixel(local, sx, top + o), b = pixel(local, sx, bottom - o);
+    const l = pixel(local, WIN.x * S + o, sy), t = pixel(local, sx, WIN.y * S + o), b = pixel(local, sx, (WIN.y + WIN.h) * S - o);
     const sum = wl + wt + wb;
     return { strength: Math.max(wl, wt, wb), color: [0, 1, 2].map(k => (wl * l[k] + wt * t[k] + wb * b[k]) / sum) };
   }
@@ -323,10 +326,10 @@
     const flat = focused ? null : params.solid ? hex(params.solid) : takeTint(base, src.mean, SOLID_TINT[scheme], 0, params.cap);
     const x0 = Math.floor(PANEL.x * S) - 2, y0 = Math.floor(PANEL.y * S) - 2;
     const w = Math.ceil(PANEL.w * S) + 4, h = Math.ceil(PANEL.h * S) + 4;
-    const out = new ImageData(w, h), stride = src.blur.width, panelRight = (PANEL.x + PANEL.w) * S;
+    const out = new ImageData(w, h), stride = src.blur.width;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const sx = x0 + x, sy = y0 + y;
-      const d = Math.max(windowSdf((sx + 0.5) / S, (sy + 0.5) / S) * S, sx + 0.5 - panelRight), cover = coverage(d);
+      const d = panelSdf((sx + 0.5) / S, (sy + 0.5) / S) * S, cover = coverage(d);
       if (cover <= 0) continue;
       const i = (sy * stride + sx) * 4, q = toOklab(src.blur.data[i], src.blur.data[i + 1], src.blur.data[i + 2]);
       let color = flat ?? takeTint(base, q, params.chroma, params.lightness, params.cap);
@@ -352,18 +355,18 @@
     const { scheme } = state;
     const ink = scheme === 'dark' ? '#eceff4' : '#1d1d1f', soft = scheme === 'dark' ? 'rgba(236,239,244,.62)' : 'rgba(29,29,31,.55)';
     ctx.font = '600 11px system-ui, sans-serif'; ctx.textBaseline = 'middle';
-    [['#ff5f57', 0], ['#febc2e', 1], ['#28c840', 2]].forEach(([color, i]) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(PANEL.x + 20 + i * 16, PANEL.y + 18, 5, 0, 7); ctx.fill(); });
+    [['#ff5f57', 0], ['#febc2e', 1], ['#28c840', 2]].forEach(([color, i]) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(PANEL.x + 14 + i * 16, PANEL.y + 14, 5, 0, 7); ctx.fill(); });
     ctx.fillStyle = scheme === 'dark' ? 'rgba(255,255,255,.1)' : 'rgba(0,0,0,.06)';
-    ctx.beginPath(); ctx.roundRect(PANEL.x + 12, PANEL.y + 36, PANEL.w - 24, 20, 7); ctx.fill();
-    ctx.fillStyle = soft; ctx.font = '11px system-ui, sans-serif'; ctx.fillText('Buscar', PANEL.x + 28, PANEL.y + 46);
+    ctx.beginPath(); ctx.roundRect(PANEL.x + 10, PANEL.y + 30, PANEL.w - 20, 20, 7); ctx.fill();
+    ctx.fillStyle = soft; ctx.font = '11px system-ui, sans-serif'; ctx.fillText('Buscar', PANEL.x + 26, PANEL.y + 40);
     const rows = [['Wi-Fi', '#2f7cf6'], ['Bluetooth', '#2f7cf6'], ['Red', '#2f7cf6'], ['Batería', '#34c759'], ['Apariencia', '#222'], ['Fondo de pantalla', '#3a86f0'], ['Notificaciones', '#ff453a'], ['Concentración', '#7d5ce0']];
     rows.forEach(([name, color], i) => {
-      const y = PANEL.y + 70 + i * 25, selected = name === 'Apariencia';
-      if (selected) { ctx.fillStyle = '#2f6fe4'; ctx.beginPath(); ctx.roundRect(PANEL.x + 10, y - 11, PANEL.w - 20, 23, 7); ctx.fill(); }
-      ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(PANEL.x + 16, y - 8, 16, 16, 4.5); ctx.fill();
-      ctx.fillStyle = selected ? '#fff' : ink; ctx.font = '12px system-ui, sans-serif'; ctx.fillText(name, PANEL.x + 40, y);
+      const y = PANEL.y + 64 + i * 25, selected = name === 'Apariencia';
+      if (selected) { ctx.fillStyle = '#2f6fe4'; ctx.beginPath(); ctx.roundRect(PANEL.x + 8, y - 11, PANEL.w - 16, 23, 7); ctx.fill(); }
+      ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(PANEL.x + 14, y - 8, 16, 16, 4.5); ctx.fill();
+      ctx.fillStyle = selected ? '#fff' : ink; ctx.font = '12px system-ui, sans-serif'; ctx.fillText(name, PANEL.x + 38, y);
     });
-    const detail = PANEL.x + PANEL.w;
+    const detail = PANEL.x + PANEL.w + INSET;
     ctx.fillStyle = ink; ctx.font = '600 13px system-ui, sans-serif'; ctx.fillText('Apariencia', detail + 18, WIN.y + 22);
     for (let i = 0; i < 5; i++) {
       const y = WIN.y + 48 + i * 40;
