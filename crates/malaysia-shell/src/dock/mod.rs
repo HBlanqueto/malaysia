@@ -33,8 +33,8 @@ use ctdesign::{
     DOCK_FOLDER_CANVAS, DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP,
     DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS,
     DOCK_MAGNIFY_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_INK_MIX,
-    DOCK_SEPARATOR_LENGTH, DOCK_THUMBNAIL_RADIUS, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN,
-    DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
+    DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE,
+    DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
@@ -808,18 +808,11 @@ impl App for DockApp {
                             Some(picture) => {
                                 let (width, height) = thumbnail::body(picture.size, slot.size);
                                 // Freya caches by id; a window minimized again has a new picture.
-                                rect()
+                                ImageViewer::new((id, picture.png.clone()))
+                                    .decode_mode(DecodeMode::Source)
+                                    .asset_age(Duration::ZERO)
                                     .width(Size::px(width))
                                     .height(Size::px(height))
-                                    .corner_radius(DOCK_THUMBNAIL_RADIUS * width.min(height))
-                                    .overflow(Overflow::Clip)
-                                    .child(
-                                        ImageViewer::new((id, picture.png.clone()))
-                                            .decode_mode(DecodeMode::Source)
-                                            .asset_age(Duration::ZERO)
-                                            .width(Size::px(width))
-                                            .height(Size::px(height)),
-                                    )
                                     .into_element()
                             }
                             None => rect()

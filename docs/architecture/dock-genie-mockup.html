@@ -88,9 +88,6 @@ input[type=range]{accent-color:var(--accent);min-width:0}
         <select id="speed"><option value="1">1×</option><option value="0.25" selected>¼×</option><option value="0.1">1/10×</option></select>
       </label>
       <label class="f" for="guides"><input id="guides" type="checkbox"> Ancho de la miniatura</label>
-      <label class="f" for="radius">Redondeo de la miniatura
-        <input id="radius" type="range" min="0" max="30" value="16" aria-describedby="rv"><span id="rv" class="readout" style="margin:0">16 %</span>
-      </label>
     </div>
     <div class="scrub">
       <input id="scrub" type="range" min="0" max="1000" value="550" aria-label="Línea de tiempo del efecto">
@@ -110,7 +107,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
       <li><b>Compositor.</b> <code>minimize::append</code> ya dibuja el genie sobre el Dock. El destino pasa de ser el hueco cuadrado a un rectángulo con la proporción de la ventana y el alto del cuerpo del icono (<code>DOCK_ICON_BODY</code>), centrado en el hueco.</li>
       <li><b>Dock.</b> Cada mosaico recibe una presencia de 0 a 1 que multiplica su ancho en <code>geometry::layout</code>. El mosaico de ventana nace en 0 y sube a 1 mientras el genie baja. Al restaurar baja a 0. El destino que envía el Dock es el cuadrado del hueco con presencia 1: el Dock está centrado, así que su centro no depende del ancho de la miniatura, y el compositor calcula ese ancho con la forma de la ventana.</li>
       <li><b>Relevo.</b> El compositor sigue dibujando la miniatura terminada unos milisegundos mientras el Dock coloca su mosaico debajo. La imagen es la misma, así que no hay salto.</li>
-      <li><b>Miniatura.</b> Se dibuja como la ventana en pequeño: fondo opaco, el redondeo de la ventana, sin borde, sombra suave e insignia de la app. Mide <code>DOCK_ICON_BODY</code> de alto; el hueco mide lo que ella más el margen del icono. Aparece en el último 8 % del efecto y desaparece en el primero al restaurar.</li>
+      <li><b>Miniatura.</b> Se dibuja como la ventana en pequeño: fondo opaco, esquinas rectas, sin borde, sombra suave e insignia de la app. Mide <code>DOCK_ICON_BODY</code> de alto; el hueco mide lo que ella más el margen del icono. Aparece en el último 8 % del efecto y desaparece en el primero al restaurar.</li>
       <li><b>Carpeta de Descargas.</b> Hoy los lugares se dibujan al <code>DOCK_ICON_BODY</code> del lienzo y la carpeta llena el suyo. Se ajusta para que su alto sea el del cuerpo del icono de Ajustes.</li>
       <li><b>Pendiente de decidir.</b> Magnificación con el puntero sobre el Dock, Dock a izquierda o derecha, y el efecto con «minimizar en el icono de la app».</li>
     </ul>
@@ -128,7 +125,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   const bg = document.createElement("canvas"); bg.width = W * dpr; bg.height = H * dpr;
   const bx = bg.getContext("2d");
   const blurOk = "filter" in cx;
-  const S = {mode: "target", dir: "min", t: .55, playing: false, last: 0, radius: .16, speed: .25};
+  const S = {mode: "target", dir: "min", t: .55, playing: false, last: 0, speed: .25};
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const lerp = (a, b, k) => a + (b - a) * k;
   const ease = k => k < .5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
@@ -296,10 +293,10 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   }
   function thumbnailBuilt(c, slot, fill) {
     if (fill <= 0) return;
-    const r = thumbRect(slot, true), rad = Math.min(r.w, r.h) * S.radius, level = r.y + (1 - fill) * r.h;
+    const r = thumbRect(slot, true), level = r.y + (1 - fill) * r.h;
     c.save(); c.beginPath(); c.rect(r.x - 12, level, r.w + 24, r.h + 24); c.clip();
-    c.shadowColor = "rgba(0,0,0,.35)"; c.shadowBlur = 6; c.shadowOffsetY = 2; rr(c, r.x, r.y, r.w, r.h, rad); c.fillStyle = "#242427"; c.fill();
-    c.shadowColor = "transparent"; rr(c, r.x, r.y, r.w, r.h, rad); c.clip(); c.imageSmoothingQuality = "high"; c.drawImage(snap, r.x, r.y, r.w, r.h); c.restore();
+    c.shadowColor = "rgba(0,0,0,.35)"; c.shadowBlur = 6; c.shadowOffsetY = 2; c.fillStyle = "#242427"; c.fillRect(r.x, r.y, r.w, r.h);
+    c.shadowColor = "transparent"; c.beginPath(); c.rect(r.x, r.y, r.w, r.h); c.clip(); c.imageSmoothingQuality = "high"; c.drawImage(snap, r.x, r.y, r.w, r.h); c.restore();
     c.save(); c.globalAlpha = clamp((fill - .8) / .2); iconSettings(c, r.x + r.w - T * .3, r.y + r.h - T * .3, T * .4); c.restore();
   }
 
@@ -354,7 +351,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
       "La miniatura tiene un ancho fijo, el de su ventana al alto del icono. El genie se estrecha hasta esa anchura exacta antes de llegar al Dock y no la rebasa. Activa «Ancho de la miniatura» para ver las guías.",
       "Se estrecha tarde y se pasa unos píxeles por los lados al cruzar el Dock."],
     ["La miniatura se construye con lo que entra", "Las filas de la ventana que cruzan el borde inferior de la miniatura quedan ya dentro, a su escala. Se llena de abajo arriba y, al restaurar, se vacía de arriba abajo. No hay salto al final.", "El destino es el cuadrado del hueco: la ventana se aplasta y luego la miniatura aparece de golpe."],
-    ["La miniatura es la ventana en pequeño", "Opaca, con el redondeo de la ventana y sin borde. Una sombra suave y la insignia de la app.", "Translúcida, de esquinas rectas y con la línea del Dock cruzándola."],
+    ["La miniatura es la ventana en pequeño", "Opaca, de esquinas rectas y sin borde. Una sombra suave y la insignia de la app.", "Translúcida y con la línea del Dock cruzándola."],
     ["Todo del alto del icono de Ajustes", "La miniatura y la carpeta de Descargas miden lo mismo que el icono de Ajustes. La miniatura es más ancha porque conserva la proporción de la ventana, y su hueco también.", "La carpeta sobresale por encima de los iconos de las apps y la miniatura es más pequeña que ellos."]
   ];
   const BUILD_FROM = (() => { const span = H - EDGE - PAD - T + (T - B) / 2 + B - WIN.y; return Math.sqrt(Math.max(0, (span - WIN.h) / span)); })();
@@ -407,7 +404,6 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   $("m-today").onclick = () => { S.mode = "today"; render(); };
   $("guides").onchange = e => { guides = e.target.checked; render(); };
   $("speed").onchange = e => { S.speed = +e.target.value; };
-  $("radius").oninput = e => { S.radius = e.target.value / 100; $("rv").textContent = e.target.value + " %"; render(); };
   $("scrub").oninput = e => { S.playing = false; S.t = e.target.value / 1000; render(); };
 
   const start = () => { drawWindow(snap.getContext("2d"), 2); render(); };

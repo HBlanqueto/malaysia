@@ -4,20 +4,18 @@ use ctappearance::dock::MinimizeEffect;
 use malaysia_scene::scene::WindowId;
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::damage::OutputDamageTracker;
+use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
-use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::element::TextureShaderElement;
 use smithay::backend::renderer::gles::{
     GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
 };
-use smithay::backend::renderer::utils::CommitCounter;
 use smithay::backend::renderer::{Bind, Offscreen, Texture};
 use smithay::utils::{
-    Buffer as BufferCoord, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
+    Buffer as BufferCoord, Logical, Point, Rectangle, Scale, Size, Transform,
 };
 
 use crate::cursor::OutputRenderElement;
-use crate::effects::RoundedTextureElement;
 use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 use crate::state::State;
 
@@ -37,8 +35,8 @@ impl Minimizing {
 pub(crate) struct Minimizing {
     pub(crate) window: WindowId,
     texture: TextureBuffer<GlesTexture>,
-    snapshot: GlesTexture,
-    thumbnail: Option<Id>,
+    // The size in pixels of the texture the thumbnail is cut from, when the Dock shows one.
+    thumbnail: Option<Size<f64, Logical>>,
     from: Rectangle<i32, Logical>,
     to: Rectangle<i32, Logical>,
     hiding: bool,
@@ -90,17 +88,17 @@ pub(crate) fn start_requested(state: &mut State, renderer: &mut GlesRenderer, sc
             continue;
         };
         let output = state.logical_output_size();
+        let size = texture.size();
         let (to, thumbnail) = match state.minimize_hints.get(&window) {
             Some(slot) if state.config.dock.minimize_to_application => (*slot, None),
             Some(slot) => (
                 thumbnail_rect(*slot, from.size, travel(*slot, output)),
-                Some(Id::new()),
+                Some(Size::from((f64::from(size.w), f64::from(size.h)))),
             ),
             None => (bottom_centre(output), None),
         };
         state.minimizing.push(Minimizing {
             window,
-            snapshot: texture.clone(),
             thumbnail,
             texture: TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None),
             from,
@@ -187,12 +185,8 @@ pub(crate) fn append<R: MalaysiaRenderer>(
         } else {
             1.0 - linear
         };
-        if let (Some(id), Some(clip)) = (&minimizing.thumbnail, state.rounded_clip.clone()) {
-            elements.extend(
-                built_thumbnail(minimizing, id, (progress as f32, output), clip, scale)
-                    .map(Into::into),
-            );
-        }
+        elements
+            .extend(built_thumbnail(minimizing, (progress as f32, output), scale).map(Into::into));
         elements.push(
             PrimaryGpu(bend(
                 &minimizing.texture,
@@ -248,13 +242,12 @@ fn built_part(travel: Travel, entered: f32) -> [f32; 4] {
     }
 }
 
-fn built_thumbnail<R: MalaysiaRenderer>(
+fn built_thumbnail(
     minimizing: &Minimizing,
-    id: &Id,
     (progress, output): (f32, Size<i32, Logical>),
-    clip: GlesTexProgram,
     scale: f64,
-) -> Option<RoundedTextureElement<R>> {
+) -> Option<PrimaryGpu<TextureRenderElement<GlesTexture>>> {
+    let texture = minimizing.thumbnail?;
     let to = minimizing.to;
     let travel = travel(to, output);
     let area = minimizing.from.merge(to);
@@ -266,46 +259,24 @@ fn built_thumbnail<R: MalaysiaRenderer>(
     if share <= 0.0 {
         return None;
     }
-    let [x0, y0, x1, y1] = built_part(travel, share);
-    let frame: Rectangle<i32, Physical> = to.to_f64().to_physical(scale).to_i32_round();
-    let part = |frame: Rectangle<f64, Physical>| {
-        Rectangle::<f64, Physical>::new(
-            Point::from((
-                frame.loc.x + f64::from(x0) * frame.size.w,
-                frame.loc.y + f64::from(y0) * frame.size.h,
-            )),
-            Size::from((
-                f64::from(x1 - x0) * frame.size.w,
-                f64::from(y1 - y0) * frame.size.h,
-            )),
-        )
-    };
-    let dst = part(frame.to_f64()).to_i32_round();
-    let texture = minimizing.snapshot.size();
-    let src = Rectangle::<f64, BufferCoord>::new(
-        Point::from((
-            f64::from(x0) * f64::from(texture.w),
-            f64::from(y0) * f64::from(texture.h),
-        )),
-        Size::from((
-            f64::from(x1 - x0) * f64::from(texture.w),
-            f64::from(y1 - y0) * f64::from(texture.h),
-        )),
+    let [x0, y0, x1, y1] = built_part(travel, share).map(f64::from);
+    let to = to.to_f64();
+    let part = Rectangle::<f64, Logical>::new(
+        Point::from((to.loc.x + x0 * to.size.w, to.loc.y + y0 * to.size.h)),
+        Size::from(((x1 - x0) * to.size.w, (y1 - y0) * to.size.h)),
     );
-    let radius = (f64::from(ctdesign::DOCK_THUMBNAIL_RADIUS)
-        * f64::from(frame.size.w.min(frame.size.h)))
-    .round() as i32;
-    Some(RoundedTextureElement::from_texture(
-        minimizing.snapshot.clone(),
-        id.clone(),
-        CommitCounter::default(),
-        src,
-        dst,
-        frame,
-        radius,
-        ctdesign::WINDOW_CORNER.exponent,
-        clip,
-    ))
+    let src = Rectangle::<f64, Logical>::new(
+        Point::from((x0 * texture.w, y0 * texture.h)),
+        Size::from(((x1 - x0) * texture.w, (y1 - y0) * texture.h)),
+    );
+    Some(PrimaryGpu(TextureRenderElement::from_texture_buffer(
+        part.loc.to_physical(scale),
+        &minimizing.texture,
+        None,
+        Some(src),
+        Some(part.size.to_i32_round()),
+        Kind::Unspecified,
+    )))
 }
 
 fn bend(
@@ -543,39 +514,24 @@ mod tests {
     }
 
     #[test]
-    fn the_thumbnail_fills_from_the_dock_edge_and_has_round_corners() {
+    fn the_thumbnail_fills_from_the_dock_edge_and_has_square_corners() {
         let Some(mut renderer) = try_test_renderer() else {
             eprintln!("skipping: no EGL device");
             return;
         };
-        let clip = crate::effects::compile_rounded_clip(&mut renderer).expect("the clip compiles");
         let snapshot = red_window(&mut renderer);
-        let to = rect(60, 140, 60, 40);
         let minimizing = Minimizing {
             window: WindowId::new(1),
-            texture: TextureBuffer::from_texture(
-                &renderer,
-                snapshot.clone(),
-                1,
-                Transform::Normal,
-                None,
-            ),
-            snapshot,
-            thumbnail: Some(Id::new()),
+            texture: TextureBuffer::from_texture(&renderer, snapshot, 1, Transform::Normal, None),
+            thumbnail: Some(Size::from((120.0, 80.0))),
             from: rect(40, 20, 120, 80),
-            to,
+            to: rect(60, 140, 60, 40),
             hiding: true,
             start: Instant::now(),
         };
         let output = Size::from((200, 200));
         let built = |renderer: &mut GlesRenderer, progress: f32| {
-            let element = built_thumbnail::<GlesRenderer>(
-                &minimizing,
-                minimizing.thumbnail.as_ref().unwrap(),
-                (progress, output),
-                clip.clone(),
-                1.0,
-            );
+            let element = built_thumbnail(&minimizing, (progress, output), 1.0);
             draw(
                 renderer,
                 &element.into_iter().map(Into::into).collect::<Vec<_>>(),
@@ -595,7 +551,10 @@ mod tests {
             red_at(&full, 90, 142) && red_at(&full, 90, 176),
             "all of it is in"
         );
-        assert!(!red_at(&full, 60, 140), "the corner is rounded");
+        assert!(
+            red_at(&full, 60, 140) && red_at(&full, 119, 179),
+            "the corners are square"
+        );
     }
 
     #[test]
