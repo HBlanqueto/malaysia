@@ -34,7 +34,7 @@ A BarrierKit window can ask for glass panels with `infinity_window_style_v1.set_
 3. A window that is not focused gets the flat `solid` tone and no rim.
 4. An island keeps its own corner. A flat panel takes the window's corner.
 
-The request applies on the next `wl_surface.commit`. Only kit clients may send it. The fade between focused and not focused is pending.
+The request applies on the next `wl_surface.commit`. Only kit clients may send it. The change between focused and not focused fades over `ctdesign::DURATION_BASE`: the material blends to the solid tone and the island rim fades out.
 
 ## Moving
 
