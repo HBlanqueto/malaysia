@@ -55,8 +55,10 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    macOS draws it ([`dock-macos-measured.html`](dock-macos-measured.html) shows
    four captures next to their reproduction): a dark outline one pixel outside
    the glass, strongest on the sides, and a light rim one pixel inside it, with a
-   glow that dies away over a few pixels, strongest on top and bottom. Around the
-   corners the outline hands over to the rim (`ctdesign::dock_rim_dark_share`).
+   glow that dies away over a few pixels, strongest on top and bottom. Around
+   each corner the rim dies away and the outline takes over by the angle of the
+   frame (`ctdesign::dock_rim_light_share`, `dock_rim_dark_share`, measured per
+   mode in `DockSurface::corner`).
    The rim and the dividers follow the glass: `ctdesign::dock_rim` and
    `dock_divider` take the luminance the glass shows over the wallpaper and move
    it (the rim's by `lift + share ×` that luminance, a fixed step in light and a

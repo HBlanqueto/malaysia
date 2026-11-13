@@ -90,6 +90,7 @@ fn rim_around(
         left: side(x - READ),
         right: side(x + width),
         outline: dock.outline,
+        corner: dock.corner,
     }
 }
 
@@ -164,6 +165,7 @@ mod tests {
         },
         rim: [0.294, 0.64],
         divider: 0.263,
+        corner: [29.0, 8.0, 68.0],
     };
 
     // In dark the rim lifts the glass less the brighter it is, so over the bright half it is fainter.

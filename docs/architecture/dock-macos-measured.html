@@ -45,7 +45,7 @@
   <section class="states" id="states"></section>
   <section class="panel">
     <h2>Cómo cambia el borde alrededor del Dock</h2>
-    <p>La línea no es una sola luz blanca. Arriba y abajo es una línea clara, con un brillo suave que se apaga en unos 5 px hacia dentro. Por los lados es una línea oscura. En las esquinas pasa de una a otra de forma continua: clara hasta el 19 % de la altura, oscura entre el 43 % y el 57 %, y clara otra vez desde el 81 %. Es igual por arriba y por abajo.</p>
+    <p>La línea no es una sola luz blanca. Arriba y abajo es una línea clara, con un brillo suave que se apaga en unos 5 px hacia dentro. Por los lados es una línea oscura, un píxel por fuera. En cada esquina el paso de una a otra depende del ángulo de la normal (0° arriba y abajo, 90° en los lados): la línea clara decae como exp(−ángulo / 26°) en claro y exp(−ángulo / 29°) en oscuro, y la oscura sube linealmente entre 12° y 84° (claro) y entre 8° y 68° (oscuro). Por eso en la curva se ven las dos a la vez, la oscura por fuera y la clara por dentro, mientras una se apaga y la otra se enciende.</p>
   </section>
   <section class="panel">
     <h2>Comprobación sobre fondo negro</h2>
@@ -80,9 +80,9 @@
   const dividerOf = (s, backdrop) => overlay(lumOf(s, backdrop), DIVIDER[s.mode]);
   STATES.forEach(s => { s.fill = [s.glass[0], s.glass[1], s.glass[2], s.glass[3]]; s.rim = rimOf(s, 190); s.glow = GLOW.map(g => g * s.rim); const d = dividerOf(s, 190); s.divider = [d.c, d.c, d.c, d.a]; });
   const BAR = { x: 9, y: 9, h: 106, r: 40, n: 3 }, W = 320, H = 124;
-  const squircle = (c, x, y, w, h, e, n = BAR.n) => {
+  const squircle = (c, x, y, w, h, e, append = false, n = BAR.n) => {
     const k = 2 / n;
-    const cs = Math.cos, sn = Math.sin; c.beginPath(); c.moveTo(x + e, y);
+    const cs = Math.cos, sn = Math.sin; if (!append) c.beginPath(); c.moveTo(x + e, y);
     for (let i = 0; i <= 24; i++) { const t = i / 24 * Math.PI / 2, u = sn(t) ** k, v = cs(t) ** k; c.lineTo(x + w - e + e * u, y + e - e * v); }
     for (let i = 0; i <= 24; i++) { const t = i / 24 * Math.PI / 2, u = cs(t) ** k, v = sn(t) ** k; c.lineTo(x + w - e + e * u, y + h - e + e * v); }
     for (let i = 0; i <= 24; i++) { const t = i / 24 * Math.PI / 2, u = sn(t) ** k, v = cs(t) ** k; c.lineTo(x + e - e * u, y + h - e + e * v); }
@@ -90,28 +90,44 @@
     c.closePath();
   };
   const rr = (c, x, y, w, h, r) => { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
-  // El borde son dos anillos: uno negro por fuera, fuerte en los lados, y uno blanco por dentro, fuerte arriba y abajo. A lo largo de las
-  // esquinas uno se apaga mientras el otro se enciende. RAMP.from y RAMP.to son la altura (como fracción) donde empieza y acaba el cambio.
-  const RAMP = { from: .2, to: .42 };
-  const smooth = v => v * v * (3 - 2 * v);
-  const dark = t => { const u = Math.min(t, 1 - t); return smooth(Math.min(1, Math.max(0, (u - RAMP.from) / (RAMP.to - RAMP.from)))); };
-  const stops = (g, fn) => { for (let i = 0; i <= 40; i++) { const t = i / 40, [r, gg, b, a] = fn(t); g.addColorStop(t, `rgba(${r},${gg},${b},${a})`); } };
-
+  // El borde son dos anillos: uno negro por fuera, fuerte en los lados, y uno blanco por dentro, fuerte arriba y abajo. A lo largo de cada
+  // esquina uno se apaga mientras el otro se enciende según el ángulo de la normal (0° arriba o abajo, 90° en los lados): el blanco
+  // decae como exp(-ángulo / decay) y el negro sube linealmente entre from y to.
+  const CORNER = { light: [26, 12, 84], dark: [29, 8, 68] };
+  const lightShare = (deg, m) => Math.exp(-deg / CORNER[m][0]);
+  const darkShare = (deg, m) => Math.min(1, Math.max(0, (deg - CORNER[m][1]) / (CORNER[m][2] - CORNER[m][1])));
   function draw(c, s) {
     c.fillStyle = `rgb(${BACKDROP})`; c.fillRect(0, 0, W, H);
-    const w = 900, { x, y, h, r } = BAR;
+    const w = 900, { x, y, h, r } = BAR, e = r;
     const [fr, fg, fb, fa] = s.fill;
     c.save(); squircle(c, x, y, w, h, r); c.clip();
     c.fillStyle = `rgba(${fr},${fg},${fb},${fa})`; c.fillRect(x, y, w, h);
-    // brillo hacia dentro, solo arriba y abajo
-    s.glow.forEach((a, i) => { c.fillStyle = `rgba(255,255,255,${a})`; c.fillRect(x, y + 1 + i, w, 1); c.fillRect(x, y + h - 2 - i, w, 1); });
     c.restore();
-    // anillo blanco por dentro y anillo negro por fuera, cada uno con su opacidad de arriba abajo
-    const gw = c.createLinearGradient(0, y, 0, y + h), gd = c.createLinearGradient(0, y, 0, y + h);
-    stops(gw, t => [255, 255, 255, (s.rim * (1 - dark(t))).toFixed(3)]); stops(gd, t => [0, 0, 0, (s.side * dark(t)).toFixed(3)]);
-    c.lineWidth = 1; c.strokeStyle = gw; squircle(c, x + .5, y + .5, w - 1, h - 1, r - .5); c.stroke();
-    c.strokeStyle = gd; squircle(c, x - .5, y - .5, w + 1, h + 1, r + .5); c.stroke();
-    // icono y punto
+    // cada anillo se dibuja por tramos: arriba y abajo (borde claro), lados (contorno), y las cuatro esquinas con un degradado cónico
+    const pieces = [
+      { clip: [x + e, y - 3, w - 2 * e, 12], deg: () => 0 }, { clip: [x + e, y + h - 9, w - 2 * e, 12], deg: () => 0 },
+      { clip: [x - 3, y + e, 12, h - 2 * e], deg: () => 90 }, { clip: [x + w - 9, y + e, 12, h - 2 * e], deg: () => 90 },
+    ];
+    const corners = [
+      { clip: [x - 3, y - 3, e + 3, e + 3], center: [x + e, y + e], start: Math.PI, flip: true },
+      { clip: [x + w - e, y - 3, e + 3, e + 3], center: [x + w - e, y + e], start: 1.5 * Math.PI, flip: false },
+      { clip: [x + w - e, y + h - e, e + 3, e + 3], center: [x + w - e, y + h - e], start: 0, flip: true },
+      { clip: [x - 3, y + h - e, e + 3, e + 3], center: [x + e, y + h - e], start: .5 * Math.PI, flip: false },
+    ];
+    const ring = (inset, width, colourAt, kind) => {
+      const draw = (paint, clip) => { c.save(); c.beginPath(); c.rect(...clip); c.clip(); c.strokeStyle = paint; c.lineWidth = width; squircle(c, x + inset, y + inset, w - 2 * inset, h - 2 * inset, r - inset); c.stroke(); c.restore(); };
+      pieces.forEach((p, i) => { const sides = i >= 2; if ((kind === "dark") === sides) draw(colourAt(sides ? 90 : 0), p.clip); });
+      corners.forEach(k => {
+        const g = c.createConicGradient(k.start, ...k.center);
+        for (let i = 0; i <= 18; i++) { const pos = i / 18 * .25, deg = k.flip ? 90 * (1 - i / 18) : 90 * i / 18; g.addColorStop(pos, colourAt(deg)); }
+        draw(g, k.clip);
+      });
+    };
+    // el brillo y el borde claro: el anillo 0 es el borde, los demás son el brillo hacia dentro
+    [1, ...s.glow.map((_, i) => s.glow[i] / s.rim)].forEach((share, i) => ring(i + .5, 1, deg => `rgba(255,255,255,${(s.rim * share * lightShare(deg, s.mode)).toFixed(4)})`, "light"));
+    c.save(); c.beginPath(); c.rect(0, 0, W, H); squircle(c, x, y, w, h, r, true); c.clip("evenodd");
+    ring(-.5, 1, deg => `rgba(0,0,0,${(s.side * darkShare(deg, s.mode)).toFixed(4)})`, "dark");
+    c.restore();
     c.fillStyle = "#58a8f6"; rr(c, x + 19, y + 19, 70, 70, 16); c.fill();
     c.fillStyle = `rgb(${s.dot})`; c.beginPath(); c.arc(x + 54, y + 98, 2.2, 0, 7); c.fill();
   }
@@ -146,6 +162,7 @@
   document.getElementById("check").innerHTML = `<thead><tr><th>medido · calculado</th>${STATES.flatMap(s => [`<th>${s.title}, negro</th>`, `<th>${s.title}, gris 190</th>`]).join("")}</tr></thead><tbody>` +
     checkRows.map(([name, key]) => `<tr><td>${name}</td>${STATES.flatMap(s => [cell(MEASURED[s.key].black[key], level(s, 0)[key]), cell(MEASURED[s.key].grey[key], level(s, 190)[key])]).join("")}</tr>`).join("") + "</tbody>";
   window.__states = STATES;
-  window.__ramp = (from, to) => { RAMP.from = from; RAMP.to = to; STATES.forEach(s => draw(s.canvas.getContext("2d"), s)); };
+  window.__redraw = () => STATES.forEach(s => draw(s.canvas.getContext("2d"), s));
+  window.__corner = CORNER;
 })();
 </script>
