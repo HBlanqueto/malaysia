@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
 use ctappearance::traffic::{self, TrafficInput};
 use ctappearance::{
-    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle,
-    WindowColorMode, load_dominant, palette as base_palette, resolve,
+    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, WindowColorMode,
+    load_dominant, palette as base_palette, resolve,
 };
 use ctdesign::{
     ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,

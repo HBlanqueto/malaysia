@@ -131,9 +131,9 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                 .into(),
             );
         }
-        if let Some(dst) = Some(panel)
-            .filter(|_| island && settle < 1.0)
-            .and_then(|dst| dst.intersection(output))
+        if island
+            && settle < 1.0
+            && let Some(dst) = panel.intersection(output)
         {
             let line = rim_line(state.config.appearance.color_scheme);
             rims.push(

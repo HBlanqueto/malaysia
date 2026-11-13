@@ -118,7 +118,9 @@ impl State {
         let Some(target) = self.wallpaper_behind(window) else {
             return self.chrome_theme;
         };
-        let wallpaper = self.chrome.fading_tint(window, target, std::time::Instant::now());
+        let wallpaper = self
+            .chrome
+            .fading_tint(window, target, std::time::Instant::now());
         self.chrome_theme
             .behind_window(wallpaper, &self.config.appearance)
     }
