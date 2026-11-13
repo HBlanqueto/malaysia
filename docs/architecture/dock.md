@@ -50,14 +50,19 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    namespace (`DOCK_LAYER_NAMESPACE`) and gives that card only the blur of
    `set_blur_region`, clipped to the corner, and no shadow: it would show
    through the translucent fill. The Dock
-   draws only the inner line itself, with `bk::style::glass_edge`: no dark outer
-   border and no inward glow, the compositor's panel colours, one physical pixel wide like them, under
-   its icons, so magnified icons rise over the bar's edge. As in macOS the line
-   is light over the wallpaper and not fixed: `dock/rim.rs` multiplies its
-   opacity by `DOCK_RIM_DARK` to `DOCK_RIM_BRIGHT` by the lightness of the
-   wallpaper behind the bar, so it is faint over a dark wallpaper and, over a
-   light or flat one, as translucent as the palette's line (10 % on the sides,
-   26 % on the top and bottom), never more. The line is soft, not a hard stroke: `glass_edge` blurs it by `DOCK_RIM_BLUR` pixels. The fill is the translucent `shell.dock`: as in
+   draws only its rim itself, with `bk::style::glass_edge`: no dark outer
+   border and no inward glow, under its icons, so magnified icons rise over the
+   bar's edge. As in macOS the rim is not a fixed white line. It is light tinted
+   by the wallpaper just outside each stretch of the edge: `dock/rim.rs` reads
+   that wallpaper every `SEGMENT` pixels and `ctdesign::dock_rim` gives each
+   stretch its colour, nearly transparent over a dark backdrop and whitish over
+   a bright one, so it fades and comes back along the bar
+   ([`dock-rim-mockup.html`](dock-rim-mockup.html)). Down the bar the rim fades too
+   (`ctdesign::dock_rim_fade`): full on top, thinner along the sides, gone
+   around the lower corners and back, weaker, along the bottom edge. A soft
+   line, blurred by `DOCK_RIM_BLUR` pixels. A Dock on the left or right takes one
+   colour from the wallpaper around the whole bar. The fill is the translucent
+   `shell.dock`, a little white over the blur (12 % in light, 6 % in dark): as in
    macOS, the wallpaper and the windows that pass behind the Dock show through
    the blur (ADR 0071, `"behind"`). It takes the bar tint only
    with `bars` in `appearance.tint_parts`, and is opaque with

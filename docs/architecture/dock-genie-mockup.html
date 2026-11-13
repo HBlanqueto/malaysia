@@ -279,9 +279,9 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     c.strokeStyle = "rgba(255,255,255,.16)"; c.lineWidth = 1; rr(c, WIN.x + .5, WIN.y + .5, WIN.w - 1, WIN.h - 1, WIN.r); c.stroke();
   }
 
-  // The kit's glass_edge: only the inner line, light over the wallpaper. Its opacity runs from DOCK_RIM_DARK to
-  // DOCK_RIM_BRIGHT with the HSL lightness of the wallpaper behind the bar; the palette gives 10 % on the sides, 26 % on the edges.
-  const RIM = {dark: .6, bright: 1, sides: .1, edges: .26, blur: .7};
+  // The kit's glass_edge, as macOS draws it: only the rim, whose opacity is DOCK_RIM_ALPHA over the brightness of the wallpaper beside it,
+  // faded from top to bottom by DOCK_RIM_FADE. dock-rim-mockup.html shows it stretch by stretch; here the bar has one backdrop.
+  const RIM = {least: .1, perBrightness: .3, blur: .7, fade: [1, .85, .7, .35, .05, .72]};
   function lightnessBehind(L) {
     const x = Math.max(0, Math.floor(L.barX * dpr)), y = Math.floor(L.barY * dpr);
     const w = Math.min(bg.width - x, Math.ceil(L.barW * dpr)), h = Math.min(bg.height - y, Math.ceil(L.barH * dpr));
@@ -301,11 +301,11 @@ input[type=range]{accent-color:var(--accent);min-width:0}
       $("rim").textContent = "Hoy: trazo negro exterior y línea blanca fija del 20 %";
       return;
     }
-    const light = lightnessBehind(L), k = RIM.dark + (RIM.bright - RIM.dark) * light, a = v => Math.min(1, v * k);
-    const line = c.createLinearGradient(0, L.barY, 0, L.barY + L.barH), curve = radius / L.barH;
-    [[0, a(RIM.edges)], [curve, a(RIM.sides)], [1 - curve, a(RIM.sides)], [1, a(RIM.edges)]].forEach(([o, al]) => line.addColorStop(o, `rgba(255,255,255,${al})`));
+    const light = lightnessBehind(L), alpha = RIM.least + RIM.perBrightness * light, curve = radius / L.barH;
+    const line = c.createLinearGradient(0, L.barY, 0, L.barY + L.barH);
+    [[0, 0], [curve * .8, 1], [.5, 2], [1 - curve * .9, 3], [1 - curve * .45, 4], [1, 5]].forEach(([o, i]) => line.addColorStop(o, `rgba(255,255,255,${alpha * RIM.fade[i]})`));
     c.save(); c.filter = `blur(${RIM.blur}px)`; c.strokeStyle = line; c.lineWidth = 1; rr(c, L.barX + .5, L.barY + .5, L.barW - 1, L.barH - 1, radius - .5); c.stroke(); c.restore();
-    $("rim").textContent = `Fondo con claridad ${Math.round(light * 100)} %: línea ×${k.toFixed(2)}, lados ${Math.round(a(RIM.sides) * 100)} %, arriba y abajo ${Math.round(a(RIM.edges) * 100)} %, suavizada con blur de ${RIM.blur} px, sin trazo negro ni resplandor`;
+    $("rim").textContent = `Fondo con claridad ${Math.round(light * 100)} %: línea ${Math.round(alpha * 100)} % arriba, más tenue por los lados, apagada en las esquinas de abajo; con blur de ${RIM.blur} px, sin trazo negro ni resplandor`;
   }
 
   function dockIcons(c, L, target) {

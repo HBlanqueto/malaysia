@@ -1,75 +1,161 @@
+use bk::style::GlassRim;
 use ctappearance::WallpaperState;
 use ctappearance::dock::DockOrientation;
 use ctappearance::tinting::WallpaperGrid;
-use ctdesign::{DOCK_RIM_BRIGHT, DOCK_RIM_DARK};
+use ctdesign::{Rgba, dock_rim};
 
-// The Dock's edge is as translucent as the palette's line over a light or flat wallpaper, and
-// fainter over a dark one. `bar` is the bar's rectangle in the Dock's surface, which spans the
-// output along the Dock's edge.
-pub(crate) fn strength(
+type Area = (f32, f32, f32, f32);
+
+// Pixels of the bar's edge that share one colour, and how far past the edge the backdrop is read.
+const SEGMENT: f32 = 10.0;
+const READ: f32 = 8.0;
+const NEUTRAL: Rgba = Rgba {
+    r: 0.5,
+    g: 0.5,
+    b: 0.5,
+    a: 1.0,
+};
+
+// The Dock's rim, as macOS draws it: light tinted by the wallpaper just outside each stretch of
+// the edge. `bar` is the bar's rectangle in the Dock's surface, which spans the output along the
+// Dock's edge. A Dock on the left or right takes the colour of the whole bar's surroundings.
+pub(crate) fn glass_rim(
     wallpaper: &WallpaperState,
     desktop: Option<u32>,
     orientation: DockOrientation,
     surface: (f32, f32),
-    bar: (f32, f32, f32, f32),
-) -> f32 {
-    lightness_behind(wallpaper, desktop, orientation, surface, bar).map_or(1.0, strength_for)
+    bar: Area,
+) -> GlassRim {
+    rim_around(
+        backdrop(wallpaper, desktop, orientation, surface),
+        orientation == DockOrientation::Bottom,
+        bar,
+    )
 }
 
-fn strength_for(lightness: f32) -> f32 {
-    DOCK_RIM_DARK + (DOCK_RIM_BRIGHT - DOCK_RIM_DARK) * lightness.clamp(0.0, 1.0)
+fn rim_around(backdrop: impl Fn(Area) -> Option<Rgba>, varies: bool, bar: Area) -> GlassRim {
+    let (x, y, width, height) = bar;
+    let read = |area: Area| dock_rim(backdrop(area).unwrap_or(NEUTRAL));
+    let around = read((x - READ, y - READ, width + 2.0 * READ, height + 2.0 * READ));
+    let stretches = if varies {
+        ((width / SEGMENT).round() as usize).clamp(8, 96)
+    } else {
+        1
+    };
+    let along = |edge_y: f32, inward: f32| -> Vec<Rgba> {
+        let length = width / stretches as f32;
+        (0..stretches)
+            .map(|index| {
+                if !varies {
+                    return around;
+                }
+                let start = x + index as f32 * length;
+                backdrop((start, edge_y, length, READ))
+                    .or_else(|| backdrop((start, edge_y + inward, length, READ)))
+                    .map_or(around, dock_rim)
+            })
+            .collect()
+    };
+    let side = |edge_x: f32| {
+        if varies {
+            read((edge_x, y + height / 4.0, READ, height / 2.0))
+        } else {
+            around
+        }
+    };
+    GlassRim {
+        top: along(y - READ, READ),
+        bottom: along(y + height, -READ),
+        left: side(x - READ),
+        right: side(x + width),
+    }
 }
 
-fn lightness_behind(
+fn backdrop(
     wallpaper: &WallpaperState,
     desktop: Option<u32>,
     orientation: DockOrientation,
     surface: (f32, f32),
-    bar: (f32, f32, f32, f32),
-) -> Option<f32> {
-    let output = wallpaper
-        .outputs
-        .first()
-        .filter(|output| output.width > 0 && output.height > 0)?;
-    let aspect = f64::from(output.width) / f64::from(output.height);
-    let (surface_width, surface_height) = (f64::from(surface.0), f64::from(surface.1));
-    let (width, height) = match orientation {
-        DockOrientation::Bottom => (surface_width, surface_width / aspect),
-        DockOrientation::Left | DockOrientation::Right => (surface_height * aspect, surface_height),
-    };
-    let (x, y) = match orientation {
-        DockOrientation::Left => (0.0, 0.0),
-        DockOrientation::Bottom => (0.0, height - surface_height),
-        DockOrientation::Right => (width - surface_width, 0.0),
-    };
-    let behind = WallpaperGrid::behind(
-        wallpaper.grid_for(desktop)?,
-        (width, height),
-        (
-            x + f64::from(bar.0),
-            y + f64::from(bar.1),
-            f64::from(bar.2),
-            f64::from(bar.3),
-        ),
-    )?;
-    Some(behind.to_hsl().2)
+) -> impl Fn(Area) -> Option<Rgba> + '_ {
+    move |(x, y, width, height)| {
+        let output = wallpaper
+            .outputs
+            .first()
+            .filter(|output| output.width > 0 && output.height > 0)?;
+        let aspect = f64::from(output.width) / f64::from(output.height);
+        let (surface_width, surface_height) = (f64::from(surface.0), f64::from(surface.1));
+        let (wallpaper_width, wallpaper_height) = match orientation {
+            DockOrientation::Bottom => (surface_width, surface_width / aspect),
+            DockOrientation::Left | DockOrientation::Right => {
+                (surface_height * aspect, surface_height)
+            }
+        };
+        let (origin_x, origin_y) = match orientation {
+            DockOrientation::Left => (0.0, 0.0),
+            DockOrientation::Bottom => (0.0, wallpaper_height - surface_height),
+            DockOrientation::Right => (wallpaper_width - surface_width, 0.0),
+        };
+        WallpaperGrid::behind(
+            wallpaper.grid_for(desktop)?,
+            (wallpaper_width, wallpaper_height),
+            (
+                origin_x + f64::from(x),
+                origin_y + f64::from(y),
+                f64::from(width),
+                f64::from(height),
+            ),
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn colour(r: f32, g: f32, b: f32) -> Rgba {
+        Rgba { r, g, b, a: 1.0 }
+    }
+
+    // Dark on the left half of the bar, bright blue on the right half.
+    fn split(area: Area) -> Option<Rgba> {
+        Some(if area.0 + area.2 / 2.0 < 300.0 {
+            colour(0.05, 0.08, 0.12)
+        } else {
+            colour(0.2, 0.5, 0.86)
+        })
+    }
+
+    const BAR: Area = (100.0, 40.0, 400.0, 70.0);
+
     #[test]
-    fn the_line_is_fainter_than_the_palette_over_black_and_never_stronger_over_white() {
-        assert_eq!(strength_for(0.0), DOCK_RIM_DARK);
-        assert_eq!(strength_for(1.0), DOCK_RIM_BRIGHT);
-        const { assert!(DOCK_RIM_DARK < 1.0 && DOCK_RIM_BRIGHT <= 1.0) };
+    fn each_stretch_of_the_edge_takes_the_light_of_the_wallpaper_beside_it() {
+        let rim = rim_around(split, true, BAR);
+        assert_eq!(rim.top.len(), 40);
+        assert!(rim.top.first().unwrap().a < rim.top.last().unwrap().a);
+        assert!(rim.bottom.first().unwrap().a < rim.bottom.last().unwrap().a);
+        assert!(rim.left.a < rim.right.a);
     }
 
     #[test]
-    fn the_line_grows_with_the_lightness_of_the_wallpaper() {
-        let steps: Vec<f32> = (0..=10).map(|i| strength_for(i as f32 / 10.0)).collect();
-        assert!(steps.windows(2).all(|pair| pair[0] < pair[1]), "{steps:?}");
-        assert_eq!(strength_for(7.0), strength_for(1.0));
+    fn a_dock_on_the_side_has_one_colour_all_round() {
+        let rim = rim_around(split, false, BAR);
+        assert_eq!(rim.top.len(), 1);
+        assert_eq!(rim.top[0], rim.bottom[0]);
+        assert_eq!(rim.top[0], rim.left);
+        assert_eq!(rim.left, rim.right);
+    }
+
+    #[test]
+    fn without_a_wallpaper_the_rim_is_neutral_and_still_there() {
+        let rim = rim_around(|_| None, true, BAR);
+        assert!(rim.top.iter().all(|colour| *colour == dock_rim(NEUTRAL)));
+        assert_eq!(rim.left, dock_rim(NEUTRAL));
+    }
+
+    #[test]
+    fn the_bottom_edge_falls_back_to_the_wallpaper_inside_it() {
+        let screen_edge = |area: Area| (area.1 + area.3 <= 110.0).then(|| colour(0.2, 0.5, 0.86));
+        let rim = rim_around(screen_edge, true, BAR);
+        assert_eq!(rim.bottom[0], dock_rim(colour(0.2, 0.5, 0.86)));
     }
 }

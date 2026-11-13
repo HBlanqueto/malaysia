@@ -646,7 +646,7 @@ impl App for DockApp {
                     rect().width(Size::px(bar.2)).height(Size::px(bar.3)),
                     radius,
                     glass_rgba,
-                    rim::strength(
+                    rim::glass_rim(
                         &wallpaper.read(),
                         *toplevels.desktop.read(),
                         config.orientation,
