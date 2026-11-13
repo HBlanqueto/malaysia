@@ -105,6 +105,7 @@
         <label class="slider" for="cap">Tope <input type="range" id="cap" min="0.02" max="0.2" step="0.01"><output id="cap-out"></output></label>
         <label class="slider" for="lightness">Claridad <input type="range" id="lightness" min="0" max="1" step="0.05"><output id="lightness-out"></output></label>
         <label class="slider" for="passes">Pasadas <input type="range" id="passes" min="3" max="8" step="1"><output id="passes-out"></output></label>
+        <label class="check" for="edge"><input type="checkbox" id="edge"> Rampa en el borde izquierdo</label>
       </div>
       <div class="copy">
         <button type="button" id="copy">Copiar valores</button>
@@ -122,6 +123,7 @@
       <li><b>Pasadas</b> es el ancho del desenfoque. Cada pasada lo duplica: sigma de 53 px con 5, 107 con 6 y 213 con 7, en una pantalla de 1080 px de alto. Aquí se dibuja con un gaussiano de ese sigma, escalado al tamaño del fondo.</li>
       <li>La sidebar solo desenfoca el fondo de pantalla: en macOS una ventana con barra rojiza detrás no cambia nada.</li>
       <li>Referencia medida en macOS (capturas del 13-nov, paisaje de Tahoe). Oscuro: L 0.28 y croma 0.02 en casi toda la altura de la sidebar. Claro: L 0.91 y croma 0.006, casi gris. El fondo de detrás va de L 0.3 a 0.8 y tiene croma 0.07, así que el vidrio toma de él, en oscuro, cerca de un 12 % de su claridad y un 30 % de su croma; en claro, un 8 % de su claridad y solo un 9 % de su croma. Por eso el modo claro necesita otros valores: con los del oscuro se tiñe y se oscurece, y la sidebar parece transparente.</li>
+      <li><b>Rampa en el borde izquierdo</b>: en macOS la sidebar deja pasar más del fondo junto al borde izquierdo de la ventana (a 8 px, claridad 0.33 y croma 0.05 en oscuro; 0.91 y 0.04 en claro) y es plana a partir de unos 150 px. Con la rampa el borde sube un 12 % de claridad y un 40 % de croma y baja con una exponencial de 45 px.</li>
       <li>El panel de detalle queda casi neutro en macOS (croma 0.01), como el nuestro.</li>
     </ul>
   </section>
@@ -134,10 +136,12 @@
   const PANEL = { x: WIN.x + 8, y: WIN.y + 8, w: 168, h: WIN.h - 16, r: 12 };
   const DETAIL_X = PANEL.x + PANEL.w + 8;
 
-  const BEFORE = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5 }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5 } };
-  const AFTER = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6 }, light: { chroma: 0.09, cap: 0.03, lightness: 0.08, passes: 6 } };
+  const BEFORE = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5, edge: false }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5, edge: false } };
+  const AFTER = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6, edge: true }, light: { chroma: 0.09, cap: 0.03, lightness: 0.08, passes: 6, edge: true } };
   const RIM_CHROMA = 0.65;
   const KAWASE_SIGMA = 5 / 3;
+  // Measured on macOS: the sidebar lets more of the backdrop through at the window's left edge and is flat after about 150 px (0.56 scales the real window to this one).
+  const EDGE = { span: 45 * 0.56, chroma: 0.4, lightness: 0.12, cap: 0.06 };
   const BASE = { dark: '#1e1e1f', light: '#eceef2' };
   const WINDOW = { dark: '#232323', light: '#ffffff' };
   const RIM_BEFORE = { dark: [255, 255, 255, 0.078], light: [111, 118, 134, 0.3] };
@@ -306,7 +310,8 @@
       const sx = x0 + x, sy = y0 + y, d = roundedSdf(sx + 0.5, sy + 0.5, box, radius), cover = coverage(d);
       if (cover <= 0) continue;
       const i = (sy * stride + sx) * 4, q = toOklab(data[i], data[i + 1], data[i + 2]);
-      let color = takeTint(base, q, params.chroma, params.lightness, params.cap);
+      const edge = params.edge ? Math.exp(-Math.max(0, sx / S - WIN.x) / EDGE.span) : 0;
+      let color = takeTint(base, q, params.chroma + EDGE.chroma * edge, params.lightness + EDGE.lightness * edge, params.cap + EDGE.cap * edge);
       const ring = coverage(d) - coverage(d + width);
       if (ring > 0 && rim[3] > 0) {
         const tint = takeTint(toOklab(rim[0], rim[1], rim[2]), q, RIM_CHROMA, 0, params.cap), alpha = rim[3] * ring;
@@ -355,7 +360,7 @@
     drawContent(ctx, scheme);
   }
 
-  const describe = p => `croma ${p.chroma.toFixed(2)} · tope ${p.cap.toFixed(2)} · claridad ${p.lightness.toFixed(2)} · ${p.passes} pasadas`;
+  const describe = p => `croma ${p.chroma.toFixed(2)} · tope ${p.cap.toFixed(2)} · claridad ${p.lightness.toFixed(2)} · ${p.passes} pasadas${p.edge ? ' · rampa en el borde' : ''}`;
 
   function renderFixed() {
     const { scheme } = state;
@@ -373,7 +378,7 @@
       $('readout').textContent = `chroma.${mode} ${p.chroma.toFixed(2)} · chroma-cap.${mode} ${p.cap.toFixed(2)} · lightness.${mode} ${p.lightness.toFixed(2)} · blur-passes ${p.passes}`;
     });
   }
-  function syncSliders() { for (const key of ['chroma', 'cap', 'lightness', 'passes']) $(key).value = state.custom[key]; }
+  function syncSliders() { for (const key of ['chroma', 'cap', 'lightness', 'passes']) $(key).value = state.custom[key]; $('edge').checked = state.custom.edge; }
   function renderAll() { renderFixed(); renderCustom(); }
 
   function setScheme(scheme) {
@@ -384,6 +389,7 @@
   $('dark').onclick = () => setScheme('dark');
   $('light').onclick = () => setScheme('light');
   $('wallpaper').onchange = e => { state.wallpaper = e.target.value; renderAll(); };
+  $('edge').onchange = e => { state.custom.edge = e.target.checked; renderCustom(); };
   for (const key of ['chroma', 'cap', 'lightness', 'passes']) $(key).oninput = e => { state.custom[key] = Number(e.target.value); renderCustom(); };
   $('copy').onclick = async () => {
     const text = $('readout').textContent;
