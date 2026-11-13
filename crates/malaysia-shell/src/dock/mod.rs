@@ -55,7 +55,6 @@ use geometry::Slot;
 use items::{AppTile, Item};
 
 const DOMAIN: &str = "dock";
-const DOCK_BAR_LAYER: i16 = -4;
 const TRASH: &str = "trash:///";
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -575,9 +574,6 @@ impl App for DockApp {
 
         let resolved = bk::theme::resolved();
         let dock = resolved.dock;
-        let glass_rgba = resolved
-            .bar_tint
-            .map_or(dock.glass, |(tint, factor)| dock.glass.mix(tint, factor));
         let label_fill = theme::color(resolved.shell.bar);
         let ink = theme::color(resolved.shell.text);
         let progress_track = theme::color(resolved.shell.tile);
@@ -629,26 +625,7 @@ impl App for DockApp {
             })
         };
 
-        // A node's layer is its parent's plus its own plus one, and nodes of one layer paint in hash
-        // order: the bar's body must sit below the deepest-nested icon image, however shallow its tree.
-        let mut children: Vec<Element> = vec![
-            placed(bar)
-                .layer(DOCK_BAR_LAYER)
-                .child(bk::style::glass_edge(
-                    (bar.2, bar.3),
-                    radius,
-                    glass_rgba,
-                    rim::glass_rim(
-                        &wallpaper.read(),
-                        *toplevels.desktop.read(),
-                        config.orientation,
-                        (width, height),
-                        bar,
-                        dock,
-                    ),
-                ))
-                .into_element(),
-        ];
+        let mut children: Vec<Element> = Vec::new();
         let menu = Menus {
             frame,
             cross0,

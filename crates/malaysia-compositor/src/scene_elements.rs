@@ -1156,6 +1156,23 @@ pub(crate) fn physical_rect(rect: Rectangle<i32, Logical>, scale: f64) -> Rectan
     rect.to_f64().to_physical_precise_up(scale)
 }
 
+fn shader_rect(
+    frame_rect: Rectangle<i32, Physical>,
+    scale: f64,
+) -> (Rectangle<i32, Logical>, [f32; 4]) {
+    let area = crate::effects::shader_area(frame_rect, 1, scale);
+    let area_physical: Rectangle<i32, Physical> = area.to_physical_precise_round(scale);
+    (
+        area,
+        [
+            (frame_rect.loc.x - area_physical.loc.x) as f32,
+            (frame_rect.loc.y - area_physical.loc.y) as f32,
+            frame_rect.size.w as f32,
+            frame_rect.size.h as f32,
+        ],
+    )
+}
+
 pub(crate) fn border_shader(
     frame_rect: Rectangle<i32, Physical>,
     radius: i32,
@@ -1168,14 +1185,7 @@ pub(crate) fn border_shader(
     Vec<smithay::backend::renderer::gles::Uniform<'static>>,
 ) {
     use smithay::backend::renderer::gles::Uniform;
-    let area = crate::effects::shader_area(frame_rect, 1, scale);
-    let area_physical: Rectangle<i32, Physical> = area.to_physical_precise_round(scale);
-    let rect_local = [
-        (frame_rect.loc.x - area_physical.loc.x) as f32,
-        (frame_rect.loc.y - area_physical.loc.y) as f32,
-        frame_rect.size.w as f32,
-        frame_rect.size.h as f32,
-    ];
+    let (area, rect_local) = shader_rect(frame_rect, scale);
     let uniforms = vec![
         Uniform::new("rect", rect_local),
         Uniform::new("radius", radius as f32),
@@ -1317,6 +1327,7 @@ fn append_cards<R: MalaysiaRenderer>(
     let mut borders = Vec::new();
     let mut backdrops = Vec::new();
     let mut shadows = Vec::new();
+    let dock = crate::window_style::is_dock_layer(surface);
     for (index, card) in cards.rects.iter().enumerate() {
         let card = Rectangle::new(surface_rect.loc + card.loc, card.size);
         let (extent, exponent) =
@@ -1331,6 +1342,10 @@ fn append_cards<R: MalaysiaRenderer>(
             bordered: true,
             arrow: crate::effects::Arrow::default(),
         };
+        if dock {
+            backdrops.extend(dock_glass(state, surface, surface_rect.loc, &frame, scale));
+            continue;
+        }
         backdrops.extend(crate::blur::backdrop(
             state,
             surface,
@@ -1345,17 +1360,78 @@ fn append_cards<R: MalaysiaRenderer>(
         borders.extend(inner);
         shadows.extend(shadow);
     }
-    // macOS: magnified Dock icons rise over the bar's edge, so the Dock draws its own edges
-    // (`panel_edges`) under them and gets only the blur; a shadow would show through its glass.
-    let dock = crate::window_style::is_dock_layer(surface);
-    if !dock {
-        elements.extend(borders);
-    }
+    elements.extend(borders);
     elements.extend(surface_elements.into_iter().map(|e| e.into()));
     elements.extend(backdrops);
-    if !dock {
-        elements.extend(shadows);
+    elements.extend(shadows);
+}
+
+// macOS: magnified Dock icons rise over the bar's edge, so its glass and frame go under its surface,
+// and it has no shadow: one would show through the glass.
+fn dock_glass<R: MalaysiaRenderer>(
+    state: &mut State,
+    surface: &WlSurface,
+    origin: Point<i32, Logical>,
+    frame: &Frame,
+    scale: f64,
+) -> Vec<OutputRenderElement<R>> {
+    use smithay::backend::renderer::gles::Uniform;
+    let uniforms = dock_frame_uniforms(&state.chrome_theme.resolved);
+    let glass = crate::blur::dock(
+        state,
+        surface,
+        origin,
+        frame.rect,
+        frame.radius,
+        frame.exponent,
+        scale,
+        uniforms.clone(),
+    );
+    if !glass.is_empty() {
+        return glass;
     }
+    let Some(program) = state.dock_solid.clone() else {
+        return Vec::new();
+    };
+    let (area, rect) = shader_rect(frame.rect, scale);
+    let mut all = vec![
+        Uniform::new("rect", rect),
+        Uniform::new("radius", frame.radius as f32),
+        Uniform::new("scale", scale as f32),
+        Uniform::new("exponent", frame.exponent),
+    ];
+    all.extend(frame.arrow.uniforms(1.0));
+    all.extend(uniforms);
+    vec![
+        crate::renderer::PrimaryGpu(state.chrome.shader(
+            (frame.owner, crate::chrome::DOCK_SLOT),
+            &program,
+            area,
+            1.0,
+            all,
+        ))
+        .into(),
+    ]
+}
+
+fn dock_frame_uniforms(
+    resolved: &ctappearance::Resolved,
+) -> Vec<smithay::backend::renderer::gles::Uniform<'static>> {
+    use smithay::backend::renderer::gles::Uniform;
+    let dock = resolved.dock;
+    let glass = resolved
+        .bar_tint
+        .map_or(dock.glass, |(tint, factor)| dock.glass.mix(tint, factor));
+    let outline = dock.outline;
+    let glow = ctdesign::DOCK_RIM_GLOW;
+    vec![
+        Uniform::new("glass", [glass.r, glass.g, glass.b, glass.a]),
+        Uniform::new("rim", dock.rim),
+        Uniform::new("corner", dock.corner),
+        Uniform::new("outline", [outline.r, outline.g, outline.b, outline.a]),
+        Uniform::new("glow_near", [glow[0], glow[1], glow[2]]),
+        Uniform::new("glow_far", [glow[3], glow[4], glow[5]]),
+    ]
 }
 
 pub(crate) fn append_cursor<R: MalaysiaRenderer>(

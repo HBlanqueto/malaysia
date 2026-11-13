@@ -33,7 +33,7 @@ use crate::theme_fade::{ease, progress};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ChromeTheme {
     pub(crate) palette: Palette,
-    resolved: Resolved,
+    pub(crate) resolved: Resolved,
     scheme: ColorScheme,
     lights: [Rgba; 3],
     traffic_style: TrafficLightStyle,
@@ -121,6 +121,7 @@ fn signature(
 pub(crate) const OUTER_BORDER_SLOT: u8 = 0;
 pub(crate) const INNER_BORDER_SLOT: u8 = 1;
 const SHADOW_SLOT: u8 = 2;
+pub(crate) const DOCK_SLOT: u8 = u8::MAX;
 
 // The client picks the window width: past a GL texture side the titlebar's byte count overflows i32.
 const MAX_TITLEBAR_WIDTH: i32 = 16384;

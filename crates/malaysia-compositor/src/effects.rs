@@ -356,8 +356,8 @@ mod tests {
     use smithay::utils::{Logical, Physical, Point, Rectangle, Scale, Size};
 
     use super::{
-        compile_glass, compile_glass_rim, frame_to_texture_geometry, opaque_inside_frame,
-        shader_area, texture_radius,
+        compile_dock_glass, compile_dock_solid, compile_glass, compile_glass_rim,
+        frame_to_texture_geometry, opaque_inside_frame, shader_area, texture_radius,
     };
     use crate::test_support::try_test_renderer;
 
@@ -369,6 +369,8 @@ mod tests {
         };
         assert!(compile_glass(&mut renderer).is_some());
         assert!(compile_glass_rim(&mut renderer).is_some());
+        assert!(compile_dock_glass(&mut renderer).is_some());
+        assert!(compile_dock_solid(&mut renderer).is_some());
     }
 
     #[test]
@@ -523,6 +525,43 @@ pub(crate) fn compile_glass_rim(renderer: &mut GlesRenderer) -> Option<GlesTexPr
     )
     .inspect_err(|error| tracing::warn!(?error, "failed to compile glass rim shader"))
     .ok()
+}
+
+fn dock_frame_uniforms() -> [UniformName<'static>; 6] {
+    [
+        UniformName::new("glass", UniformType::_4f),
+        UniformName::new("rim", UniformType::_2f),
+        UniformName::new("corner", UniformType::_3f),
+        UniformName::new("outline", UniformType::_4f),
+        UniformName::new("glow_near", UniformType::_3f),
+        UniformName::new("glow_far", UniformType::_3f),
+    ]
+}
+
+pub(crate) fn compile_dock_glass(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
+    compile_wallpaper_shape(
+        renderer,
+        grade_graphics::shaders::DOCK_GLASS,
+        &dock_frame_uniforms(),
+    )
+    .inspect_err(|error| tracing::warn!(?error, "failed to compile Dock glass shader"))
+    .ok()
+}
+
+pub(crate) fn compile_dock_solid(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
+    let mut uniforms = vec![
+        UniformName::new("rect", UniformType::_4f),
+        UniformName::new("radius", UniformType::_1f),
+        UniformName::new("scale", UniformType::_1f),
+        UniformName::new("exponent", UniformType::_1f),
+        UniformName::new("arrow", UniformType::_4f),
+        UniformName::new("arrow_slope", UniformType::_1f),
+    ];
+    uniforms.extend(dock_frame_uniforms());
+    renderer
+        .compile_custom_pixel_shader(grade_graphics::shaders::DOCK_SOLID, &uniforms)
+        .inspect_err(|error| tracing::warn!(?error, "failed to compile Dock solid shader"))
+        .ok()
 }
 
 // The shape uniforms every RoundedTextureElement sends, then the ones of the shader itself.

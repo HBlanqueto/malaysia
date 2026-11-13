@@ -108,9 +108,45 @@ pub(crate) fn backdrop<R: MalaysiaRenderer>(
     exponent: f32,
     scale: f64,
 ) -> Vec<OutputRenderElement<R>> {
-    sampled(state, surface, origin, scale, |dst| {
-        Some((dst.intersection(frame)?, frame, radius, exponent))
-    })
+    sampled(
+        state,
+        surface,
+        origin,
+        scale,
+        state.rounded_clip.clone(),
+        Vec::new(),
+        |dst| Some((dst.intersection(frame)?, frame, radius, exponent)),
+    )
+}
+
+// One pixel wider than the bar: the outline lies outside it.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn dock<R: MalaysiaRenderer>(
+    state: &State,
+    surface: &WlSurface,
+    origin: Point<i32, Logical>,
+    frame: Rectangle<i32, Physical>,
+    radius: i32,
+    exponent: f32,
+    scale: f64,
+    uniforms: Vec<Uniform<'static>>,
+) -> Vec<OutputRenderElement<R>> {
+    let ring = Rectangle::new(
+        (frame.loc.x - 1, frame.loc.y - 1).into(),
+        (frame.size.w + 2, frame.size.h + 2).into(),
+    );
+    sampled(
+        state,
+        surface,
+        origin,
+        scale,
+        state.dock_glass.clone(),
+        uniforms,
+        |dst| {
+            dst.overlaps(frame)
+                .then_some((ring, frame, radius, exponent))
+        },
+    )
 }
 
 // ADR 0075: a rectangle shorter than the menu bar is its selection pill, rounded like it.
@@ -122,15 +158,23 @@ pub(crate) fn layer<R: MalaysiaRenderer>(
     scale: f64,
 ) -> Vec<OutputRenderElement<R>> {
     let pill = (f64::from(ctdesign::MENU_LIGHT.bar_title_open_radius) * scale).round() as i32;
-    sampled(state, surface, origin, scale, |dst| {
-        let dst = dst.intersection(frame)?;
-        let radius = if dst.size.h < frame.size.h {
-            pill.min(dst.size.h / 2)
-        } else {
-            0
-        };
-        Some((dst, dst, radius, CIRCLE_EXPONENT))
-    })
+    sampled(
+        state,
+        surface,
+        origin,
+        scale,
+        state.rounded_clip.clone(),
+        Vec::new(),
+        |dst| {
+            let dst = dst.intersection(frame)?;
+            let radius = if dst.size.h < frame.size.h {
+                pill.min(dst.size.h / 2)
+            } else {
+                0
+            };
+            Some((dst, dst, radius, CIRCLE_EXPONENT))
+        },
+    )
 }
 
 // ADR 0074: the lock screen's blur rectangles are its capsule-shaped fields.
@@ -139,9 +183,15 @@ pub(crate) fn capsules<R: MalaysiaRenderer>(
     surface: &WlSurface,
     scale: f64,
 ) -> Vec<OutputRenderElement<R>> {
-    sampled(state, surface, Point::default(), scale, |dst| {
-        Some((dst, dst, dst.size.w.min(dst.size.h) / 2, CIRCLE_EXPONENT))
-    })
+    sampled(
+        state,
+        surface,
+        Point::default(),
+        scale,
+        state.rounded_clip.clone(),
+        Vec::new(),
+        |dst| Some((dst, dst, dst.size.w.min(dst.size.h) / 2, CIRCLE_EXPONENT)),
+    )
 }
 
 const CIRCLE_EXPONENT: f32 = 2.0;
@@ -151,6 +201,8 @@ fn sampled<R: MalaysiaRenderer>(
     surface: &WlSurface,
     origin: Point<i32, Logical>,
     scale: f64,
+    program: Option<GlesTexProgram>,
+    uniforms: Vec<Uniform<'static>>,
     shape: impl Fn(
         Rectangle<i32, Physical>,
     ) -> Option<(Rectangle<i32, Physical>, Rectangle<i32, Physical>, i32, f32)>,
@@ -161,7 +213,7 @@ fn sampled<R: MalaysiaRenderer>(
             .as_ref()
             .and_then(|blur| sampled_cache(blur, surface))
             .filter(|_| drawn(state)),
-        state.rounded_clip.clone(),
+        program,
     ) else {
         return Vec::new();
     };
@@ -206,6 +258,7 @@ fn sampled<R: MalaysiaRenderer>(
                     exponent,
                     program.clone(),
                 )
+                .with_uniforms(uniforms.clone())
                 .into(),
             )
         })

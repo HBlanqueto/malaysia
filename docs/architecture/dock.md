@@ -47,30 +47,28 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    there), so clicks above it reach the windows.
 5. **Frame.** The bar is a card (ADR 0068) with a continuous corner of
    `DOCK_RADIUS` × its thickness. The compositor knows the Dock by its
-   namespace (`DOCK_LAYER_NAMESPACE`) and gives that card only the blur of
-   `set_blur_region`, clipped to the corner, and no shadow: it would show
-   through the translucent fill. The Dock
-   draws its glass and its frame itself, with `bk::style::glass_edge`, under its
-   icons, so magnified icons rise over the bar's edge. The frame is two lines, as
+   namespace (`DOCK_LAYER_NAMESPACE`) and draws the card's glass and frame
+   itself, under the Dock's surface, so magnified icons rise over the bar's
+   edge (`scene_elements::dock_glass`, shader `grade-graphics/dock_frame.glsl`).
+   It gives the card no shadow: it would show through the glass. The Dock
+   draws only its icons, dividers and labels. The frame is two lines, as
    macOS draws it ([`dock-macos-measured.html`](dock-macos-measured.html) shows
    four captures next to their reproduction): a dark outline one pixel outside
    the glass, strongest on the sides, and a light rim one pixel inside it, with a
-   glow that dies away over a few pixels, strongest on top and bottom. Around
+   glow that dies away over `DOCK_RIM_GLOW`, strongest on top and bottom. Around
    each corner the rim dies away and the outline takes over by the angle of the
-   frame (`ctdesign::dock_rim_light_share`, `dock_rim_dark_share`, measured per
-   mode in `DockSurface::corner`).
-   The rim and the dividers follow the glass: `ctdesign::dock_rim` and
-   `dock_divider` take the luminance the glass shows over the wallpaper and move
-   it (the rim's by `lift + share ×` that luminance, a fixed step in light and a
-   shrinking one in dark; the divider's by a fixed step), so they fade and
-   come back along the bar as the wallpaper changes. `dock/rim.rs` reads the
-   wallpaper just outside each `SEGMENT` pixels of the edge and behind each
-   divider. A Dock on the left or right takes one colour from the wallpaper
-   around the whole bar. The glass, outline and the two steps are
-   `ctdesign::DockSurface` (`resolved.dock`): a grey with some opacity in light
-   and in dark, solved from captures over black and over grey; with
+   frame's normal (`DockSurface::corner`, measured per mode).
+   The rim and the dividers follow the glass: they take the luminance the glass
+   shows over what is behind it and move it (the rim's to `lift + share ×` that
+   luminance, a fixed step in light and a shrinking one in dark; the divider's
+   by a fixed step, `ctdesign::dock_divider`), so they fade and come back along
+   the bar. The compositor reads the rim's backdrop pixel by pixel from the
+   Dock's blur; `dock/rim.rs` reads the wallpaper behind each divider. The
+   glass, outline and the two steps are `ctdesign::DockSurface`
+   (`resolved.dock`): a grey with some opacity in light and in dark, solved
+   from captures over black and over grey; with
    `appearance.reduce_transparency` the glass is a solid grey, as in macOS, and
-   rim and divider come out of the same formulas. As in macOS the glass is a
+   the compositor draws it without a blur. As in macOS the glass is a
    thin veil over the blur, so the wallpaper and the windows that pass behind
    the Dock show through (ADR 0071, `"behind"`). It takes the bar tint only
    with `bars` in `appearance.tint_parts`.

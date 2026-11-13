@@ -13,16 +13,6 @@ uniform vec4 glow;
 uniform float glow_depth;
 uniform float alpha;
 
-float vertical_normal(vec2 px) {
-    vec2 dx = vec2(0.5, 0.0);
-    vec2 dy = vec2(0.0, 0.5);
-    vec2 gradient = vec2(
-        frame_sdf(px + dx, rect, radius, exponent) - frame_sdf(px - dx, rect, radius, exponent),
-        frame_sdf(px + dy, rect, radius, exponent) - frame_sdf(px - dy, rect, radius, exponent)
-    );
-    return abs(gradient.y) / max(length(gradient), 0.0001);
-}
-
 void main() {
     vec2 px = v_coords * size * scale;
     float dist = frame_sdf(px, rect, radius, exponent);
@@ -34,7 +24,7 @@ void main() {
         coverage = window_coverage(dist) - window_coverage(dist + width);
     }
 
-    float vertical = vertical_normal(px);
+    float vertical = vertical_normal(px, rect, radius, exponent);
     vec4 tint = mix(color, edge_color, vertical) * coverage;
     float below_line = -dist - width;
     if (side < 0.0 && below_line > 0.0 && below_line < glow_depth) {

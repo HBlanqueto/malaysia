@@ -25,6 +25,10 @@ pub mod shaders {
     pub const MINIMIZE: &str = texture_shader!("minimize.frag");
     pub const BLUR_DOWN: &str = texture_shader!("blur_down.frag");
     pub const BLUR_UP: &str = texture_shader!("blur_up.frag");
+    pub const DOCK_GLASS: &str =
+        texture_shader!("window_shape.glsl", "dock_frame.glsl", "dock_glass.frag");
+    pub const DOCK_SOLID: &str =
+        pixel_shader!("window_shape.glsl", "dock_frame.glsl", "dock_solid.frag");
     pub const SHADOW: &str = pixel_shader!("window_shape.glsl", "shadow.frag");
     pub const BORDER: &str = pixel_shader!("window_shape.glsl", "border.frag");
 }

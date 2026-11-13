@@ -41,3 +41,13 @@ float frame_sdf(vec2 p, vec4 rect, float radius, float exponent) {
 float window_coverage(float dist) {
     return clamp(0.5 - dist, 0.0, 1.0);
 }
+
+float vertical_normal(vec2 p, vec4 rect, float radius, float exponent) {
+    vec2 dx = vec2(0.5, 0.0);
+    vec2 dy = vec2(0.0, 0.5);
+    vec2 gradient = vec2(
+        frame_sdf(p + dx, rect, radius, exponent) - frame_sdf(p - dx, rect, radius, exponent),
+        frame_sdf(p + dy, rect, radius, exponent) - frame_sdf(p - dy, rect, radius, exponent)
+    );
+    return abs(gradient.y) / max(length(gradient), 0.0001);
+}
