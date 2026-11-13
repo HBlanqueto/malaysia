@@ -22,6 +22,17 @@ use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 use crate::state::State;
 
 const DURATION: Duration = Duration::from_millis(ctdesign::DOCK_MINIMIZE_MS);
+const HANDOFF: Duration = Duration::from_millis(ctdesign::DOCK_MINIMIZE_HANDOFF_MS);
+
+impl Minimizing {
+    // A thumbnail that has just been built stays drawn while the Dock's tile takes over under it.
+    fn lasts(&self) -> Duration {
+        match (&self.thumbnail, self.hiding) {
+            (Some(_), true) => DURATION + HANDOFF,
+            _ => DURATION,
+        }
+    }
+}
 
 pub(crate) struct Minimizing {
     pub(crate) window: WindowId,
@@ -160,7 +171,7 @@ pub(crate) fn append<R: MalaysiaRenderer>(
 ) {
     state
         .minimizing
-        .retain(|effect| now.saturating_duration_since(effect.start) < DURATION);
+        .retain(|effect| now.saturating_duration_since(effect.start) < effect.lasts());
     let Some(program) = state.minimize_program.clone() else {
         return;
     };
