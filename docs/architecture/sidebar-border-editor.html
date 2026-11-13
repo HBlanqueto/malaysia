@@ -101,7 +101,7 @@
       <h2>Algoritmo derivado: como mide macOS</h2>
       <ol>
         <li>Calcula el color del relleno en ese punto, con las mismas cuentas del material.</li>
-        <li>La línea es ese color, más claro y más saturado: <code>L = L del relleno + sube</code> y <code>croma = croma del relleno × croma×</code>, con su propio tope y el mismo tono.</li>
+        <li>La línea es ese color, más claro y más saturado: <code>L = L del relleno + sube</code> y <code>croma = croma del relleno × croma×</code>, con su propio tope y el mismo tono. Sube más donde asoma el fondo (izquierda, arriba y abajo) que en el lado del contenido.</li>
         <li>Es sólida: opacidad 1. En la captura de Atajos: relleno L 0.254, croma 0.058, tono 279°; línea L 0.350, croma 0.082, tono 280°. Es decir, sube 0.096 y el croma ×1.41.</li>
       </ol>
     </div>
@@ -144,6 +144,23 @@
     </div>
   </section>
 
+  <section class="panel">
+    <h2>Todo el borde, lado por lado</h2>
+    <p style="margin-bottom:12px">El borde no es uniforme: en macOS cambia de color y de brillo según el lado. La línea toma siempre el tono del relleno que tiene al lado, y el relleno cambia con el fondo que asoma por la izquierda, arriba y abajo, y no por la derecha, donde está el contenido.</p>
+    <div class="trio">
+      <figure><canvas id="full-now" role="img" aria-label="La isla entera con lo que lleva Malaysia ahora"></canvas><figcaption><b>Ahora en el compositor</b></figcaption></figure>
+      <figure><canvas id="full-macos" role="img" aria-label="La isla entera con el algoritmo derivado y los valores de macOS"></canvas><figcaption><b>Derivado, como macOS</b></figcaption></figure>
+      <figure><canvas id="full-custom" role="img" aria-label="La isla entera con tu ajuste"></canvas><figcaption><b>Tu ajuste</b></figcaption></figure>
+    </div>
+    <div class="scroll" style="margin-top:12px">
+      <table>
+        <thead><tr><th>Fuente</th><th>Izquierda</th><th>Arriba</th><th>Abajo</th><th>Derecha</th></tr></thead>
+        <tbody id="sides"></tbody>
+      </table>
+    </div>
+    <p style="margin-top:10px">Cada celda es la línea (L · croma · tono) y, debajo, cuánto sube sobre el relleno y su croma respecto al del relleno. El tono se omite cuando el croma es menor de 0.012. La captura de Malaysia mide el borde inferior en un píxel que casi no se distingue del relleno.</p>
+  </section>
+
   <section class="trio" aria-label="Esquina">
     <figure>
       <canvas id="now" role="img" aria-label="Esquina de la isla con lo que lleva Malaysia ahora"></canvas>
@@ -174,7 +191,7 @@
     <ul class="notes">
       <li>Las dos capturas usan fondos azul y violeta con croma parecido (0.18 a 0.22), así que se pueden comparar, pero son de apps distintas. Compara las relaciones, no los colores absolutos: cuánto más clara y más saturada es la línea que el relleno, y cuánto más oscuro es el marco.</li>
       <li>El modelo dibuja un fondo propio en degradado. Con él, el relleno sale con el croma y el tono que le da el fondo, igual que en el compositor.</li>
-      <li>La rampa del borde del relleno queda con tus valores de oscuro (intensidad 0.70, caída 28 px, croma 0.25, claridad 0.10, tope 0.18) y no se edita aquí.</li>
+      <li>La rampa del borde del relleno parte de tus valores de oscuro (intensidad 0.70, caída 28 px, croma 0.25; claridad 0.10 y tope 0.18 fijos). Es lo que da al relleno su color cerca del borde, y la línea derivada lo hereda.</li>
       <li>En el algoritmo derivado el tope de la línea corta el croma de golpe, sin suavizarlo, para que el valor sea el que escribes.</li>
       <li>Para llevar el derivado al compositor, el shader de la línea calcularía el relleno con los mismos valores del material, y habría tokens nuevos para el tope de la línea, lo que sube y el factor de croma. Lo de ahora (capa encima) no los necesita, pero su tope es el del vidrio.</li>
     </ul>
@@ -186,20 +203,33 @@
   const PW = 140, PH = 112, Z = 4;
   const WINDOW_BOX = { x: 24, y: PH - 20 - 800, w: 800, h: 800 }, WINDOW_R = 26;
   const ISLAND_BOX = { x: 32, y: PH - 28 - 780, w: 224, h: 780 }, ISLAND_R = 18;
-  const EDGE = { intensity: 0.7, span: 28, chroma: 0.25, lightness: 0.1, cap: 0.18, offset: 11 };
+  const EDGE = { lightness: 0.1, cap: 0.18, offset: 11 };
   const SOLID_TINT = 0.3;
   const STRIP_X = 20, STRIP_Y = 40.5;
   const SCENES = {
-    violet: { top: [84, 48, 208], bottom: [6, 36, 160] },
-    landscape: { top: [63, 143, 203], bottom: [14, 111, 144] },
+    violet: { top: [84, 48, 208], bottom: [6, 36, 160], right: [132, 46, 168] },
+    landscape: { top: [63, 143, 203], bottom: [14, 111, 144], right: [63, 143, 203] },
   };
-  const NOW = { algo: 'overlay', baseL: 0.273, chroma: 0.05, cap: 0.02, alpha: 0.03, width: 1, tint: 1, rimCap: 0.02, rimL: 1, lift: 0.096, boost: 1.41, frameL: 0.257, frameTint: 0.1 };
-  const MACOS = { algo: 'derived', baseL: 0.251, chroma: 0.3, cap: 0.06, alpha: 1, width: 1, tint: 1, rimCap: 0.25, rimL: 1, lift: 0.096, boost: 1.41, frameL: 0.234, frameTint: 0.19 };
+  const CORNER = { w: PW, h: PH, window: WINDOW_BOX, island: ISLAND_BOX };
+  const FULL = { w: 330, h: 330, window: { x: 20, y: 20, w: 300, h: 290 }, island: { x: 28, y: 28, w: 216, h: 274 }, contentX: 252 };
+  const CONTENT = [32, 34, 43];
+  const NOW = { algo: 'overlay', baseL: 0.273, chroma: 0.05, cap: 0.02, alpha: 0.03, width: 1, tint: 1, rimCap: 0.02, rimL: 1, lift: 0.096, liftEdge: 0, boost: 1.41, frameL: 0.257, frameTint: 0.1, edgeIntensity: 0.7, edgeSpan: 28, edgeChroma: 0.25 };
+  const MACOS = { algo: 'derived', baseL: 0.245, chroma: 0.05, cap: 0.04, alpha: 1, width: 1, tint: 1, rimCap: 0.25, rimL: 1, lift: 0.06, liftEdge: 0.05, boost: 1.35, frameL: 0.234, frameTint: 0.19, edgeIntensity: 0.7, edgeSpan: 60, edgeChroma: 0.45 };
   const MEASURED = [
     { name: 'macOS, Atajos', note: 'captura a media escala', frame: [5, 8], line: [9, 10], fill: [13, 19],
       cells: [[2, 16, 82], [3, 13, 80], [4, 12, 66], [9, 14, 41], [56, 60, 76], [25, 28, 47], [24, 28, 47], [23, 29, 46], [23, 28, 53], [32, 34, 79], [51, 52, 100], [25, 28, 64], [30, 34, 62], [29, 32, 59], [29, 31, 60], [29, 31, 62], [29, 30, 64], [29, 30, 64], [29, 30, 64], [29, 31, 62]] },
     { name: 'Malaysia, Ajustes', note: 'captura de la pantalla', frame: [5, 10], line: [12, 12], fill: [14, 19],
       cells: [[20, 52, 122], [24, 50, 110], [29, 47, 89], [0, 5, 30], [52, 57, 68], [32, 35, 41], [33, 34, 43], [33, 34, 43], [32, 35, 45], [32, 35, 45], [30, 36, 43], [27, 35, 44], [41, 50, 65], [33, 41, 59], [33, 41, 61], [33, 41, 61], [33, 41, 59], [33, 41, 59], [33, 40, 58], [33, 40, 58]] },
+  ];
+  const SIDES = ['left', 'top', 'bottom', 'right'];
+  const SIDE_NAMES = { left: 'Izquierda', top: 'Arriba', bottom: 'Abajo', right: 'Derecha' };
+  const MEASURED_SIDES = [
+    { name: 'macOS, Atajos', note: 'cada lado, promedio de 5 a 10 puntos',
+      left: { L: 0.368, C: 0.088, h: 283, fL: 0.257, fC: 0.065 }, top: { L: 0.344, C: 0.082, h: 288, fL: 0.243, fC: 0.074 },
+      bottom: { L: 0.370, C: 0.078, h: 279, fL: 0.259, fC: 0.058 }, right: { L: 0.328, C: 0.016, h: 306, fL: 0.252, fC: 0.020 } },
+    { name: 'Malaysia, Ajustes', note: 'captura de la pantalla',
+      left: { L: 0.314, C: 0.031, h: 268, fL: 0.280, fC: 0.036 }, top: { L: 0.310, C: 0.027, h: 272, fL: 0.281, fC: 0.042 },
+      bottom: { L: 0.288, C: 0.036, h: 263, fL: 0.283, fC: 0.034 }, right: { L: 0.298, C: 0.015, h: 268, fL: 0.276, fC: 0.016 } },
   ];
   const MODEL_RANGES = { frame: [5, 11], line: [12, 12], fill: [14, 19] };
 
@@ -242,23 +272,29 @@
   }
   const cover = d => clamp(0.5 - d, 0, 1);
 
-  const wall = (px, py) => { const s = SCENES[state.wallpaper]; return mix(s.bottom, s.top, clamp(0.9 - (py / PH) * 0.9 + (px / PW) * 0.1, 0, 1)); };
+  const wall = (px, py, l) => {
+    const scene = SCENES[state.wallpaper], t = clamp(0.9 - (py / l.h) * 0.9 + (px / l.w) * 0.1, 0, 1);
+    return mix(mix(scene.bottom, scene.top, t), scene.right, clamp((px / l.w - 0.45) * 1.4, 0, 0.7));
+  };
 
-  function pixelColor(px, py, p) {
-    const meanLab = toLab(mix(SCENES[state.wallpaper].bottom, SCENES[state.wallpaper].top, 0.5));
-    const backdrop = wall(px, py), q = toLab(backdrop);
+  function pixelColor(px, py, p, l = CORNER) {
+    const scene = SCENES[state.wallpaper], meanLab = toLab(mix(scene.bottom, scene.top, 0.5));
+    const backdrop = wall(px, py, l), q = toLab(backdrop), W = l.window, I = l.island;
     const frame = toRgb(tintLab([p.frameL, 0, 0], meanLab, p.frameTint, 0, 0.2));
-    const dW = boxSdf(px, py, WINDOW_BOX, WINDOW_R), dI = boxSdf(px, py, ISLAND_BOX, ISLAND_R);
+    const dW = boxSdf(px, py, W, WINDOW_R), dI = boxSdf(px, py, I, ISLAND_R);
     let c = mix(backdrop, mix(backdrop, [0, 0, 0], 0.9), cover(dW - 1) - cover(dW));
     c = mix(c, frame, cover(dW));
-    c = mix(c, mix(frame, [255, 255, 255], 0.1), cover(dW) - cover(dW + 1));
+    if (l.contentX && px >= l.contentX) c = mix(c, CONTENT, cover(dW));
+    c = mix(c, mix(l.contentX && px >= l.contentX ? CONTENT : frame, [255, 255, 255], 0.1), cover(dW) - cover(dW + 1));
     if (cover(dI) <= 0) return c;
     const solid = tintLab([p.baseL, 0, 0], meanLab, SOLID_TINT, 0, p.cap);
     const centre = p.chroma > 0 ? tintLab(solid, q, p.chroma, 0, p.cap) : solid;
-    const left = Math.exp(-Math.max(px - ISLAND_BOX.x, 0) / EDGE.span), bottom = Math.exp(-Math.max(ISLAND_BOX.y + ISLAND_BOX.h - py, 0) / EDGE.span);
-    const outside = [0, 1, 2].map(k => (left * toLab(wall(WINDOW_BOX.x - EDGE.offset, py))[k] + bottom * toLab(wall(px, WINDOW_BOX.y + WINDOW_BOX.h + EDGE.offset))[k]) / (left + bottom));
-    const edge = tintLab([p.baseL, 0, 0], outside, EDGE.chroma, EDGE.lightness, EDGE.cap);
-    const fill = mix(centre, edge, Math.max(left, bottom) * EDGE.intensity);
+    const left = Math.exp(-Math.max(px - I.x, 0) / p.edgeSpan), top = Math.exp(-Math.max(py - I.y, 0) / p.edgeSpan), bottom = Math.exp(-Math.max(I.y + I.h - py, 0) / p.edgeSpan);
+    const taken = [toLab(wall(W.x - EDGE.offset, py, l)), toLab(wall(px, W.y - EDGE.offset, l)), toLab(wall(px, W.y + W.h + EDGE.offset, l))];
+    const outside = [0, 1, 2].map(k => (left * taken[0][k] + top * taken[1][k] + bottom * taken[2][k]) / (left + top + bottom + 1e-9));
+    const ramp = Math.max(left, top, bottom);
+    const edge = tintLab([p.baseL, 0, 0], outside, p.edgeChroma, EDGE.lightness, EDGE.cap);
+    const fill = mix(centre, edge, ramp * p.edgeIntensity);
     c = mix(c, toRgb(fill), cover(dI));
     const band = cover(dI) - cover(dI + p.width);
     if (band <= 0 || p.alpha <= 0) return c;
@@ -266,7 +302,7 @@
     if (p.algo === 'overlay') rim = toRgb(tintLab([p.rimL, 0, 0], q, p.tint, 0, p.rimCap));
     else {
       const chroma = Math.hypot(fill[1], fill[2]), target = Math.min(chroma * p.boost, p.rimCap), k = chroma > 1e-6 ? target / chroma : 0;
-      rim = toRgb([Math.min(1, fill[0] + p.lift), fill[1] * k, fill[2] * k]);
+      rim = toRgb([Math.min(1, fill[0] + p.lift + p.liftEdge * ramp), fill[1] * k, fill[2] * k]);
     }
     return mix(c, rim, band * p.alpha);
   }
@@ -291,35 +327,62 @@
     const rows = [
       ...MEASURED.map(m => ({ name: m.name, note: m.note, cells: m.cells, ranges: m })),
       { name: 'Modelo: ahora', note: 'capa encima, tokens', cells: modelCells(NOW), ranges: MODEL_RANGES },
-      { name: 'Modelo: derivado, como macOS', note: 'sube 0.096, croma ×1.41', cells: modelCells(MACOS), ranges: MODEL_RANGES },
+      { name: 'Modelo: derivado, como macOS', note: 'sube 0.06 (+0.05 con fondo), croma ×1.35', cells: modelCells(MACOS), ranges: MODEL_RANGES },
       { name: 'Modelo: tu ajuste', note: state.params.algo === 'overlay' ? 'capa encima' : 'derivado', cells: modelCells(state.params), ranges: MODEL_RANGES },
     ];
     $('strips').innerHTML = rows.map(r => `<div class="strip-row"><div class="strip-name">${r.name}<span>${r.note}</span></div><div class="cells" role="img" aria-label="${r.name}">${swatches(r.cells)}</div></div>`).join('');
     $('metrics').innerHTML = rows.map(r => row(r.name, r.note, r.cells, r.ranges).html).join('');
   }
 
-  function renderCorner(canvas, p) {
-    canvas.width = PW * Z; canvas.height = PH * Z;
-    const ctx = canvas.getContext('2d'), image = ctx.createImageData(PW * Z, PH * Z);
-    for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
-      const [r, g, b] = pixelColor(x + 0.5, y + 0.5, p);
-      for (let dy = 0; dy < Z; dy++) for (let dx = 0; dx < Z; dx++) {
-        const o = (((y * Z + dy) * PW * Z) + x * Z + dx) * 4;
+  function renderLayout(canvas, p, l, zoom) {
+    canvas.width = l.w * zoom; canvas.height = l.h * zoom;
+    const ctx = canvas.getContext('2d'), image = ctx.createImageData(l.w * zoom, l.h * zoom);
+    for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) {
+      const [r, g, b] = pixelColor(x + 0.5, y + 0.5, p, l);
+      for (let dy = 0; dy < zoom; dy++) for (let dx = 0; dx < zoom; dx++) {
+        const o = (((y * zoom + dy) * l.w * zoom) + x * zoom + dx) * 4;
         image.data[o] = r; image.data[o + 1] = g; image.data[o + 2] = b; image.data[o + 3] = 255;
       }
     }
     ctx.putImageData(image, 0, 0);
   }
+  const renderCorner = (canvas, p) => renderLayout(canvas, p, CORNER, Z);
+
+  // The line and the fill at five points along each side of the full island, as Oklab L, chroma and hue.
+  function sideStats(p) {
+    const I = FULL.island, at = (i, n) => (i + 0.5) / n, n = 5, inward = 8, out = {};
+    const spots = {
+      left: Array.from({ length: n }, (_, i) => [I.x + 0.5, I.y + 50 + at(i, n) * (I.h - 100), inward, 0]),
+      right: Array.from({ length: n }, (_, i) => [I.x + I.w - 0.5, I.y + 50 + at(i, n) * (I.h - 100), -inward, 0]),
+      top: Array.from({ length: n }, (_, i) => [I.x + 50 + at(i, n) * (I.w - 100), I.y + 0.5, 0, inward]),
+      bottom: Array.from({ length: n }, (_, i) => [I.x + 50 + at(i, n) * (I.w - 100), I.y + I.h - 0.5, 0, -inward]),
+    };
+    for (const side of SIDES) {
+      const rim = spots[side].map(([x, y]) => toLab(pixelColor(x, y, p, FULL))), fill = spots[side].map(([x, y, dx, dy]) => toLab(pixelColor(x + dx, y + dy, p, FULL)));
+      const mean = list => [0, 1, 2].map(k => list.reduce((sum, v) => sum + v[k], 0) / list.length);
+      const r = lch(mean(rim)), f = lch(mean(fill));
+      out[side] = { L: r.L, C: r.C, h: r.h, fL: f.L, fC: f.C };
+    }
+    return out;
+  }
+  function sidesTable() {
+    const rows = [...MEASURED_SIDES, { name: 'Modelo: ahora', note: 'capa encima, tokens', sides: sideStats(NOW) }, { name: 'Modelo: derivado, como macOS', note: 'sube por lado, croma ×1.35', sides: sideStats(MACOS) }, { name: 'Modelo: tu ajuste', note: state.params.algo === 'overlay' ? 'capa encima' : 'derivado', sides: sideStats(state.params) }];
+    const cell = d => `<td class="num">${f2(d.L)} · ${f2(d.C)} · ${d.C < 0.012 ? '—' : f0(d.h) + '°'}<br><span class="muted">${d.L - d.fL >= 0 ? '+' : ''}${f2(d.L - d.fL)} · croma ×${(d.C / Math.max(d.fC, 1e-6)).toFixed(2)}</span></td>`;
+    $('sides').innerHTML = rows.map(r => `<tr><td>${r.name}<br><span class="muted">${r.note}</span></td>${SIDES.map(side => cell((r.sides || r)[side])).join('')}</tr>`).join('');
+  }
   const f2s = v => v.toFixed(2);
   const describe = p => p.algo === 'overlay'
     ? `capa encima · opacidad ${f2s(p.alpha)} · tinte ${f2s(p.tint)} · tope ${f2s(p.rimCap)} · ancho ${p.width} px`
-    : `derivado · sube ${p.lift.toFixed(3)} · croma ×${f2s(p.boost)} · tope ${f2s(p.rimCap)} · opacidad ${f2s(p.alpha)} · ancho ${p.width} px`;
+    : `derivado · sube ${p.lift.toFixed(3)} (+${p.liftEdge.toFixed(3)} donde asoma el fondo) · croma ×${f2s(p.boost)} · tope ${f2s(p.rimCap)} · opacidad ${f2s(p.alpha)} · ancho ${p.width} px`;
 
   const SLIDERS = [
     { title: 'Relleno', note: 'De él depende la línea derivada.', items: [
       { key: 'baseL', label: 'Base (L)', min: 0.2, max: 0.32, step: 0.005, digits: 3 },
       { key: 'chroma', label: 'Croma del fondo', min: 0, max: 1, step: 0.05, digits: 2 },
       { key: 'cap', label: 'Tope de croma', min: 0.02, max: 0.2, step: 0.01, digits: 2 },
+      { key: 'edgeIntensity', label: 'Fondo en el borde', min: 0, max: 1.2, step: 0.05, digits: 2 },
+      { key: 'edgeSpan', label: 'Caída del borde (px)', min: 10, max: 240, step: 2, digits: 0 },
+      { key: 'edgeChroma', label: 'Croma del borde', min: 0, max: 1, step: 0.05, digits: 2 },
     ] },
     { title: 'Línea', note: 'Opacidad y ancho valen para los dos algoritmos.', items: [
       { key: 'alpha', label: 'Opacidad', min: 0, max: 1, step: 0.01, digits: 2 },
@@ -328,6 +391,7 @@
       { key: 'tint', label: 'Tinte', min: 0, max: 1, step: 0.05, digits: 2, algo: 'overlay' },
       { key: 'rimL', label: 'Base de la línea (L)', min: 0, max: 1, step: 0.05, digits: 2, algo: 'overlay' },
       { key: 'lift', label: 'Sube (L)', min: 0, max: 0.3, step: 0.005, digits: 3, algo: 'derived' },
+      { key: 'liftEdge', label: 'Sube más con fondo (L)', min: 0, max: 0.15, step: 0.005, digits: 3, algo: 'derived' },
       { key: 'boost', label: 'Croma ×', min: 0, max: 3, step: 0.05, digits: 2, algo: 'derived' },
     ] },
     { title: 'Marco', note: 'La franja de la ventana entre su contorno y la isla.', items: [
@@ -339,14 +403,15 @@
   function readout() {
     const p = state.params;
     return [`modo oscuro · algoritmo ${p.algo === 'overlay' ? 'capa encima' : 'derivado'}`,
-      `relleno: base L ${p.baseL.toFixed(3)} · croma ${f2s(p.chroma)} · tope ${f2s(p.cap)}`,
-      `línea: opacidad ${f2s(p.alpha)} · ancho ${p.width} px · tope ${f2s(p.rimCap)}` + (p.algo === 'overlay' ? ` · tinte ${f2s(p.tint)} · base L ${f2s(p.rimL)}` : ` · sube ${p.lift.toFixed(3)} · croma ×${f2s(p.boost)}`),
+      `relleno: base L ${p.baseL.toFixed(3)} · croma ${f2s(p.chroma)} · tope ${f2s(p.cap)} · borde: intensidad ${f2s(p.edgeIntensity)}, caída ${p.edgeSpan} px, croma ${f2s(p.edgeChroma)}`,
+      `línea: opacidad ${f2s(p.alpha)} · ancho ${p.width} px · tope ${f2s(p.rimCap)}` + (p.algo === 'overlay' ? ` · tinte ${f2s(p.tint)} · base L ${f2s(p.rimL)}` : ` · sube ${p.lift.toFixed(3)} (+${p.liftEdge.toFixed(3)} donde asoma el fondo) · croma ×${f2s(p.boost)}`),
       `marco: L ${p.frameL.toFixed(3)} · tinte ${f2s(p.frameTint)}`].join('\n');
   }
 
   function renderAll() {
     renderCorner($('now'), NOW); $('now-values').textContent = describe(NOW);
     renderCorner($('macos'), MACOS); $('macos-values').textContent = describe(MACOS);
+    renderLayout($('full-now'), NOW, FULL, 2); renderLayout($('full-macos'), MACOS, FULL, 2);
     renderCustom();
   }
   let pending = 0;
@@ -354,7 +419,7 @@
     cancelAnimationFrame(pending);
     pending = requestAnimationFrame(() => {
       renderCorner($('custom'), state.params); $('custom-values').textContent = describe(state.params);
-      renderStrips(); $('readout').textContent = readout();
+      renderLayout($('full-custom'), state.params, FULL, 2); renderStrips(); sidesTable(); $('readout').textContent = readout();
       for (const group of SLIDERS) for (const s of group.items) $(s.key + '-out').textContent = state.params[s.key].toFixed(s.digits);
     });
   }
