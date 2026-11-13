@@ -98,7 +98,10 @@ and the bottom.
    `set_cards` already gets (ADR 0068), drawn above the surface. It is a white
    line with `rim_chroma` of the chroma of B(p), the blurred wallpaper behind
    that stretch, so its tint changes along the contour. It shows nothing of
-   what is behind it.
+   what is behind it. With an accent as window color the request's `rim` is
+   the accent and the rim takes its chroma from it, not from the wallpaper, so
+   border and fill stay uniform. In both cases the chroma saturates towards
+   `chroma_cap`.
 5. **States**, decided by the compositor:
 
    | State | Panel | Rim |

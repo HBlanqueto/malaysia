@@ -30,7 +30,7 @@ The compositor recognizes a BarrierKit app because it binds `infinity_window_sty
 A BarrierKit window can ask for glass panels with `infinity_window_style_v1.set_glass` (version 6, [ADR 0078](../decisions/0078-sidebar-glass-panels.md)). The kit leaves each panel transparent. While blur is drawn (`appearance.reduce_transparency` and `appearance.contrast` off), the compositor fills it under the surface and, in the island style, draws a rim above it:
 
 1. The panel takes the lightness of `base` and the request's `chroma` (0.40 dark, 0.25 light, less under an accent) of the blurred wallpaper's chroma behind it, saturating towards `chroma_cap`, with the same `take_chroma_capped` as `ctappearance`. The wallpaper is blurred in a cache of its own, wider than the other blurs. It never shows windows.
-2. The rim is a white line (`sidebar-glass-rim`) with `rim_chroma` (0.65) of the chroma of the wallpaper behind each stretch.
+2. The rim is a white line (`sidebar-glass-rim`) with `rim_chroma` (0.65) of the chroma of the wallpaper behind each stretch, saturating towards `chroma_cap`. With an accent as window color the request's `rim` is the accent and the rim takes its chroma from it, so it stays uniform with the fill.
 3. A window that is not focused gets the flat `solid` tone and no rim.
 4. An island keeps its own corner. A flat panel takes the window's corner.
 

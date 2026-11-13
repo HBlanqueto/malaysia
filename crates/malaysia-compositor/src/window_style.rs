@@ -45,6 +45,7 @@ pub(crate) struct GlassPanels {
     pub(crate) base: [f32; 3],
     pub(crate) solid: [f32; 3],
     pub(crate) chroma: f32,
+    pub(crate) rim_tint: [f32; 4],
 }
 
 impl Cacheable for GlassPanels {
@@ -167,6 +168,7 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 base,
                 solid,
                 chroma,
+                rim,
             } if is_kit_client(&surface) => {
                 let mut rects = card_rects(&panels);
                 rects.truncate(MAX_GLASS_PANELS);
@@ -178,6 +180,7 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                         base: unpack_rgb(base),
                         solid: unpack_rgb(solid),
                         chroma: chroma as f32 / 1000.0,
+                        rim_tint: unpack_tint(rim),
                     };
                 });
                 state.request_redraw();
@@ -238,6 +241,11 @@ fn card_rects(bytes: &[u8]) -> Vec<Rectangle<i32, Logical>> {
         })
         .filter(|rect| rect.size.w > 0 && rect.size.h > 0)
         .collect()
+}
+
+fn unpack_tint(argb: u32) -> [f32; 4] {
+    let [r, g, b] = unpack_rgb(argb);
+    [r, g, b, f32::from(argb >> 24 != 0)]
 }
 
 fn unpack_rgb(argb: u32) -> [f32; 3] {
@@ -412,6 +420,12 @@ mod tests {
     fn a_glass_color_unpacks_to_unit_channels_and_ignores_alpha() {
         assert_eq!(unpack_rgb(0x00ff_8000), [1.0, 128.0 / 255.0, 0.0]);
         assert_eq!(unpack_rgb(0xff00_0000), [0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_rim_tint_with_zero_alpha_means_the_wallpaper_and_any_other_alpha_the_accent() {
+        assert_eq!(unpack_tint(0x00ff_8000)[3], 0.0);
+        assert_eq!(unpack_tint(0xffff_8000), [1.0, 128.0 / 255.0, 0.0, 1.0]);
     }
 
     #[test]

@@ -153,7 +153,9 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                 )
                 .with_uniforms(vec![
                     Uniform::new("line", [line.r, line.g, line.b, line.a * (1.0 - settle)]),
+                    Uniform::new("tint", glass.rim_tint),
                     Uniform::new("chroma", ctdesign::GLASS.rim_chroma),
+                    Uniform::new("chroma_cap", chroma_cap),
                     Uniform::new(
                         "width",
                         (f64::from(ctdesign::SIDEBAR.rim_width) * scale) as f32,

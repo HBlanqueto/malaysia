@@ -500,7 +500,9 @@ pub(crate) fn compile_glass_rim(renderer: &mut GlesRenderer) -> Option<GlesTexPr
         grade_graphics::shaders::GLASS_RIM,
         &[
             UniformName::new("line", UniformType::_4f),
+            UniformName::new("tint", UniformType::_4f),
             UniformName::new("chroma", UniformType::_1f),
+            UniformName::new("chroma_cap", UniformType::_1f),
             UniformName::new("width", UniformType::_1f),
         ],
     )
