@@ -2,6 +2,7 @@
 
 > Overview map: [`interface.md`](interface.md).
 > Target design: [`dock-mockup.html`](dock-mockup.html), a working mockup of the Dock and its Settings section.
+> Minimize and restore: [`dock-genie-mockup.html`](dock-genie-mockup.html), the genie, the Dock's slot and the thumbnail, today against the target.
 
 Native component (ADR 0023): one icon per app, kept apps and open apps, as in
 macOS. Its options live in `dock.domain`

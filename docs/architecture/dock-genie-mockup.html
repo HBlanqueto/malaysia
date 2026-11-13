@@ -1,0 +1,384 @@
+<meta charset="utf-8">
+<title>Genie del Dock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one live desktop stage (canvas), its transport and timeline, then the four rules the effect follows. */
+:root{
+  --bg:#f4f3f6; --card:#ffffff; --ink:#1b1a20; --ink-2:#5d5b68; --ink-3:#8a8895; --rule:#dedce4;
+  --accent:#2f6bff; --accent-ink:#ffffff; --ok:#1f8a4c; --ok-bg:#e1f3e8; --warn:#a15c00; --warn-bg:#fbeacd;
+  --track:#ebe9f0; --bar-a:#2f6bff; --bar-b:#d6336c; --bar-c:#1f8a4c;
+  --f-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121116; --card:#1b1a21; --ink:#efedf3; --ink-2:#a9a6b5; --ink-3:#7c7a88; --rule:#2b2a33;
+  --accent:#6c93ff; --accent-ink:#0d1330; --ok:#5fd18c; --ok-bg:#16301f; --warn:#f0b45a; --warn-bg:#3a2a0e;
+  --track:#25242c; --bar-a:#6c93ff; --bar-b:#ff6b9a; --bar-c:#5fd18c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121116; --card:#1b1a21; --ink:#efedf3; --ink-2:#a9a6b5; --ink-3:#7c7a88; --rule:#2b2a33;
+  --accent:#6c93ff; --accent-ink:#0d1330; --ok:#5fd18c; --ok-bg:#16301f; --warn:#f0b45a; --warn-bg:#3a2a0e;
+  --track:#25242c; --bar-a:#6c93ff; --bar-b:#ff6b9a; --bar-c:#5fd18c; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.5;margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px;display:grid;gap:22px}
+.eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+h1{font-size:28px;line-height:1.15;margin:4px 0 8px;letter-spacing:-.02em;text-wrap:balance}
+h2{font-size:16px;margin:0 0 10px;letter-spacing:-.01em}
+.lede{max-width:70ch;color:var(--ink-2);margin:0}
+code{font-family:var(--f-mono);font-size:12.5px;background:var(--track);padding:1px 5px;border-radius:5px}
+
+.stage{border-radius:14px;overflow:hidden;background:#101018;border:1px solid var(--rule)}
+.stage canvas{display:block;width:100%;height:auto;aspect-ratio:1000/560}
+
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:16px;display:grid;gap:14px}
+.row{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:9px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;padding:7px 14px;border:0;background:transparent;color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn{font:inherit;font-size:13px;font-weight:500;padding:7px 14px;border-radius:9px;border:1px solid var(--rule);background:var(--card);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn:hover{border-color:var(--ink-3)}
+:is(.btn,.seg button,input,select):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label.f{display:flex;gap:8px;align-items:center;color:var(--ink-2);font-size:13px}
+select{font:inherit;font-size:13px;padding:6px 8px;border-radius:8px;border:1px solid var(--rule);background:var(--card);color:var(--ink)}
+input[type=range]{accent-color:var(--accent);min-width:0}
+.scrub{display:grid;gap:6px}
+.scrub input{width:100%}
+.readout{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);margin-left:auto}
+
+.tracks{display:grid;gap:6px}
+.track{display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.lane{position:relative;height:16px;border-radius:5px;background:var(--track);overflow:hidden}
+.lane i{position:absolute;top:0;bottom:0;border-radius:5px;opacity:.9}
+.head{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);transform:translateX(-1px);pointer-events:none}
+
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}
+.rule{display:grid;gap:6px;padding:14px;border:1px solid var(--rule);border-radius:12px;background:var(--card);min-width:0}
+.rule h3{margin:0;font-size:14px;display:flex;gap:10px;align-items:baseline;justify-content:space-between}
+.rule p{margin:0;color:var(--ink-2)}
+.pill{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.notes{margin:0;padding-left:18px;color:var(--ink-2);display:grid;gap:6px;max-width:80ch}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+</style>
+
+<main class="wrap">
+  <header>
+    <div class="eyebrow">Dock · minimizar y restaurar</div>
+    <h1>Genie del Dock</h1>
+    <p class="lede">Mockup del efecto completo: el Dock abre su hueco, la ventana fluye hasta la miniatura por encima del Dock y la miniatura aparece donde aterriza. Cambia entre <b>Objetivo</b> y <b>Hoy</b> para comparar, y arrastra la línea de tiempo para ver cada fotograma.</p>
+  </header>
+
+  <div class="stage"><canvas id="cv" width="1000" height="560" role="img" aria-label="Escritorio con una ventana de Ajustes del sistema que se minimiza hacia el Dock"></canvas></div>
+
+  <section class="panel" aria-label="Controles">
+    <div class="row">
+      <div class="seg" role="group" aria-label="Versión del efecto">
+        <button type="button" id="m-target" aria-pressed="true">Objetivo</button>
+        <button type="button" id="m-today" aria-pressed="false">Hoy</button>
+      </div>
+      <button type="button" class="btn primary" id="b-min">Minimizar</button>
+      <button type="button" class="btn" id="b-res">Restaurar</button>
+      <label class="f" for="speed">Velocidad
+        <select id="speed"><option value="1">1×</option><option value="0.25" selected>¼×</option><option value="0.1">1/10×</option></select>
+      </label>
+      <label class="f" for="radius">Esquinas de la miniatura
+        <input id="radius" type="range" min="0" max="30" value="16" aria-describedby="rv"><span id="rv" class="readout" style="margin:0">16 %</span>
+      </label>
+    </div>
+    <div class="scrub">
+      <input id="scrub" type="range" min="0" max="1000" value="550" aria-label="Línea de tiempo del efecto">
+      <div class="row"><span id="phase" style="font-weight:600"></span><span class="readout" id="clock"></span></div>
+    </div>
+    <div id="tracks" class="tracks" aria-hidden="true"></div>
+  </section>
+
+  <section>
+    <h2>Lo que fija el mockup</h2>
+    <div class="rules" id="rules"></div>
+  </section>
+
+  <section>
+    <h2>Qué cambia en el código</h2>
+    <ul class="notes">
+      <li><b>Compositor.</b> <code>minimize::append</code> ya dibuja el genie sobre el Dock. El destino pasa de ser el hueco cuadrado a un rectángulo con la proporción de la ventana, centrado en el hueco con <code>DOCK_ICON_BODY</code>.</li>
+      <li><b>Dock.</b> Cada mosaico recibe una presencia de 0 a 1 que multiplica su ancho en <code>geometry::layout</code>. El mosaico de ventana nace en 0 y sube a 1 mientras el genie baja. Al restaurar baja a 0. El destino que envía el Dock es siempre el hueco con presencia 1.</li>
+      <li><b>Miniatura.</b> Se dibuja como una ventana pequeña: fondo opaco, esquinas redondeadas, borde interior de un píxel, sombra e insignia de la app. Aparece en el último 8 % del efecto y desaparece en el primero al restaurar.</li>
+      <li><b>Pendiente de decidir.</b> Magnificación con el puntero sobre el Dock, Dock a izquierda o derecha, y el efecto con «minimizar en el icono de la app».</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  const W = 1000, H = 560, T = 56, PAD = 9, EDGE = 10, BODY = .82;
+  const WIN = {x: 150, y: 52, w: 560, h: 350, r: 12};
+  const DUR = 560;
+  const cv = document.getElementById("cv"), cx = cv.getContext("2d");
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = W * dpr; cv.height = H * dpr;
+  const bg = document.createElement("canvas"); bg.width = W * dpr; bg.height = H * dpr;
+  const bx = bg.getContext("2d");
+  const blurOk = "filter" in cx;
+  const S = {mode: "target", dir: "min", t: .55, playing: false, last: 0, radius: .16, speed: .25};
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const ease = k => k < .5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
+
+  function rr(c, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+  }
+
+  /* ---------- Window snapshot: what the compositor draws into the effect's texture ---------- */
+  const snap = document.createElement("canvas"); snap.width = WIN.w * 2; snap.height = WIN.h * 2;
+  function drawWindow(c, s) {
+    c.save(); c.scale(s, s);
+    rr(c, 0, 0, WIN.w, WIN.h, WIN.r); c.clip();
+    c.fillStyle = "#242427"; c.fillRect(0, 0, WIN.w, WIN.h);
+    c.fillStyle = "#1b1b1e"; c.fillRect(0, 0, 150, WIN.h);
+    c.font = "500 12px Inter, system-ui, sans-serif"; c.textBaseline = "middle";
+    [["#ff5f57", 16], ["#febc2e", 34], ["#28c840", 52]].forEach(([col, x]) => { c.fillStyle = col; c.beginPath(); c.arc(x, 18, 5.5, 0, 7); c.fill(); });
+    c.fillStyle = "#9d9da6"; c.textAlign = "center"; c.fillText("Escritorio y Dock", 345, 18); c.textAlign = "left";
+    const side = ["Wi‑Fi", "Bluetooth", "Red", "Notificaciones", "Sonido", "Escritorio y Dock", "Fondo de pantalla", "Accesibilidad"];
+    side.forEach((t, i) => {
+      const y = 48 + i * 30, on = i === 5;
+      if (on) { c.fillStyle = "#2f6bff"; rr(c, 10, y - 12, 130, 26, 7); c.fill(); }
+      c.fillStyle = on ? "#3a78ff" : "#4a4a52"; if (!on) { rr(c, 18, y - 7, 14, 14, 4); c.fill(); }
+      c.fillStyle = on ? "#fff" : "#d6d6dc"; c.fillText(t, 40, y + 1);
+    });
+    c.font = "600 18px Inter, system-ui, sans-serif"; c.fillStyle = "#f2f2f7"; c.fillText("Escritorio y Dock", 172, 62);
+    const row = (y, label, kind, v) => {
+      c.font = "400 13px Inter, system-ui, sans-serif"; c.fillStyle = "#d6d6dc"; c.fillText(label, 172, y);
+      if (kind === "slider") {
+        c.fillStyle = "#3b3b42"; rr(c, 330, y - 2, 200, 4, 2); c.fill();
+        c.fillStyle = "#2f6bff"; rr(c, 330, y - 2, 200 * v, 4, 2); c.fill();
+        c.fillStyle = "#f2f2f7"; c.beginPath(); c.arc(330 + 200 * v, y, 7, 0, 7); c.fill();
+      } else if (kind === "toggle") {
+        c.fillStyle = v ? "#2f6bff" : "#4a4a52"; rr(c, 490, y - 10, 40, 20, 10); c.fill();
+        c.fillStyle = "#fff"; c.beginPath(); c.arc(v ? 520 : 500, y, 8, 0, 7); c.fill();
+      } else {
+        c.fillStyle = "#34343a"; rr(c, 400, y - 12, 130, 24, 7); c.fill();
+        c.fillStyle = "#e8e8ee"; c.fillText(v, 410, y + 1);
+      }
+    };
+    row(110, "Tamaño", "slider", .42); row(146, "Ampliación", "slider", .7);
+    row(192, "Posición en pantalla", "pop", "Abajo"); row(228, "Minimizar ventanas con", "pop", "Efecto genio");
+    row(264, "Minimizar en el icono de la app", "toggle", false); row(300, "Animar apertura de apps", "toggle", true);
+    row(336, "Ocultar y mostrar el Dock", "toggle", false);
+    c.restore();
+  }
+
+  /* ---------- Icons ---------- */
+  function iconBrowser(c, x, y, s) {
+    const g = c.createLinearGradient(x, y, x + s, y + s); g.addColorStop(0, "#ffb02e"); g.addColorStop(1, "#e5383b");
+    c.fillStyle = g; c.beginPath(); c.arc(x + s / 2, y + s / 2, s * .42, 0, 7); c.fill();
+    c.strokeStyle = "#5b3cc4"; c.lineWidth = s * .09; c.lineCap = "round";
+    c.beginPath(); c.arc(x + s / 2, y + s / 2, s * .26, .6, 4.9); c.stroke();
+  }
+  function iconSettings(c, x, y, s) {
+    const g = c.createLinearGradient(x, y, x, y + s); g.addColorStop(0, "#f3f3f6"); g.addColorStop(1, "#b7b8c0");
+    c.fillStyle = g; rr(c, x + s * .08, y + s * .08, s * .84, s * .84, s * .2); c.fill();
+    c.save(); c.translate(x + s / 2, y + s / 2); c.fillStyle = "#6e6f78"; c.beginPath();
+    const n = 12, R = s * .34, r = s * .27;
+    for (let i = 0; i < n * 2; i++) { const a = i * Math.PI / n, d = i % 2 ? r : R; c.lineTo(Math.cos(a) * d, Math.sin(a) * d); }
+    c.closePath(); c.fill(); c.fillStyle = "#e9e9ee"; c.beginPath(); c.arc(0, 0, s * .17, 0, 7); c.fill();
+    c.fillStyle = "#6e6f78"; c.beginPath(); c.arc(0, 0, s * .06, 0, 7); c.fill(); c.restore();
+  }
+  function iconDownloads(c, x, y, s) {
+    c.fillStyle = "#59a9f5"; rr(c, x + s * .06, y + s * .22, s * .88, s * .66, s * .08); c.fill();
+    c.fillStyle = "#8cc6fb"; rr(c, x + s * .06, y + s * .16, s * .38, s * .14, s * .05); c.fill();
+    c.strokeStyle = "#ffffff"; c.lineWidth = s * .05; c.lineCap = "round"; c.lineJoin = "round";
+    c.beginPath(); c.moveTo(x + s / 2, y + s * .4); c.lineTo(x + s / 2, y + s * .7); c.moveTo(x + s * .38, y + s * .6); c.lineTo(x + s / 2, y + s * .72); c.lineTo(x + s * .62, y + s * .6); c.stroke();
+  }
+  function iconTrash(c, x, y, s) {
+    const g = c.createLinearGradient(x, y, x + s, y); g.addColorStop(0, "rgba(255,255,255,.55)"); g.addColorStop(1, "rgba(255,255,255,.85)");
+    c.fillStyle = g; c.beginPath(); c.moveTo(x + s * .2, y + s * .18); c.lineTo(x + s * .8, y + s * .18); c.lineTo(x + s * .74, y + s * .9); c.lineTo(x + s * .26, y + s * .9); c.closePath(); c.fill();
+    c.fillStyle = "rgba(255,255,255,.95)"; c.beginPath(); c.ellipse(x + s / 2, y + s * .18, s * .3, s * .06, 0, 0, 7); c.fill();
+  }
+
+  /* ---------- Dock layout: tiles centred, the slot's width is its presence ---------- */
+  function layout(f) {
+    const items = [["browser", 1], ["settings", 1], ["sep", .34], ["downloads", 1], ["thumb", f], ["trash", 1]].map(([k, w]) => ({k, w}));
+    const total = items.reduce((a, i) => a + i.w * T, 0);
+    let x = W / 2 - total / 2;
+    items.forEach(i => { i.x = x; i.px = i.w * T; x += i.px; });
+    return {items, barX: W / 2 - total / 2 - PAD, barW: total + 2 * PAD, barY: H - EDGE - T - 2 * PAD, barH: T + 2 * PAD, iconY: H - EDGE - PAD - T};
+  }
+  const slotRect = L => { const i = L.items.find(i => i.k === "thumb"); return {x: i.x, y: L.iconY, w: T, h: T}; };
+  function thumbRect(slot) {
+    const k = T * BODY / Math.max(WIN.w, WIN.h), w = WIN.w * k, h = WIN.h * k;
+    return {x: slot.x + (T - w) / 2, y: slot.y + (T - h) / 2, w, h};
+  }
+
+  /* ---------- Genie: the fragment shader of crates/grade-graphics/src/minimize.frag, drawn row by row ---------- */
+  function genie(c, p, to) {
+    const s = {x0: WIN.x, y0: WIN.y, x1: WIN.x + WIN.w, y1: WIN.y + WIN.h};
+    const t = {x0: to.x, y0: to.y, x1: to.x + to.w, y1: to.y + to.h};
+    const span = Math.max(1e-4, t.y1 - s.y0), winH = s.y1 - s.y0;
+    const pinch = Math.pow(clamp(p, 0, .25) * 4, 2), slide = p * p;
+    const top = s.y0 + slide * span, rows = snap.height / winH;
+    c.save(); c.imageSmoothingQuality = "high";
+    for (let y = Math.floor(top); y < Math.min(t.y1, top + winH); y += 1) {
+      const along = (y - s.y0) / span, n = pinch / (1 + Math.exp(-(along * 15 - 10)));
+      const x0 = lerp(s.x0, t.x0, n), x1 = lerp(s.x1, t.x1, n), sy = (y - top) * rows;
+      if (sy < 0 || sy >= snap.height) continue;
+      c.drawImage(snap, 0, sy, snap.width, Math.max(1, rows), x0, y, Math.max(.5, x1 - x0), 1.6);
+    }
+    c.restore();
+  }
+
+  /* ---------- Frame ---------- */
+  function wallpaper(c) {
+    const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#2a2f8f"); g.addColorStop(.45, "#c2307a"); g.addColorStop(1, "#ff7a3d");
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    const wave = (col, y0, amp) => { c.fillStyle = col; c.beginPath(); c.moveTo(0, H); c.lineTo(0, y0);
+      c.bezierCurveTo(W * .3, y0 - amp, W * .55, y0 + amp, W, y0 - amp * .6); c.lineTo(W, H); c.closePath(); c.fill(); };
+    wave("rgba(255,106,90,.55)", 330, 120); wave("rgba(255,60,90,.55)", 430, 90); wave("rgba(90,40,140,.45)", 500, 60);
+    const r = c.createRadialGradient(W * .85, 60, 10, W * .85, 60, 420); r.addColorStop(0, "rgba(80,190,255,.55)"); r.addColorStop(1, "rgba(80,190,255,0)");
+    c.fillStyle = r; c.fillRect(0, 0, W, H);
+    c.fillStyle = "rgba(20,16,28,.55)"; c.fillRect(0, 0, W, 24);
+    c.fillStyle = "#f2f0f6"; c.font = "500 12px Inter, system-ui, sans-serif"; c.textBaseline = "middle";
+    ["Escritorio", "Archivo", "Edición", "Visualización", "Ir", "Ventana", "Ayuda"].forEach((t, i) => c.fillText(t, 36 + [0, 70, 132, 192, 288, 322, 386][i], 12));
+    c.textAlign = "right"; c.fillText("100 %   19:11", W - 14, 12); c.textAlign = "left";
+  }
+
+  function windowAtRest(c) {
+    c.save(); c.shadowColor = "rgba(0,0,0,.5)"; c.shadowBlur = 34; c.shadowOffsetY = 14;
+    rr(c, WIN.x, WIN.y, WIN.w, WIN.h, WIN.r); c.fillStyle = "#242427"; c.fill(); c.restore();
+    c.drawImage(snap, WIN.x, WIN.y, WIN.w, WIN.h);
+    c.strokeStyle = "rgba(255,255,255,.16)"; c.lineWidth = 1; rr(c, WIN.x + .5, WIN.y + .5, WIN.w - 1, WIN.h - 1, WIN.r); c.stroke();
+  }
+
+  function dockGlass(c, L) {
+    c.save(); rr(c, L.barX, L.barY, L.barW, L.barH, L.barH * .3); c.clip();
+    if (blurOk) { c.filter = "blur(14px)"; c.drawImage(bg, 0, 0, W, H); c.filter = "none"; }
+    c.fillStyle = "rgba(34,22,32,.46)"; c.fillRect(L.barX, L.barY, L.barW, L.barH); c.restore();
+    c.strokeStyle = "rgba(0,0,0,.4)"; c.lineWidth = 1; rr(c, L.barX - .5, L.barY - .5, L.barW + 1, L.barH + 1, L.barH * .3 + .5); c.stroke();
+    c.strokeStyle = "rgba(255,255,255,.2)"; rr(c, L.barX + .5, L.barY + .5, L.barW - 1, L.barH - 1, L.barH * .3 - .5); c.stroke();
+  }
+
+  function dockIcons(c, L) {
+    L.items.forEach(i => {
+      if (i.k === "browser") iconBrowser(c, i.x, L.iconY, T);
+      if (i.k === "settings") iconSettings(c, i.x, L.iconY, T);
+      if (i.k === "downloads") iconDownloads(c, i.x, L.iconY, T);
+      if (i.k === "trash") iconTrash(c, i.x, L.iconY, T);
+      if (i.k === "sep") { c.fillStyle = "rgba(255,255,255,.28)"; c.fillRect(i.x + i.px / 2 - .5, L.iconY + 6, 1, T - 12); }
+      if (i.k === "browser" || i.k === "settings") { c.fillStyle = "rgba(255,255,255,.8)"; c.beginPath(); c.arc(i.x + T / 2, L.barY + L.barH - 5, 2, 0, 7); c.fill(); }
+    });
+  }
+
+  function thumbnailTarget(c, slot, a) {
+    if (a <= 0) return;
+    const r = thumbRect(slot), rad = Math.min(r.w, r.h) * S.radius;
+    c.save(); c.globalAlpha = a;
+    c.shadowColor = "rgba(0,0,0,.45)"; c.shadowBlur = 8; c.shadowOffsetY = 3; rr(c, r.x, r.y, r.w, r.h, rad); c.fillStyle = "#242427"; c.fill();
+    c.shadowColor = "transparent"; rr(c, r.x, r.y, r.w, r.h, rad); c.clip(); c.imageSmoothingQuality = "high"; c.drawImage(snap, r.x, r.y, r.w, r.h); c.restore();
+    c.save(); c.globalAlpha = a; c.strokeStyle = "rgba(255,255,255,.28)"; c.lineWidth = 1; rr(c, r.x + .5, r.y + .5, r.w - 1, r.h - 1, rad); c.stroke(); c.restore();
+    c.save(); c.globalAlpha = a; iconSettings(c, slot.x + T * .56, slot.y + T * .5, T * .5); c.restore();
+  }
+
+  function thumbnailToday(c, slot, a, placeholder, L) {
+    if (placeholder) {
+      c.fillStyle = "rgba(255,255,255,.16)"; rr(c, slot.x + 3, slot.y + 3, T - 6, T - 6, 10); c.fill(); iconSettings(c, slot.x + T * .2, slot.y + T * .2, T * .6);
+      return;
+    }
+    if (a <= 0) return;
+    const r = thumbRect(slot);
+    c.save(); c.globalAlpha = .78 * a; c.drawImage(snap, r.x, r.y, r.w, r.h); c.restore();
+    c.strokeStyle = "rgba(255,255,255,.5)"; c.lineWidth = 1; c.beginPath(); c.moveTo(r.x, L.barY + 1.5); c.lineTo(r.x + r.w, L.barY + 1.5); c.stroke();
+    iconSettings(c, slot.x + T * .56, slot.y + T * .5, T * .5);
+  }
+
+  function render() {
+    const {mode, dir, t} = S, target = mode === "target", p = dir === "min" ? t : 1 - t;
+    const f = target ? (dir === "min" ? ease(clamp(t / .8)) : 1 - ease(clamp(t / .8))) : (dir === "min" ? 1 : (t <= 0 ? 1 : 0));
+    const alpha = target ? (dir === "min" ? clamp((t - .92) / .08) : clamp(1 - t / .08)) : (dir === "min" ? (t >= 1 ? 1 : 0) : (t <= 0 ? 1 : 0));
+    const L = layout(f), L1 = layout(1), slot = slotRect(L), goal = target ? thumbRect(slotRect(L1)) : slotRect(L1);
+    const flying = p > 0 && p < 1;
+
+    bx.setTransform(dpr, 0, 0, dpr, 0, 0); bx.clearRect(0, 0, W, H);
+    wallpaper(bx);
+    if (p <= 0) windowAtRest(bx);
+    if (!target && flying) genie(bx, p, goal);
+
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, W, H);
+    cx.drawImage(bg, 0, 0, W, H);
+    dockGlass(cx, L);
+    dockIcons(cx, L);
+    if (target) thumbnailTarget(cx, slot, alpha);
+    else thumbnailToday(cx, slot, alpha, dir === "min" && t < 1, L);
+    if (target && flying) genie(cx, p, goal);
+    ui();
+  }
+
+  /* ---------- Rules, timeline and transport ---------- */
+  const RULES = [
+    ["El genie va por encima del Dock", "La ventana nace de la miniatura y se ve entera al cruzar la barra.", "El cristal del Dock lo cubre: la ventana parece salir de detrás."],
+    ["El Dock abre su hueco", "El mosaico crece de 0 a 1 mientras baja el genie y las demás miniaturas se apartan. Al restaurar, se cierra.", "El hueco aparece de golpe al empezar; no hay sitio preparado."],
+    ["El genie aterriza en la miniatura", "El destino es el rectángulo de la miniatura, con la proporción de la ventana.", "El destino es el cuadrado del hueco: la ventana se aplasta y luego aparece la miniatura."],
+    ["La miniatura es una ventana pequeña", "Opaca, esquinas redondeadas, borde de un píxel, sombra e insignia de la app.", "Translúcida, de esquinas rectas y con la línea del Dock cruzándola."]
+  ];
+  const TRACKS = {
+    "target-min": [["Hueco del Dock", 0, .8, "--bar-a"], ["Genie sobre el Dock", 0, 1, "--bar-b"], ["Aparece la miniatura", .92, 1, "--bar-c"]],
+    "target-res": [["Desaparece la miniatura", 0, .08, "--bar-c"], ["Genie sobre el Dock", 0, 1, "--bar-b"], ["Se cierra el hueco", 0, .8, "--bar-a"]],
+    "today-min": [["Hueco del Dock (de golpe)", 0, .02, "--bar-a"], ["Genie bajo el Dock", 0, 1, "--bar-b"], ["Aparece la miniatura (de golpe)", .98, 1, "--bar-c"]],
+    "today-res": [["Mosaico quitado (de golpe)", 0, .02, "--bar-c"], ["Genie bajo el Dock", 0, 1, "--bar-b"], ["Se cierra el hueco (de golpe)", 0, .02, "--bar-a"]]
+  };
+  const $ = id => document.getElementById(id);
+  let tracksKey = "", heads = [];
+  function ui() {
+    const key = S.mode + "-" + (S.dir === "min" ? "min" : "res");
+    if (key !== tracksKey) {
+      tracksKey = key; $("tracks").textContent = ""; heads = [];
+      TRACKS[key].forEach(([label, a, b, col]) => {
+        const row = document.createElement("div"); row.className = "track";
+        const name = document.createElement("span"); name.textContent = label;
+        const lane = document.createElement("div"); lane.className = "lane";
+        const bar = document.createElement("i"); bar.style.left = a * 100 + "%"; bar.style.width = Math.max(.8, (b - a) * 100) + "%"; bar.style.background = `var(${col})`;
+        const head = document.createElement("div"); head.className = "head"; heads.push(head);
+        lane.append(bar, head); row.append(name, lane); $("tracks").append(row);
+      });
+      $("rules").textContent = "";
+      RULES.forEach(([title, goal, today]) => {
+        const box = document.createElement("div"); box.className = "rule";
+        const h = document.createElement("h3"); const hs = document.createElement("span"); hs.textContent = title;
+        const pill = document.createElement("span"); pill.className = "pill " + (S.mode === "target" ? "ok" : "warn"); pill.textContent = S.mode === "target" ? "Así debe quedar" : "Así está hoy";
+        h.append(hs, pill); const para = document.createElement("p"); para.textContent = S.mode === "target" ? goal : today; box.append(h, para); $("rules").append(box);
+      });
+    }
+    heads.forEach(h => h.style.left = S.t * 100 + "%");
+    $("scrub").value = Math.round(S.t * 1000);
+    $("clock").textContent = `τ ${S.t.toFixed(2)} · ${Math.round(S.t * DUR)} ms de ${DUR} ms`;
+    const p = S.dir === "min" ? S.t : 1 - S.t;
+    $("phase").textContent = (S.dir === "min" ? "Minimizando" : "Restaurando") + " · " + (p <= 0 ? "ventana abierta" : p >= 1 ? "miniatura en el Dock" : "genie al " + Math.round(p * 100) + " %");
+    $("m-target").setAttribute("aria-pressed", S.mode === "target"); $("m-today").setAttribute("aria-pressed", S.mode === "today");
+  }
+
+  function tick(now) {
+    if (!S.playing) return;
+    S.t = clamp(S.t + (now - S.last) * S.speed / DUR); S.last = now;
+    if (S.t >= 1) S.playing = false;
+    render(); if (S.playing) requestAnimationFrame(tick);
+  }
+  function play(dir) { S.dir = dir; S.t = 0; S.playing = true; S.last = performance.now(); render(); requestAnimationFrame(tick); }
+  $("b-min").onclick = () => play("min");
+  $("b-res").onclick = () => play("restore");
+  $("m-target").onclick = () => { S.mode = "target"; render(); };
+  $("m-today").onclick = () => { S.mode = "today"; render(); };
+  $("speed").onchange = e => { S.speed = +e.target.value; };
+  $("radius").oninput = e => { S.radius = e.target.value / 100; $("rv").textContent = e.target.value + " %"; render(); };
+  $("scrub").oninput = e => { S.playing = false; S.t = e.target.value / 1000; render(); };
+
+  const start = () => { drawWindow(snap.getContext("2d"), 2); render(); };
+  start();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
+})();
+</script>
