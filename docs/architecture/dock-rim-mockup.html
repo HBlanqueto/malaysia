@@ -88,6 +88,7 @@
     <div class="group" role="group" aria-label="Preajuste">
       <button id="preset-today" type="button" aria-pressed="false">Hoy</button>
       <button id="preset-new" type="button" aria-pressed="true">Propuesta</button>
+      <button id="preset-apple" type="button" aria-pressed="false">Referencia Apple</button>
     </div>
     <div class="group">
       <label class="check"><input id="c-local" type="checkbox" checked> Por tramos</label>
@@ -121,6 +122,7 @@
       <li><b>Por tramos.</b> La claridad del fondo se mide cada 10 px bajo la barra y la línea sigue esa medida. Apagado, usa una sola media para todo el Dock, como hoy.</li>
       <li><b>Base por borde.</b> Arriba, abajo y lados tienen su propia curva medida en las capturas. Apagado, usa 26 % arriba y abajo y 10 % en los lados, por la fuerza global.</li>
       <li><b>Tono del fondo.</b> La línea es el color del fondo aclarado, no blanco puro. Apagado, es blanca.</li>
+      <li><b>Referencia Apple.</b> Reproduce la captura de alta resolución: la línea suma luz al fondo (no lo tapa con blanco), así que conserva su tono sin un paso aparte. Es más fuerte arriba que en los lados y abajo.</li>
       <li>El blur de 0,7 px de la línea está siempre activo. Los iconos son marcadores; el vidrio es el desenfoque del propio fondo más un velo oscuro.</li>
     </ul>
   </section>
@@ -135,11 +137,14 @@
           <tr><td>Aurora oscura</td><td>Inferior</td><td class="num">17 % a 22 %</td><td>Casi constante: el fondo es uniforme y oscuro.</td></tr>
           <tr><td>Aurora oscura</td><td>Lados</td><td class="num">13 % a 17 %</td><td>Más fuertes que arriba con el mismo fondo.</td></tr>
           <tr><td>Azul plano</td><td>Superior / inferior</td><td class="num">≈ 29 % / ≈ 39 %</td><td>La fuerza crece con la claridad del fondo.</td></tr>
-          <tr><td>Azul plano</td><td>Color</td><td class="num">+34 +40 +8 (RGB)</td><td>No suma blanco: aclara el tono del fondo.</td></tr>
+          <tr><td>Azul plano</td><td>Color</td><td class="num">+34 +40 +8 (RGB)</td><td>Suma luz y el canal azul se satura: no es un velo blanco.</td></tr>
+          <tr><td>Alta resolución (Apple)</td><td>Superior</td><td class="num">+64 a +39 por canal</td><td>Casi uniforme en 1 000 px de borde: 25 % de luz sumada sobre el azul oscuro, 16 % sobre el claro. Perfil de 3 px: núcleo de 1 px y hombros al 50 %.</td></tr>
+          <tr><td>Alta resolución (Apple)</td><td>Inferior</td><td class="num">+48 a +27 por canal</td><td>Menos que arriba, también uniforme.</td></tr>
+          <tr><td>Alta resolución (Apple)</td><td>Lado derecho</td><td class="num">+37 por canal</td><td>Se apaga hacia la esquina de abajo (un 40 % menos).</td></tr>
         </tbody>
       </table>
     </div>
-    <p style="margin-top:10px">Son estimaciones sobre capturas comprimidas, suponiendo una línea blanca sobre el interior del Dock. Una captura de otro material de vidrio (degradado azul) muestra la tendencia contraria; el modelo sigue las dos de este Dock. Los lados con fondo claro son una extrapolación, no una medida.</p>
+    <p style="margin-top:10px">Las tres primeras filas salen de capturas reducidas, que diluyen una línea de 1 px: sus valores absolutos quedan por debajo de la captura de alta resolución. Una captura de otro material (degradado azul) muestra la tendencia contraria. La referencia Apple sale de una sola imagen: la forma (uniforme, más fuerte arriba, suma de luz) es fiable, los números exactos no.</p>
   </section>
 </main>
 
@@ -153,7 +158,7 @@
   const BAR = { w: 580, h: 78, r: 19, bottom: 16 };
   BAR.x = (W - BAR.w) / 2; BAR.y = H - BAR.bottom - BAR.h;
   const SEG = 58, SEGW = BAR.w / SEG;
-  const state = { wall: "aurora", local: true, edge: true, tone: true };
+  const state = { wall: "aurora", local: true, edge: true, tone: true, apple: false };
   let wp, wpData, probe = null;
 
   // ---------- fondos ----------
@@ -195,14 +200,16 @@
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   // Modelo de la propuesta: ajustado a las medidas de las capturas (tabla de abajo).
   const proposal = l => ({ top: clamp(.62 * l, 0, .6), bottom: clamp(.12 + .6 * l, 0, .7), sides: clamp(.09 + .4 * l, 0, .5) });
+  // Referencia de alta resolución (captura de Apple): luz que se suma, algo más fuerte sobre fondo oscuro; arriba > lados > abajo.
+  const apple = l => ({ top: clamp(.27 - .25 * l, .1, .3), bottom: clamp(.21 - .22 * l, .08, .25), sides: clamp(.17 - .05 * l, .1, .2) });
   const today = l => { const k = .6 + .4 * l; return { top: .26 * k, bottom: .26 * k, sides: .1 * k }; };
   const globalLum = segs => lum(...[0, 1, 2].map(ch => segs.reduce((a, s) => a + s[ch], 0) / segs.length));
   function alphasAt(seg, glob) {
     const l = state.local ? lum(...seg) : glob;
-    return state.edge ? proposal(l) : today(l);
+    return state.apple ? apple(l) : state.edge ? proposal(l) : today(l);
   }
   function rimColor(seg) {
-    if (!state.tone) return [255, 255, 255];
+    if (state.apple || !state.tone) return [255, 255, 255];
     const lifted = seg.map(v => v + (255 - v) * .65);
     return lifted.map(v => 255 + (v - 255) * .7);
   }
@@ -236,7 +243,7 @@
     mc.filter = "blur(12px)"; mc.drawImage(wp, 0, 0); mc.filter = "none";
     mc.fillStyle = "rgba(26,26,30,.34)"; mc.fillRect(BAR.x, BAR.y, BAR.w, BAR.h); mc.restore();
     const { T, al } = rimLayer(segs, glob);
-    mc.save(); mc.filter = "blur(.7px)"; mc.setTransform(1, 0, 0, 1, 0, 0); mc.drawImage(T, 0, 0); mc.restore();
+    mc.save(); mc.filter = "blur(.7px)"; if (state.apple) mc.globalCompositeOperation = "lighter"; mc.setTransform(1, 0, 0, 1, 0, 0); mc.drawImage(T, 0, 0); mc.restore();
     mc.setTransform(S, 0, 0, S, 0, 0);
     const tile = 52, gap = 14, n = ICONS.length, total = n * tile + (n - 1) * gap, x0 = BAR.x + (BAR.w - total) / 2, y0 = BAR.y + (BAR.h - tile) / 2;
     ICONS.forEach((c, i) => { const x = x0 + i * (tile + gap); mc.fillStyle = c; rr(mc, x, y0, tile, tile, 12); mc.fill(); mc.fillStyle = "rgba(255,255,255,.22)"; rr(mc, x, y0, tile, tile * .5, 12); mc.fill(); });
@@ -250,9 +257,9 @@
     lc.imageSmoothingEnabled = false; lc.fillStyle = "#000"; lc.fillRect(0, 0, 240, 240);
     lc.drawImage(main, (p.x - span / 2) * S, (p.y - span / 2) * S, span * S, span * S, 0, 0, 240, 240);
     lc.strokeStyle = "rgba(255,255,255,.55)"; lc.lineWidth = 1; lc.strokeRect(116, 116, 8, 8);
-    const i = clamp(Math.floor((p.x - BAR.x) / SEGW), 0, SEG - 1), a = al[i], now = state.edge ? "propuesta" : "hoy";
+    const i = clamp(Math.floor((p.x - BAR.x) / SEGW), 0, SEG - 1), a = al[i], now = state.apple ? "referencia Apple, luz sumada" : state.edge ? "propuesta" : "hoy";
     const t = lum(...segs[i]), pct = v => `<b>${Math.round(v * 100)} %</b>`;
-    $("readout").innerHTML = `tramo ${i + 1} de ${SEG}, fondo ${Math.round(t * 100)} %<br>arriba ${pct(a.top)} · abajo ${pct(a.bottom)}<br>lados ${pct(a.sides)}<br>${state.local ? "medida local" : "media global " + Math.round(glob * 100) + " %"} · ${now}${state.tone ? " · tono del fondo" : " · blanca"}`;
+    $("readout").innerHTML = `tramo ${i + 1} de ${SEG}, fondo ${Math.round(t * 100)} %<br>arriba ${pct(a.top)} · abajo ${pct(a.bottom)}<br>lados ${pct(a.sides)}<br>${state.local ? "medida local" : "media global " + Math.round(glob * 100) + " %"} · ${now}${state.apple ? "" : state.tone ? " · tono del fondo" : " · blanca"}`;
   }
   main.addEventListener("pointermove", e => { const r = main.getBoundingClientRect(); probe = { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; render(); });
   main.addEventListener("pointerleave", () => { probe = null; render(); });
@@ -276,14 +283,17 @@
   // ---------- controles ----------
   function sync() {
     const all = (a, b, c) => state.local === a && state.edge === b && state.tone === c;
-    $("preset-today").setAttribute("aria-pressed", String(all(false, false, false)));
-    $("preset-new").setAttribute("aria-pressed", String(all(true, true, true)));
+    $("preset-today").setAttribute("aria-pressed", String(!state.apple && all(false, false, false)));
+    $("preset-new").setAttribute("aria-pressed", String(!state.apple && all(true, true, true)));
+    $("preset-apple").setAttribute("aria-pressed", String(state.apple));
+    ["c-edge", "c-tone"].forEach(id => { $(id).disabled = state.apple; });
     $("c-local").checked = state.local; $("c-edge").checked = state.edge; $("c-tone").checked = state.tone;
   }
-  const apply = (l, e, t) => { Object.assign(state, { local: l, edge: e, tone: t }); sync(); render(); };
+  const apply = (l, e, t) => { Object.assign(state, { local: l, edge: e, tone: t, apple: false }); sync(); render(); };
+  $("preset-apple").addEventListener("click", () => { state.apple = true; sync(); render(); });
   $("preset-today").addEventListener("click", () => apply(false, false, false));
   $("preset-new").addEventListener("click", () => apply(true, true, true));
-  [["c-local", "local"], ["c-edge", "edge"], ["c-tone", "tone"]].forEach(([id, key]) => $(id).addEventListener("change", e => { state[key] = e.target.checked; sync(); render(); }));
+  [["c-local", "local"], ["c-edge", "edge"], ["c-tone", "tone"]].forEach(([id, key]) => $(id).addEventListener("change", e => { state[key] = e.target.checked; state.apple = false; sync(); render(); }));
   $("wall").addEventListener("change", e => setWall(e.target.value));
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
   new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
