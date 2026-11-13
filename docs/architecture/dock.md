@@ -78,8 +78,10 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    not before. Downloads is `DOCK_FOLDER_CANVAS` tiles wide and drawn on all of it so that
    the folder is as tall as an icon's body and keeps the icon margin from its
    neighbours, as the picture does. Every icon sits on macOS's
-   grid: Malaysia's app icons already keep the 824-on-1024 body; any other
-   icon, and the places, is drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon marks an
+   grid: the app icons of the Malaysia themes already keep the 824-on-1024 body; any other
+   icon, and the places, is drawn at `DOCK_ICON_BODY` of the slot. With `appearance.icon_style`
+   other than `default`, an SVG app icon goes through `Image::icon_style` (a Skia color filter);
+   a PNG icon and the places keep their colors. A dot under the icon marks an
    open app (`show-process-indicators`). The name label shows over the icon
    under the pointer.
 7. **Clicks.** A tile answers over its whole column, from the bar's edge up

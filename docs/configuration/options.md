@@ -124,6 +124,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.text_size` | a value of `TEXT_SIZES` | `1.0` | **active** | the preferred reading size of every toolkit without its own, **System Settings › Accessibility › Display › Text size** |
 | `appearance.text_sizes` | table: `barrierkit`, `gtk`, `qt`, each a value of `TEXT_SIZES` | empty | **active** | kit (`Text`, sidebar items), portal (`text-scaling-factor` for GTK 4), shell (`GDK_DPI_SCALE` for the GTK 3 apps it opens) and the Qt bridge (qt6ct font, only with `qt_bridge`); a missing key uses `text_size` (ADR 0067). **System Settings**: `barrierkit` in Accessibility › Display › Text size, `gtk` and `qt` in Accessibility › freedesktop Options |
 | `appearance.menu_bar_size` | `"default"` \| `"large"` | `"default"` | **active** | shell: menu bar text size, **System Settings › Accessibility › Display** |
+| `appearance.icon_style` | `"default"` \| `"monochrome"` \| `"clear"` \| `"tinted"` | `"default"` | **active** | shell (dock): restyles the SVG app icons of the Dock tiles with a Skia color filter, `bk::symbol::IconStyle`: `monochrome` keeps the luminance, `clear` turns it into transparency (best from `Malaysia-Dark`, set with `MALAYSIA_ICON_THEME`), `tinted` maps it to the accent; **System Settings › Appearance** |
 | `appearance.shake_to_locate` | bool | `true` | **active** | compositor: shaking the pointer enlarges it, **System Settings › Accessibility › Display** |
 | `appearance.pointer_size` | a value of `POINTER_SIZES` | `1.0` | **active** | compositor: size of the cursors it draws; a cursor an app draws itself keeps the app's size (ADR 0066), **System Settings › Accessibility › Display** |
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
@@ -558,6 +559,7 @@ differentiate_without_color = false
 display_contrast = 1.0
 text_size = 1.0
 menu_bar_size = "default"
+icon_style = "default"
 shake_to_locate = true
 pointer_size = 1.0
 color_filters = false

@@ -275,6 +275,21 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
     }
 }
 
+pub(crate) fn styled_app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
+    match (icon, theme::resolved().icon_style) {
+        (
+            Some(IconData {
+                svg: Some(bytes), ..
+            }),
+            style,
+        ) if style != IconStyle::Default => Image::data(bytes.clone())
+            .icon_style(style)
+            .size(size)
+            .into_element(),
+        _ => app_icon(icon, name, size),
+    }
+}
+
 fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> Element {
     let palette = Palette::current();
     let text = theme::color(palette.label);

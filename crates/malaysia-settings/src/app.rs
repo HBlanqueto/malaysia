@@ -32,6 +32,7 @@ use crate::state::{account_name, initials, save_config};
 use crate::wallpaper::{color_sheet, use_wallpaper, wallpaper_pane};
 use crate::wifi::{WifiDialog, wifi_dialog, wifi_pane};
 use bk::app::{use_defaults, use_menu_action};
+use ctappearance::icon_style::IconStyle;
 use ctappearance::menubar::MenubarConfig;
 use malaysia_services::SETTINGS_PANE_ACTION as PANE_ACTION;
 use malaysia_services::bluez::{BlueZ, BluetoothCommand};
@@ -54,6 +55,12 @@ const SCROLL_BARS: [ScrollBars; 3] = [
 ];
 const SCROLL_CLICKS: [ScrollBarClick; 2] = [ScrollBarClick::NextPage, ScrollBarClick::ClickedSpot];
 const MENU_BAR_SIZES: [MenuBarSize; 2] = [MenuBarSize::Default, MenuBarSize::Large];
+const ICON_STYLES: [IconStyle; 4] = [
+    IconStyle::Default,
+    IconStyle::Monochrome,
+    IconStyle::Clear,
+    IconStyle::Tinted,
+];
 const COLOR_FILTERS: [ColorFilter; 4] = [
     ColorFilter::Grayscale,
     ColorFilter::RedGreen,
@@ -267,6 +274,22 @@ fn appearance(
         .section(
             Section::titled(tr!("color"))
                 .row(accent)
+                .row(
+                    Row::new(tr!("icon-style"))
+                        .keywords(tr_list!("icon-style-keywords"))
+                        .stacked()
+                        .control(
+                            RadioGroup::new(tr!("icon-style"))
+                                .option(tr!("icon-style-default"))
+                                .option(tr!("icon-style-monochrome"))
+                                .option(tr!("icon-style-clear"))
+                                .option(tr!("icon-style-tinted"))
+                                .selected(position(&ICON_STYLES, config.icon_style))
+                                .on_change(edit(error, |config, index: usize| {
+                                    config.icon_style = ICON_STYLES[index];
+                                })),
+                        ),
+                )
                 .row(
                     Row::new(tr!("tint-windows"))
                         .keywords(tr_list!("tint-windows-keywords"))
