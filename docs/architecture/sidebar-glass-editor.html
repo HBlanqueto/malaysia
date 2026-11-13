@@ -127,7 +127,7 @@
       <li><b>Croma</b> y <b>claridad</b> del fondo son cuánto del color y de la luminosidad de lo de detrás atraviesan el centro. <b>Tope</b> limita hasta dónde satura un fondo muy vivo.</li>
       <li>La <b>rampa del borde</b> es el color del fondo que asoma junto a los bordes izquierdo, superior e inferior de la sidebar. En macOS cae de forma exponencial en unos 46 px de captura y no existe en el borde que mira al contenido. Intensidad 0.70 es más sólido que lo medido; 1.00 es lo medido.</li>
       <li>La <b>línea del borde</b> es un trazo de 1 px más claro que el relleno. En oscuro es blanca y teñida (captura de Ajustes). En claro es casi blanca y apenas teñida: L 0.98–0.99 y croma 0.004–0.017 (captura de Libros).</li>
-      <li>El <b>marco</b> es la franja de 8 px de la ventana alrededor de la isla. En claro con foco es sólida, gris (L 0.90–0.93) y apenas teñida (croma 0.00–0.02). Sin foco es blanca (255) y la isla es un gris neutro de 247 (capturas de Libros y Apple TV). No está dibujada la sombra suave que la isla echa hacia el contenido con foco.</li>
+      <li>La <b>sombra</b> es lo que rodea a la isla en claro con foco (captura de Libros). La ventana es del mismo tono que el panel de Apariencia, y la isla echa sobre ella una sombra suave: L 0.91 pegada a la isla, 0.95 a 13 px y blanco poco después, apenas teñida (croma 0.005–0.019). Por eso la franja parece sólida sin ser de otro tono. Sin foco no hay sombra: la ventana es blanca y la isla es un gris neutro de 247. En oscuro no está medida y empieza en 0.</li>
       <li>El <b>grano</b> empieza en 0: en la captura de macOS el relleno varía 0.5 sobre 255, así que no tiene grano visible.</li>
       <li>El <b>color del borde</b> puede salir de lo que hay justo fuera de la ventana o justo dentro; no se sabe cuál hace macOS. Con el fondo de prueba se ve la diferencia: fuera da un borde oscuro, dentro uno claro.</li>
     </ul>
@@ -152,12 +152,12 @@
   const RIM_NOW = { dark: [255, 255, 255, 0.078], light: [111, 118, 134, 0.3] };
   const RIM_NOW_CHROMA = 0.65;
   const DEFAULTS = {
-    dark: { passes: 6, chroma: 0, lightness: 0, cap: 0.06, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.65, edgeLightness: 0.22, edgeCap: 0.12, source: 'outside', rim: 0.12, rimChroma: 0.3, noise: 0, frameTone: 0.256, frameChroma: 0 },
-    light: { passes: 6, chroma: 0, lightness: 0, cap: 0.03, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.45, edgeLightness: 0, edgeCap: 0.04, source: 'outside', rim: 0.8, rimChroma: 0.1, noise: 0, frameTone: 0.92, frameChroma: 0.15 },
+    dark: { passes: 6, chroma: 0, lightness: 0, cap: 0.06, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.65, edgeLightness: 0.22, edgeCap: 0.12, source: 'outside', rim: 0.12, rimChroma: 0.3, noise: 0, shadow: 0, shadowSpan: 25, shadowTint: 1 },
+    light: { passes: 6, chroma: 0, lightness: 0, cap: 0.03, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.45, edgeLightness: 0, edgeCap: 0.04, source: 'outside', rim: 0.8, rimChroma: 0.1, noise: 0, shadow: 0.13, shadowSpan: 25, shadowTint: 1 },
   };
   const CONFIRMED = {
-    dark: { passes: 4, chroma: 0.05, lightness: 0, cap: 0.02, edge: 0.4, span: 114, edgePasses: 6, edgeChroma: 0.55, edgeLightness: 0.1, edgeCap: 0.18, source: 'outside', rim: 0.03, rimChroma: 1, noise: 0, frameTone: 0.256, frameChroma: 0 },
-    light: { passes: 8, chroma: 0, lightness: 0, cap: 0.03, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.45, edgeLightness: 0, edgeCap: 0.04, source: 'outside', rim: 0.8, rimChroma: 0, noise: 0, frameTone: 0.92, frameChroma: 0.15 },
+    dark: { passes: 4, chroma: 0.05, lightness: 0, cap: 0.02, edge: 0.4, span: 114, edgePasses: 6, edgeChroma: 0.55, edgeLightness: 0.1, edgeCap: 0.18, source: 'outside', rim: 0.03, rimChroma: 1, noise: 0, shadow: 0, shadowSpan: 25, shadowTint: 1 },
+    light: { passes: 8, chroma: 0, lightness: 0, cap: 0.03, edge: 0.7, span: 46, edgePasses: 4, edgeChroma: 0.45, edgeLightness: 0, edgeCap: 0.04, source: 'outside', rim: 0.8, rimChroma: 0, noise: 0, shadow: 0.13, shadowSpan: 25, shadowTint: 1 },
   };
   const GROUPS = [
     { title: 'Desenfoque y centro', note: 'Con croma y claridad en 0 el centro es sólido y el desenfoque no se ve.', sliders: [
@@ -179,9 +179,10 @@
       { key: 'rim', label: 'Opacidad', min: 0, max: 0.8, step: 0.01, digits: 2 },
       { key: 'rimChroma', label: 'Tinte', min: 0, max: 1, step: 0.05, digits: 2 },
     ] },
-    { title: 'Marco de la isla', note: 'La franja de la ventana alrededor de la isla. Sin foco es blanca en claro.', sliders: [
-      { key: 'frameTone', label: 'Claridad', min: 0.2, max: 1, step: 0.01, digits: 2 },
-      { key: 'frameChroma', label: 'Tinte del fondo', min: 0, max: 0.5, step: 0.01, digits: 2 },
+    { title: 'Sombra de la isla', note: 'Sobre la ventana, pegada a la isla. Solo con foco.', sliders: [
+      { key: 'shadow', label: 'Opacidad', min: 0, max: 0.3, step: 0.01, digits: 2 },
+      { key: 'shadowSpan', label: 'Caída (px)', min: 4, max: 60, step: 1, digits: 0 },
+      { key: 'shadowTint', label: 'Tinte del fondo', min: 0, max: 1, step: 0.05, digits: 2 },
     ] },
     { title: 'Grano', note: 'En macOS no se ve.', sliders: [
       { key: 'noise', label: 'Cantidad', min: 0, max: 0.06, step: 0.002, digits: 3 },
@@ -397,12 +398,22 @@
     }
   }
 
-  // The window's own strip around the island: a solid tone with a trace of the wallpaper; white without focus in light.
-  function drawFrame(ctx, cfg) {
-    if (cfg.legacy || (!state.focused && state.scheme === 'light')) return;
-    const [r, g, b] = takeTint([cfg.frameTone, 0, 0], scene(state.wallpaper).mean, cfg.frameChroma, 0, 0.1);
+  // The island's soft shadow on the window around it: darkest at the island's edge, fading outward, tinted by the wallpaper; none without focus.
+  function drawShadow(ctx, cfg) {
+    if (cfg.legacy || !state.focused || !cfg.shadow) return;
+    const mean = scene(state.wallpaper).mean, tint = fromOklab(0.2, mean[1] * cfg.shadowTint, mean[2] * cfg.shadowTint);
+    const reach = cfg.shadowSpan * K * 3, x0 = Math.floor((PANEL.x - reach) * S), y0 = Math.floor((PANEL.y - reach) * S);
+    const w = Math.ceil((PANEL.w + 2 * reach) * S), h = Math.ceil((PANEL.h + 2 * reach) * S), out = new ImageData(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const d = panelSdf((x0 + x + 0.5) / S, (y0 + y + 0.5) / S);
+      if (d <= 0) continue;
+      const o = (y * w + x) * 4;
+      out.data[o] = tint[0]; out.data[o + 1] = tint[1]; out.data[o + 2] = tint[2]; out.data[o + 3] = 255 * cfg.shadow * Math.exp(-d / (cfg.shadowSpan * K));
+    }
+    const layer = document.createElement('canvas'); layer.width = w; layer.height = h;
+    layer.getContext('2d').putImageData(out, 0, 0);
     ctx.save(); ctx.beginPath(); ctx.roundRect(WIN.x, WIN.y, WIN.w, WIN.h, WIN.r); ctx.clip();
-    ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.fillRect(WIN.x, WIN.y, PANEL.x + PANEL.w + INSET - WIN.x, WIN.h); ctx.restore();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layer, x0, y0); ctx.restore();
   }
 
   function render(canvas, cfg) {
@@ -412,7 +423,7 @@
     ctx.setTransform(S, 0, 0, S, 0, 0);
     ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 28; ctx.shadowOffsetY = 10;
     ctx.fillStyle = WINDOW[scheme]; ctx.beginPath(); ctx.roundRect(WIN.x, WIN.y, WIN.w, WIN.h, WIN.r); ctx.fill(); ctx.restore();
-    drawFrame(ctx, cfg);
+    drawShadow(ctx, cfg);
     drawGlass(ctx, cfg);
     ctx.strokeStyle = scheme === 'dark' ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(WIN.x + 0.5, WIN.y + 0.5, WIN.w - 1, WIN.h - 1, WIN.r); ctx.stroke();
@@ -420,7 +431,7 @@
   }
 
   const fixed = p => p.toFixed(2);
-  const summary = p => `fondo en el centro: croma ${fixed(p.chroma)}, claridad ${fixed(p.lightness)} · borde al ${Math.round(p.edge * 100)} % · línea ${fixed(p.rim)} · marco ${fixed(p.frameTone)} · grano ${p.noise.toFixed(3)}`;
+  const summary = p => `fondo en el centro: croma ${fixed(p.chroma)}, claridad ${fixed(p.lightness)} · borde al ${Math.round(p.edge * 100)} % · línea ${fixed(p.rim)} · sombra ${fixed(p.shadow)} · grano ${p.noise.toFixed(3)}`;
   const readout = () => ['dark', 'light'].map(modeReadout).join('\n\n');
   function modeReadout(scheme) {
     const p = state.params[scheme];
@@ -428,7 +439,7 @@
       `centro: desenfoque ${p.passes} pasadas · croma ${fixed(p.chroma)} · claridad ${fixed(p.lightness)} · tope ${fixed(p.cap)}`,
       `borde: intensidad ${fixed(p.edge)} · caída ${p.span} px · desenfoque ${p.edgePasses} pasadas · croma ${fixed(p.edgeChroma)} · claridad ${fixed(p.edgeLightness)} · tope ${fixed(p.edgeCap)} · color de ${p.source === 'outside' ? 'fuera' : 'dentro'}`,
       `línea: opacidad ${fixed(p.rim)} · tinte ${fixed(p.rimChroma)}`,
-      `marco: claridad ${fixed(p.frameTone)} · tinte del fondo ${fixed(p.frameChroma)}`,
+      `sombra: opacidad ${fixed(p.shadow)} · caída ${p.shadowSpan} px · tinte del fondo ${fixed(p.shadowTint)}`,
       `grano: ${p.noise.toFixed(3)}`].join('\n');
   }
 
