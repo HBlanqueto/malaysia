@@ -376,7 +376,15 @@ fn append_desktop<R: MalaysiaRenderer>(
                 }
                 _ => Point::from((0, 0)),
             };
-            append_window_frame(state, renderer, id, focused, scale, offset, None, elements);
+            append_window_frame(
+                state,
+                renderer,
+                id,
+                focused,
+                scale,
+                Placement::at(offset),
+                elements,
+            );
         }
         let focus_space = matches!(
             state.spaces.current().kind,
@@ -601,8 +609,7 @@ pub(crate) fn append_sliding_spaces<R: MalaysiaRenderer>(
                 id,
                 focused,
                 scale,
-                Point::from((x, 0)),
-                None,
+                Placement::at(Point::from((x, 0))),
                 elements,
             );
         }
@@ -676,16 +683,31 @@ pub(crate) fn frame_has_border(state: crate::decoration::WindowState) -> bool {
     state != crate::decoration::WindowState::Fullscreen
 }
 
+pub(crate) struct Placement {
+    pub(crate) offset: Point<i32, Logical>,
+    // Where a snapshot's corner sits on screen: its glass still samples the wallpaper there.
+    pub(crate) snapshot: Option<Point<i32, Physical>>,
+}
+
+impl Placement {
+    pub(crate) fn at(offset: Point<i32, Logical>) -> Self {
+        Self {
+            offset,
+            snapshot: None,
+        }
+    }
+}
+
 pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
     state: &mut State,
     renderer: &mut R,
     id: malaysia_scene::scene::WindowId,
     focused: Option<malaysia_scene::scene::WindowId>,
     scale: f64,
-    offset: Point<i32, Logical>,
-    snapshot: Option<Point<i32, Physical>>,
+    placement: Placement,
     elements: &mut Vec<OutputRenderElement<R>>,
 ) {
+    let Placement { offset, snapshot } = placement;
     let data = {
         let Some(window) = state
             .windows
@@ -810,7 +832,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
     );
     let (material, rim) = crate::glass::panels(
         state,
-        &data.surface,
+        id,
         data.location + data.surface_location,
         &crate::glass::Frame {
             rect: frame_rect_physical,

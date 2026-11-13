@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 
+use malaysia_scene::scene::WindowId;
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::Id;
@@ -20,18 +22,20 @@ use crate::cursor::OutputRenderElement;
 use crate::effects::RoundedTextureElement;
 use crate::renderer::MalaysiaRenderer;
 use crate::scene_elements::{
-    LayerSide, append_buffer, append_layers, append_window_frame, background_of, physical_rect,
+    LayerSide, Placement, append_buffer, append_layers, append_window_frame, background_of,
+    physical_rect,
 };
 use crate::state::State;
 
 // ADR 0071: dual Kawase (Bjørge, SIGGRAPH 2015), blurred again only when what it samples changes.
-// `wallpaper` is the Background layer; `glass` is the same, blurred wider for the sidebars (ADR 0078); `behind` adds the windows, for the Dock's glass.
+// `wallpaper` is the Background layer; `glass` is the same, blurred wider for the sidebars (ADR 0078); `behind` adds the windows, for the Dock's glass; `glass_behind` is that stack below each glass window, blurred as wide as `glass`.
 pub(crate) struct Blur {
     down: GlesTexProgram,
     up: GlesTexProgram,
     wallpaper: Option<Blurred>,
     glass: Option<Blurred>,
     behind: Option<Blurred>,
+    glass_behind: HashMap<WindowId, Blurred>,
 }
 
 struct Blurred {
@@ -63,6 +67,7 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<Blur> {
         wallpaper: None,
         glass: None,
         behind: None,
+        glass_behind: HashMap::new(),
     })
 }
 
@@ -81,6 +86,7 @@ pub(crate) fn update(
     if !drawn(state) {
         blur.wallpaper = None;
         blur.glass = None;
+        blur.glass_behind.clear();
     } else if (requested(state) || glass_requested(state))
         && blur.refresh(state, renderer, output_size).is_none()
     {
@@ -94,6 +100,9 @@ pub(crate) fn update(
     state.blur = Some(blur);
     if drawn(state) && behind_requested(state) {
         refresh_behind(state, renderer, output_size);
+    }
+    if drawn(state) {
+        refresh_glass_behind(state, renderer, output_size);
     }
 }
 
@@ -245,16 +254,34 @@ fn blur_region(surface: &WlSurface) -> Vec<Rectangle<i32, Logical>> {
     })
 }
 
-pub(crate) fn wallpaper_texture(state: &State) -> Option<(GlesTexture, CommitCounter)> {
-    let wallpaper = state.blur.as_ref()?.glass.as_ref()?;
-    drawn(state).then(|| (wallpaper.blurred.clone(), wallpaper.commit))
+// The windows below a glass window show through it; without that cache, the wallpaper. The flag says which.
+pub(crate) fn glass_texture(
+    state: &State,
+    window: WindowId,
+) -> Option<(GlesTexture, CommitCounter, bool)> {
+    let blur = state.blur.as_ref()?;
+    let behind = blur.glass_behind.get(&window);
+    let cache = behind.or(blur.glass.as_ref())?;
+    drawn(state).then(|| (cache.blurred.clone(), cache.commit, behind.is_some()))
 }
 
+fn wants_glass(state: &State, window: WindowId) -> bool {
+    state
+        .windows
+        .surface_of(window)
+        .is_some_and(|surface| crate::window_style::glass(surface).is_some())
+}
+
+// A window that is about to minimize is already hidden, but its snapshot still needs the glass.
 fn glass_requested(state: &State) -> bool {
     state
         .windows
         .iter_visible(&state.minimized)
-        .any(|window| crate::window_style::glass(window.surface()).is_some())
+        .any(|window| wants_glass(state, window.id()))
+        || state
+            .minimize_requests
+            .iter()
+            .any(|request| wants_glass(state, request.window))
 }
 
 fn requested(state: &State) -> bool {
@@ -337,6 +364,50 @@ fn refresh_behind(
     state.blur = Some(blur);
 }
 
+fn refresh_glass_behind(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    output_size: Size<i32, Physical>,
+) {
+    let scale = state.scale.fractional_scale();
+    let stack: Vec<_> = state
+        .windows
+        .iter_visible(&state.minimized)
+        .map(|window| window.id())
+        .filter(|id| !state.is_minimizing(*id))
+        .collect();
+    let glass: Vec<_> = stack
+        .iter()
+        .enumerate()
+        .filter(|(_, id)| wants_glass(state, **id))
+        .collect();
+    if let Some(blur) = state.blur.as_mut() {
+        blur.glass_behind
+            .retain(|id, _| glass.iter().any(|(_, shown)| *shown == id));
+    }
+    for (index, &id) in glass {
+        let elements = stack_elements(state, renderer, scale, &stack[..index]);
+        let Some(mut blur) = state.blur.take() else {
+            return;
+        };
+        let mut cache = blur.glass_behind.remove(&id);
+        let rendered = render_blurred(
+            &mut cache,
+            (&blur.down, &blur.up),
+            renderer,
+            (output_size, scale, ctdesign::GLASS.blur_passes),
+            &elements,
+        );
+        match (rendered, cache) {
+            (Some(()), Some(cache)) => {
+                blur.glass_behind.insert(id, cache);
+            }
+            _ => tracing::warn!("failed to blur what is behind a glass window"),
+        }
+        state.blur = Some(blur);
+    }
+}
+
 fn render_blurred(
     cache: &mut Option<Blurred>,
     (down, up): (&GlesTexProgram, &GlesTexProgram),
@@ -380,24 +451,31 @@ fn behind_elements(
     renderer: &mut GlesRenderer,
     scale: f64,
 ) -> Vec<OutputRenderElement<GlesRenderer>> {
-    let focused = state.focused_window();
     let windows: Vec<_> = state
         .windows
         .iter_visible(&state.minimized)
-        .rev()
         .map(|window| window.id())
         .filter(|id| !state.is_minimizing(*id))
         .collect();
+    stack_elements(state, renderer, scale, &windows)
+}
+
+fn stack_elements(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    scale: f64,
+    bottom_to_top: &[WindowId],
+) -> Vec<OutputRenderElement<GlesRenderer>> {
+    let focused = state.focused_window();
     let mut elements = Vec::new();
-    for id in windows {
+    for &id in bottom_to_top.iter().rev() {
         append_window_frame(
             state,
             renderer,
             id,
             focused,
             scale,
-            Point::default(),
-            None,
+            Placement::at(Point::default()),
             &mut elements,
         );
     }

@@ -15,6 +15,7 @@ use smithay::utils::{Buffer as BufferCoord, Logical, Point, Rectangle, Scale, Si
 
 use crate::cursor::OutputRenderElement;
 use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
+use crate::scene_elements::Placement;
 use crate::state::State;
 
 const DURATION: Duration = Duration::from_millis(ctdesign::DOCK_MINIMIZE_MS);
@@ -67,7 +68,7 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
 }
 
 pub(crate) struct MinimizeRequest {
-    window: WindowId,
+    pub(crate) window: WindowId,
     hiding: bool,
     // Focus has already moved to another window when the snapshot is taken; the baked look is the click's.
     was_focused: bool,
@@ -160,8 +161,10 @@ fn snapshot(
             window,
             focused,
             scale,
-            Point::from((-outer.loc.x, -outer.loc.y)),
-            Some(crate::session::physical_point(outer.loc, scale)),
+            Placement {
+                offset: Point::from((-outer.loc.x, -outer.loc.y)),
+                snapshot: Some(crate::session::physical_point(outer.loc, scale)),
+            },
             &mut elements,
         );
     }

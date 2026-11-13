@@ -2,6 +2,7 @@ use std::sync::Mutex;
 
 use ctappearance::ColorScheme;
 use ctdesign::Rgba;
+use malaysia_scene::scene::WindowId;
 use smithay::backend::renderer::Texture;
 use smithay::backend::renderer::element::Id;
 use smithay::backend::renderer::gles::Uniform;
@@ -23,6 +24,7 @@ type Layers<R> = (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>);
 #[derive(Clone, PartialEq)]
 struct Drawn {
     wallpaper: CommitCounter,
+    behind: bool,
     panel: Rectangle<i32, Physical>,
     window: Rectangle<i32, Physical>,
     radius: i32,
@@ -91,16 +93,19 @@ fn panel_shape(
 
 pub(crate) fn panels<R: MalaysiaRenderer>(
     state: &State,
-    surface: &WlSurface,
+    id: WindowId,
     origin: Point<i32, Logical>,
     window: &Frame,
     settle: f32,
     scale: f64,
     screen_origin: Point<i32, Physical>,
 ) -> Layers<R> {
-    let (Some(glass), Some((texture, commit)), Some(material), Some(rim)) = (
+    let Some(surface) = state.windows.surface_of(id) else {
+        return (Vec::new(), Vec::new());
+    };
+    let (Some(glass), Some((texture, commit, behind)), Some(material), Some(rim)) = (
         crate::window_style::glass(surface),
-        crate::blur::wallpaper_texture(state),
+        crate::blur::glass_texture(state, id),
         state.glass.clone(),
         state.glass_rim.clone(),
     ) else {
@@ -142,6 +147,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
         );
         let drawn = Drawn {
             wallpaper: commit,
+            behind,
             panel,
             window: window.rect,
             radius,

@@ -92,9 +92,13 @@ and the bottom.
       empty array removes the panels. It lasts for the lifetime of the surface.
    5. The client leaves the panels transparent. The compositor fills them.
 3. **The material of an active panel** is, for each point p of the panel:
-   `take_chroma(base, B(p), chroma)`, where B is the blurred wallpaper of
-   ADR 0071, step 6. It is always `"wallpaper"`: the windows behind add nothing
-   measurable, so `appearance.blur_behind` does not apply to panels.
+   `take_chroma(base, B(p), chroma)`, where B is the blurred stack below the
+   window: the windows under it, in their stacking order, over the wallpaper,
+   like the Dock's `"behind"` (ADR 0071, step 6). Each glass window has its own
+   cache, blurred again only when something below it changes. Where that cache
+   fails, B is the blurred wallpaper. The owner chose this on 2026-11-13, over the
+   measurement that the windows add nothing; `appearance.blur_behind` does not
+   apply to panels.
 4. **The rim** is the inner border of the window frame, around each panel and
    on the same corner, with no shadow and no outer border. It is the line
    `set_cards` already gets (ADR 0068), drawn above the surface. It is a line,
@@ -167,8 +171,8 @@ describes what it changes, in its own commit.
 - A kit sidebar looks like a solid panel with the wallpaper's color. Only the
   compositor can draw that, because it is the only one that sees the wallpaper.
 - Other compositors keep the opaque sidebar the kit paints today.
-- The cost is one textured quad per panel and its rim. The wallpaper is blurred
-  once, as before.
+- The cost is one textured quad per panel and its rim, plus, per glass window,
+  one render and blur of the stack below it when that stack changes.
 - The Infinity protocol grows by one request. Only kit clients use it.
 - A panel that moves needs a `set_glass` per frame. The kit sends it only when
   the rectangle changes.
@@ -183,8 +187,6 @@ describes what it changes, in its own commit.
   kept in step with every output and scale.
 - **Only the wallpaper's dominant color, on the client.** It is uniform: there
   is no local color. It is what the kit paints today and stays as the fallback.
-- **`"behind"` for panels.** The windows behind add nothing measurable and
-  cost a blur per frame.
 - **A see-through rim.** It would show what is behind the sidebar. The measured
   rim is a line that takes the wallpaper's chroma, not its pixels.
 - **The kit paints the rim.** The compositor already draws the inner border of
