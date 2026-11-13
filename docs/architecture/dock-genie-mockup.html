@@ -87,11 +87,15 @@ input[type=range]{accent-color:var(--accent);min-width:0}
       <label class="f" for="speed">Velocidad
         <select id="speed"><option value="1">1×</option><option value="0.25" selected>¼×</option><option value="0.1">1/10×</option></select>
       </label>
+      <label class="f" for="wall">Fondo
+        <select id="wall"><option value="color" selected>Colorido</option><option value="dark">Oscuro</option><option value="blue">Azul plano</option><option value="light">Claro plano</option></select>
+      </label>
       <label class="f" for="guides"><input id="guides" type="checkbox"> Ancho de la miniatura</label>
     </div>
     <div class="scrub">
       <input id="scrub" type="range" min="0" max="1000" value="550" aria-label="Línea de tiempo del efecto">
       <div class="row"><span id="phase" style="font-weight:600"></span><span class="readout" id="clock"></span></div>
+      <div class="row"><span id="rim" class="readout" style="margin:0"></span></div>
     </div>
     <div id="tracks" class="tracks" aria-hidden="true"></div>
   </section>
@@ -125,7 +129,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   const bg = document.createElement("canvas"); bg.width = W * dpr; bg.height = H * dpr;
   const bx = bg.getContext("2d");
   const blurOk = "filter" in cx;
-  const S = {mode: "target", dir: "min", t: .55, playing: false, last: 0, speed: .25};
+  const S = {mode: "target", dir: "min", t: .55, playing: false, last: 0, speed: .25, wall: "color"};
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const lerp = (a, b, k) => a + (b - a) * k;
   const ease = k => k < .5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
@@ -243,14 +247,24 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   }
 
   /* ---------- Frame ---------- */
+  const WALLS = {
+    color: [[0, "#2a2f8f"], [.45, "#c2307a"], [1, "#ff7a3d"]],
+    dark: [[0, "#07131b"], [.5, "#10303a"], [1, "#16262c"]],
+    blue: [[0, "#6f9fc7"], [.5, "#2f56c4"], [1, "#0a2a9a"]],
+    light: [[0, "#e4edf6"], [.5, "#d3e2f1"], [1, "#c6d8ec"]]
+  };
   function wallpaper(c) {
-    const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#2a2f8f"); g.addColorStop(.45, "#c2307a"); g.addColorStop(1, "#ff7a3d");
+    const g = c.createLinearGradient(0, 0, W, H); WALLS[S.wall].forEach(([k, col]) => g.addColorStop(k, col));
     c.fillStyle = g; c.fillRect(0, 0, W, H);
+    if (S.wall !== "color") { drawMenubar(c); return; }
     const wave = (col, y0, amp) => { c.fillStyle = col; c.beginPath(); c.moveTo(0, H); c.lineTo(0, y0);
       c.bezierCurveTo(W * .3, y0 - amp, W * .55, y0 + amp, W, y0 - amp * .6); c.lineTo(W, H); c.closePath(); c.fill(); };
     wave("rgba(255,106,90,.55)", 330, 120); wave("rgba(255,60,90,.55)", 430, 90); wave("rgba(90,40,140,.45)", 500, 60);
     const r = c.createRadialGradient(W * .85, 60, 10, W * .85, 60, 420); r.addColorStop(0, "rgba(80,190,255,.55)"); r.addColorStop(1, "rgba(80,190,255,0)");
     c.fillStyle = r; c.fillRect(0, 0, W, H);
+    drawMenubar(c);
+  }
+  function drawMenubar(c) {
     c.fillStyle = "rgba(20,16,28,.55)"; c.fillRect(0, 0, W, 24);
     c.fillStyle = "#f2f0f6"; c.font = "500 12px Inter, system-ui, sans-serif"; c.textBaseline = "middle";
     ["Escritorio", "Archivo", "Edición", "Visualización", "Ir", "Ventana", "Ayuda"].forEach((t, i) => c.fillText(t, 36 + [0, 70, 132, 192, 288, 322, 386][i], 12));
@@ -264,12 +278,37 @@ input[type=range]{accent-color:var(--accent);min-width:0}
     c.strokeStyle = "rgba(255,255,255,.16)"; c.lineWidth = 1; rr(c, WIN.x + .5, WIN.y + .5, WIN.w - 1, WIN.h - 1, WIN.r); c.stroke();
   }
 
-  function dockGlass(c, L) {
-    c.save(); rr(c, L.barX, L.barY, L.barW, L.barH, L.barH * .3); c.clip();
+  // The kit's glass_edge: only the inner line, light over the wallpaper. Its opacity runs from DOCK_RIM_DARK to
+  // DOCK_RIM_BRIGHT with the HSL lightness of the wallpaper behind the bar; the palette gives 10 % on the sides, 26 % on the edges.
+  const RIM = {dark: .6, bright: 3, sides: .1, edges: .26, glow: .07};
+  function lightnessBehind(L) {
+    const x = Math.max(0, Math.floor(L.barX * dpr)), y = Math.floor(L.barY * dpr);
+    const w = Math.min(bg.width - x, Math.ceil(L.barW * dpr)), h = Math.min(bg.height - y, Math.ceil(L.barH * dpr));
+    const d = bx.getImageData(x, y, w, h).data; let r = 0, g = 0, b = 0, n = 0;
+    for (let i = 0; i < d.length; i += 64) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+    const hi = Math.max(r, g, b) / (n * 255), lo = Math.min(r, g, b) / (n * 255);
+    return (hi + lo) / 2;
+  }
+  function dockGlass(c, L, target) {
+    const radius = L.barH * .3;
+    c.save(); rr(c, L.barX, L.barY, L.barW, L.barH, radius); c.clip();
     if (blurOk) { c.filter = "blur(14px)"; c.drawImage(bg, 0, 0, W, H); c.filter = "none"; }
     c.fillStyle = "rgba(34,22,32,.46)"; c.fillRect(L.barX, L.barY, L.barW, L.barH); c.restore();
-    c.strokeStyle = "rgba(0,0,0,.4)"; c.lineWidth = 1; rr(c, L.barX - .5, L.barY - .5, L.barW + 1, L.barH + 1, L.barH * .3 + .5); c.stroke();
-    c.strokeStyle = "rgba(255,255,255,.2)"; rr(c, L.barX + .5, L.barY + .5, L.barW - 1, L.barH - 1, L.barH * .3 - .5); c.stroke();
+    if (!target) {
+      c.strokeStyle = "rgba(0,0,0,.4)"; c.lineWidth = 1; rr(c, L.barX - .5, L.barY - .5, L.barW + 1, L.barH + 1, radius + .5); c.stroke();
+      c.strokeStyle = "rgba(255,255,255,.2)"; rr(c, L.barX + .5, L.barY + .5, L.barW - 1, L.barH - 1, radius - .5); c.stroke();
+      $("rim").textContent = "Hoy: trazo negro exterior y línea blanca fija del 20 %";
+      return;
+    }
+    const light = lightnessBehind(L), k = RIM.dark + (RIM.bright - RIM.dark) * light, a = v => Math.min(1, v * k);
+    c.save(); rr(c, L.barX, L.barY, L.barW, L.barH, radius); c.clip();
+    const glow = c.createLinearGradient(0, L.barY, 0, L.barY + L.barH), depth = 12 / L.barH;
+    [[0, a(RIM.glow)], [depth, 0], [1 - depth, 0], [1, a(RIM.glow)]].forEach(([o, al]) => glow.addColorStop(o, `rgba(255,255,255,${al})`));
+    c.fillStyle = glow; c.fillRect(L.barX, L.barY, L.barW, L.barH); c.restore();
+    const line = c.createLinearGradient(0, L.barY, 0, L.barY + L.barH), curve = radius / L.barH;
+    [[0, a(RIM.edges)], [curve, a(RIM.sides)], [1 - curve, a(RIM.sides)], [1, a(RIM.edges)]].forEach(([o, al]) => line.addColorStop(o, `rgba(255,255,255,${al})`));
+    c.strokeStyle = line; c.lineWidth = 1; rr(c, L.barX + .5, L.barY + .5, L.barW - 1, L.barH - 1, radius - .5); c.stroke();
+    $("rim").textContent = `Fondo con claridad ${Math.round(light * 100)} %: línea ×${k.toFixed(2)}, lados ${Math.round(a(RIM.sides) * 100)} %, arriba y abajo ${Math.round(a(RIM.edges) * 100)} %, sin trazo negro`;
   }
 
   function dockIcons(c, L, target) {
@@ -334,7 +373,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
 
     cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, W, H);
     cx.drawImage(bg, 0, 0, W, H);
-    dockGlass(cx, L);
+    dockGlass(cx, L, target);
     dockIcons(cx, L, target);
     if (!target) thumbnailToday(cx, slot, alpha, dir === "min" && t < 1, L);
     if (target && guides) widthGuides(cx, goal);
@@ -346,6 +385,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   /* ---------- Rules, timeline and transport ---------- */
   const RULES = [
     ["El genie va por encima del Dock", "La ventana nace de la miniatura y se ve entera al cruzar la barra.", "El cristal del Dock lo cubre: la ventana parece salir de detrás."],
+    ["Solo la línea interior, como en macOS", "Sin trazo negro. La línea es blanca y translúcida: tenue sobre un fondo oscuro y casi blanca sobre uno claro o plano, y más fuerte arriba y abajo que a los lados. Cambia el fondo para verlo.", "Trazo negro exterior y una línea blanca fija del 20 %."],
     ["El Dock abre su hueco", "El mosaico crece de 0 a 1 mientras baja el genie y las demás miniaturas se apartan. Al restaurar, se cierra.", "El hueco aparece de golpe al empezar; no hay sitio preparado."],
     ["El genie sale de la anchura de la miniatura",
       "La miniatura tiene un ancho fijo, el de su ventana al alto del icono. El genie se estrecha hasta esa anchura exacta antes de llegar al Dock y no la rebasa. Activa «Ancho de la miniatura» para ver las guías.",
@@ -402,6 +442,7 @@ input[type=range]{accent-color:var(--accent);min-width:0}
   $("b-res").onclick = () => play("restore");
   $("m-target").onclick = () => { S.mode = "target"; render(); };
   $("m-today").onclick = () => { S.mode = "today"; render(); };
+  $("wall").onchange = e => { S.wall = e.target.value; render(); };
   $("guides").onchange = e => { guides = e.target.checked; render(); };
   $("speed").onchange = e => { S.speed = +e.target.value; };
   $("scrub").oninput = e => { S.playing = false; S.t = e.target.value / 1000; render(); };
