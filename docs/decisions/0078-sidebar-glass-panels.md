@@ -125,6 +125,11 @@ and the bottom.
    blurs the wallpaper `blur_passes` (4) times, one more than the other
    blurs, in its own cache. The rim's white and its width are the window
    frame's own tokens. They are first values, to calibrate in phase 6.
+   Reference for that calibration, read by eye from macOS screenshots over the
+   vivid Sonoma wallpaper (not measured): in dark the sidebar reaches a chroma
+   of about 0.035 to 0.05, blue above and green below; in light it is a clear
+   pastel (mint, pink, cyan), about 0.03 to 0.05, at L about 0.95. The caps
+   (0.016 dark, 0.03 light) and the light `chroma` (0.15) are below that.
 8. **Without this request** (another compositor, or version below 6) the kit
    keeps painting its opaque sidebar. Nothing else changes.
 9. **No new configuration.** `appearance.reduce_transparency`,
