@@ -33,11 +33,10 @@ use ctappearance::dock::{DockConfig, DockOrientation, MinimizeEffect};
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
     DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
-    DOCK_FOLDER_CANVAS, DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP,
-    DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS,
-    DOCK_MAGNIFY_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH,
-    DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON,
-    DRAG,
+    DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X,
+    DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS,
+    DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX,
+    DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
@@ -460,7 +459,6 @@ impl App for DockApp {
                             .find(|tile| tile.window.id == window.id)
                             .map_or(1.0, |tile| tile.presence),
                 ),
-                Item::Downloads => Slot::Wide(DOCK_FOLDER_CANVAS),
                 _ => Slot::Tile,
             })
             .collect();
@@ -804,7 +802,7 @@ impl App for DockApp {
                         children.push(
                             placed(frame.area(
                                 center - dot / 2.0,
-                                cross0 + layout.padding / 2.0 - dot / 2.0,
+                                cross0 + layout.padding - dot,
                                 dot,
                                 dot,
                             ))
@@ -887,32 +885,28 @@ impl App for DockApp {
                 }
                 Item::Downloads => {
                     let folder = downloads_dir();
-                    let spill = slot.size * (DOCK_FOLDER_CANVAS - 1.0) / 2.0;
                     children.push(
-                        placed(frame.area(
-                            slot.start,
-                            icon_cross - spill,
-                            slot.length,
-                            slot.size * DOCK_FOLDER_CANVAS,
-                        ))
-                        .center()
-                        .child(app_icon(
-                            icon("folder-download", &["places"]).as_ref(),
-                            tr!("dock-downloads"),
-                            slot.size * DOCK_FOLDER_CANVAS,
-                        ))
-                        .on_press({
-                            let folder = folder.clone();
-                            move |_| xdg_open(&folder)
-                        })
-                        .on_secondary_down({
-                            let anchor = menu.anchor(slot.start, slot.length, slot.size);
-                            move |_| {
+                        placed(frame.area(slot.start, icon_cross, slot.length, slot.size))
+                            .center()
+                            .child(app_icon(
+                                icon("folder-download", &["places"]).as_ref(),
+                                tr!("dock-downloads"),
+                                slot.size,
+                            ))
+                            .on_press({
                                 let folder = folder.clone();
-                                menu.open(open_menu(), anchor, move |_: String| xdg_open(&folder))
-                            }
-                        })
-                        .into_element(),
+                                move |_| xdg_open(&folder)
+                            })
+                            .on_secondary_down({
+                                let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                                move |_| {
+                                    let folder = folder.clone();
+                                    menu.open(open_menu(), anchor, move |_: String| {
+                                        xdg_open(&folder)
+                                    })
+                                }
+                            })
+                            .into_element(),
                     );
                 }
                 Item::Trash => {

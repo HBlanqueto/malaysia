@@ -81,12 +81,11 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    icon's body (`DOCK_ICON_BODY`), as wide as its window's shape asks, with
    square corners and no border; its slot is as wide as the
    picture plus the margin of an icon. The picture shows when the genie is over,
-   not before. Downloads is `DOCK_FOLDER_CANVAS` tiles wide and drawn on all of it so that
-   the folder is as tall as an icon's body and keeps the icon margin from its
-   neighbours, as the picture does. Every icon sits on macOS's
+   not before. Downloads takes a plain slot and its folder fills it, as in
+   macOS. Every icon sits on macOS's
    grid: an app icon already sits on it, because a Malaysia theme draws it so and the kit puts
    any other on a plate (`Image::app_icon`, in the user's `appearance.icon_style` and color scheme); the
-   places fill their canvas, so they are drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon marks an
+   places fill their canvas, so they are drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon, touching its slot, marks an
    open app (`show-process-indicators`). The name label shows over the icon
    under the pointer.
 7. **Clicks.** A tile answers over its whole column, from the bar's edge up
