@@ -77,6 +77,11 @@
       <button type="button" id="dark" aria-pressed="true">Oscuro</button>
       <button type="button" id="light" aria-pressed="false">Claro</button>
     </div>
+    <div class="group" role="group" aria-label="Foco de la ventana">
+      <span class="label">Foco</span>
+      <button type="button" id="focused" aria-pressed="true">Con foco</button>
+      <button type="button" id="unfocused" aria-pressed="false">Sin foco</button>
+    </div>
     <div class="group">
       <label class="label" for="wallpaper">Fondo</label>
       <select id="wallpaper">
@@ -124,6 +129,7 @@
       <li>La sidebar solo desenfoca el fondo de pantalla: en macOS una ventana con barra rojiza detrás no cambia nada.</li>
       <li>Referencia medida en macOS (capturas del 13-nov, paisaje de Tahoe). Oscuro: L 0.28 y croma 0.02 en el centro de la sidebar; el fondo de detrás va de L 0.3 a 0.8 y tiene croma 0.09, así que el vidrio toma de él cerca de un 12 % de su claridad y un 25 % de su croma. Claro: L 0.945 y croma 0.003 en el centro, (235,237,238): es casi el color base sin tinte, casi sólido. Toma como mucho un 2–3 % del croma del fondo y nada de claridad. Por eso el modo claro necesita otros valores: con los del oscuro se tiñe y se oscurece, y la sidebar parece transparente.</li>
       <li><b>Rampa en los bordes</b>: en macOS la sidebar deja pasar más del fondo junto a los bordes izquierdo y superior de la ventana (a 8 px, claridad 0.33 y croma 0.05 en oscuro; 0.91 y 0.04 en claro), menos junto al inferior, y es plana en el centro, a partir de unos 150 px. Con la rampa el borde sube un 12 % de claridad y un 40 % de croma y baja con una exponencial de 60 px en oscuro y de 45 px en claro, que es más corta.</li>
+      <li><b>Sin foco</b>: en macOS, en claro, la sidebar sin foco es un gris neutro plano de (242,242,242), sin tinte ni rampa; con foco es (236,238,238) en el centro y toma el color del fondo en los bordes. El compositor ya funde a un sólido plano al perder el foco, pero lo tiñe con el color del fondo, y su base es (236,238,242). En oscuro aún no hay medida del estado sin foco y la propuesta deja el sólido de ahora.</li>
       <li>El panel de detalle queda casi neutro en macOS (croma 0.01), como el nuestro.</li>
     </ul>
   </section>
@@ -137,8 +143,10 @@
   const DETAIL_X = PANEL.x + PANEL.w + 8;
 
   const BEFORE = { dark: { chroma: 0.35, cap: 0.04, lightness: 0, passes: 5, edge: false }, light: { chroma: 0.6, cap: 0.09, lightness: 0.2, passes: 5, edge: false } };
-  const AFTER = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6, edge: true }, light: { chroma: 0.02, cap: 0.03, lightness: 0, passes: 6, edge: true } };
+  const AFTER = { dark: { chroma: 0.3, cap: 0.06, lightness: 0.12, passes: 6, edge: true }, light: { chroma: 0.02, cap: 0.03, lightness: 0, passes: 6, edge: true, solid: '#f2f2f2' } };
   const RIM_CHROMA = 0.65;
+  // Without focus the compositor fades to a flat solid: the base with the wallpaper's chroma at wallpaper-tinting x sidebar (ctdesign). macOS shows a flat neutral (242,242,242) in light.
+  const SOLID_TINT = { dark: 0.15 * 2, light: 0.12 * 2 };
   const KAWASE_SIGMA = 5 / 3;
   // Measured on macOS: the sidebar lets more of the backdrop through along its left, top and bottom edges (the bottom at half strength) and is flat past about 150 px (0.56 scales the real window to this one).
   const EDGE = { span: { dark: 60 * 0.56, light: 45 * 0.56 }, bottom: 0.5, chroma: 0.4, lightness: 0.12, cap: 0.06 };
@@ -147,7 +155,7 @@
   const RIM_BEFORE = { dark: [255, 255, 255, 0.078], light: [111, 118, 134, 0.3] };
   const RIM_AFTER = { dark: [255, 255, 255, 0.078], light: [111, 118, 134, 0.3] };
 
-  const state = { scheme: 'dark', wallpaper: 'tahoe', custom: { ...AFTER.dark } };
+  const state = { scheme: 'dark', focused: true, wallpaper: 'tahoe', custom: { ...AFTER.dark } };
   const $ = id => document.getElementById(id);
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -288,9 +296,17 @@
       const base = document.createElement('canvas'); base.width = W * S; base.height = H * S;
       const bc = base.getContext('2d'); paintBehind(bc, state.wallpaper);
       const image = bc.getImageData(0, 0, W * S, H * S);
-      blurCache.set(key, { plain: base, blur: gaussian(image, KAWASE_SIGMA * Math.pow(2, passes) * (H / 1080) * S) });
+      const blur = gaussian(image, KAWASE_SIGMA * Math.pow(2, passes) * (H / 1080) * S);
+      blurCache.set(key, { plain: base, blur, mean: meanOklab(image.data) });
     }
     return blurCache.get(key);
+  }
+
+  function meanOklab(data) {
+    let r = 0, g = 0, b = 0;
+    const n = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
+    return toOklab(r / n, g / n, b / n);
   }
 
   function roundedSdf(px, py, box, r) {
@@ -302,6 +318,7 @@
 
   function drawGlass(ctx, params, rim, scheme, sources) {
     const base = toOklab(...hex(BASE[scheme]));
+    const flat = state.focused ? null : params.solid ? hex(params.solid) : takeTint(base, sources.mean, SOLID_TINT[scheme], 0, params.cap);
     const x0 = Math.floor(PANEL.x * S) - 2, y0 = Math.floor(PANEL.y * S) - 2;
     const w = Math.ceil(PANEL.w * S) + 4, h = Math.ceil(PANEL.h * S) + 4;
     const out = new ImageData(w, h), data = sources.blur.data, stride = sources.blur.width;
@@ -311,9 +328,9 @@
       if (cover <= 0) continue;
       const i = (sy * stride + sx) * 4, q = toOklab(data[i], data[i + 1], data[i + 2]);
       const edge = params.edge ? Math.max(Math.exp(-Math.max(0, sx / S - WIN.x) / EDGE.span[scheme]), Math.exp(-Math.max(0, sy / S - WIN.y) / EDGE.span[scheme]), EDGE.bottom * Math.exp(-Math.max(0, WIN.y + WIN.h - sy / S) / EDGE.span[scheme])) : 0;
-      let color = takeTint(base, q, params.chroma + EDGE.chroma * edge, params.lightness + EDGE.lightness * edge, params.cap + EDGE.cap * edge);
+      let color = flat ?? takeTint(base, q, params.chroma + EDGE.chroma * edge, params.lightness + EDGE.lightness * edge, params.cap + EDGE.cap * edge);
       const ring = coverage(d) - coverage(d + width);
-      if (ring > 0 && rim[3] > 0) {
+      if (state.focused && ring > 0 && rim[3] > 0) {
         const tint = takeTint(toOklab(rim[0], rim[1], rim[2]), q, RIM_CHROMA, 0, params.cap), alpha = rim[3] * ring;
         color = color.map((c, k) => c * (1 - alpha) + tint[k] * alpha);
       }
@@ -388,6 +405,13 @@
   }
   $('dark').onclick = () => setScheme('dark');
   $('light').onclick = () => setScheme('light');
+  function setFocus(focused) {
+    state.focused = focused;
+    $('focused').setAttribute('aria-pressed', focused); $('unfocused').setAttribute('aria-pressed', !focused);
+    renderAll();
+  }
+  $('focused').onclick = () => setFocus(true);
+  $('unfocused').onclick = () => setFocus(false);
   $('wallpaper').onchange = e => { state.wallpaper = e.target.value; renderAll(); };
   $('edge').onchange = e => { state.custom.edge = e.target.checked; renderCustom(); };
   for (const key of ['chroma', 'cap', 'lightness', 'passes']) $(key).oninput = e => { state.custom[key] = Number(e.target.value); renderCustom(); };
