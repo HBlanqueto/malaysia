@@ -5,6 +5,7 @@ use ctdesign::Rgba;
 use smithay::backend::renderer::Texture;
 use smithay::backend::renderer::element::Id;
 use smithay::backend::renderer::gles::Uniform;
+use smithay::backend::renderer::utils::CommitCounter;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Size};
 use smithay::wayland::compositor::with_states;
@@ -14,12 +15,50 @@ use crate::effects::RoundedTextureElement;
 use crate::renderer::MalaysiaRenderer;
 use crate::scene_elements::physical_rect;
 use crate::state::State;
+use crate::window_style::GlassPanels;
 
 // ADR 0078: the material goes under the window's surface and the rim above it.
 type Layers<R> = (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>);
 
+#[derive(Clone, PartialEq)]
+struct Drawn {
+    wallpaper: CommitCounter,
+    panel: Rectangle<i32, Physical>,
+    window: Rectangle<i32, Physical>,
+    radius: i32,
+    exponent: f32,
+    settle: f32,
+    chroma_cap: f32,
+    glass: GlassPanels,
+}
+
+// The damage tracker redraws a texture element only when its commit changes, and `settle` is a uniform.
+struct Tracked {
+    id: Id,
+    commit: CommitCounter,
+    drawn: Option<Drawn>,
+}
+
+impl Tracked {
+    fn new() -> Self {
+        Self {
+            id: Id::new(),
+            commit: CommitCounter::default(),
+            drawn: None,
+        }
+    }
+
+    fn commit_for(&mut self, drawn: &Drawn) -> (Id, CommitCounter) {
+        if self.drawn.as_ref() != Some(drawn) {
+            self.commit.increment();
+            self.drawn = Some(drawn.clone());
+        }
+        (self.id.clone(), self.commit)
+    }
+}
+
 #[derive(Default)]
-struct GlassIds(Mutex<Vec<(Id, Id)>>);
+struct GlassIds(Mutex<Vec<(Tracked, Tracked)>>);
 
 pub(crate) struct Frame {
     pub(crate) rect: Rectangle<i32, Physical>,
@@ -66,17 +105,6 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     ) else {
         return (Vec::new(), Vec::new());
     };
-    let ids = with_states(surface, |states| {
-        let ids = states.data_map.get_or_insert_threadsafe(GlassIds::default);
-        let mut ids = ids
-            .0
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if ids.len() < glass.rects.len() {
-            ids.resize_with(glass.rects.len(), || (Id::new(), Id::new()));
-        }
-        ids.clone()
-    });
     let size = texture.size();
     let output = Rectangle::from_size(Size::<i32, Physical>::from((size.w, size.h)));
     let source = |dst: Rectangle<i32, Physical>| {
@@ -93,7 +121,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     let grow = scale.ceil() as i32;
     let mut materials = Vec::new();
     let mut rims = Vec::new();
-    for (rect, (material_id, rim_id)) in glass.rects.iter().zip(ids) {
+    for (index, rect) in glass.rects.iter().enumerate() {
         let panel = physical_rect(Rectangle::new(origin + rect.loc, rect.size), scale);
         let (frame, radius, exponent) = panel_shape(
             glass.radius,
@@ -102,6 +130,29 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
             window,
             scale,
         );
+        let drawn = Drawn {
+            wallpaper: commit,
+            panel,
+            window: window.rect,
+            radius,
+            exponent,
+            settle,
+            chroma_cap,
+            glass: glass.clone(),
+        };
+        let ((material_id, material_commit), (rim_id, rim_commit)) =
+            with_states(surface, |states| {
+                let ids = states.data_map.get_or_insert_threadsafe(GlassIds::default);
+                let mut ids = ids
+                    .0
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if ids.len() <= index {
+                    ids.resize_with(index + 1, || (Tracked::new(), Tracked::new()));
+                }
+                let (material, rim) = &mut ids[index];
+                (material.commit_for(&drawn), rim.commit_for(&drawn))
+            });
         let bleed = if island { grow } else { 0 };
         let spread = Rectangle::new(
             (panel.loc.x - bleed, panel.loc.y - bleed).into(),
@@ -116,7 +167,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                 RoundedTextureElement::from_texture(
                     texture.clone(),
                     material_id,
-                    commit,
+                    material_commit,
                     source(dst),
                     dst,
                     material_frame,
@@ -143,7 +194,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                 RoundedTextureElement::from_texture(
                     texture.clone(),
                     rim_id,
-                    commit,
+                    rim_commit,
                     source(dst),
                     dst,
                     frame,
