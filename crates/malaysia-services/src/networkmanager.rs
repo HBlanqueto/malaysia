@@ -461,10 +461,11 @@ impl Service for NetworkManager {
         }
     }
 
-    fn tick(&mut self, bus: &Connection) {
+    fn tick(&mut self, bus: &Connection) -> bool {
         if self.scanning {
             self.scan(bus);
         }
+        self.scanning
     }
 }
 

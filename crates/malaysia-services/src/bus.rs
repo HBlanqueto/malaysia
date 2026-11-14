@@ -23,7 +23,10 @@ pub trait Service: Default + Send + 'static {
 
     fn read(&mut self, bus: &Connection) -> zbus::Result<Self::Snapshot>;
     fn run(&mut self, bus: &Connection, command: Self::Command) -> zbus::Result<()>;
-    fn tick(&mut self, _bus: &Connection) {}
+    // Signals report every change; a service that also watches what none reports returns true to read again.
+    fn tick(&mut self, _bus: &Connection) -> bool {
+        false
+    }
     fn signals() -> zbus::Result<MatchRule<'static>> {
         signals_from(Self::NAME)
     }
@@ -106,7 +109,7 @@ fn work<S: Service>(
     watch(&bus, S::signals(), events.clone());
     watch(&bus, owner_changes_of(S::NAME), events);
     let mut last: Option<Option<S::Snapshot>> = None;
-    loop {
+    'serve: loop {
         let snapshot = service
             .read(&bus)
             .inspect_err(|error| tracing::debug!(%error, service = S::NAME, "unavailable"))
@@ -120,13 +123,16 @@ fn work<S: Service>(
             }
             last = Some(snapshot);
         }
-        let first = match inbox.recv_timeout(TICK) {
-            Ok(event) => event,
-            Err(RecvTimeoutError::Timeout) => {
-                service.tick(&bus);
-                continue;
+        let first = loop {
+            match inbox.recv_timeout(TICK) {
+                Ok(event) => break event,
+                Err(RecvTimeoutError::Timeout) => {
+                    if service.tick(&bus) {
+                        continue 'serve;
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => return,
             }
-            Err(RecvTimeoutError::Disconnected) => return,
         };
         let mut event = Some(first);
         let settled = Instant::now() + SETTLE;

@@ -56,6 +56,11 @@ impl Service for Cups {
         match command {}
     }
 
+    // cupsd announces neither its start nor a job that no subscription covers: its job count is polled.
+    fn tick(&mut self, _bus: &Connection) -> bool {
+        true
+    }
+
     // cupsd's D-Bus notifier owns no bus name: its signals match by interface only.
     fn signals() -> zbus::Result<MatchRule<'static>> {
         Ok(MatchRule::builder()
