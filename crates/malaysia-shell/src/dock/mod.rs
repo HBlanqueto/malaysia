@@ -434,13 +434,8 @@ impl App for DockApp {
             shown.set(!*autohide)
         });
 
-        let mut magnifying = use_state(|| false);
-        let magnified = *hovering.read() && !*menu_open.read();
-        use_side_effect_with_deps(&magnified, move |magnified: &bool| {
-            magnifying.set(*magnified)
-        });
         let magnify = use_switch_progress(
-            magnifying,
+            hovering,
             Animation::Ease {
                 duration_ms: DOCK_MAGNIFY_MS,
             },
@@ -1166,7 +1161,9 @@ impl App for DockApp {
                     thickness
                 };
                 hovering.set_if_modified(
-                    (bar_span.0..=bar_span.1).contains(&main) && cross <= cross0 + reach,
+                    !*menu_open.peek()
+                        && (bar_span.0..=bar_span.1).contains(&main)
+                        && cross <= cross0 + reach,
                 );
                 if autohide && !*shown.peek() && !reveal.get() {
                     reveal.set(true);
@@ -1308,8 +1305,10 @@ impl Menus {
         anchor: (i32, i32, u32, u32),
         run: impl Fn(String) + 'static,
     ) {
-        let mut menu_open = self.menu_open;
+        // An open menu lets the icons settle, as in macOS.
+        let (mut menu_open, mut hovering) = (self.menu_open, self.hovering);
         menu_open.set(true);
+        hovering.set(false);
         let (side, _) = self.placement();
         pop_up_menu(items, anchor, side, run, move || {
             let (mut menu_open, mut hovering, mut shown) =
