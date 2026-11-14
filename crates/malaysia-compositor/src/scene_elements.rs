@@ -986,13 +986,17 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             let (edge, tip) =
                 crate::window_style::popover_arrow(popup, frame.size.to_f64(), metrics);
             Some((
-                metrics,
+                crate::window_style::popover_corner(shape, metrics),
                 crate::effects::Arrow::popover(edge, tip, metrics, scale),
             ))
         });
-        let corner = popover.map_or(ctdesign::POPUP.corner_radius, |(metrics, _)| {
-            metrics.radius.round() as u32
-        });
+        let (extent, exponent) = popover.map_or(
+            (
+                crate::window_style::corner_extent(ctdesign::POPUP.corner_radius),
+                ctdesign::POPUP.superellipse_exponent,
+            ),
+            |(corner, _)| corner,
+        );
         append_frame(
             state,
             Vec::new(),
@@ -1001,8 +1005,8 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             Frame {
                 owner: crate::chrome::FrameOwner::Popup(id),
                 rect: physical_rect(frame, scale),
-                radius: (crate::window_style::corner_extent(corner) * scale).round() as i32,
-                exponent: ctdesign::POPUP.superellipse_exponent,
+                radius: (extent * scale).round() as i32,
+                exponent,
                 focused: true,
                 panel: true,
                 bordered: true,

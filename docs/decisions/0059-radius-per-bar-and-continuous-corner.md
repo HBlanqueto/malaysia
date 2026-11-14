@@ -78,7 +78,8 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
    `popover` as above; `menu`, a Dock menu, the menu corner
    (`POPUP.corner_radius`, 12) with the `POPOVER` arrow, rounder at the tip
    and the fillets (`DOCK_MENU_ARROW_*`, 6 and 8); `label`, the name over a
-   Dock icon, `DOCK_LABEL_RADIUS` (8) with the `DOCK_LABEL_ARROW_*` arrow,
+   Dock icon, `DOCK_LABEL_RADIUS` (12, the menu bar's title pill) in circular
+   arcs like that pill (`popover_corner`), with the `DOCK_LABEL_ARROW_*` arrow,
    22 × 6.5. Both measured on macOS 26 Dock captures. The Dock menu opens
    `DOCK_MENU_ARROW_INSET` (30) before the anchor's centre, so the tip lands
    in the corner where the menu starts; the clamp in `clamped_tip` leaves it

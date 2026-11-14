@@ -204,7 +204,7 @@ pub(crate) fn capsules<R: MalaysiaRenderer>(
     )
 }
 
-const CIRCLE_EXPONENT: f32 = 2.0;
+pub(crate) const CIRCLE_EXPONENT: f32 = 2.0;
 
 #[derive(Clone, Copy)]
 enum Detail {

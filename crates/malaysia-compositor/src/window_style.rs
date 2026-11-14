@@ -384,6 +384,17 @@ pub(crate) fn popover_metrics(shape: PopoverShape) -> ctdesign::PopoverMetrics {
     }
 }
 
+// The Dock's label is a pill with circular arcs, like the menu bar's open-title pill.
+pub(crate) fn popover_corner(shape: PopoverShape, metrics: ctdesign::PopoverMetrics) -> (f64, f32) {
+    match shape {
+        PopoverShape::Label => (f64::from(metrics.radius), crate::blur::CIRCLE_EXPONENT),
+        _ => (
+            corner_extent(metrics.radius.round() as u32),
+            ctdesign::POPUP.superellipse_exponent,
+        ),
+    }
+}
+
 pub(crate) fn popover_arrow(
     popup: &PopupSurface,
     size: Size<f64, Logical>,
@@ -546,6 +557,18 @@ mod tests {
         assert_eq!(clamped_tip(-40.0, 300.0, popover), edge);
         assert_eq!(clamped_tip(400.0, 300.0, popover), 300.0 - edge);
         assert_eq!(clamped_tip(10.0, 40.0, popover), 20.0);
+    }
+
+    #[test]
+    fn the_dock_label_is_rounded_like_the_menu_bar_title_pill() {
+        let label = popover_metrics(PopoverShape::Label);
+        assert_eq!(
+            popover_corner(PopoverShape::Label, label),
+            (
+                f64::from(ctdesign::MENU_LIGHT.bar_title_open_radius),
+                crate::blur::CIRCLE_EXPONENT
+            )
+        );
     }
 
     #[test]
