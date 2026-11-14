@@ -49,8 +49,9 @@ fn update(
     app_uri: &str,
     sender: &str,
     properties: &HashMap<String, OwnedValue>,
-) {
+) -> bool {
     let entry = entries.entry(app_id(app_uri).to_string()).or_default();
+    let before = entry.clone();
     entry.sender = sender.to_string();
     for (key, value) in properties {
         match key.as_str() {
@@ -62,6 +63,7 @@ fn update(
             _ => {}
         }
     }
+    *entry != before
 }
 
 pub(crate) fn start(entries: Entries, wake: WakeHandle) {
@@ -105,8 +107,8 @@ async fn follow(entries: Entries, wake: WakeHandle) -> zbus::Result<()> {
                     if let Ok((app_uri, properties)) = message
                         .body()
                         .deserialize::<(String, HashMap<String, OwnedValue>)>()
+                        && update(&mut lock(&entries), &app_uri, &sender, &properties)
                     {
-                        update(&mut lock(&entries), &app_uri, &sender, &properties);
                         wake.wake();
                     }
                 }
@@ -189,5 +191,15 @@ mod tests {
             ]),
         );
         assert_eq!(entries["mail"].badge(), None);
+    }
+
+    #[test]
+    fn an_update_that_changes_nothing_is_not_reported() {
+        let mut entries = HashMap::new();
+        let uri = "application://mail.desktop";
+        let properties: HashMap<String, OwnedValue> =
+            HashMap::from([("count".into(), value(3i64))]);
+        assert!(update(&mut entries, uri, ":1.9", &properties));
+        assert!(!update(&mut entries, uri, ":1.9", &properties));
     }
 }

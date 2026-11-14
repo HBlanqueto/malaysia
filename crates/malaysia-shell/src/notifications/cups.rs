@@ -9,6 +9,7 @@ use super::live::{self, Activity};
 use super::server::Link;
 
 const POLL: Duration = Duration::from_secs(2);
+const QUIET: Duration = Duration::from_secs(5);
 const IDLE: Duration = Duration::from_secs(60);
 const CANCEL_JOB: u16 = 0x0008;
 const PROCESSING_STOPPED: i32 = 6;
@@ -89,7 +90,7 @@ pub(crate) fn start(link: Link) {
                     }
                     present
                 });
-                std::thread::sleep(POLL);
+                std::thread::sleep(if known.is_empty() { QUIET } else { POLL });
             }
         })
         .expect("malaysia-print-jobs thread");
