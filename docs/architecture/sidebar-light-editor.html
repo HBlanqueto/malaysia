@@ -1,0 +1,434 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Isla en modo claro</title>
+<style>
+  /* Una mesa de comparación de la isla de la sidebar en claro contra el oscuro: la misma cuenta del compositor (relleno, rampa del borde, línea derivada y sombra), con los ajustes editables y cuánto se distingue la sidebar de la ventana. */
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --fg: #15181d;
+    --muted: #5d6673;
+    --line: #d9dde3;
+    --accent: #0a6cf0;
+    --accent-ink: #ffffff;
+    --soft: #e8ecf2;
+    --ok: #17803d;
+    --font-text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111419; --panel: #1a1e25; --fg: #eceff4; --muted: #9aa3b0; --line: #2c333d;
+      --accent: #5aa2ff; --accent-ink: #07131f; --soft: #232a34; --ok: #5fcf86;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111419; --panel: #1a1e25; --fg: #eceff4; --muted: #9aa3b0; --line: #2c333d;
+    --accent: #5aa2ff; --accent-ink: #07131f; --soft: #232a34; --ok: #5fcf86;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-text); line-height: 1.5;
+    padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+  .eyebrow { font: 600 12px/1 var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font: 700 34px/1.1 var(--font-head); margin: 8px 0 10px; text-wrap: balance; }
+  h2 { font: 600 16px/1.3 var(--font-head); margin: 0 0 10px; }
+  h3 { font: 600 13px/1.3 var(--font-head); margin: 0; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
+  p { margin: 0; max-width: 76ch; color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; }
+  .group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .label { font-size: 12px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  select, button { font: 500 14px var(--font-text); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  code { font: 12.5px var(--font-mono); background: var(--soft); border-radius: 4px; padding: 1px 5px; color: var(--fg); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.num { font-family: var(--font-mono); }
+  .quad { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  @media (max-width: 760px) { .quad { grid-template-columns: minmax(0, 1fr); } }
+  figure { margin: 0; display: grid; gap: 8px; min-width: 0; }
+  figcaption { display: grid; gap: 2px; }
+  figcaption b { font: 600 15px var(--font-head); }
+  figcaption span { font: 12.5px/1.5 var(--font-mono); color: var(--muted); }
+  #big { max-width: 830px; margin: 0 auto; image-rendering: auto; }
+  .segment { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  canvas { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); background: #000; image-rendering: auto; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 20px; }
+  .tuning { display: grid; gap: 8px; align-content: start; }
+  .tuning p { font-size: 12.5px; }
+  .slider { display: grid; grid-template-columns: 110px minmax(0, 1fr) 48px; gap: 8px; align-items: center; font-size: 13px; }
+  .slider input { width: 100%; accent-color: var(--accent); }
+  .slider output { font: 12.5px var(--font-mono); text-align: right; }
+  .copy { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+  .readout { font: 12.5px/1.6 var(--font-mono); background: var(--soft); border-radius: 8px; padding: 10px 12px; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 10px; }
+  .status { font-size: 13px; color: var(--ok); min-height: 1.2em; }
+  ul.notes { margin: 0; padding-left: 18px; color: var(--muted); max-width: 78ch; display: grid; gap: 6px; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Malaysia · ADR 0078 · modo claro</div>
+    <h1>Isla en modo claro</h1>
+    <p>La sidebar de vidrio en claro, con las mismas cuentas del compositor, junto al modo oscuro. Abajo puedes mover cada valor y ver cuánto se distingue la sidebar de la ventana. Lo que confirmes pasa a los tokens.</p>
+  </header>
+
+  <section class="panel controls" aria-label="Escena">
+    <div class="group">
+      <label class="label" for="wallpaper">Fondo</label>
+      <select id="wallpaper">
+        <option value="violet">Azul y violeta (como las capturas)</option>
+        <option value="landscape">Paisaje (Tahoe)</option>
+      </select>
+    </div>
+    <div class="group" role="group" aria-label="Punto de partida">
+      <span class="label">Partir de</span>
+      <button type="button" id="from-now">Claro: lo de ahora</button>
+      <button type="button" id="from-bold">Claro: propuesta</button>
+      <button type="button" id="from-dark">Oscuro</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Ventana completa</h2>
+    <div class="segment" role="group" aria-label="Qué ventana ver">
+      <span class="label">Mostrar</span>
+      <button type="button" id="big-now" aria-pressed="false">Claro: lo de ahora</button>
+      <button type="button" id="big-bold" aria-pressed="false">Claro: propuesta</button>
+      <button type="button" id="big-custom" aria-pressed="true">Tu ajuste</button>
+      <button type="button" id="big-dark" aria-pressed="false">Oscuro (referencia)</button>
+    </div>
+    <canvas id="big" role="img" aria-label="Una ventana completa con su sidebar entera"></canvas>
+    <p style="margin-top:10px">Una ventana de 770 × 810 px como la de Ajustes. El contenido de la derecha y los textos son de relleno. La sombra y el borde de la ventana están aproximados; el relleno, la rampa del borde, la línea y la sombra de la isla usan las cuentas del compositor.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Cuánto se nota</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ventana</th><th>Croma del relleno · centro</th><th>Croma · borde izquierdo</th><th>Distancia a la ventana · centro</th><th>Distancia · borde izquierdo</th><th>Línea sobre el relleno</th></tr></thead>
+        <tbody id="metrics"></tbody>
+      </table>
+    </div>
+    <p style="margin-top:10px">La distancia es el ΔE en Oklab por 100 entre el relleno y el tono de la ventana: cuanto mayor, más se separa la sidebar. El croma es lo que da el tono azulado. La línea se mide contra el relleno que tiene justo dentro: cuánto sube en claridad y cuántas veces su croma.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Tu ajuste</h2>
+    <div class="groups" id="groups"></div>
+    <div class="copy">
+      <button type="button" id="copy">Copiar valores</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+    <div class="readout" id="readout"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Las cuatro, lado a lado</h2>
+    <div class="quad">
+      <figure><canvas id="full-dark" role="img" aria-label="La isla en oscuro, de referencia"></canvas><figcaption><b>Oscuro (referencia)</b><span>lo que lleva el compositor</span></figcaption></figure>
+      <figure><canvas id="full-now" role="img" aria-label="La isla en claro con lo que lleva el compositor"></canvas><figcaption><b>Claro: lo de ahora</b><span>lo que lleva el compositor</span></figcaption></figure>
+      <figure><canvas id="full-bold" role="img" aria-label="La isla en claro con la propuesta"></canvas><figcaption><b>Claro: propuesta</b><span id="bold-values"></span></figcaption></figure>
+      <figure><canvas id="full-custom" role="img" aria-label="La isla en claro con tu ajuste"></canvas><figcaption><b>Tu ajuste</b><span id="custom-values"></span></figcaption></figure>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Cómo leerlo</h2>
+    <ul class="notes">
+      <li>«Lo de ahora» es lo que el compositor dibuja en claro desde el último commit: relleno <code>#ebedee</code> con 0.08 del croma del fondo (tope 0.03), borde con intensidad 0.70, caída 46 px, croma 0.45 y tope 0.04, línea que sube 0.03 (0.02 más donde asoma el fondo) con croma ×1.35, y sombra de 0.13, 25 px y tinte 1.0.</li>
+      <li>El oscuro se nota más porque su base ya lleva el tinte del fondo (croma cerca de 0.04) y la ventana es un gris neutro. En claro la base no lo lleva y el relleno solo toma el 0.08 del croma del fondo, así que su croma queda en torno a 0.014.</li>
+      <li>En macOS, el relleno claro mide un croma de 0.016 (Libros). La propuesta va más allá de lo que mide macOS: es una decisión de diseño para que el claro se note como el oscuro.</li>
+      <li>Contra un render del compositor con los mismos valores, los colores del mockup difieren 1.4 niveles de 255 de media y 4 como máximo, donde el azul llega al límite de lo que se puede mostrar.</li>
+      <li>La base de la ventana en claro es <code>#ebedee</code> sin el tinte de las ventanas que añade el kit cuando está activo; el oscuro sí lo lleva, como en el compositor.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  const WINDOW_R = 26, ISLAND_R = 18, SOLID_TINT = 0.3, EDGE_OFFSET = 11;
+  const SCENES = {
+    violet: { top: [84, 48, 208], bottom: [6, 36, 160], right: [132, 46, 168] },
+    landscape: { top: [63, 143, 203], bottom: [14, 111, 144], right: [63, 143, 203] },
+  };
+  const FULL = { w: 330, h: 330, window: { x: 20, y: 20, w: 300, h: 290 }, island: { x: 28, y: 28, w: 216, h: 274 } };
+  const BIG = { w: 830, h: 870, window: { x: 30, y: 30, w: 770, h: 810 }, island: { x: 38, y: 38, w: 230, h: 794 }, contentX: 276 };
+
+  const $ = id => document.getElementById(id);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const mix = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
+
+  const toLin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const toSrgb = c => { c = clamp(c, 0, 1); return 255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055); };
+  function toLab([r, g, b]) {
+    const R = toLin(r), G = toLin(g), B = toLin(b);
+    const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+    const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+    const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  }
+  function toRgb([L, a, b]) {
+    const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
+    const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
+    const s = Math.pow(L - 0.0894841775 * a - 1.291485548 * b, 3);
+    return [toSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      toSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      toSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+  }
+  // Same steps as grade-graphics/oklab.glsl take_tint, on Oklab values.
+  function tintLab(base, q, chroma, lightness, cap) {
+    const a = base[1] + (q[1] - base[1]) * chroma, b = base[2] + (q[2] - base[2]) * chroma;
+    const soft = 1 / Math.sqrt(1 + (a * a + b * b) / (cap * cap));
+    return [base[0] + (q[0] - base[0]) * lightness, a * soft, b * soft];
+  }
+
+  function boxSdf(px, py, box, r) {
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    const qx = Math.abs(px - cx) - (box.w / 2 - r), qy = Math.abs(py - cy) - (box.h / 2 - r);
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+  }
+  const cover = d => clamp(0.5 - d, 0, 1);
+
+  const state = { wallpaper: 'violet', big: 'custom' };
+  const wall = (px, py, l) => {
+    const scene = SCENES[state.wallpaper], t = clamp(0.9 - (py / l.h) * 0.9 + (px / l.w) * 0.1, 0, 1);
+    return mix(mix(scene.bottom, scene.top, t), scene.right, clamp((px / l.w - 0.45) * 1.4, 0, 0.7));
+  };
+
+  const TOKEN_LIGHT = toLab([235, 237, 238]);
+  // Lo que lleva el compositor hoy.
+  const DARK = { scheme: 'dark', baseL: 0.245, chroma: 0.05, cap: 0.04, edgeIntensity: 0.7, edgeSpan: 60, edgeChroma: 0.45, edgeLightness: 0.1, edgeCap: 0.18,
+    lift: 0.06, liftEdge: 0.05, boost: 1.35, rimCap: 0.25, alpha: 1, width: 1,
+    shadowOpacity: 0, shadowSpan: 25, shadowTint: 1, shadowL: 0.2, windowL: 0.252, windowTint: 0.09 };
+  const LIGHT_NOW = { scheme: 'light', baseL: TOKEN_LIGHT[0], chroma: 0.08, cap: 0.03, edgeIntensity: 0.7, edgeSpan: 46, edgeChroma: 0.45, edgeLightness: 0, edgeCap: 0.04,
+    lift: 0.03, liftEdge: 0.02, boost: 1.35, rimCap: 0.25, alpha: 1, width: 1,
+    shadowOpacity: 0.13, shadowSpan: 25, shadowTint: 1, shadowL: 0.2, windowL: 1, windowTint: 0 };
+  // La propuesta: más croma en el relleno y en el borde, para que el tono se note como en oscuro.
+  const LIGHT_BOLD = { ...LIGHT_NOW, baseL: 0.91, chroma: 0.35, cap: 0.07, edgeSpan: 60, edgeChroma: 0.7, edgeCap: 0.12 };
+  const params = { ...LIGHT_BOLD };
+
+  // The colour of any point of the window, for the given settings and layout.
+  function makeShader(p, l) {
+    const scene = SCENES[state.wallpaper], meanLab = toLab(mix(scene.bottom, scene.top, 0.5)), W = l.window, I = l.island, dark = p.scheme === 'dark';
+    const windowTone = toRgb(tintLab([p.windowL, 0, 0], meanLab, p.windowTint, 0, 0.2));
+    const baseLab = dark ? [p.baseL, 0, 0] : [p.baseL, TOKEN_LIGHT[1], TOKEN_LIGHT[2]];
+    const centreBase = dark ? tintLab(baseLab, meanLab, SOLID_TINT, 0, p.cap) : baseLab;
+    const outerLine = dark ? 0.9 : 0.22, innerLine = dark ? mix(windowTone, [255, 255, 255], 0.1) : windowTone;
+    const shadowReach = 3 * p.shadowSpan;
+    // The fill of the island at a point, and how much of the wallpaper shows there (1 at the left, top and bottom edges, 0 far from them).
+    const fillAt = (px, py) => {
+      const centre = p.chroma > 0 ? tintLab(centreBase, toLab(wall(px, py, l)), p.chroma, 0, p.cap) : centreBase;
+      const left = Math.exp(-Math.max(px - I.x, 0) / p.edgeSpan), top = Math.exp(-Math.max(py - I.y, 0) / p.edgeSpan), bottom = Math.exp(-Math.max(I.y + I.h - py, 0) / p.edgeSpan);
+      const ramp = Math.max(left, top, bottom);
+      if (ramp <= 0.002) return { fill: centre, ramp };
+      const taken = [toLab(wall(W.x - EDGE_OFFSET, py, l)), toLab(wall(px, W.y - EDGE_OFFSET, l)), toLab(wall(px, W.y + W.h + EDGE_OFFSET, l))];
+      const outside = [0, 1, 2].map(k => (left * taken[0][k] + top * taken[1][k] + bottom * taken[2][k]) / (left + top + bottom));
+      return { fill: mix(centre, tintLab(baseLab, outside, p.edgeChroma, p.edgeLightness, p.edgeCap), ramp * p.edgeIntensity), ramp };
+    };
+    // Away from the line the fill is smooth: it is worked out once per 3 px cell.
+    const cells = new Map();
+    const interior = (px, py) => {
+      const ix = Math.floor(px / 3), iy = Math.floor(py / 3), key = ix * 4096 + iy;
+      if (!cells.has(key)) cells.set(key, toRgb(fillAt((ix + 0.5) * 3, (iy + 0.5) * 3).fill));
+      return cells.get(key);
+    };
+    const shadows = new Map();
+    const shadowTone = (px, py) => {
+      const ix = Math.floor(px / 4), iy = Math.floor(py / 4), key = ix * 4096 + iy;
+      if (!shadows.has(key)) { const q = toLab(wall((ix + 0.5) * 4, (iy + 0.5) * 4, l)); shadows.set(key, toRgb([p.shadowL, q[1] * p.shadowTint, q[2] * p.shadowTint])); }
+      return shadows.get(key);
+    };
+    return (px, py) => {
+      const dI = boxSdf(px, py, I, ISLAND_R);
+      if (dI < -p.width - 1.5) return interior(px, py);
+      const dW = boxSdf(px, py, W, WINDOW_R);
+      if (dW > 1) return wall(px, py, l);
+      const shadowed = p.shadowOpacity > 0 && dI < shadowReach;
+      if (dW < -1.5 && dI > 1 && !shadowed) return windowTone;
+      const backdrop = wall(px, py, l);
+      let c = mix(backdrop, mix(backdrop, [0, 0, 0], outerLine), cover(dW - 1) - cover(dW));
+      c = mix(c, windowTone, cover(dW));
+      c = mix(c, innerLine, cover(dW) - cover(dW + 1));
+      if (shadowed && dI > -1) c = mix(c, shadowTone(px, py), p.shadowOpacity * Math.exp(-Math.max(dI, 0) / p.shadowSpan) * clamp(dI + 0.5, 0, 1) * cover(dW));
+      if (cover(dI) <= 0) return c;
+      const { fill, ramp } = fillAt(px, py);
+      c = mix(c, toRgb(fill), cover(dI));
+      const band = cover(dI) - cover(dI + p.width);
+      if (band <= 0 || p.alpha <= 0) return c;
+      const chroma = Math.hypot(fill[1], fill[2]), target = Math.min(chroma * p.boost, p.rimCap), k = chroma > 1e-6 ? target / chroma : 0;
+      const rim = toRgb([Math.min(1, fill[0] + p.lift + p.liftEdge * ramp), fill[1] * k, fill[2] * k]);
+      return mix(c, rim, band * p.alpha);
+    };
+  }
+
+  function renderLayout(canvas, p, l, zoom, after) {
+    canvas.width = l.w * zoom; canvas.height = l.h * zoom;
+    const ctx = canvas.getContext('2d'), image = ctx.createImageData(l.w * zoom, l.h * zoom), shade = makeShader(p, l);
+    for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) {
+      const [r, g, b] = shade(x + 0.5, y + 0.5);
+      for (let dy = 0; dy < zoom; dy++) for (let dx = 0; dx < zoom; dx++) {
+        const o = (((y * zoom + dy) * l.w * zoom) + x * zoom + dx) * 4;
+        image.data[o] = r; image.data[o + 1] = g; image.data[o + 2] = b; image.data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+    if (after) { ctx.save(); ctx.scale(zoom, zoom); after(ctx, l); ctx.restore(); }
+  }
+
+  const SIDEBAR_ITEMS = [['Wi-Fi', '#2f7cf6'], ['Bluetooth', '#2f7cf6'], ['Red', '#2f7cf6'], ['VPN', '#2f7cf6'], ['Batería', '#34c759'], null, ['Accesibilidad', '#2f7cf6'], ['Apariencia', '#222'], ['Escritorio y Dock', '#3a3a3c'], ['Fondo de pantalla', '#3a86f0'], ['Notificaciones', '#ff453a'], ['Concentración', '#7d5ce0']];
+  function drawWindow(ctx, l, p) {
+    const dark = p.scheme === 'dark', I = l.island, W = l.window;
+    const ink = dark ? '#eceff4' : '#1d1f24', soft = dark ? 'rgba(236,239,244,.6)' : 'rgba(29,31,36,.55)';
+    const field = dark ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.06)', card = dark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.045)';
+    ctx.textBaseline = 'middle';
+    [['#ff5f57', 0], ['#febc2e', 1], ['#28c840', 2]].forEach(([color, i]) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(I.x + 19 + i * 23, I.y + 19, 6, 0, 7); ctx.fill(); });
+    ctx.fillStyle = field; ctx.beginPath(); ctx.roundRect(I.x + 10, I.y + 54, I.w - 20, 24, 8); ctx.fill();
+    ctx.fillStyle = soft; ctx.font = '12px system-ui, sans-serif'; ctx.fillText('Buscar', I.x + 34, I.y + 66);
+    ctx.fillStyle = '#5a5f6a'; ctx.beginPath(); ctx.arc(I.x + 34, I.y + 108, 17, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '600 11px system-ui, sans-serif'; ctx.fillText('HB', I.x + 27, I.y + 108);
+    ctx.fillStyle = ink; ctx.font = '600 13px system-ui, sans-serif'; ctx.fillText('H. Blanqueto', I.x + 60, I.y + 102);
+    ctx.fillStyle = soft; ctx.font = '12px system-ui, sans-serif'; ctx.fillText('Cuenta local', I.x + 60, I.y + 118);
+    let y = I.y + 160;
+    for (const item of SIDEBAR_ITEMS) {
+      if (!item) { y += 20; continue; }
+      const [name, color] = item, selected = name === 'Apariencia';
+      if (selected) { ctx.fillStyle = '#2f6fe4'; ctx.beginPath(); ctx.roundRect(I.x + 10, y - 15, I.w - 20, 31, 8); ctx.fill(); }
+      ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(I.x + 19, y - 10, 20, 20, 5); ctx.fill();
+      ctx.fillStyle = selected ? '#fff' : ink; ctx.font = '13px system-ui, sans-serif'; ctx.fillText(name, I.x + 49, y);
+      y += 32;
+    }
+    ctx.fillStyle = ink; ctx.font = '600 14px system-ui, sans-serif'; ctx.fillText('Apariencia', l.contentX + 64, W.y + 28);
+    for (let i = 0; i < 6; i++) {
+      const top = W.y + 66 + i * 70;
+      ctx.fillStyle = card; ctx.beginPath(); ctx.roundRect(l.contentX + 16, top, W.x + W.w - l.contentX - 32, 56, 10); ctx.fill();
+      ctx.fillStyle = ink; ctx.font = '13px system-ui, sans-serif'; ctx.fillText(['Apariencia', 'Idioma', 'Color de acento', 'Estilo de los íconos', 'Teñir las ventanas', 'Color del tinte'][i], l.contentX + 32, top + 28);
+    }
+  }
+
+  const f2 = v => v.toFixed(3), f1 = v => v.toFixed(1);
+  const lch = ([L, a, b]) => ({ L, C: Math.hypot(a, b) });
+  const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  // How much the sidebar stands out from the window: the fill at the centre and at the left edge against the window's tone, and the line against the fill just inside it.
+  function measures(p) {
+    const l = BIG, I = l.island, shade = makeShader(p, l), my = I.y + I.h / 2, at = (x, y) => toLab(shade(x, y));
+    const centre = at(I.x + I.w * 0.55, my), edge = at(I.x + 8, my), window = at(l.contentX + 100, my), line = at(I.x + 0.5, my), inside = at(I.x + 0.5 + p.width + 0.5, my);
+    return { centreC: lch(centre).C, edgeC: lch(edge).C, centreD: 100 * distance(centre, window), edgeD: 100 * distance(edge, window),
+      lineL: line[0] - inside[0], lineC: lch(line).C / Math.max(lch(inside).C, 1e-6) };
+  }
+  function renderMetrics() {
+    const rows = [['Oscuro (referencia)', DARK], ['Claro: lo de ahora', LIGHT_NOW], ['Claro: propuesta', LIGHT_BOLD], ['Tu ajuste', params]];
+    $('metrics').innerHTML = rows.map(([name, p]) => {
+      const m = measures(p);
+      return `<tr><td>${name}</td><td class="num">${f2(m.centreC)}</td><td class="num">${f2(m.edgeC)}</td><td class="num">${f1(m.centreD)}</td><td class="num">${f1(m.edgeD)}</td><td class="num">${m.lineL >= 0 ? '+' : ''}${f2(m.lineL)} · croma ×${m.lineC.toFixed(2)}</td></tr>`;
+    }).join('');
+  }
+
+  const f2s = v => v.toFixed(2);
+  const describe = p => `relleno croma ${f2s(p.chroma)} · tope ${f2s(p.cap)} · borde ${f2s(p.edgeChroma)} · línea sube ${p.lift.toFixed(3)}`;
+  const SLIDERS = [
+    { title: 'Relleno', note: 'El tono de la sidebar y cuánto croma toma del fondo.', items: [
+      { key: 'baseL', label: 'Base (L)', min: 0.2, max: 1, step: 0.005, digits: 3 },
+      { key: 'chroma', label: 'Croma del fondo', min: 0, max: 1, step: 0.01, digits: 2 },
+      { key: 'cap', label: 'Tope de croma', min: 0.01, max: 0.12, step: 0.005, digits: 3 },
+    ] },
+    { title: 'Borde del relleno', note: 'El fondo que asoma por la izquierda, arriba y abajo.', items: [
+      { key: 'edgeIntensity', label: 'Fondo en el borde', min: 0, max: 1.2, step: 0.05, digits: 2 },
+      { key: 'edgeSpan', label: 'Caída (px)', min: 10, max: 240, step: 2, digits: 0 },
+      { key: 'edgeChroma', label: 'Croma del borde', min: 0, max: 1, step: 0.05, digits: 2 },
+      { key: 'edgeLightness', label: 'Claridad', min: 0, max: 0.3, step: 0.01, digits: 2 },
+      { key: 'edgeCap', label: 'Tope de croma', min: 0.02, max: 0.25, step: 0.01, digits: 2 },
+    ] },
+    { title: 'Línea', note: 'Se deriva del relleno: más clara y con más croma.', items: [
+      { key: 'alpha', label: 'Opacidad', min: 0, max: 1, step: 0.05, digits: 2 },
+      { key: 'lift', label: 'Sube (L)', min: 0, max: 0.15, step: 0.005, digits: 3 },
+      { key: 'liftEdge', label: 'Sube más con fondo', min: 0, max: 0.15, step: 0.005, digits: 3 },
+      { key: 'boost', label: 'Croma ×', min: 0, max: 3, step: 0.05, digits: 2 },
+      { key: 'rimCap', label: 'Tope de croma', min: 0.02, max: 0.3, step: 0.01, digits: 2 },
+    ] },
+    { title: 'Sombra de la isla', note: 'Sobre el marco de la ventana, junto a la isla.', items: [
+      { key: 'shadowOpacity', label: 'Opacidad', min: 0, max: 0.4, step: 0.01, digits: 2 },
+      { key: 'shadowSpan', label: 'Caída (px)', min: 5, max: 80, step: 1, digits: 0 },
+      { key: 'shadowTint', label: 'Tinte del fondo', min: 0, max: 1, step: 0.05, digits: 2 },
+      { key: 'shadowL', label: 'Claridad', min: 0, max: 0.6, step: 0.01, digits: 2 },
+    ] },
+    { title: 'Ventana', note: 'El tono de todo lo que rodea a la isla y del contenido.', items: [
+      { key: 'windowL', label: 'Claridad (L)', min: 0.2, max: 1, step: 0.005, digits: 3 },
+      { key: 'windowTint', label: 'Tinte del fondo', min: 0, max: 1, step: 0.05, digits: 2 },
+    ] },
+  ];
+
+  function readout() {
+    const p = params;
+    return [`modo ${p.scheme === 'dark' ? 'oscuro' : 'claro'}`,
+      `relleno: base L ${p.baseL.toFixed(3)} · croma ${f2s(p.chroma)} · tope ${f2s(p.cap)}`,
+      `borde del relleno: intensidad ${f2s(p.edgeIntensity)} · caída ${p.edgeSpan} px · croma ${f2s(p.edgeChroma)} · claridad ${f2s(p.edgeLightness)} · tope ${f2s(p.edgeCap)}`,
+      `línea: opacidad ${f2s(p.alpha)} · sube ${p.lift.toFixed(3)} (+${p.liftEdge.toFixed(3)} donde asoma el fondo) · croma ×${f2s(p.boost)} · tope ${f2s(p.rimCap)}`,
+      `sombra: opacidad ${f2s(p.shadowOpacity)} · caída ${p.shadowSpan} px · tinte ${f2s(p.shadowTint)} · claridad ${f2s(p.shadowL)}`,
+      `ventana: L ${p.windowL.toFixed(3)} · tinte ${f2s(p.windowTint)}`].join('\n');
+  }
+
+  const SETS = { dark: DARK, now: LIGHT_NOW, bold: LIGHT_BOLD };
+  function renderBig() {
+    const p = state.big === 'custom' ? params : SETS[state.big];
+    renderLayout($('big'), p, BIG, 2, (ctx, l) => drawWindow(ctx, l, p));
+    for (const id of ['now', 'bold', 'custom', 'dark']) $('big-' + id).setAttribute('aria-pressed', state.big === id);
+  }
+  const drawFull = (id, p) => renderLayout($(id), p, FULL, 2, (ctx, l) => drawFullIsland(ctx, l, p));
+  // A few rows are enough to see the ink against each fill.
+  function drawFullIsland(ctx, l, p) {
+    const dark = p.scheme === 'dark', I = l.island, ink = dark ? '#eceff4' : '#1d1f24';
+    ctx.textBaseline = 'middle';
+    [['#ff5f57', 0], ['#febc2e', 1], ['#28c840', 2]].forEach(([color, i]) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(I.x + 19 + i * 23, I.y + 19, 6, 0, 7); ctx.fill(); });
+    ['Wi-Fi', 'Bluetooth', 'Red', 'Apariencia', 'Fondo'].forEach((name, i) => {
+      const y = I.y + 70 + i * 36, selected = name === 'Apariencia';
+      if (selected) { ctx.fillStyle = '#2f6fe4'; ctx.beginPath(); ctx.roundRect(I.x + 10, y - 15, I.w - 20, 31, 8); ctx.fill(); }
+      ctx.fillStyle = selected ? '#fff' : ink; ctx.font = '13px system-ui, sans-serif'; ctx.fillText(name, I.x + 24, y);
+    });
+  }
+  function renderStatic() {
+    drawFull('full-dark', DARK); drawFull('full-now', LIGHT_NOW); drawFull('full-bold', LIGHT_BOLD);
+    $('bold-values').textContent = describe(LIGHT_BOLD);
+    renderCustom();
+  }
+  let pending = 0;
+  function renderCustom() {
+    cancelAnimationFrame(pending);
+    pending = requestAnimationFrame(() => {
+      drawFull('full-custom', params); $('custom-values').textContent = describe(params);
+      renderMetrics(); renderBig(); $('readout').textContent = readout();
+      for (const group of SLIDERS) for (const s of group.items) $(s.key + '-out').textContent = params[s.key].toFixed(s.digits);
+    });
+  }
+
+  function buildControls() {
+    $('groups').innerHTML = SLIDERS.map(g => `<div class="tuning"><h3>${g.title}</h3><p>${g.note}</p>${g.items.map(s => `<label class="slider" for="${s.key}">${s.label}<input type="range" id="${s.key}" min="${s.min}" max="${s.max}" step="${s.step}"><output id="${s.key}-out"></output></label>`).join('')}</div>`).join('');
+    for (const g of SLIDERS) for (const s of g.items) $(s.key).oninput = e => { params[s.key] = parseFloat(e.target.value); renderCustom(); };
+  }
+  function syncControls() { for (const g of SLIDERS) for (const s of g.items) $(s.key).value = params[s.key]; }
+  const startFrom = set => { Object.assign(params, set); syncControls(); renderCustom(); };
+
+  for (const id of ['now', 'bold', 'custom', 'dark']) $('big-' + id).onclick = () => { state.big = id; renderBig(); };
+  $('wallpaper').onchange = e => { state.wallpaper = e.target.value; renderStatic(); };
+  $('from-now').onclick = () => startFrom(LIGHT_NOW);
+  $('from-bold').onclick = () => startFrom(LIGHT_BOLD);
+  $('from-dark').onclick = () => startFrom(DARK);
+  $('copy').onclick = async () => {
+    const status = $('status');
+    try { await navigator.clipboard.writeText(readout()); status.textContent = 'Valores copiados.'; }
+    catch { const range = document.createRange(); range.selectNodeContents($('readout')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range); status.textContent = 'Selecciónalos y cópialos.'; }
+    setTimeout(() => { status.textContent = ''; }, 2500);
+  };
+
+  buildControls(); syncControls(); renderStatic();
+})();
+</script>
