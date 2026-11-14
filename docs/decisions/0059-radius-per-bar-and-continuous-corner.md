@@ -68,8 +68,17 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
    (`arrow_tip_radius`) with a fillet (`arrow_fillet`). The clip, the border
    and the shadow use that distance, so the arrow has a border and a shadow.
    The tip points at the centre of the anchor rectangle and stays clear of
-   the corners (`popover_tip`). AppKit measurements on macOS 26.7 from the
+   the corners (`popover_arrow`). AppKit measurements on macOS 26.7 from the
    [`popover`](https://pub.dev/packages/popover) package.
+9. **Popover shapes:** since protocol version 7 the band lies on the edge
+   that faces the anchor rectangle (`facing_edge`): the bottom edge for a
+   popup above it, the right or left edge for one beside it, the top edge
+   otherwise. `frame_sdf` maps that edge onto the top one (`arrow_edge`).
+   `set_popover_shape` picks the corner and the arrow (`popover_metrics`):
+   `popover` as above; `menu`, a Dock menu, the menu corner
+   (`POPUP.corner_radius`, 12) with the `POPOVER` arrow; `label`, the name
+   over a Dock icon, `DOCK_LABEL_RADIUS` (8) with the `DOCK_LABEL_ARROW_*`
+   arrow, 22 × 6.5. Both measured on macOS 26 Dock captures.
 
 ## Consequences
 

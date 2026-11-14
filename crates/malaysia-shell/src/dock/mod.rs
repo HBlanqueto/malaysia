@@ -18,9 +18,12 @@ use bk::animation::use_switch_progress;
 use bk::app::{
     load_defaults, load_restoration, save_defaults, save_restoration, use_defaults, use_watched,
 };
-use bk::menu::{CheckState, MenuItem};
-use bk::platform::{PopupAnchor, Timers, modifier_flags};
-use bk::popup_button::pop_up_menu;
+use bk::menu::{CheckState, MenuItem, measure_text};
+use bk::platform::{
+    PopoverShape, PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
+    Timers, modifier_flags,
+};
+use bk::popup_button::{arrow_band, pop_up_menu};
 use bk::prelude::*;
 use bk::shell::{
     Activation, Anchors, BlurRegion, CardFrames, InputRegion, KeyboardInteractivity, Layer,
@@ -33,10 +36,11 @@ use ctappearance::dock::{DockConfig, DockOrientation, MinimizeEffect};
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
     DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
-    DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X,
-    DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS,
-    DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX,
-    DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
+    DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_ARROW_HEIGHT, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP,
+    DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS,
+    DOCK_MAGNIFY_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH,
+    DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON,
+    DRAG, TEXT_LINE_HEIGHT,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
@@ -383,6 +387,7 @@ impl App for DockApp {
         let after_drag = use_hook(|| Rc::new(Cell::new(false)));
         let revealing = use_hook(|| Rc::new(Cell::new(false)));
         let written_size = use_hook(|| Rc::new(Cell::new(0)));
+        let shown_label = use_hook(|| Rc::new(RefCell::new(None::<ShownLabel>)));
         let activation = Activation::get();
         let timers = Timers::get();
 
@@ -1019,7 +1024,7 @@ impl App for DockApp {
         }
 
         let hovered = pointer_at
-            .filter(|_| *hovering.read() && drag_now.is_none())
+            .filter(|_| *hovering.read() && drag_now.is_none() && !*menu_open.read())
             .and_then(|at| geometry::slot_at(&layout, frame.canonical(at).0))
             .and_then(|index| {
                 let label = match &list[index] {
@@ -1031,49 +1036,13 @@ impl App for DockApp {
                 };
                 Some((label, layout.placed[index]))
             });
-        if let Some((text, slot)) = hovered {
-            let bubble = rect()
-                .padding(Gaps::new(
-                    DOCK_LABEL_PADDING_Y,
-                    DOCK_LABEL_PADDING_X,
-                    DOCK_LABEL_PADDING_Y,
-                    DOCK_LABEL_PADDING_X,
-                ))
-                .corner_radius(DOCK_LABEL_RADIUS)
-                .background(label_fill)
-                .child(Text::new(text).font_size(DOCK_LABEL_FONT_SIZE).color(ink));
-            let beyond = icon_cross + slot.size + DOCK_LABEL_GAP;
-            let center = slot.start + slot.length / 2.0;
-            let lane = match config.orientation {
-                DockOrientation::Bottom => rect()
-                    .position(
-                        Position::new_absolute()
-                            .left(center - width / 2.0)
-                            .bottom(beyond),
-                    )
-                    .width(Size::px(width))
-                    .main_align(Alignment::Center)
-                    .direction(Direction::Horizontal),
-                DockOrientation::Left => rect()
-                    .position(
-                        Position::new_absolute()
-                            .left(beyond)
-                            .top(center - slot.size / 2.0),
-                    )
-                    .height(Size::px(slot.size))
-                    .main_align(Alignment::Center),
-                DockOrientation::Right => rect()
-                    .position(
-                        Position::new_absolute()
-                            .right(beyond)
-                            .top(center - slot.size / 2.0),
-                    )
-                    .height(Size::px(slot.size))
-                    .main_align(Alignment::Center)
-                    .cross_align(Alignment::End),
-            };
-            children.push(lane.child(bubble).into_element());
-        }
+        let label_colors = bk::theme::popover_palette(&resolved, bk::theme::SurfaceKind::Toplevel);
+        show_label(
+            &shown_label,
+            hovered.map(|(text, slot)| (text, menu.anchor(slot.start, slot.length, slot.size))),
+            menu.placement(),
+            (theme::color(label_colors.bg), theme::color(label_colors.fg)),
+        );
 
         if let Some(drag) = lifted {
             let (main, cross) = drag.at;
@@ -1232,6 +1201,14 @@ struct Menus {
 }
 
 impl Menus {
+    fn placement(self) -> (PopupAnchor, PopupGravity) {
+        match self.frame.orientation {
+            DockOrientation::Bottom => (PopupAnchor::Top, PopupGravity::Top),
+            DockOrientation::Left => (PopupAnchor::Right, PopupGravity::Right),
+            DockOrientation::Right => (PopupAnchor::Left, PopupGravity::Left),
+        }
+    }
+
     fn anchor(self, start: f32, length: f32, reach: f32) -> (i32, i32, u32, u32) {
         let (x, y, width, height) = region(self.frame.area(
             start,
@@ -1250,11 +1227,7 @@ impl Menus {
     ) {
         let mut menu_open = self.menu_open;
         menu_open.set(true);
-        let side = match self.frame.orientation {
-            DockOrientation::Bottom => PopupAnchor::Top,
-            DockOrientation::Left => PopupAnchor::Right,
-            DockOrientation::Right => PopupAnchor::Left,
-        };
+        let (side, _) = self.placement();
         pop_up_menu(items, anchor, side, run, move || {
             let (mut menu_open, mut hovering, mut shown) =
                 (self.menu_open, self.hovering, self.shown);
@@ -1264,6 +1237,92 @@ impl Menus {
                 shown.set(false);
             }
         });
+    }
+}
+
+struct ShownLabel {
+    text: String,
+    anchor: (i32, i32, u32, u32),
+    id: PopupId,
+}
+
+fn show_label(
+    shown: &RefCell<Option<ShownLabel>>,
+    wanted: Option<(String, (i32, i32, u32, u32))>,
+    placement: (PopupAnchor, PopupGravity),
+    (fill, ink): (Color, Color),
+) {
+    let popups = Popups::get();
+    let mut shown = shown.borrow_mut();
+    if let (Some(label), Some((text, anchor))) = (shown.as_mut(), &wanted)
+        && label.text == *text
+    {
+        if label.anchor != *anchor {
+            label.anchor = *anchor;
+            popups.reposition(label.id, label_spec(text, *anchor, placement));
+        }
+        return;
+    }
+    if let Some(label) = shown.take() {
+        popups.close(label.id);
+    }
+    *shown = wanted.map(|(text, anchor)| {
+        let content = AppComponent::new(DockLabel {
+            text: text.clone(),
+            band: arrow_band(placement.0, DOCK_LABEL_ARROW_HEIGHT),
+            fill,
+            ink,
+        });
+        let spec = label_spec(&text, anchor, placement);
+        let id = popups.open_popover(spec, content, PopoverShape::Label);
+        ShownLabel { text, anchor, id }
+    });
+}
+
+fn label_spec(
+    text: &str,
+    anchor: (i32, i32, u32, u32),
+    (side, gravity): (PopupAnchor, PopupGravity),
+) -> PopupSpec {
+    let band = arrow_band(side, DOCK_LABEL_ARROW_HEIGHT);
+    let width = measure_text(text, DOCK_LABEL_FONT_SIZE) + 2.0 * DOCK_LABEL_PADDING_X;
+    let height = DOCK_LABEL_FONT_SIZE * TEXT_LINE_HEIGHT + 2.0 * DOCK_LABEL_PADDING_Y;
+    PopupSpec {
+        anchor_rect: anchor,
+        anchor: side,
+        gravity,
+        size: (
+            (width + band.horizontal()).ceil() as u32,
+            (height + band.vertical()).ceil() as u32,
+        ),
+        constraint_adjustment: PopupConstraintAdjustment {
+            slide_x: true,
+            slide_y: true,
+            ..PopupConstraintAdjustment::default()
+        },
+        ..PopupSpec::default()
+    }
+}
+
+struct DockLabel {
+    text: String,
+    band: Gaps,
+    fill: Color,
+    ink: Color,
+}
+
+impl App for DockLabel {
+    fn render(&self) -> impl IntoElement {
+        rect()
+            .expanded()
+            .background(self.fill)
+            .padding(self.band)
+            .center()
+            .child(
+                Text::new(self.text.clone())
+                    .font_size(DOCK_LABEL_FONT_SIZE)
+                    .color(self.ink),
+            )
     }
 }
 

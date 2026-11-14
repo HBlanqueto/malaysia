@@ -977,16 +977,19 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             elements.extend(surface_elements.into_iter().map(|e| e.into()));
             continue;
         }
-        let tip = state
-            .popups
-            .popup_of(id)
-            .filter(|popup| crate::window_style::is_popover(popup.wl_surface()))
-            .map(|popup| crate::window_style::popover_tip(popup, f64::from(frame.size.w)));
-        let corner = if tip.is_some() {
-            ctdesign::POPOVER.radius.round() as u32
-        } else {
-            ctdesign::POPUP.corner_radius
-        };
+        let popover = state.popups.popup_of(id).and_then(|popup| {
+            let shape = crate::window_style::popover_shape(popup.wl_surface())?;
+            let metrics = crate::window_style::popover_metrics(shape);
+            let (edge, tip) =
+                crate::window_style::popover_arrow(popup, frame.size.to_f64(), metrics);
+            Some((
+                metrics,
+                crate::effects::Arrow::popover(edge, tip, metrics, scale),
+            ))
+        });
+        let corner = popover.map_or(ctdesign::POPUP.corner_radius, |(metrics, _)| {
+            metrics.radius.round() as u32
+        });
         append_frame(
             state,
             Vec::new(),
@@ -1000,9 +1003,7 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
                 focused: true,
                 panel: true,
                 bordered: true,
-                arrow: tip.map_or_else(crate::effects::Arrow::default, |tip| {
-                    crate::effects::Arrow::popover(tip, scale)
-                }),
+                arrow: popover.map(|(_, arrow)| arrow).unwrap_or_default(),
             },
             scale,
             elements,

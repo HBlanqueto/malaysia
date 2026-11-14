@@ -13,22 +13,40 @@ use smithay::utils::{
     Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
 };
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum ArrowEdge {
+    #[default]
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct Arrow {
-    tip_x: f32,
+    edge: ArrowEdge,
+    tip: f32,
     height: f32,
     tip_radius: f32,
     fillet: f32,
+    slope: f32,
 }
 
 impl Arrow {
-    pub(crate) fn popover(tip_x: f64, scale: f64) -> Self {
-        let physical = |value: f64| (value * scale) as f32;
+    pub(crate) fn popover(
+        edge: ArrowEdge,
+        tip: f64,
+        metrics: ctdesign::PopoverMetrics,
+        scale: f64,
+    ) -> Self {
+        let physical = |value: f32| (f64::from(value) * scale) as f32;
         Self {
-            tip_x: physical(tip_x),
-            height: physical(f64::from(ctdesign::POPOVER.arrow_height)),
-            tip_radius: physical(f64::from(ctdesign::POPOVER.arrow_tip_radius)),
-            fillet: physical(f64::from(ctdesign::POPOVER.arrow_fillet)),
+            edge,
+            tip: (tip * scale) as f32,
+            height: physical(metrics.arrow_height),
+            tip_radius: physical(metrics.arrow_tip_radius),
+            fillet: physical(metrics.arrow_fillet),
+            slope: metrics.arrow_width / 2.0 / metrics.arrow_height,
         }
     }
 
@@ -36,22 +54,19 @@ impl Arrow {
         self.height > 0.0
     }
 
-    pub(crate) fn uniforms(self, factor: f32) -> [Uniform<'static>; 2] {
-        let popover = ctdesign::POPOVER;
+    pub(crate) fn uniforms(self, factor: f32) -> [Uniform<'static>; 3] {
         [
             Uniform::new(
                 "arrow",
                 [
-                    self.tip_x * factor,
+                    self.tip * factor,
                     self.height * factor,
                     self.tip_radius * factor,
                     self.fillet * factor,
                 ],
             ),
-            Uniform::new(
-                "arrow_slope",
-                popover.arrow_width / 2.0 / popover.arrow_height,
-            ),
+            Uniform::new("arrow_slope", self.slope),
+            Uniform::new("arrow_edge", self.edge as u8 as f32),
         ]
     }
 }
@@ -221,7 +236,7 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
 
     fn uniforms(&self) -> Vec<Uniform<'static>> {
         let src = self.src();
-        let [arrow, slope] = self.arrow.uniforms(texture_radius(src, self.dst, 1));
+        let [arrow, slope, edge] = self.arrow.uniforms(texture_radius(src, self.dst, 1));
         let mut uniforms = vec![
             Uniform::new(
                 "texture_size",
@@ -235,6 +250,7 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
             Uniform::new("exponent", self.exponent),
             arrow,
             slope,
+            edge,
         ];
         uniforms.extend(self.extra.iter().cloned());
         uniforms
@@ -490,6 +506,7 @@ pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTe
                 UniformName::new("exponent", UniformType::_1f),
                 UniformName::new("arrow", UniformType::_4f),
                 UniformName::new("arrow_slope", UniformType::_1f),
+                UniformName::new("arrow_edge", UniformType::_1f),
             ],
         )
         .inspect_err(|error| tracing::warn!(?error, "failed to compile rounded-clip shader"))
@@ -579,6 +596,7 @@ pub(crate) fn compile_dock_solid(renderer: &mut GlesRenderer) -> Option<GlesPixe
         UniformName::new("exponent", UniformType::_1f),
         UniformName::new("arrow", UniformType::_4f),
         UniformName::new("arrow_slope", UniformType::_1f),
+        UniformName::new("arrow_edge", UniformType::_1f),
     ];
     uniforms.extend(dock_frame_uniforms());
     renderer
@@ -600,6 +618,7 @@ fn compile_wallpaper_shape(
         UniformName::new("exponent", UniformType::_1f),
         UniformName::new("arrow", UniformType::_4f),
         UniformName::new("arrow_slope", UniformType::_1f),
+        UniformName::new("arrow_edge", UniformType::_1f),
     ];
     uniforms.extend(own.iter().cloned());
     renderer.compile_custom_texture_shader(shader, &uniforms)
@@ -619,6 +638,7 @@ pub(crate) fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelPro
                 UniformName::new("color", UniformType::_4f),
                 UniformName::new("arrow", UniformType::_4f),
                 UniformName::new("arrow_slope", UniformType::_1f),
+                UniformName::new("arrow_edge", UniformType::_1f),
             ],
         )
         .inspect_err(|error| tracing::warn!(?error, "failed to compile shadow shader"))
@@ -642,6 +662,7 @@ pub(crate) fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelPro
                 UniformName::new("glow_depth", UniformType::_1f),
                 UniformName::new("arrow", UniformType::_4f),
                 UniformName::new("arrow_slope", UniformType::_1f),
+                UniformName::new("arrow_edge", UniformType::_1f),
             ],
         )
         .inspect_err(|error| tracing::warn!(?error, "failed to compile border shader"))

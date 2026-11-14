@@ -41,7 +41,7 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    widens.
 4. **Surface.** The layer surface is anchored to the `orientation` edge. It
    is as deep as the bar plus room for magnified and bouncing icons and the
-   name label. The exclusive zone is only the bar, so windows do not move
+   "Remove" label of a dragged icon. The exclusive zone is only the bar, so windows do not move
    when icons grow; with `autohide` it is 0. `set_input_region` takes the
    pointer from the screen edge to the top of the bar, along the bar (to the
    magnified icons while the pointer is there): the margin under the bar
@@ -88,7 +88,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    any other on a plate (`Image::app_icon`, in the user's `appearance.icon_style` and color scheme); the
    places fill their canvas, so they are drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon, touching its slot, marks an
    open app (`show-process-indicators`). The name label shows over the icon
-   under the pointer.
+   under the pointer, in a popup with the `label` popover shape (ADR 0059):
+   an arrow points at the icon. It follows the icon while it magnifies
+   (`xdg_popup.reposition`) and hides while a menu is open.
 7. **Clicks.** A tile answers over its whole column, from the bar's edge up
    to the top of its icon (the icon itself takes no pointer events, nor the
    running dot). A click on an open app activates its first visible window, or
@@ -102,7 +104,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    window tile restores that window. Downloads and Trash open in the file
    manager (`xdg-open`).
 8. **Menus.** A secondary click opens the menu beside the icon, centred on
-   it, toward the screen (`pop_up_menu`): above it on a bottom Dock. The Dock
+   it, toward the screen (`pop_up_menu`): above it on a bottom Dock, with the
+   `menu` popover shape, so its arrow points at the icon. The Dock
    stays up and magnified until the menu closes. On an app it lists the
    windows (a diamond marks a minimized one), Options › Keep in Dock, and
    Hide and Quit (or Open). On Downloads and the Trash it has Open; the Trash adds Empty Trash, which

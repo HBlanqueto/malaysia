@@ -5,7 +5,7 @@ use smithay::reexports::wayland_server::WEnum;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
-use smithay::utils::{Logical, Rectangle};
+use smithay::utils::{Logical, Rectangle, Size};
 use smithay::wayland::compositor::{Cacheable, with_states};
 use smithay::wayland::shell::xdg::PopupSurface;
 use smithay::wayland::{Dispatch2, GlobalDispatch2};
@@ -14,11 +14,12 @@ use infinity_protocol::server::style::infinity_window_style_v1::infinity_window_
     self, InfinityWindowStyleV1,
 };
 pub(crate) use infinity_protocol::server::style::infinity_window_style_v1::infinity_window_style_v1::{
-    Bar, Panel,
+    Bar, Panel, PopoverShape,
 };
 use malaysia_scene::scene::WindowId;
 
 use crate::decoration::Role;
+use crate::effects::ArrowEdge;
 use crate::state::{ClientState, State};
 
 #[derive(Debug, Clone)]
@@ -28,7 +29,7 @@ struct BarStyle(AtomicU32);
 
 struct AlertLayer(u64);
 
-struct Popover;
+struct Popover(AtomicU32);
 
 struct DockLayer;
 
@@ -66,7 +67,7 @@ pub(crate) struct Cards {
 
 static NEXT_ALERT: AtomicU64 = AtomicU64::new(0);
 
-const VERSION: u32 = 6;
+const VERSION: u32 = 7;
 
 const MAX_GLASS_PANELS: usize = 16;
 
@@ -195,9 +196,14 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 state.request_redraw();
             }
             infinity_window_style_v1::Request::SetPopover { surface } => {
-                with_states(&surface, |states| {
-                    states.data_map.insert_if_missing_threadsafe(|| Popover);
-                });
+                set_popover_shape(&surface, PopoverShape::Popover);
+                state.request_redraw();
+            }
+            infinity_window_style_v1::Request::SetPopoverShape {
+                surface,
+                shape: WEnum::Value(shape),
+            } => {
+                set_popover_shape(&surface, shape);
                 state.request_redraw();
             }
             _ => {}
@@ -314,25 +320,87 @@ pub(crate) fn is_gtk_client(surface: &WlSurface) -> bool {
     })
 }
 
-pub(crate) fn is_popover(surface: &WlSurface) -> bool {
-    with_states(surface, |states| states.data_map.get::<Popover>().is_some())
-}
-
-pub(crate) fn popover_tip(popup: &PopupSurface, width: f64) -> f64 {
-    let anchor_center = popup.with_pending_state(|state| {
-        let anchor = state.positioner.anchor_rect;
-        f64::from(anchor.loc.x) + f64::from(anchor.size.w) / 2.0 - f64::from(state.geometry.loc.x)
+fn set_popover_shape(surface: &WlSurface, shape: PopoverShape) {
+    with_states(surface, |states| {
+        states
+            .data_map
+            .insert_if_missing_threadsafe(|| Popover(AtomicU32::new(0)));
+        if let Some(popover) = states.data_map.get::<Popover>() {
+            popover.0.store(shape.into(), Ordering::Relaxed);
+        }
     });
-    clamped_tip(anchor_center, width)
 }
 
-fn clamped_tip(anchor_center: f64, width: f64) -> f64 {
+pub(crate) fn popover_shape(surface: &WlSurface) -> Option<PopoverShape> {
+    with_states(surface, |states| {
+        let popover = states.data_map.get::<Popover>()?;
+        PopoverShape::try_from(popover.0.load(Ordering::Relaxed)).ok()
+    })
+}
+
+pub(crate) fn popover_metrics(shape: PopoverShape) -> ctdesign::PopoverMetrics {
     let popover = ctdesign::POPOVER;
-    let edge = f64::from(popover.radius) + f64::from(popover.arrow_width) / 2.0;
-    if width < 2.0 * edge {
-        width / 2.0
+    match shape {
+        PopoverShape::Menu => ctdesign::PopoverMetrics {
+            radius: ctdesign::POPUP.corner_radius as f32,
+            ..popover
+        },
+        PopoverShape::Label => ctdesign::PopoverMetrics {
+            radius: ctdesign::DOCK_LABEL_RADIUS,
+            arrow_width: ctdesign::DOCK_LABEL_ARROW_WIDTH,
+            arrow_height: ctdesign::DOCK_LABEL_ARROW_HEIGHT,
+            arrow_tip_radius: ctdesign::DOCK_LABEL_ARROW_TIP_RADIUS,
+            arrow_fillet: ctdesign::DOCK_LABEL_ARROW_FILLET,
+            ..popover
+        },
+        _ => popover,
+    }
+}
+
+pub(crate) fn popover_arrow(
+    popup: &PopupSurface,
+    size: Size<f64, Logical>,
+    metrics: ctdesign::PopoverMetrics,
+) -> (ArrowEdge, f64) {
+    let (anchor, geometry) =
+        popup.with_pending_state(|state| (state.positioner.anchor_rect, state.geometry));
+    let edge = facing_edge(anchor, geometry);
+    let center = |start: i32, length: i32, from: i32| {
+        f64::from(start) + f64::from(length) / 2.0 - f64::from(from)
+    };
+    let tip = match edge {
+        ArrowEdge::Top | ArrowEdge::Bottom => clamped_tip(
+            center(anchor.loc.x, anchor.size.w, geometry.loc.x),
+            size.w,
+            metrics,
+        ),
+        ArrowEdge::Left | ArrowEdge::Right => clamped_tip(
+            center(anchor.loc.y, anchor.size.h, geometry.loc.y),
+            size.h,
+            metrics,
+        ),
+    };
+    (edge, tip)
+}
+
+fn facing_edge(anchor: Rectangle<i32, Logical>, popup: Rectangle<i32, Logical>) -> ArrowEdge {
+    if popup.loc.y + popup.size.h <= anchor.loc.y {
+        ArrowEdge::Bottom
+    } else if popup.loc.x + popup.size.w <= anchor.loc.x {
+        ArrowEdge::Right
+    } else if popup.loc.x >= anchor.loc.x + anchor.size.w {
+        ArrowEdge::Left
     } else {
-        anchor_center.clamp(edge, width - edge)
+        ArrowEdge::Top
+    }
+}
+
+fn clamped_tip(anchor_center: f64, length: f64, metrics: ctdesign::PopoverMetrics) -> f64 {
+    let edge = f64::from(metrics.radius) + f64::from(metrics.arrow_width) / 2.0;
+    if length < 2.0 * edge {
+        length / 2.0
+    } else {
+        anchor_center.clamp(edge, length - edge)
     }
 }
 
@@ -433,12 +501,23 @@ mod tests {
 
     #[test]
     fn the_popover_arrow_points_at_the_anchor_but_stays_clear_of_the_corners() {
-        let edge =
-            f64::from(ctdesign::POPOVER.radius) + f64::from(ctdesign::POPOVER.arrow_width) / 2.0;
-        assert_eq!(clamped_tip(120.0, 300.0), 120.0);
-        assert_eq!(clamped_tip(-40.0, 300.0), edge);
-        assert_eq!(clamped_tip(400.0, 300.0), 300.0 - edge);
-        assert_eq!(clamped_tip(10.0, 40.0), 20.0);
+        let popover = ctdesign::POPOVER;
+        let edge = f64::from(popover.radius) + f64::from(popover.arrow_width) / 2.0;
+        assert_eq!(clamped_tip(120.0, 300.0, popover), 120.0);
+        assert_eq!(clamped_tip(-40.0, 300.0, popover), edge);
+        assert_eq!(clamped_tip(400.0, 300.0, popover), 300.0 - edge);
+        assert_eq!(clamped_tip(10.0, 40.0, popover), 20.0);
+    }
+
+    #[test]
+    fn the_arrow_sits_on_the_popup_edge_that_faces_the_anchor() {
+        let anchor = Rectangle::new((100, 100).into(), (40, 40).into());
+        let at = |x, y| Rectangle::new((x, y).into(), (80, 60).into());
+        assert_eq!(facing_edge(anchor, at(80, 30)), ArrowEdge::Bottom);
+        assert_eq!(facing_edge(anchor, at(20, 90)), ArrowEdge::Right);
+        assert_eq!(facing_edge(anchor, at(140, 90)), ArrowEdge::Left);
+        assert_eq!(facing_edge(anchor, at(80, 140)), ArrowEdge::Top);
+        assert_eq!(facing_edge(anchor, at(90, 110)), ArrowEdge::Top);
     }
 
     #[test]

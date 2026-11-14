@@ -11,6 +11,7 @@ float window_sdf(vec2 p, vec4 rect, float radius, float exponent) {
 
 uniform vec4 arrow;
 uniform float arrow_slope;
+uniform float arrow_edge;
 
 float arrow_triangle(vec2 p, vec2 q) {
     p.x = abs(p.x);
@@ -26,10 +27,18 @@ float smooth_union(float a, float b, float k) {
     return min(a, b) - h * h * k * 0.25;
 }
 
-// arrow = (tip x from rect.x, band height, tip radius, fillet); a zero band means no arrow.
+// arrow = (tip along the edge from its start, band height, tip radius, fillet); a zero band
+// means no arrow. arrow_edge 0 top, 1 bottom, 2 left, 3 right: mapped onto the top edge.
 float frame_sdf(vec2 p, vec4 rect, float radius, float exponent) {
     if (arrow.y <= 0.0) {
         return window_sdf(p, rect, radius, exponent);
+    }
+    if (arrow_edge > 1.5) {
+        p = p.yx;
+        rect = rect.yxwz;
+    }
+    if (mod(arrow_edge, 2.0) > 0.5) {
+        p.y = 2.0 * rect.y + rect.w - p.y;
     }
     vec4 body = vec4(rect.x, rect.y + arrow.y, rect.z, rect.w - arrow.y);
     float depth = arrow.y - arrow.z + arrow.w;
