@@ -8,6 +8,8 @@ use ctappearance::{AppearanceConfig, ColorScheme, Resolved, resolve};
 use ctdesign::{MENUBAR_HEIGHT, Rgba};
 use torin::prelude::Gaps;
 
+use crate::wallpaper::{Picture, appearance, over_artwork, preview};
+
 fn preview_for_theme(
     base_config: &AppearanceConfig,
     scheme: ColorScheme,
@@ -26,24 +28,26 @@ pub fn theme_preview(
     dominant: Option<Rgba>,
 ) -> Rect {
     let theme = preview_for_theme(base_config, scheme, dominant);
-    gradient_background(theme.accent)
-        .child(preview_panel(&theme))
-        .child(preview_menu(&theme, theme.accent))
-        .child(preview_app(&theme))
+    wallpaper_background(scheme.is_dark()).child(
+        over_artwork(Position::new_absolute())
+            .width(Size::percent(100.0))
+            .height(Size::percent(100.0))
+            .child(preview_panel(&theme))
+            .child(preview_menu(&theme, theme.accent))
+            .child(preview_app(&theme)),
+    )
 }
 
-fn gradient_background(accent: Rgba) -> Rect {
-    let gradient = LinearGradient::new()
-        .angle(SETTINGS.preview_wall_angle as f32)
-        .stop((rgba(accent.lighten(SETTINGS.preview_wall_light)), 0.0))
-        .stop((rgba(accent), 50.0))
-        .stop((rgba(accent.darken(SETTINGS.preview_wall_dark)), 100.0));
+fn wallpaper_background(dark: bool) -> Rect {
     rect()
         .width(Size::fill())
         .height(Size::fill())
         .corner_radius(SETTINGS.card_radius as f32)
-        .background(gradient)
         .overflow(Overflow::Clip)
+        .maybe_child(preview(None, appearance(dark)).map(|path| Picture {
+            path,
+            aspect: AspectRatio::Max,
+        }))
 }
 
 fn preview_panel(resolved: &Resolved) -> Rect {
@@ -172,9 +176,13 @@ pub fn menubar_preview(
         .background(rgba(background))
         .child(preview_bar_items(4, ink))
         .child(preview_bar_items(2, ink));
-    gradient_background(resolved.accent)
-        .maybe_child(with_window.then_some(window))
-        .child(bar)
+    wallpaper_background(resolved.scheme.is_dark()).child(
+        over_artwork(Position::new_absolute())
+            .width(Size::percent(100.0))
+            .height(Size::percent(100.0))
+            .maybe_child(with_window.then_some(window))
+            .child(bar),
+    )
 }
 
 fn preview_bar_items(count: usize, ink: Rgba) -> HStack {

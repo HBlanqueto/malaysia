@@ -214,7 +214,7 @@ pub fn name_of(file: Option<&Path>) -> &'static str {
     intern(words.join(" "))
 }
 
-fn appearance(dark: bool) -> WallpaperAppearance {
+pub(crate) fn appearance(dark: bool) -> WallpaperAppearance {
     if dark {
         WallpaperAppearance::Dark
     } else {
@@ -236,7 +236,7 @@ pub fn preview(file: Option<&Path>, look: WallpaperAppearance) -> Option<PathBuf
 }
 
 // Freya paints by layer (one more per level): the artwork's image sits three levels down.
-fn over_artwork(position: Position) -> Rect {
+pub(crate) fn over_artwork(position: Position) -> Rect {
     rect().layer(3).position(position)
 }
 
@@ -1238,9 +1238,9 @@ impl Component for Artwork {
 }
 
 #[derive(PartialEq)]
-struct Picture {
-    path: PathBuf,
-    aspect: AspectRatio,
+pub(crate) struct Picture {
+    pub(crate) path: PathBuf,
+    pub(crate) aspect: AspectRatio,
 }
 
 impl Component for Picture {
