@@ -319,6 +319,7 @@ impl State {
 
         popup.with_pending_state(|state| {
             state.geometry = relative;
+            state.positioner = positioner;
         });
         popup.send_repositioned(token);
         let _ = popup.send_configure();
