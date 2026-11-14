@@ -85,10 +85,10 @@ forum alone.
    ([get notifications](https://support.apple.com/guide/mac-help/get-notifications-mchl2fb1258f/26/mac/26),
    [Focus](https://support.apple.com/guide/mac-help/mchl999b7c1a/26/mac/26))
    [A].
-2. **Panel content:** notifications on top, widgets below, and «Edit Widgets»
-   at the bottom
+2. **Panel content:** notifications on top and «Edit Widgets» at the bottom
    ([widgets](https://support.apple.com/guide/mac-help/add-and-customize-widgets-mchl52be5da5/26/mac/26))
-   [A].
+   [A]. The panel has no widgets yet and the button does nothing. Focus never
+   shows in the panel.
 3. **Stacks:** one app's notifications stack; a click expands the stack,
    «Show less» collapses it, and hovering the top card's Clear button turns it
    into «Clear All» [A].
@@ -319,8 +319,7 @@ Exact names from
    continuous corner and sends its rectangle with
    `infinity_window_style_v1.set_cards` (`bk::shell::set_card_frames`), and
    the compositor adds the window shadow below and the inner and outer
-   borders above (`append_cards` in `scene_elements.rs`). The Focus pill is
-   framed the same way. Freya fades a continuous corner towards a circle
+   borders above (`append_cards` in `scene_elements.rs`). Freya fades a continuous corner towards a circle
    when the shape is short (`compute_smooth_corner` in freya-core 0.5.0), so
    `window_style::card_corner` repeats that rule for each card's frame. A dark Tahoe call
    notification in the MacStories review shows the same two borders as a
@@ -398,10 +397,8 @@ Exact names from
        Settings › Notifications.
     2. Portal v2, inline reply, lock screen and activation tokens.
     3. Dock badges and progress, Focus modes.
-    4. Live Activities, then widgets in the panel: Calendar (the month with
-       today marked) and Batteries (UPower, every 60 s), added and removed
-       with «Edit Widgets» (`widgets` in `notifications.domain`). Widgets
-       from apps need a contract Linux does not have.
+    4. Live Activities, then widgets in the panel. Widgets from apps need a
+       contract Linux does not have.
 
 ## As built
 

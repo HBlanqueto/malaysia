@@ -1,11 +1,9 @@
-mod batteries;
 mod cups;
 mod image;
 mod live;
 mod server;
 mod store;
 mod view;
-mod widgets;
 
 pub(crate) use live::{Activity, ActivityKind};
 pub(crate) use store::{Center, Notification};
@@ -15,8 +13,6 @@ use bk::prelude::Symbol;
 use bk::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, run_layer};
 use ctappearance::notifications::Focus;
 use freya_core::integration::AppComponent;
-
-use crate::localize::tr;
 
 use server::{CONTROL_NAME, CONTROL_PATH};
 
@@ -116,14 +112,5 @@ pub(crate) fn focus_symbol(focus: Focus) -> Symbol {
         Focus::Sleep => Symbol::Bed,
         Focus::Personal => Symbol::Person,
         Focus::Work => Symbol::Briefcase,
-    }
-}
-
-pub(crate) fn focus_title(focus: Focus) -> &'static str {
-    match focus {
-        Focus::DoNotDisturb => tr!("focus-do-not-disturb"),
-        Focus::Sleep => tr!("focus-sleep"),
-        Focus::Personal => tr!("focus-personal"),
-        Focus::Work => tr!("focus-work"),
     }
 }

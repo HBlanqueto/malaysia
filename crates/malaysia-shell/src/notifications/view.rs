@@ -13,7 +13,7 @@ use bk::shell::{
 };
 use bk::style::Palette;
 use bk::theme;
-use ctappearance::notifications::{AlertStyle, Focus, NotificationsConfig, ShowPreviews};
+use ctappearance::notifications::{AlertStyle, NotificationsConfig, ShowPreviews};
 use ctdesign::{
     BODY, CAPTION, HEADLINE, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES,
     NOTIFICATION_CLOSE_SIZE, NOTIFICATION_GAP, NOTIFICATION_ICON_SIZE, NOTIFICATION_MARGIN,
@@ -27,8 +27,7 @@ use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::{Area, Content, Gaps, Position};
 
 use super::server::{self, Link, Reply};
-use super::store::{Notification, Origin, focus_name, parse_focus};
-use super::{focus_symbol, focus_title};
+use super::store::{Notification, Origin};
 use crate::launcher::{app_icon, load_icon, spawn_entry, with_activation_token};
 use crate::localize::tr;
 
@@ -49,8 +48,6 @@ struct Snapshot {
     notifications: Vec<Notification>,
     banners: Vec<(Notification, AlertStyle)>,
     panel_open: bool,
-    focus: Option<Focus>,
-    batteries: Vec<super::batteries::Battery>,
 }
 
 impl Snapshot {
@@ -60,8 +57,6 @@ impl Snapshot {
             notifications: hub.center.notifications.clone(),
             banners: hub.banners.clone(),
             panel_open: hub.panel_open,
-            focus: hub.center.focus,
-            batteries: hub.batteries.clone(),
         }
     }
 
@@ -139,7 +134,6 @@ impl App for NotificationsApp {
         let replying = use_state(|| None::<u32>);
         let draft = use_state(String::new);
         let expanded = use_state(HashSet::<String>::new);
-        let editing = use_state(|| false);
         let timed = use_hook(|| Rc::new(RefCell::new(HashSet::<u32>::new())));
         let applied = use_hook(|| Rc::new(Cell::new(None::<LayerGeometry>)));
         let departures = use_hook(|| Rc::new(RefCell::new(Departures::default())));
@@ -276,7 +270,7 @@ impl App for NotificationsApp {
                 shifts: context.shifts,
                 height: Size::fill(),
                 leaving: panel_closing,
-                child: panel(&context, &shown, &config, expanded, editing).into_element(),
+                child: panel(&context, &shown, &config, expanded).into_element(),
             }
             .into_element()
         } else {
@@ -501,7 +495,6 @@ fn panel(
     shown: &Snapshot,
     config: &NotificationsConfig,
     expanded: State<HashSet<String>>,
-    editing: State<bool>,
 ) -> ScrollView {
     let center = super::store::Center {
         notifications: shown.notifications.clone(),
@@ -509,10 +502,7 @@ fn panel(
     };
     let groups = center.groups(config);
     let palette = Palette::current();
-    let mut column = VStack::new()
-        .width(Size::fill())
-        .spacing(NOTIFICATION_GAP)
-        .child(focus_toggle(context, shown.focus));
+    let mut column = VStack::new().width(Size::fill()).spacing(NOTIFICATION_GAP);
     if groups.is_empty() {
         column = column.child(
             rect()
@@ -531,7 +521,7 @@ fn panel(
     for group in groups {
         column = column.child(stack(context, group, expanded));
     }
-    column = column.child(super::widgets::section(config, &shown.batteries, editing));
+    column = column.child(Button::new(tr!("widgets-edit")));
     ScrollView::new()
         .width(Size::fill())
         .height(Size::fill())
@@ -541,69 +531,6 @@ fn panel(
                 .padding(Gaps::new(0.0, 0.0, 0.0, close_room()))
                 .child(column),
         )
-}
-
-fn focus_toggle(context: &Context, focus: Option<Focus>) -> Element {
-    let palette = Palette::current();
-    let (background, foreground) = match focus {
-        Some(_) => (palette.accent, palette.on_accent),
-        None => (palette.raised_background, palette.label),
-    };
-    let shown = focus.unwrap_or(Focus::DoNotDisturb);
-    let press = {
-        let context = context.clone();
-        move |_| set_focus(&context, focus.is_none().then_some(Focus::DoNotDisturb))
-    };
-    let menu = Focus::ALL
-        .into_iter()
-        .map(|mode| MenuItem::action(focus_name(Some(mode)), focus_title(mode)))
-        .chain([
-            MenuItem::Separator,
-            MenuItem::action("off", tr!("notifications-focus-off")),
-        ])
-        .collect::<Vec<_>>();
-    let chosen = context.clone();
-    let pill = rect()
-        .width(Size::fill())
-        .padding(Gaps::new(
-            6.0,
-            NOTIFICATION_PADDING,
-            6.0,
-            NOTIFICATION_PADDING,
-        ))
-        .background(theme::color(background))
-        .center()
-        .on_press(press)
-        .child(
-            HStack::new()
-                .cross_align(Alignment::Center)
-                .spacing(NOTIFICATION_GAP)
-                .child(
-                    Image::system(focus_symbol(shown))
-                        .size(HEADLINE.size as f32)
-                        .color(foreground),
-                )
-                .child(
-                    Text::new(focus_title(shown))
-                        .font(HEADLINE)
-                        .color(theme::color(foreground)),
-                ),
-        );
-    framed(context, FOCUS_FRAME, pill)
-        .context_menu(menu, move |command: String| {
-            set_focus(&chosen, parse_focus(&command))
-        })
-        .into_element()
-}
-
-fn set_focus(context: &Context, focus: Option<Focus>) {
-    {
-        let mut hub = context.link.hub();
-        hub.center.focus = focus;
-        hub.center.save();
-    }
-    context.link.reply(Reply::Focus);
-    context.refresh();
 }
 
 fn stack(context: &Context, group: Vec<Notification>, expanded: State<HashSet<String>>) -> Element {
@@ -990,7 +917,6 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
 }
 
 // Notification ids start at 1 (Desktop Notifications spec), so 0 never names a card.
-const FOCUS_FRAME: u32 = 0;
 const PANEL_SLIDE: u64 = 0;
 
 fn framed(context: &Context, id: u32, body: Rect) -> Rect {

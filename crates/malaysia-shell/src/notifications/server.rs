@@ -59,7 +59,6 @@ pub(crate) struct Hub {
     pub(crate) activities: Vec<live::Activity>,
     pub(crate) owners: HashMap<String, String>,
     pub(crate) calls: HashMap<String, (Notification, Option<String>)>,
-    pub(crate) batteries: Vec<super::batteries::Battery>,
     wake: Option<WakeHandle>,
 }
 
@@ -89,7 +88,6 @@ pub(crate) enum Reply {
     Ended(String),
     OwnerGone(String),
     Ask(String, live::Request),
-    Focus,
 }
 
 #[derive(Clone)]
@@ -105,14 +103,6 @@ impl Link {
 
     pub(crate) fn set_wake(&self, wake: WakeHandle) {
         self.hub().wake = Some(wake);
-    }
-
-    pub(crate) fn set_batteries(&self, batteries: Vec<super::batteries::Battery>) {
-        let mut hub = self.hub();
-        if hub.batteries != batteries {
-            hub.batteries = batteries;
-            hub.changed();
-        }
     }
 
     pub(crate) fn reply(&self, reply: Reply) {
@@ -139,7 +129,6 @@ pub(crate) fn start() -> Link {
         })
         .expect("malaysia-notifications thread");
     super::cups::start(link.clone());
-    super::batteries::start(link.clone());
     link
 }
 
@@ -288,17 +277,6 @@ async fn answer(link: &Link, connection: &zbus::Connection, reply: Reply) -> zbu
             }
         }
         Reply::Ask(id, request) => ask(link, connection, &id, request).await?,
-        Reply::Focus => {
-            let control = connection
-                .object_server()
-                .interface::<_, Control>(CONTROL_PATH)
-                .await?;
-            control
-                .get()
-                .await
-                .focus_changed(control.signal_emitter())
-                .await?;
-        }
     }
     Ok(())
 }
