@@ -269,6 +269,9 @@ mod tests {
             write_appearance(&path, &initial).unwrap();
 
             let mut test = run_app(initial);
+            let page =
+                find_label(&test, tr!("tint-windows")).expect("Appearance lists Tint windows");
+            click_node(&mut test, page);
             let node = find_label(&test, tr!("tint-part-bars")).expect("bars checkbox exists");
             click_node(&mut test, node);
 
@@ -296,6 +299,9 @@ mod tests {
                 write_appearance(&path, &initial).unwrap();
 
                 let mut test = run_app(initial);
+                let page =
+                    find_label(&test, tr!("tint-windows")).expect("Appearance lists Tint windows");
+                click_node(&mut test, page);
                 let node = find_label(&test, tr!("tint-part-bars")).expect("bars checkbox exists");
                 click_node(&mut test, node);
 

@@ -115,8 +115,8 @@ They are not domain options; they are fixed and documented here:
 | `appearance.tint_strength` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of the accent tint and of `wallpaper_tinting` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings**; the retired key `tint_strength_accent` is no longer read and System Settings removes it |
 | `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"`, `"bars"` | all but `"bars"` | **active** | which surfaces the tint reaches, with either tint color; `bars` is the Dock and the menu bar with the Solid style, tinted with the accent or with the wallpaper's dominant color. Replaces the retired `window_tint_scope`, **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
-| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window, each libadwaita window with Malaysia's patch and the compositor's server-side titlebar mix the wallpaper behind it into its `tint_parts`, at `tint_strength`, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
-| `appearance.wallpaper_tinting_in_light` | bool | `false` | **active** | `wallpaper_tinting` also in light mode, **System Settings › Accessibility › Display** |
+| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window, each libadwaita window with Malaysia's patch and the compositor's server-side titlebar mix the wallpaper behind it into its `tint_parts`, at `tint_strength`, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance › Tint windows** |
+| `appearance.wallpaper_tinting_in_light` | bool | `false` | **active** | `wallpaper_tinting` also in light mode, **System Settings › Appearance › Tint windows** |
 | `appearance.invert_colors` | bool | `false` | **active** | compositor: inverts the screen (ADR 0066), **System Settings › Accessibility › Display** |
 | `appearance.show_borders` | bool | `false` | **active** | kit: a border on icon buttons, tool groups and search fields, **System Settings › Accessibility › Display** |
 | `appearance.differentiate_without_color` | bool | `false` | **active** | kit and compositor: the traffic lights keep their symbols in the focused window, **System Settings › Accessibility › Display** |
@@ -173,11 +173,13 @@ that color's hue (chroma in OKLab): 15 % in dark, 12 % in light with
 window as it moves and fades in over 220 ms when it changes at once. It needs
 a neutral `window_color`; any accent works.
 
-System Settings › Appearance shows both tints as one control: «Tint windows»
-(Neutral, Subtle, Normal, Strong, Intense) sets `tint_strength`, or turns both
-off with Neutral; «Tint color» picks the accent (`window_color = "accent"`) or
-the wallpaper behind each window (`window_color = "neutral"` with
-`wallpaper_tinting = true`).
+System Settings › Appearance opens the page «Tint windows», which holds every
+tint option. «Intensity» (Neutral, Subtle, Normal, Strong, Intense) sets
+`tint_strength`, or turns both tints off with Neutral; «Tint color» picks the
+accent (`window_color = "accent"`) or the wallpaper behind each window
+(`window_color = "neutral"` with `wallpaper_tinting = true`); «Also tint in
+light mode» sets `wallpaper_tinting_in_light`; «Tint in windows» sets
+`tint_parts`.
 
 ## `language` — language (System Settings → General → Language & Region)
 

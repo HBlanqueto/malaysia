@@ -180,13 +180,22 @@ pub fn settings_window(
                     ),
                 )),
             )
-            .pane(Pane::new(
-                "appearance",
-                tr!("appearance"),
-                Symbol::CircleHalf,
-                SETTINGS.section_icon_bg,
-                appearance(config, dominant, resolved, error),
-            ))
+            .pane(
+                Pane::new(
+                    "appearance",
+                    tr!("appearance"),
+                    Symbol::CircleHalf,
+                    SETTINGS.section_icon_bg,
+                    appearance(config, dominant, resolved, error),
+                )
+                .page(Pane::new(
+                    "tint-windows",
+                    tr!("tint-windows"),
+                    Symbol::CircleHalf,
+                    SETTINGS.section_icon_bg,
+                    tint_windows(config, error),
+                )),
+            )
             .pane(desktop_pane(resolved, &menubar, error))
             .pane(wallpaper_pane(wallpaper, resolved.scheme.is_dark(), error))
             .pane(notifications)
@@ -246,8 +255,6 @@ fn appearance(
     resolved: &Resolved,
     error: State<Option<String>>,
 ) -> Form {
-    let level = tint_level(config);
-    let accent_source = config.window_color == WindowColorMode::Accent;
     let accent = Row::new(tr!("accent-color"))
         .keywords(tr_list!("accent-color-keywords"))
         .control(
@@ -291,42 +298,8 @@ fn appearance(
                         ),
                 )
                 .row(
-                    Row::new(tr!("tint-windows"))
-                        .keywords(tr_list!("tint-windows-keywords"))
-                        .control(
-                            Slider::stepped(tr!("tint-windows"), STRENGTHS.len() + 1)
-                                .value(level)
-                                .labels(tr_list!(
-                                    "tint-windows-neutral",
-                                    "tint-strength-subtle",
-                                    "tint-strength-normal",
-                                    "tint-strength-strong",
-                                    "tint-strength-intense"
-                                ))
-                                .on_change(edit(error, set_tint_level)),
-                        ),
-                )
-                .row(
-                    Row::new(tr!("tint-source"))
-                        .keywords(tr_list!("tint-source-keywords"))
-                        .stacked()
-                        .control(
-                            RadioGroup::new(tr!("tint-source"))
-                                .option(tr!("tint-source-accent"))
-                                .option(tr!("tint-source-wallpaper"))
-                                .selected(usize::from(!accent_source))
-                                .disabled(level == 0)
-                                .on_change(edit(error, |config, index: usize| {
-                                    config.window_color = WINDOW_COLORS[usize::from(index == 0)];
-                                    config.wallpaper_tinting = index == 1;
-                                })),
-                        ),
-                )
-                .row(
-                    Row::new(tr!("tint-parts"))
-                        .keywords(tr_list!("tint-parts-keywords"))
-                        .stacked()
-                        .control(tint_parts(config.tint_parts, level == 0, error)),
+                    Row::page(tr!("tint-windows"), "tint-windows")
+                        .keywords(tr_list!("tint-windows-keywords")),
                 ),
         )
         .section(
@@ -367,6 +340,64 @@ fn appearance(
                         ),
                 ),
         )
+}
+
+fn tint_windows(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
+    let level = tint_level(config);
+    let accent_source = config.window_color == WindowColorMode::Accent;
+    Form::new().section(
+        Section::new()
+            .row(
+                Row::new(tr!("tint-intensity"))
+                    .keywords(tr_list!("tint-windows-keywords"))
+                    .control(
+                        Slider::stepped(tr!("tint-intensity"), STRENGTHS.len() + 1)
+                            .value(level)
+                            .labels(tr_list!(
+                                "tint-windows-neutral",
+                                "tint-strength-subtle",
+                                "tint-strength-normal",
+                                "tint-strength-strong",
+                                "tint-strength-intense"
+                            ))
+                            .on_change(edit(error, set_tint_level)),
+                    ),
+            )
+            .row(
+                Row::new(tr!("tint-source"))
+                    .keywords(tr_list!("tint-source-keywords"))
+                    .stacked()
+                    .control(
+                        RadioGroup::new(tr!("tint-source"))
+                            .option(tr!("tint-source-accent"))
+                            .option(tr!("tint-source-wallpaper"))
+                            .selected(usize::from(!accent_source))
+                            .disabled(level == 0)
+                            .on_change(edit(error, |config, index: usize| {
+                                config.window_color = WINDOW_COLORS[usize::from(index == 0)];
+                                config.wallpaper_tinting = index == 1;
+                            })),
+                    ),
+            )
+            .row(
+                Row::new(tr!("wallpaper-tinting-in-light"))
+                    .keywords(tr_list!("wallpaper-tinting-in-light-keywords"))
+                    .control(
+                        Switch::new(tr!("wallpaper-tinting-in-light"))
+                            .on(config.wallpaper_tinting_in_light)
+                            .disabled(!config.wallpaper_tinting || accent_source)
+                            .on_toggle(edit(error, |config, on: bool| {
+                                config.wallpaper_tinting_in_light = on;
+                            })),
+                    ),
+            )
+            .row(
+                Row::new(tr!("tint-parts"))
+                    .keywords(tr_list!("tint-parts-keywords"))
+                    .stacked()
+                    .control(tint_parts(config.tint_parts, level == 0, error)),
+            ),
+    )
 }
 
 fn tint_level(config: &AppearanceConfig) -> usize {
@@ -475,21 +506,6 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                 } else {
                     reduce_transparency
                 })
-                .row(
-                    Row::new(tr!("wallpaper-tinting-in-light"))
-                        .keywords(tr_list!("wallpaper-tinting-in-light-keywords"))
-                        .control(
-                            Switch::new(tr!("wallpaper-tinting-in-light"))
-                                .on(config.wallpaper_tinting_in_light)
-                                .disabled(
-                                    !config.wallpaper_tinting
-                                        || config.window_color == WindowColorMode::Accent,
-                                )
-                                .on_toggle(edit(error, |config, on: bool| {
-                                    config.wallpaper_tinting_in_light = on;
-                                })),
-                        ),
-                )
                 .row(switch(
                     tr!("show-borders"),
                     config.show_borders,

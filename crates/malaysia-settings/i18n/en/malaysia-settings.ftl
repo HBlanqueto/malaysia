@@ -61,6 +61,7 @@ accent-color-keywords = blue, purple, pink, red, orange, yellow, green, graphite
 accent-automatic = Automatic
 tint-windows = Tint windows
 tint-windows-keywords = tint, neutral, subtle, normal, strong, intense, window color
+tint-intensity = Intensity
 tint-windows-neutral = Neutral
 tint-strength-subtle = Subtle
 tint-strength-normal = Normal

@@ -33,7 +33,7 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
    `"neutral"`. `tint_strength_wallpaper`, the wallpaper accent and the
    wallpaper tint of the menu bar and the Dock go away.
 2. **Dark mode only.** `wallpaper_tinting_in_light` (default `false`, System
-   Settings › Accessibility) extends it to light mode.
+   Settings › Appearance › Tint windows) extends it to light mode.
 3. **Per window.** `malaysia-wallpaper` writes a grid of average colors
    (`WALLPAPER_TINTING_GRID` cells per side) to `wallpaper.state`. The
    compositor averages the cells behind each window, with the wallpaper
@@ -49,7 +49,9 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
    «Tint windows» goes from Neutral (both off) to Intense and sets
    `tint_strength`, which also multiplies `WALLPAPER_TINTING` (×0.5 to ×2);
    «Tint color» picks the accent or the wallpaper behind each window. The retired
-   key `tint_strength_accent` is no longer read; a write removes it.
+   key `tint_strength_accent` is no longer read; a write removes it. Since
+   2026-11-14 the tint options live on their own page, Appearance › Tint
+   windows, where «Tint windows» is called «Intensity».
 7. **The wallpaper accent comes back as a swatch (2026-11-09).** The first
    accent swatch, a rainbow like macOS «Multicolor», sets `wallpaper_accent`:
    the accent is the dominant color of `wallpaper.state`. The traffic-light

@@ -61,6 +61,7 @@ accent-color-keywords = azul, morado, rosa, rojo, naranja, amarillo, verde, gris
 accent-automatic = Automático
 tint-windows = Teñir las ventanas
 tint-windows-keywords = tinte, neutro, sutil, normal, fuerte, intenso, color de las ventanas
+tint-intensity = Intensidad
 tint-windows-neutral = Neutro
 tint-strength-subtle = Sutil
 tint-strength-normal = Normal
