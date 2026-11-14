@@ -10,7 +10,7 @@ use std::{
     f32::consts::PI,
     path::PathBuf,
     rc::Rc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use bk::adornments::Badge;
@@ -38,9 +38,9 @@ use ctdesign::{
     DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
     DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_ARROW_HEIGHT, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP,
     DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS,
-    DOCK_MAGNIFY_MS, DOCK_MINIMIZE_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP,
-    DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE,
-    DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, TEXT_LINE_HEIGHT,
+    DOCK_MAGNIFY_MS, DOCK_MINIMIZE_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REMOVE_MS,
+    DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN,
+    DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, TEXT_LINE_HEIGHT,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
@@ -77,7 +77,8 @@ struct Drag {
     from: (f32, f32),
     at: (f32, f32),
     moved: bool,
-    away: bool,
+    away: Option<Instant>,
+    removing: bool,
     order: Vec<String>,
 }
 
@@ -90,7 +91,8 @@ impl Drag {
             from: at,
             at,
             moved: false,
-            away: false,
+            away: None,
+            removing: false,
             order,
         }
     }
@@ -154,8 +156,20 @@ impl Frame {
     }
 }
 
-fn primary(event: &Event<PointerEventData>) -> bool {
-    event.data().button() == Some(MouseButton::Left)
+// Freya's on_secondary_down is an on_pointer_down handler and an element keeps only the last one,
+// so one handler takes both buttons: the primary one starts a drag, the secondary one opens the menu.
+fn on_down(
+    mut primary: impl FnMut((f32, f32)) + 'static,
+    secondary: impl Fn() + 'static,
+) -> impl FnMut(Event<PointerEventData>) + 'static {
+    move |event| match event.data().button() {
+        Some(MouseButton::Left) => {
+            let at = event.global_location();
+            primary((at.x as f32, at.y as f32))
+        }
+        Some(MouseButton::Right) => secondary(),
+        _ => {}
+    }
 }
 
 fn placed((x, y, width, height): Area) -> Rect {
@@ -518,8 +532,8 @@ impl App for DockApp {
         if let Some(index) = lifted_from {
             list.remove(index);
         }
-        let landing =
-            lifted_from.filter(|_| lifted.is_none_or(|drag| !(drag.downloads && drag.away)));
+        let landing = lifted_from
+            .filter(|_| lifted.is_none_or(|drag| !(drag.downloads && drag.away.is_some())));
         let mut gaps: Vec<(usize, f32)> = motion::use_slots(lifted.map(|_| {
             landing
                 .map(|index| (index as u64, index))
@@ -789,18 +803,16 @@ impl App for DockApp {
                         placed(area)
                             .center()
                             .child(line.background(separator_ink))
-                            .on_pointer_down(move |event: Event<PointerEventData>| {
-                                if !primary(&event) {
-                                    return;
-                                }
-                                let at = event.global_location();
-                                let (_, cross) = frame.canonical((at.x as f32, at.y as f32));
-                                resizing.set(Some((cross, start_size)));
-                            })
-                            .on_secondary_down({
+                            .on_pointer_down({
                                 let items = separator_menu(&config);
                                 let anchor = menu.anchor(resting.start, resting.length, tile);
-                                move |_| menu.open(items.clone(), anchor, on_separator_command)
+                                on_down(
+                                    move |at| {
+                                        let (_, cross) = frame.canonical(at);
+                                        resizing.set(Some((cross, start_size)));
+                                    },
+                                    move || menu.open(items.clone(), anchor, on_separator_command),
+                                )
                             })
                             .into_element(),
                     );
@@ -856,21 +868,24 @@ impl App for DockApp {
                             slot.size,
                             layout.padding + lift + slot.size,
                         ))
-                        .on_pointer_down(move |event: Event<PointerEventData>| {
-                            if !primary(&event) {
-                                return;
-                            }
-                            let at = event.global_location();
-                            let at = frame.canonical((at.x as f32, at.y as f32));
-                            after_drag_down.set(false);
-                            dragging.set(Some(Drag::start(
-                                id.clone(),
-                                kept,
-                                false,
-                                at,
-                                state.peek().persistent_apps.clone(),
-                            )));
-                        })
+                        .on_pointer_down(on_down(
+                            move |at| {
+                                after_drag_down.set(false);
+                                dragging.set(Some(Drag::start(
+                                    id.clone(),
+                                    kept,
+                                    false,
+                                    frame.canonical(at),
+                                    state.peek().persistent_apps.clone(),
+                                )));
+                            },
+                            move || {
+                                let commands = commands.clone();
+                                menu.open(items.clone(), anchor, move |command: String| {
+                                    commands.run(&command)
+                                })
+                            },
+                        ))
                         .on_press(move |_| {
                             let dragged = dragging.peek().as_ref().is_some_and(|drag| drag.moved);
                             if dragged || after_drag.replace(false) {
@@ -884,12 +899,6 @@ impl App for DockApp {
                                 }
                             }
                             open(&pressed);
-                        })
-                        .on_secondary_down(move |_| {
-                            let commands = commands.clone();
-                            menu.open(items.clone(), anchor, move |command: String| {
-                                commands.run(&command)
-                            })
                         })
                         .into_element(),
                     );
@@ -987,20 +996,28 @@ impl App for DockApp {
                         placed(frame.area(slot.start, icon_cross, slot.length, slot.size))
                             .center()
                             .child(downloads_icon(slot.size))
-                            .on_pointer_down(move |event: Event<PointerEventData>| {
-                                if !primary(&event) {
-                                    return;
-                                }
-                                let at = event.global_location();
-                                let at = frame.canonical((at.x as f32, at.y as f32));
-                                after_drag_down.set(false);
-                                dragging.set(Some(Drag::start(
-                                    String::new(),
-                                    false,
-                                    true,
-                                    at,
-                                    state.peek().persistent_apps.clone(),
-                                )));
+                            .on_pointer_down({
+                                let anchor =
+                                    menu.anchor(resting.start, resting.length, resting.size);
+                                let folder = folder.clone();
+                                on_down(
+                                    move |at| {
+                                        after_drag_down.set(false);
+                                        dragging.set(Some(Drag::start(
+                                            String::new(),
+                                            false,
+                                            true,
+                                            frame.canonical(at),
+                                            state.peek().persistent_apps.clone(),
+                                        )));
+                                    },
+                                    move || {
+                                        let folder = folder.clone();
+                                        menu.open(open_menu(), anchor, move |_: String| {
+                                            xdg_open(&folder)
+                                        })
+                                    },
+                                )
                             })
                             .on_press({
                                 let folder = folder.clone();
@@ -1010,16 +1027,6 @@ impl App for DockApp {
                                     if !(dragged || after_drag.replace(false)) {
                                         xdg_open(&folder)
                                     }
-                                }
-                            })
-                            .on_secondary_down({
-                                let anchor =
-                                    menu.anchor(resting.start, resting.length, resting.size);
-                                move |_| {
-                                    let folder = folder.clone();
-                                    menu.open(open_menu(), anchor, move |_: String| {
-                                        xdg_open(&folder)
-                                    })
                                 }
                             })
                             .into_element(),
@@ -1099,15 +1106,16 @@ impl App for DockApp {
                     } else {
                         app_icon_named(&drag.id, tile)
                     })
-                    .maybe_child(drag.away.then(|| {
+                    .maybe_child(drag.removing.then(|| {
                         rect()
                             .position(
                                 Position::new_absolute()
-                                    .left(0.0)
-                                    .top(-DOCK_LABEL_GAP * 2.0),
+                                    .left(tile / 2.0 - width / 2.0)
+                                    .bottom(tile + DOCK_LABEL_GAP),
                             )
-                            .width(Size::px(tile))
-                            .center()
+                            .width(Size::px(width))
+                            .direction(Direction::Horizontal)
+                            .main_align(Alignment::Center)
                             .child(
                                 rect()
                                     .padding(Gaps::new(
@@ -1137,6 +1145,7 @@ impl App for DockApp {
         let reveal = revealing.clone();
         let leave = revealing.clone();
         let tilesize = config.tilesize;
+        let remove_timers = timers.clone();
         rect()
             .width(Size::fill())
             .height(Size::fill())
@@ -1195,7 +1204,23 @@ impl App for DockApp {
                         let (dx, dy) = (main - drag.from.0, cross - drag.from.1);
                         drag.moved |= dx.hypot(dy) > DRAG.threshold;
                         drag.at = (main, cross);
-                        drag.away = cross > cross0 + thickness + tile;
+                        if cross <= cross0 + thickness + tile {
+                            drag.away = None;
+                            drag.removing = false;
+                        } else if drag.away.is_none() {
+                            let since = Instant::now();
+                            drag.away = Some(since);
+                            remove_timers.after(Duration::from_millis(DOCK_REMOVE_MS), move || {
+                                let mut dragging = dragging;
+                                let lifted = dragging.peek().clone();
+                                if let Some(mut drag) =
+                                    lifted.filter(|drag| drag.away == Some(since))
+                                {
+                                    drag.removing = true;
+                                    dragging.set(Some(drag));
+                                }
+                            });
+                        }
                         let before = targets
                             .iter()
                             .find(|(_, center)| main < *center)
@@ -1204,7 +1229,7 @@ impl App for DockApp {
                             && targets
                                 .last()
                                 .is_some_and(|(_, center)| main > center + tile * 1.5);
-                        let keep = !drag.away && !(past_kept && !drag.kept);
+                        let keep = drag.away.is_none() && !(past_kept && !drag.kept);
                         if !drag.downloads {
                             drag.order =
                                 items::dropped(&drag.order, &drag.id, before.as_deref(), keep);
@@ -1223,10 +1248,13 @@ impl App for DockApp {
                     return;
                 }
                 after_drag.set(true);
-                // macOS keeps Downloads among the folders; dragged out, it leaves the Dock.
+                // macOS: an icon dropped away from the Dock before Remove shows goes back to its place.
+                if drag.away.is_some() && !drag.removing {
+                    return;
+                }
                 if !drag.downloads {
                     edit_state(state, |state| state.persistent_apps = drag.order);
-                } else if drag.away {
+                } else if drag.removing {
                     edit_config(|config| config.show_downloads = false);
                 }
             })

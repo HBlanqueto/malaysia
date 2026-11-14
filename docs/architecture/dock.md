@@ -130,10 +130,14 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    icons slide apart where it would land: that gap opens in `DOCK_SLOT_MS`
    while the one it leaves closes (`dock/motion.rs`). Dropping it there
    keeps it in the Dock (`persistent-apps`), open or not. Dragging it away
-   shows Remove, closes the gap and takes it out; an open app stays until it
-   quits. Downloads stays among the folders: dropped there it goes back to
-   its slot, and dropped away it turns `show-downloads` off; the separator's
-   menu or System Settings › Desktop & Dock turns it back on.
+   closes the gap; held there for `DOCK_REMOVE_MS` it shows Remove, and
+   dropped then it leaves the Dock (an open app stays until it quits).
+   Dropped away before Remove shows, it goes back to its slot. Downloads
+   stays among the folders: dropped in the Dock it goes back to its slot,
+   and removed it turns `show-downloads` off; the separator's menu or System
+   Settings › Desktop & Dock turns it back on. Each tile takes both buttons
+   in one `on_pointer_down`: Freya's `on_secondary_down` is one too, and an
+   element keeps only its last handler.
 10. **Minimize target.** The Dock sends each window's slot with
     `set_minimize_target` (`zwlr_foreign_toplevel_handle_v1.set_rectangle`):
     the app's icon with `minimize-to-application`, otherwise the window's own
