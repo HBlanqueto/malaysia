@@ -158,12 +158,12 @@
     <h2>Corte del borde, un píxel por celda</h2>
     <div class="strips" id="strips"></div>
     <div class="legend" style="margin-top:12px">
-      <span>De izquierda a derecha: fondo, trazo oscuro de la ventana, contorno claro, marco, línea de la isla, relleno.</span>
-      <span>La captura de macOS está a la mitad de escala: su marco es de 4 celdas y su línea de 2, y en Malaysia son 7 y 1.</span>
+      <span>De izquierda a derecha: fondo, trazo oscuro de la ventana, contorno claro, la ventana alrededor de la isla, línea de la isla, relleno.</span>
+      <span>La captura de macOS está a la mitad de escala: la ventana alrededor de la isla ocupa 4 celdas y su línea 2, y en Malaysia 7 y 1. En macOS esa franja es 0.02 más oscura que el contenido; en el modelo es del mismo tono que él.</span>
     </div>
     <div class="scroll" style="margin-top:12px">
       <table>
-        <thead><tr><th>Fuente</th><th>Marco (L · croma)</th><th>Línea (L · croma · tono)</th><th>Relleno (L · croma · tono)</th><th>Línea − relleno</th></tr></thead>
+        <thead><tr><th>Fuente</th><th>Ventana alrededor (L · croma)</th><th>Línea (L · croma · tono)</th><th>Relleno (L · croma · tono)</th><th>Línea − relleno</th></tr></thead>
         <tbody id="metrics"></tbody>
       </table>
     </div>
@@ -226,11 +226,10 @@
     landscape: { top: [63, 143, 203], bottom: [14, 111, 144], right: [63, 143, 203] },
   };
   const CORNER = { w: PW, h: PH, window: WINDOW_BOX, island: ISLAND_BOX };
-  const FULL = { w: 330, h: 330, window: { x: 20, y: 20, w: 300, h: 290 }, island: { x: 28, y: 28, w: 216, h: 274 }, contentX: 252 };
+  const FULL = { w: 330, h: 330, window: { x: 20, y: 20, w: 300, h: 290 }, island: { x: 28, y: 28, w: 216, h: 274 } };
   const BIG = { w: 830, h: 870, window: { x: 30, y: 30, w: 770, h: 810 }, island: { x: 38, y: 38, w: 230, h: 794 }, contentX: 276 };
-  const CONTENT = [32, 34, 43];
   const NOW = { algo: 'overlay', baseL: 0.273, chroma: 0.05, cap: 0.02, alpha: 0.03, width: 1, tint: 1, rimCap: 0.02, rimL: 1, lift: 0.096, liftEdge: 0, boost: 1.41, frameL: 0.257, frameTint: 0.1, edgeIntensity: 0.7, edgeSpan: 28, edgeChroma: 0.25 };
-  const MACOS = { algo: 'derived', baseL: 0.245, chroma: 0.05, cap: 0.04, alpha: 1, width: 1, tint: 1, rimCap: 0.25, rimL: 1, lift: 0.06, liftEdge: 0.05, boost: 1.35, frameL: 0.234, frameTint: 0.19, edgeIntensity: 0.7, edgeSpan: 60, edgeChroma: 0.45 };
+  const MACOS = { algo: 'derived', baseL: 0.245, chroma: 0.05, cap: 0.04, alpha: 1, width: 1, tint: 1, rimCap: 0.25, rimL: 1, lift: 0.06, liftEdge: 0.05, boost: 1.35, frameL: 0.252, frameTint: 0.09, edgeIntensity: 0.7, edgeSpan: 60, edgeChroma: 0.45 };
   const MEASURED = [
     { name: 'macOS, Atajos', note: 'captura a media escala', frame: [5, 8], line: [9, 10], fill: [13, 19],
       cells: [[2, 16, 82], [3, 13, 80], [4, 12, 66], [9, 14, 41], [56, 60, 76], [25, 28, 47], [24, 28, 47], [23, 29, 46], [23, 28, 53], [32, 34, 79], [51, 52, 100], [25, 28, 64], [30, 34, 62], [29, 32, 59], [29, 31, 60], [29, 31, 62], [29, 30, 64], [29, 30, 64], [29, 30, 64], [29, 31, 62]] },
@@ -296,7 +295,7 @@
   // The colour of any point of the window, for the given settings and layout. What does not depend on the point is worked out once.
   function makeShader(p, l = CORNER) {
     const scene = SCENES[state.wallpaper], meanLab = toLab(mix(scene.bottom, scene.top, 0.5)), W = l.window, I = l.island;
-    const frame = toRgb(tintLab([p.frameL, 0, 0], meanLab, p.frameTint, 0, 0.2)), solid = tintLab([p.baseL, 0, 0], meanLab, SOLID_TINT, 0, p.cap), baseLab = [p.baseL, 0, 0];
+    const windowTone = toRgb(tintLab([p.frameL, 0, 0], meanLab, p.frameTint, 0, 0.2)), frame = windowTone, solid = tintLab([p.baseL, 0, 0], meanLab, SOLID_TINT, 0, p.cap), baseLab = [p.baseL, 0, 0];
     // The fill of the island at a point, and how much of the wallpaper shows there (1 at the left, top and bottom edges, 0 far from them).
     const fillAt = (px, py) => {
       const q = toLab(wall(px, py, l)), centre = p.chroma > 0 ? tintLab(solid, q, p.chroma, 0, p.cap) : solid;
@@ -317,13 +316,13 @@
     return (px, py) => {
       const dI = boxSdf(px, py, I, ISLAND_R);
       if (dI < -p.width - 1.5) return interior(px, py);
-      const dW = boxSdf(px, py, W, WINDOW_R), onContent = l.contentX && px >= l.contentX;
+      const dW = boxSdf(px, py, W, WINDOW_R);
       if (dW > 1) return wall(px, py, l);
-      if (dW < -1.5 && dI > 1) return onContent ? CONTENT : frame;
+      if (dW < -1.5 && dI > 1) return frame;
       const backdrop = wall(px, py, l);
       let c = mix(backdrop, mix(backdrop, [0, 0, 0], 0.9), cover(dW - 1) - cover(dW));
-      c = mix(c, onContent ? CONTENT : frame, cover(dW));
-      c = mix(c, mix(onContent ? CONTENT : frame, [255, 255, 255], 0.1), cover(dW) - cover(dW + 1));
+      c = mix(c, frame, cover(dW));
+      c = mix(c, mix(frame, [255, 255, 255], 0.1), cover(dW) - cover(dW + 1));
       if (cover(dI) <= 0) return c;
       const { fill, ramp, q } = fillAt(px, py);
       c = mix(c, toRgb(fill), cover(dI));
@@ -459,7 +458,7 @@
       { key: 'liftEdge', label: 'Sube más con fondo (L)', min: 0, max: 0.15, step: 0.005, digits: 3, algo: 'derived' },
       { key: 'boost', label: 'Croma ×', min: 0, max: 3, step: 0.05, digits: 2, algo: 'derived' },
     ] },
-    { title: 'Marco', note: 'La franja de la ventana entre su contorno y la isla.', items: [
+    { title: 'Fondo de la ventana', note: 'Un solo tono para todo lo que rodea a la isla y para el contenido.', items: [
       { key: 'frameL', label: 'Claridad (L)', min: 0.15, max: 0.32, step: 0.005, digits: 3 },
       { key: 'frameTint', label: 'Tinte del fondo', min: 0, max: 1, step: 0.05, digits: 2 },
     ] },
@@ -470,7 +469,7 @@
     return [`modo oscuro · algoritmo ${p.algo === 'overlay' ? 'capa encima' : 'derivado'}`,
       `relleno: base L ${p.baseL.toFixed(3)} · croma ${f2s(p.chroma)} · tope ${f2s(p.cap)} · borde: intensidad ${f2s(p.edgeIntensity)}, caída ${p.edgeSpan} px, croma ${f2s(p.edgeChroma)}`,
       `línea: opacidad ${f2s(p.alpha)} · ancho ${p.width} px · tope ${f2s(p.rimCap)}` + (p.algo === 'overlay' ? ` · tinte ${f2s(p.tint)} · base L ${f2s(p.rimL)}` : ` · sube ${p.lift.toFixed(3)} (+${p.liftEdge.toFixed(3)} donde asoma el fondo) · croma ×${f2s(p.boost)}`),
-      `marco: L ${p.frameL.toFixed(3)} · tinte ${f2s(p.frameTint)}`].join('\n');
+      `fondo de la ventana: L ${p.frameL.toFixed(3)} · tinte ${f2s(p.frameTint)}`].join('\n');
   }
 
   function renderAll() {
