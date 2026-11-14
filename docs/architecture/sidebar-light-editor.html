@@ -51,8 +51,7 @@
   th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
   th { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
   td.num { font-family: var(--font-mono); }
-  .quad { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
-  @media (max-width: 760px) { .quad { grid-template-columns: minmax(0, 1fr); } }
+  .quad { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; align-items: start; }
   figure { margin: 0; display: grid; gap: 8px; min-width: 0; }
   figcaption { display: grid; gap: 2px; }
   figcaption b { font: 600 15px var(--font-head); }
@@ -91,7 +90,8 @@
     <div class="group" role="group" aria-label="Punto de partida">
       <span class="label">Partir de</span>
       <button type="button" id="from-now">Claro: lo de ahora</button>
-      <button type="button" id="from-bold">Claro: propuesta</button>
+      <button type="button" id="from-mid">Claro: punto medio</button>
+      <button type="button" id="from-bold">Claro: propuesta fuerte</button>
       <button type="button" id="from-dark">Oscuro</button>
     </div>
   </section>
@@ -101,8 +101,9 @@
     <div class="segment" role="group" aria-label="Qué ventana ver">
       <span class="label">Mostrar</span>
       <button type="button" id="big-now" aria-pressed="false">Claro: lo de ahora</button>
-      <button type="button" id="big-bold" aria-pressed="false">Claro: propuesta</button>
-      <button type="button" id="big-custom" aria-pressed="true">Tu ajuste</button>
+      <button type="button" id="big-mid" aria-pressed="true">Claro: punto medio</button>
+      <button type="button" id="big-bold" aria-pressed="false">Claro: propuesta fuerte</button>
+      <button type="button" id="big-custom" aria-pressed="false">Tu ajuste</button>
       <button type="button" id="big-dark" aria-pressed="false">Oscuro (referencia)</button>
     </div>
     <canvas id="big" role="img" aria-label="Una ventana completa con su sidebar entera"></canvas>
@@ -131,11 +132,12 @@
   </section>
 
   <section class="panel">
-    <h2>Las cuatro, lado a lado</h2>
+    <h2>Todas, lado a lado</h2>
     <div class="quad">
       <figure><canvas id="full-dark" role="img" aria-label="La isla en oscuro, de referencia"></canvas><figcaption><b>Oscuro (referencia)</b><span>lo que lleva el compositor</span></figcaption></figure>
       <figure><canvas id="full-now" role="img" aria-label="La isla en claro con lo que lleva el compositor"></canvas><figcaption><b>Claro: lo de ahora</b><span>lo que lleva el compositor</span></figcaption></figure>
-      <figure><canvas id="full-bold" role="img" aria-label="La isla en claro con la propuesta"></canvas><figcaption><b>Claro: propuesta</b><span id="bold-values"></span></figcaption></figure>
+      <figure><canvas id="full-mid" role="img" aria-label="La isla en claro con el punto medio"></canvas><figcaption><b>Claro: punto medio</b><span id="mid-values"></span></figcaption></figure>
+      <figure><canvas id="full-bold" role="img" aria-label="La isla en claro con la propuesta fuerte"></canvas><figcaption><b>Claro: propuesta fuerte</b><span id="bold-values"></span></figcaption></figure>
       <figure><canvas id="full-custom" role="img" aria-label="La isla en claro con tu ajuste"></canvas><figcaption><b>Tu ajuste</b><span id="custom-values"></span></figcaption></figure>
     </div>
   </section>
@@ -144,6 +146,7 @@
     <h2>Cómo leerlo</h2>
     <ul class="notes">
       <li>«Lo de ahora» es lo que el compositor dibuja en claro desde el último commit: relleno <code>#ebedee</code> con 0.08 del croma del fondo (tope 0.03), borde con intensidad 0.70, caída 46 px, croma 0.45 y tope 0.04, línea que sube 0.03 (0.02 más donde asoma el fondo) con croma ×1.35, y sombra de 0.13, 25 px y tinte 1.0.</li>
+      <li>El punto medio queda entre lo de ahora y la propuesta fuerte: base L 0.927 (<code>#e5e7e8</code>), croma del fondo 0.22 con tope 0.05, y borde de 53 px con croma 0.58 y tope 0.08. La línea no cambia.</li>
       <li>El oscuro se nota más porque su base ya lleva el tinte del fondo (croma cerca de 0.04) y la ventana es un gris neutro. En claro la base no lo lleva y el relleno solo toma el 0.08 del croma del fondo, así que su croma queda en torno a 0.014.</li>
       <li>En macOS, el relleno claro mide un croma de 0.016 (Libros). La propuesta va más allá de lo que mide macOS: es una decisión de diseño para que el claro se note como el oscuro.</li>
       <li>Contra un render del compositor con los mismos valores, los colores del mockup difieren 1.4 niveles de 255 de media y 4 como máximo, donde el azul llega al límite de lo que se puede mostrar.</li>
@@ -199,7 +202,7 @@
   }
   const cover = d => clamp(0.5 - d, 0, 1);
 
-  const state = { wallpaper: 'violet', big: 'custom' };
+  const state = { wallpaper: 'violet', big: 'mid' };
   const wall = (px, py, l) => {
     const scene = SCENES[state.wallpaper], t = clamp(0.9 - (py / l.h) * 0.9 + (px / l.w) * 0.1, 0, 1);
     return mix(mix(scene.bottom, scene.top, t), scene.right, clamp((px / l.w - 0.45) * 1.4, 0, 0.7));
@@ -209,13 +212,15 @@
   // Lo que lleva el compositor hoy.
   const DARK = { scheme: 'dark', baseL: 0.245, chroma: 0.05, cap: 0.04, edgeIntensity: 0.7, edgeSpan: 60, edgeChroma: 0.45, edgeLightness: 0.1, edgeCap: 0.18,
     lift: 0.06, liftEdge: 0.05, boost: 1.35, rimCap: 0.25, alpha: 1, width: 1,
-    shadowOpacity: 0, shadowSpan: 25, shadowTint: 1, shadowL: 0.2, windowL: 0.252, windowTint: 0.09 };
+    shadowOpacity: 0.35, shadowSpan: 25, shadowTint: 1, shadowL: 0.1, windowL: 0.252, windowTint: 0.09 };
   const LIGHT_NOW = { scheme: 'light', baseL: TOKEN_LIGHT[0], chroma: 0.08, cap: 0.03, edgeIntensity: 0.7, edgeSpan: 46, edgeChroma: 0.45, edgeLightness: 0, edgeCap: 0.04,
     lift: 0.03, liftEdge: 0.02, boost: 1.35, rimCap: 0.25, alpha: 1, width: 1,
     shadowOpacity: 0.13, shadowSpan: 25, shadowTint: 1, shadowL: 0.2, windowL: 1, windowTint: 0 };
   // La propuesta: más croma en el relleno y en el borde, para que el tono se note como en oscuro.
   const LIGHT_BOLD = { ...LIGHT_NOW, baseL: 0.91, chroma: 0.35, cap: 0.07, edgeSpan: 60, edgeChroma: 0.7, edgeCap: 0.12 };
-  const params = { ...LIGHT_BOLD };
+  // El punto medio entre lo de ahora y la propuesta.
+  const LIGHT_MID = { ...LIGHT_NOW, baseL: toLab([229, 231, 232])[0], chroma: 0.22, cap: 0.05, edgeSpan: 53, edgeChroma: 0.58, edgeCap: 0.08 };
+  const params = { ...LIGHT_MID };
 
   // The colour of any point of the window, for the given settings and layout.
   function makeShader(p, l) {
@@ -326,7 +331,7 @@
       lineL: line[0] - inside[0], lineC: lch(line).C / Math.max(lch(inside).C, 1e-6) };
   }
   function renderMetrics() {
-    const rows = [['Oscuro (referencia)', DARK], ['Claro: lo de ahora', LIGHT_NOW], ['Claro: propuesta', LIGHT_BOLD], ['Tu ajuste', params]];
+    const rows = [['Oscuro (referencia)', DARK], ['Claro: lo de ahora', LIGHT_NOW], ['Claro: punto medio', LIGHT_MID], ['Claro: propuesta fuerte', LIGHT_BOLD], ['Tu ajuste', params]];
     $('metrics').innerHTML = rows.map(([name, p]) => {
       const m = measures(p);
       return `<tr><td>${name}</td><td class="num">${f2(m.centreC)}</td><td class="num">${f2(m.edgeC)}</td><td class="num">${f1(m.centreD)}</td><td class="num">${f1(m.edgeD)}</td><td class="num">${m.lineL >= 0 ? '+' : ''}${f2(m.lineL)} · croma ×${m.lineC.toFixed(2)}</td></tr>`;
@@ -377,11 +382,11 @@
       `ventana: L ${p.windowL.toFixed(3)} · tinte ${f2s(p.windowTint)}`].join('\n');
   }
 
-  const SETS = { dark: DARK, now: LIGHT_NOW, bold: LIGHT_BOLD };
+  const SETS = { dark: DARK, now: LIGHT_NOW, mid: LIGHT_MID, bold: LIGHT_BOLD };
   function renderBig() {
     const p = state.big === 'custom' ? params : SETS[state.big];
     renderLayout($('big'), p, BIG, 2, (ctx, l) => drawWindow(ctx, l, p));
-    for (const id of ['now', 'bold', 'custom', 'dark']) $('big-' + id).setAttribute('aria-pressed', state.big === id);
+    for (const id of ['now', 'mid', 'bold', 'custom', 'dark']) $('big-' + id).setAttribute('aria-pressed', state.big === id);
   }
   const drawFull = (id, p) => renderLayout($(id), p, FULL, 2, (ctx, l) => drawFullIsland(ctx, l, p));
   // A few rows are enough to see the ink against each fill.
@@ -396,8 +401,8 @@
     });
   }
   function renderStatic() {
-    drawFull('full-dark', DARK); drawFull('full-now', LIGHT_NOW); drawFull('full-bold', LIGHT_BOLD);
-    $('bold-values').textContent = describe(LIGHT_BOLD);
+    drawFull('full-dark', DARK); drawFull('full-now', LIGHT_NOW); drawFull('full-mid', LIGHT_MID); drawFull('full-bold', LIGHT_BOLD);
+    $('mid-values').textContent = describe(LIGHT_MID); $('bold-values').textContent = describe(LIGHT_BOLD);
     renderCustom();
   }
   let pending = 0;
@@ -417,9 +422,10 @@
   function syncControls() { for (const g of SLIDERS) for (const s of g.items) $(s.key).value = params[s.key]; }
   const startFrom = set => { Object.assign(params, set); syncControls(); renderCustom(); };
 
-  for (const id of ['now', 'bold', 'custom', 'dark']) $('big-' + id).onclick = () => { state.big = id; renderBig(); };
+  for (const id of ['now', 'mid', 'bold', 'custom', 'dark']) $('big-' + id).onclick = () => { state.big = id; renderBig(); };
   $('wallpaper').onchange = e => { state.wallpaper = e.target.value; renderStatic(); };
   $('from-now').onclick = () => startFrom(LIGHT_NOW);
+  $('from-mid').onclick = () => startFrom(LIGHT_MID);
   $('from-bold').onclick = () => startFrom(LIGHT_BOLD);
   $('from-dark').onclick = () => startFrom(DARK);
   $('copy').onclick = async () => {

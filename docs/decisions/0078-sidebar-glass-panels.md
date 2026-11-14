@@ -128,7 +128,7 @@ and the bottom.
 
    | State | Panel | Rim |
    |---|---|---|
-   | Toplevel active | Material of step 3 | Rim of step 4 and, in light, the island's shadow |
+   | Toplevel active | Material of step 3 | Rim of step 4 and the island's shadow |
    | Toplevel not active | Flat `solid`, no blur, no edge | None. In the island style the rim and the shadow disappear |
    | `reduce_transparency` or `contrast` | Nothing. The kit paints a neutral solid itself | None |
 
@@ -149,17 +149,17 @@ and the bottom.
    is `accent_share` (0.35) of the usual one. The values are `GLASS` in
    `components.window.sidebar.glass`, light and dark, chosen by the owner on the
    mockup (`docs/architecture/sidebar-glass-editor.html`) from the measures
-   above: `chroma` 0.08 and 0.05, `chroma_cap` 0.03 and 0.04, `lightness` 0.00
+   above: `chroma` 0.22 and 0.05, `chroma_cap` 0.05 and 0.04, `lightness` 0.00
    and 0.00, `blur_passes` 4 and 6, the edge
-   (`intensity` 0.70 and 0.70, `span` 46 and 60 logical pixels, `chroma` 0.45 and
-   0.45, `lightness` 0.00 and 0.10, `cap` 0.04 and 0.18, `offset` 11), the rim
+   (`intensity` 0.70 and 0.70, `span` 53 and 60 logical pixels, `chroma` 0.58 and
+   0.45, `lightness` 0.00 and 0.10, `cap` 0.08 and 0.18, `offset` 11), the rim
    (`opacity` 1.00, `chroma` 1.35 and `cap` 0.25 in both; `lift` 0.03 and 0.06,
    `lift-edge` 0.02 and 0.05) and the
-   shadow (`opacity` 0.13 and 0.00, `span` 25, `tint` 1.00, `lightness` 0.20).
+   shadow (`opacity` 0.13 and 0.35, `span` 25, `tint` 1.00, `lightness` 0.20 and 0.10: the light values barely show on the dark window, so dark has more opacity and a darker tone).
    The mockup also let the owner set the blur of the center and of the edge
    apart (dark 5 and 6, light 8 and 4); the compositor has one blur per scheme
    for both, so it takes the edge's, which is where the wallpaper shows. The
-   tones are tokens: `sidebar-glass-base` (`#202020` dark, `#ebedee` light) and
+   tones are tokens: `sidebar-glass-base` (`#202020` dark, `#e5e7e8` light, a little darker than the `#ebedee` measured on macOS so that the tint shows) and
    `sidebar-glass-solid` (`#f2f2f2` light, the same as base in dark). The dark
    edge, base and rim are the owner's «derived, like macOS» setting on
    `docs/architecture/sidebar-border-editor.html`. The glass blurs what is behind it `glass_blur_passes`
@@ -183,7 +183,7 @@ and the bottom.
 6. **Calibration.** Measure light mode, other wallpapers and the unfocused
    state on a Mac, and fix the values of step 7. The edge, the rim and the
    shadow were measured on captures of Settings (dark) and Books and Apple TV
-   (light); the dark unfocused state and the dark shadow are still not measured.
+   (light); the dark unfocused state is still not measured, and the dark shadow is the owner's choice on a render, not a measure.
 
 Each phase updates [`roadmap.md`](../roadmap.md) and the chapter that
 describes what it changes, in its own commit.
