@@ -122,6 +122,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     let (_, chroma_cap) = ctappearance::glass_chroma(scheme);
     let lightness = ctappearance::glass_lightness(scheme);
     let edge = ctappearance::glass_edge(scheme);
+    let (rim_lift, rim_lift_edge) = ctappearance::glass_rim_lift(scheme);
     let shadow = ctappearance::glass_shadow(scheme);
     let physical = |logical: f32| (f64::from(logical) * scale) as f32;
     let screen_rect = |rect: Rectangle<i32, Physical>| {
@@ -291,11 +292,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                         vec![
                             Uniform::new(
                                 "rim",
-                                [
-                                    ctdesign::GLASS.rim_lift,
-                                    ctdesign::GLASS.rim_lift_edge,
-                                    ctdesign::GLASS.rim_chroma,
-                                ],
+                                [rim_lift, rim_lift_edge, ctdesign::GLASS.rim_chroma],
                             ),
                             Uniform::new("rim_cap", ctdesign::GLASS.rim_cap),
                             Uniform::new("opacity", ctdesign::GLASS.rim_opacity * (1.0 - settle)),
