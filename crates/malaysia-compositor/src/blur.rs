@@ -206,6 +206,7 @@ enum Detail {
     Sharp,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sampled<R: MalaysiaRenderer>(
     state: &State,
     surface: &WlSurface,
