@@ -581,13 +581,11 @@ fn dock_frame_uniforms() -> [UniformName<'static>; 8] {
 }
 
 pub(crate) fn compile_dock_glass(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
-    compile_wallpaper_shape(
-        renderer,
-        grade_graphics::shaders::DOCK_GLASS,
-        &dock_frame_uniforms(),
-    )
-    .inspect_err(|error| tracing::warn!(?error, "failed to compile Dock glass shader"))
-    .ok()
+    let mut uniforms = Vec::from(dock_frame_uniforms());
+    uniforms.push(UniformName::new("lens", UniformType::_3f));
+    compile_wallpaper_shape(renderer, grade_graphics::shaders::DOCK_GLASS, &uniforms)
+        .inspect_err(|error| tracing::warn!(?error, "failed to compile Dock glass shader"))
+        .ok()
 }
 
 pub(crate) fn compile_dock_solid(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {

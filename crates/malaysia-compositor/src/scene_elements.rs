@@ -1381,6 +1381,8 @@ fn dock_glass<R: MalaysiaRenderer>(
 ) -> Vec<OutputRenderElement<R>> {
     use smithay::backend::renderer::gles::Uniform;
     let uniforms = dock_frame_uniforms(&state.chrome_theme.resolved);
+    let mut glass_uniforms = uniforms.clone();
+    glass_uniforms.push(Uniform::new("lens", state.chrome_theme.resolved.dock.lens));
     let glass = crate::blur::dock(
         state,
         surface,
@@ -1389,7 +1391,7 @@ fn dock_glass<R: MalaysiaRenderer>(
         frame.radius,
         frame.exponent,
         scale,
-        uniforms.clone(),
+        glass_uniforms,
     );
     if !glass.is_empty() {
         return glass;
