@@ -32,9 +32,9 @@ work, and forcing a reload of `gtk.css` by toggling high contrast flickers
      same colors as `malaysia.css` but only the two `@media` blocks.
    - `accent-color` (`(ddd)`): the exact accent, the same as
      `org.freedesktop.appearance`.
-   - `folder-color` (`(ddd)`): the color of the folders, sent after the
-     portal writes `Malaysia-Tinted`; `(-1, -1, -1)` keeps them blue. The
-     Dock redraws its folders on it.
+   - `folder-theme` (`s`): the icon theme with the tinted folders,
+     `Malaysia-Tinted-<rrggbb>`, sent after the portal writes it; empty
+     keeps them blue. The Dock draws its folders from it.
    With `appearance.gtk_bridge = false` the stylesheet is empty and the accent out of
    range, `(-1, -1, -1)`: libadwaita stays stock.
 2. **Fork patch** (`src/adw-live-appearance.c`, third patch on top of

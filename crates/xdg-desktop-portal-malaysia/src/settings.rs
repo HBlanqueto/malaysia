@@ -25,7 +25,7 @@ const KEYS: [(&str, &str); 10] = [
     (GNOME_NAMESPACE, "text-scaling-factor"),
     (LIVE_NAMESPACE, "gtk4-css"),
     (LIVE_NAMESPACE, "accent-color"),
-    (LIVE_NAMESPACE, "folder-color"),
+    (LIVE_NAMESPACE, "folder-theme"),
     (WM_NAMESPACE, "button-layout"),
 ];
 
@@ -42,7 +42,7 @@ pub struct Values {
     text_scaling_factor: f64,
     live_css: String,
     live_accent: (f64, f64, f64),
-    folder_color: (f64, f64, f64),
+    folder_theme: String,
 }
 
 impl Values {
@@ -89,9 +89,7 @@ impl Values {
             text_scaling_factor: f64::from(appearance.text_size_for(Toolkit::Gtk)),
             live_css,
             live_accent,
-            folder_color: crate::folders::tint(appearance).map_or(UNSET_ACCENT, |[r, g, b]| {
-                (f64::from(r), f64::from(g), f64::from(b))
-            }),
+            folder_theme: crate::folders::theme(appearance).unwrap_or_default(),
         }
     }
 
@@ -105,7 +103,7 @@ impl Values {
             (GNOME_NAMESPACE, "text-scaling-factor") => Value::new(self.text_scaling_factor),
             (LIVE_NAMESPACE, "gtk4-css") => Value::new(self.live_css.clone()),
             (LIVE_NAMESPACE, "accent-color") => Value::new(self.live_accent),
-            (LIVE_NAMESPACE, "folder-color") => Value::new(self.folder_color),
+            (LIVE_NAMESPACE, "folder-theme") => Value::new(self.folder_theme.clone()),
             (WM_NAMESPACE, "button-layout") => Value::new(gtk::button_layout()),
             _ => return None,
         };

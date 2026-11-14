@@ -4,7 +4,8 @@ use std::{
     env,
     path::PathBuf,
     rc::Rc,
-    time::{Duration, SystemTime},
+    sync::{Mutex, PoisonError},
+    time::Duration,
 };
 
 use bk::animation::Spring;
@@ -25,6 +26,7 @@ use freya_components::image_viewer::{DecodeMode, ImageViewer};
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use torin::prelude::Gaps;
+use zbus::zvariant::OwnedValue;
 
 use crate::desktop::{self, DesktopEntry};
 use crate::localize::tr;
@@ -418,7 +420,7 @@ pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<Icon
 thread_local! {
     static THEMED_ICONS: RefCell<HashMap<(String, String, String), Option<IconData>>> =
         RefCell::default();
-    static ICON_THEME: RefCell<(&'static str, Option<SystemTime>)> = RefCell::default();
+    static ICON_THEME: RefCell<String> = RefCell::default();
 }
 
 pub(crate) fn forget_icons() {
@@ -436,7 +438,7 @@ pub(crate) fn load_icon_in(
     if direct.is_absolute() && direct.is_file() {
         return icon_data(&direct, app);
     }
-    let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| malaysia_theme().to_string());
+    let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| malaysia_theme());
     THEMED_ICONS.with_borrow_mut(|found| {
         found
             .entry((icon.to_string(), sizes.join(","), contexts.join(",")))
@@ -445,29 +447,25 @@ pub(crate) fn load_icon_in(
     })
 }
 
-// xdg-desktop-portal-malaysia writes Malaysia-Tinted while the folders have a color; its index changes with it.
-fn malaysia_theme() -> &'static str {
-    let stamp = ctappearance::xdg::data_home().and_then(|home| {
-        std::fs::metadata(home.join("icons/Malaysia-Tinted/index.theme"))
-            .and_then(|meta| meta.modified())
-            .ok()
-    });
-    let theme = if stamp.is_some() {
-        "Malaysia-Tinted"
-    } else {
-        "Malaysia"
-    };
+static FOLDER_THEME: Mutex<Option<String>> = Mutex::new(None);
+
+fn malaysia_theme() -> String {
+    let theme = FOLDER_THEME
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+        .unwrap_or_else(|| "Malaysia".to_string());
     ICON_THEME.with_borrow_mut(|known| {
-        if *known != (theme, stamp) {
-            *known = (theme, stamp);
+        if *known != theme {
+            known.clone_from(&theme);
             forget_icons();
         }
     });
     theme
 }
 
-// The portal announces the folder color once Malaysia-Tinted is written, so this redraw finds the new folders.
-pub(crate) fn use_folder_color() {
+// The portal announces the theme with the tinted folders once it is written (xdg-desktop-portal-malaysia folders.rs).
+pub(crate) fn use_folder_theme() {
     let revision = use_state(|| 0u64);
     use_hook(move || {
         let wake = Timers::get().wakeup(move || {
@@ -475,7 +473,11 @@ pub(crate) fn use_folder_color() {
             *revision.write() += 1;
         });
         std::thread::spawn(move || {
-            if let Err(error) = follow_folder_color(|| wake.wake()) {
+            let followed = follow_folder_theme(|theme| {
+                *FOLDER_THEME.lock().unwrap_or_else(PoisonError::into_inner) = theme;
+                wake.wake();
+            });
+            if let Err(error) = followed {
                 tracing::warn!(%error, "the shell does not follow the folder color");
             }
         });
@@ -483,7 +485,9 @@ pub(crate) fn use_folder_color() {
     revision.read();
 }
 
-fn follow_folder_color(changed: impl Fn()) -> zbus::Result<()> {
+fn follow_folder_theme(changed: impl Fn(Option<String>)) -> zbus::Result<()> {
+    const NAMESPACE: &str = "org.malaysia.appearance";
+    const KEY: &str = "folder-theme";
     let connection = zbus::blocking::Connection::session()?;
     let portal = zbus::blocking::Proxy::new(
         &connection,
@@ -491,14 +495,24 @@ fn follow_folder_color(changed: impl Fn()) -> zbus::Result<()> {
         "/org/freedesktop/portal/desktop",
         "org.freedesktop.impl.portal.Settings",
     )?;
-    for signal in portal.receive_signal("SettingChanged")? {
-        let (namespace, key, _): (String, String, zbus::zvariant::OwnedValue) =
-            signal.body().deserialize()?;
-        if namespace == "org.malaysia.appearance" && key == "folder-color" {
-            changed();
+    let signals = portal.receive_signal("SettingChanged")?;
+    let current: OwnedValue = portal.call("Read", &(NAMESPACE, KEY))?;
+    changed(installed_theme(current.try_into()?));
+    for signal in signals {
+        let (namespace, key, value): (String, String, OwnedValue) = signal.body().deserialize()?;
+        if namespace == NAMESPACE && key == KEY {
+            changed(installed_theme(value.try_into()?));
         }
     }
     Ok(())
+}
+
+fn installed_theme(name: String) -> Option<String> {
+    let index = ctappearance::xdg::data_home()?
+        .join("icons")
+        .join(&name)
+        .join("index.theme");
+    (!name.is_empty() && index.is_file()).then_some(name)
 }
 
 fn find_themed(theme: &str, icon: &str, sizes: &[&str], contexts: &[&str]) -> Option<IconData> {

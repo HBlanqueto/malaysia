@@ -144,7 +144,7 @@ tint in GTK 3/4 and libadwaita through user CSS; dark GTK 3 through
 (2026-11-01, ADR 0055):** the portal publishes `org.malaysia.appearance`
 (`gtk4-css`, `accent-color`) and the patched libadwaita changes accent and tint
 without reopening the app; Flatpak and GTK 3 still need a reopen. **Folder
-color (2026-11-14):** the portal writes `Malaysia-Tinted` and switches the GTK
+color (2026-11-14):** the portal writes `Malaysia-Tinted-<rrggbb>` and switches the GTK
 icon theme to it ([`appearance.icon_color`](configuration/options.md)). Test:
 `cargo test -p xdg-desktop-portal-malaysia`, and in a session open Nautilus with
 `window_color = "accent"`. Missing: `Screenshot`/`ScreenCast` and the

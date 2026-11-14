@@ -63,64 +63,80 @@ impl Palette {
 }
 
 pub struct Folders {
-    dir: PathBuf,
+    icons: PathBuf,
 }
 
 impl Folders {
     pub fn from_env() -> Option<Self> {
         Some(Self {
-            dir: xdg::data_home()?.join("icons").join(TINTED),
+            icons: xdg::data_home()?.join("icons"),
         })
     }
 
     pub fn sync(&self, appearance: Option<&AppearanceConfig>) {
-        let result = match (appearance.and_then(tint), installed()) {
-            (Some([r, g, b]), Some(installed)) => self
-                .write(&installed, Rgba { r, g, b, a: 1.0 })
-                .map(|()| use_theme(TINTED)),
-            _ => {
-                use_theme(THEME);
-                self.remove()
+        let written = match (appearance.and_then(tinted), installed()) {
+            (Some((tint, name)), Some(installed)) => {
+                self.write(&installed, &name, tint).map(|()| name)
             }
+            _ => Ok(THEME.to_string()),
         };
+        let result = written.and_then(|theme| {
+            let previous = use_theme(&theme);
+            self.remove_stale(&[theme.as_str(), previous.as_deref().unwrap_or_default()])
+        });
         if let Err(error) = result {
-            tracing::warn!(%error, dir = %self.dir.display(), "could not update the tinted folders");
+            tracing::warn!(%error, icons = %self.icons.display(), "could not update the tinted folders");
         }
     }
 
-    // The index goes last: its new Comment changes the theme folder's mtime, which GTK and the shell watch.
-    fn write(&self, installed: &Path, tint: Rgba) -> io::Result<()> {
+    fn write(&self, installed: &Path, name: &str, tint: Rgba) -> io::Result<()> {
         let palette: Palette = serde_json::from_str(&fs::read_to_string(installed.join(PALETTE))?)
             .map_err(io::Error::other)?;
         let pairs = palette.replacements(tint);
+        let dir = self.icons.join(name);
         for icon in &palette.icons {
             let svg = fs::read_to_string(installed.join(icon))?;
             let tinted = pairs
                 .iter()
                 .fold(svg, |svg, (from, to)| svg.replace(from, to));
-            write_if_changed(&self.dir.join(icon), &tinted)?;
+            write_if_changed(&dir.join(icon), &tinted)?;
         }
-        let [r, g, b, _] = tint.to_rgba8();
-        let comment = format!("Malaysia folders tinted #{r:02x}{g:02x}{b:02x}");
-        let index = [("Name", TINTED), ("Comment", &comment), ("Inherits", THEME)]
+        let index = [("Name", name), ("Inherits", THEME), ("Hidden", "true")]
             .into_iter()
             .fold(
                 fs::read_to_string(installed.join("index.theme"))?,
                 |index, (key, value)| ini::set(&index, "Icon Theme", key, Some(value)),
             );
-        write_if_changed(&self.dir.join("index.theme"), &index)
+        write_if_changed(&dir.join("index.theme"), &index)
     }
 
-    fn remove(&self) -> io::Result<()> {
-        match fs::remove_dir_all(&self.dir) {
-            Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
-            _ => Ok(()),
+    // The theme GTK used until now stays until the next change: an app may still be switching away from it.
+    fn remove_stale(&self, keep: &[&str]) -> io::Result<()> {
+        let Ok(entries) = fs::read_dir(&self.icons) else {
+            return Ok(());
+        };
+        for entry in entries {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(TINTED) && !keep.contains(&name.as_ref()) {
+                fs::remove_dir_all(entry.path())?;
+            }
         }
+        Ok(())
     }
 }
 
-pub fn tint(appearance: &AppearanceConfig) -> Option<[f32; 3]> {
-    appearance.icon_color.or(appearance.accent_color)
+pub fn theme(appearance: &AppearanceConfig) -> Option<String> {
+    tinted(appearance).map(|(_, name)| name)
+}
+
+// GTK reloads its icons only when the theme's name changes, so each color has its own theme.
+fn tinted(appearance: &AppearanceConfig) -> Option<(Rgba, String)> {
+    let [r, g, b] = appearance.icon_color.or(appearance.accent_color)?;
+    let tint = Rgba { r, g, b, a: 1.0 };
+    let [r, g, b, _] = tint.to_rgba8();
+    Some((tint, format!("{TINTED}-{r:02x}{g:02x}{b:02x}")))
 }
 
 fn installed() -> Option<PathBuf> {
@@ -132,23 +148,24 @@ fn installed() -> Option<PathBuf> {
 }
 
 // GTK on Wayland reads the icon theme from GSettings; a theme the user picked in Desktop stays.
-fn use_theme(theme: &str) {
-    let Ok(output) = Command::new("gsettings")
+fn use_theme(theme: &str) -> Option<String> {
+    let output = Command::new("gsettings")
         .args(["get", GNOME_NAMESPACE, "icon-theme"])
         .output()
-    else {
-        return;
-    };
-    let current = String::from_utf8_lossy(&output.stdout);
-    let current = current.trim().trim_matches('\'');
+        .ok()?;
+    let current = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .trim_matches('\'')
+        .to_string();
     if current != theme
-        && [THEME, TINTED].contains(&current)
+        && (current == THEME || current.starts_with(TINTED))
         && let Err(error) = Command::new("gsettings")
             .args(["set", GNOME_NAMESPACE, "icon-theme", theme])
             .status()
     {
         tracing::warn!(%error, theme, "could not set the GTK icon theme");
     }
+    Some(current)
 }
 
 #[cfg(test)]
@@ -201,21 +218,49 @@ mod tests {
         )
         .unwrap();
         let folders = Folders {
-            dir: root.join(TINTED),
+            icons: root.clone(),
         };
+        let name = "Malaysia-Tinted-e8a33d";
         folders
-            .write(&installed, Rgba::rgb8(0xe8, 0xa3, 0x3d))
+            .write(&installed, name, Rgba::rgb8(0xe8, 0xa3, 0x3d))
             .unwrap();
-        let svg = fs::read_to_string(folders.dir.join("scalable/places/folder.svg")).unwrap();
+        let svg = fs::read_to_string(root.join(name).join("scalable/places/folder.svg")).unwrap();
         assert_eq!(
             svg,
             r##"<stop stop-color="#bb8330"/><path stroke-opacity="0.35"/>"##
         );
-        let index = fs::read_to_string(folders.dir.join("index.theme")).unwrap();
+        let index = fs::read_to_string(root.join(name).join("index.theme")).unwrap();
         assert_eq!(ini::value(&index, "Icon Theme", "Inherits"), Some(THEME));
-        assert_eq!(ini::value(&index, "Icon Theme", "Name"), Some(TINTED));
-        folders.remove().unwrap();
-        assert!(!folders.dir.exists());
+        assert_eq!(ini::value(&index, "Icon Theme", "Name"), Some(name));
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn only_the_stale_tinted_themes_are_removed() {
+        let root = std::env::temp_dir().join(format!("malaysia-stale-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let themes = [
+            "Malaysia",
+            "Papirus",
+            "Malaysia-Tinted",
+            "Malaysia-Tinted-804dcc",
+            "Malaysia-Tinted-e8a33d",
+            "Malaysia-Tinted-35c759",
+        ];
+        for theme in themes {
+            fs::create_dir_all(root.join(theme)).unwrap();
+        }
+        let folders = Folders {
+            icons: root.clone(),
+        };
+        folders
+            .remove_stale(&["Malaysia-Tinted-e8a33d", "Malaysia-Tinted-804dcc"])
+            .unwrap();
+        let left: Vec<bool> = themes
+            .iter()
+            .map(|theme| root.join(theme).exists())
+            .collect();
+        assert_eq!(left, [true, true, false, true, true, false]);
         fs::remove_dir_all(&root).unwrap();
     }
 }
