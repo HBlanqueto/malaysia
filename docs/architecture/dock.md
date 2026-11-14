@@ -95,7 +95,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    open app (`show-process-indicators`). The name label shows over the icon
    under the pointer, in a popup with the `label` popover shape (ADR 0059):
    an arrow points at the icon. It follows the icon while it magnifies
-   (`xdg_popup.reposition`) and hides while a menu is open.
+   (`xdg_popup.reposition`) and hides while a menu is open or the bar
+   slides. It takes no pointer, so the Dock under it does not see the pointer
+   leave.
 7. **Clicks.** A tile answers over its whole column, from the bar's edge up
    to the top of its icon (the icon itself takes no pointer events, nor the
    running dot). A click on an open app activates its first visible window, or
@@ -144,7 +146,9 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    after `autohide-delay` seconds the bar slides back in. While the bar is
    out the strip still takes the pointer, so a pointer at the edge keeps it
    up. The slide lasts `DOCK_HIDE_MS` × `autohide-time-modifier`; one that
-   turns back midway goes on from where it is.
+   turns back midway goes on from where it is. When a window minimizes or
+   comes back, the hidden bar comes up for the slide and `DOCK_MINIMIZE_MS`,
+   so the genie meets it, and then goes unless the pointer is on it.
 
 ## Compositor side
 
@@ -174,7 +178,9 @@ A popup whose root parent is a layer surface, such as a Dock menu, is drawn
 above the `Top` and `Overlay` layers and takes the pointer before them; the
 popups of windows stay below the shell. A card's blur is clipped to its
 corner. A Dock on the left or right counts as shell chrome while it reserves
-space, so focus spaces hide it like the bottom one.
+space, so focus spaces hide it like the bottom one. In a focus space the
+pointer at the Dock's edge brings it back (`spaces::update_dock_reveal`); it
+goes again when the pointer leaves its surface with no menu open.
 
 ## Divergences
 

@@ -38,9 +38,9 @@ use ctdesign::{
     DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
     DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_ARROW_HEIGHT, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP,
     DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS,
-    DOCK_MAGNIFY_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH,
-    DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON,
-    DRAG, TEXT_LINE_HEIGHT,
+    DOCK_MAGNIFY_MS, DOCK_MINIMIZE_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP,
+    DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN, DOCK_WINDOW_BADGE,
+    DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, TEXT_LINE_HEIGHT,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
@@ -429,6 +429,35 @@ impl App for DockApp {
             },
         );
         let hide_ms = (DOCK_HIDE_MS as f32 * config.autohide_time_modifier.max(0.0)) as u64;
+        // macOS: a hidden Dock comes up while a window minimizes into it or comes back out.
+        let minimized: Vec<(u64, bool)> = windows
+            .iter()
+            .map(|window| (window.id, window.minimized))
+            .collect();
+        let minimized_before = use_hook(|| Rc::new(RefCell::new(minimized.clone())));
+        let peek_timers = timers.clone();
+        use_side_effect_with_deps(
+            &(minimized, config.autohide, hide_ms),
+            move |(now, autohide, hide_ms): &(Vec<(u64, bool)>, bool, u64)| {
+                let flipped = now
+                    .iter()
+                    .any(|(id, minimized)| minimized_before.borrow().contains(&(*id, !*minimized)));
+                *minimized_before.borrow_mut() = now.clone();
+                if !(flipped && *autohide && !*shown.peek()) {
+                    return;
+                }
+                shown.set(true);
+                peek_timers.after(
+                    Duration::from_millis(hide_ms + DOCK_MINIMIZE_MS),
+                    move || {
+                        if !*hovering.peek() && !*menu_open.peek() {
+                            let mut shown = shown;
+                            shown.set(false);
+                        }
+                    },
+                );
+            },
+        );
         let visible = use_switch_progress(
             shown,
             if hide_ms == 0 {
@@ -1039,7 +1068,9 @@ impl App for DockApp {
         }
 
         let hovered = pointer_at
-            .filter(|_| *hovering.read() && drag_now.is_none() && !*menu_open.read())
+            .filter(|_| {
+                *hovering.read() && drag_now.is_none() && !*menu_open.read() && visible > 0.99
+            })
             .and_then(|at| geometry::slot_at(&layout, frame.canonical(at).0))
             .and_then(|index| {
                 let label = match &list[index] {
@@ -1328,6 +1359,8 @@ struct DockLabel {
 
 impl App for DockLabel {
     fn render(&self) -> impl IntoElement {
+        // The pointer passes through the name to the Dock under it, so the Dock does not see it leave.
+        use_hook(|| set_input_region(InputRegion::default()));
         rect()
             .expanded()
             .background(self.fill)
