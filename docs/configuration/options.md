@@ -227,6 +227,15 @@ becomes per output.
 | `window.corner_radius` | integer (logical pt), optional | unset | **active** | radius of every window; unset, its bar's (ADR 0059) |
 | `window.qt_server_decorations` | bool | `true` | **active** | `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` in clients and session |
 | `window.focus_titlebar_apps` | list of `app_id` | `["firefox", "brave-browser", "chromium-browser"]` | **active** | focus mode of CSD apps with tabs |
+| `window.rules` | list of tables | `[]` | **active** | SSD titlebar design of one app (below) |
+
+`window.rules` restyles the SSD titlebar of the app whose `app_id` matches. Each
+entry takes `app_id` and any of:
+
+- `titlebar_from_content = true`: the bar takes the mean colour of the first row
+  of the window's content, whatever the system scheme, with a title that stays
+  readable on it. Only shm buffers are read; any other keeps the regular bar.
+- `hide_titlebar_divider = true`: no line between the bar and the window.
 
 `window.resize_border` is a band **outside** the side; the «L» of
 `window.resize_corner` is outside and may reach 2 px in. The hit-test is only
@@ -595,6 +604,11 @@ resize_corner = 20
 # corner_radius = 16            # without the key: radius by bar
 qt_server_decorations = true    # false for Qt's native bar
 focus_titlebar_apps = ["firefox", "brave-browser", "chromium-browser"]
+
+[[rules]]
+app_id = "org.telegram.desktop"
+titlebar_from_content = true
+hide_titlebar_divider = true
 ```
 
 ```toml

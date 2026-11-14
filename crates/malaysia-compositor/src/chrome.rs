@@ -24,7 +24,7 @@ use smithay::backend::renderer::utils::CommitCounter;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::config::Config;
+use crate::config::{Config, WindowRule};
 use crate::cursor::OutputRenderElement;
 use crate::decoration::Insets;
 use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
@@ -83,6 +83,48 @@ impl ChromeTheme {
             traffic_shape: appearance.traffic_light_shape,
             signature,
         }
+    }
+}
+
+impl ChromeTheme {
+    pub(crate) fn for_rule(
+        &self,
+        rule: &WindowRule,
+        content: Option<Rgba>,
+        appearance: &AppearanceConfig,
+    ) -> Self {
+        let mut theme = *self;
+        if let Some(color) = content {
+            theme.palette.titlebar_bg = FocusPair {
+                focused: color,
+                unfocused: color,
+            };
+            theme.palette.title = readable_title(color);
+        }
+        if rule.hide_titlebar_divider {
+            theme.palette.hairline = theme.palette.titlebar_bg.focused;
+        }
+        theme.signature = signature(
+            theme.scheme,
+            appearance.window_color,
+            appearance.traffic_lights,
+            appearance.traffic_light_shape,
+            theme.palette,
+            theme.lights,
+        );
+        theme
+    }
+}
+
+fn readable_title(background: Rgba) -> FocusPair {
+    let [for_light_bar, for_dark_bar] =
+        [ColorScheme::Light, ColorScheme::Dark].map(|scheme| base_palette(scheme).title);
+    if background.contrast_ratio(for_light_bar.focused)
+        >= background.contrast_ratio(for_dark_bar.focused)
+    {
+        for_light_bar
+    } else {
+        for_dark_bar
     }
 }
 
@@ -1041,6 +1083,24 @@ mod tests {
             color: LIGHT.outer_border,
         };
         assert_eq!(shadow_margin(layer), 90);
+    }
+
+    #[test]
+    fn a_rule_tints_the_bar_from_the_content_and_hides_the_divider() {
+        let appearance = AppearanceConfig::default();
+        let theme = ChromeTheme::from_parts(&appearance, None);
+        let rule = WindowRule {
+            app_id: String::new(),
+            titlebar_from_content: true,
+            hide_titlebar_divider: true,
+        };
+        let content = Rgba::rgb8(20, 30, 60);
+        let ruled = theme.for_rule(&rule, Some(content), &appearance);
+        assert_eq!(ruled.palette.titlebar_bg.focused, content);
+        assert_eq!(ruled.palette.titlebar_bg.unfocused, content);
+        assert_eq!(ruled.palette.hairline, content);
+        assert_eq!(ruled.palette.title, base_palette(ColorScheme::Dark).title);
+        assert_ne!(ruled.signature, theme.signature);
     }
 
     #[test]

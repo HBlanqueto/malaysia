@@ -7,6 +7,7 @@ mod blur;
 mod capture;
 mod chrome;
 mod config;
+mod content_color;
 mod cursor;
 mod decoration;
 mod display_filter;

@@ -19,7 +19,7 @@ The SSD titlebar belongs to the compositor (ADR 0020) and uses Tengen: a top bar
 - In dark mode the inner line follows macOS Golden Gate 27 and depends on the frame. A window without a parent gets the uniform `window-inner` line. A focused dialog (a window with `set_parent`), a popup or a shell alert gets `panel-inner-edge` (26 %) at the top and bottom and `panel-inner` (10 %) on the sides, mixed by how vertical the edge is, so the corners turn smoothly. Under the top and bottom, `panel-glow` (4 %) fades over `PANEL_GLOW_DEPTH` (6 px). An unfocused dialog falls back to `window-inner`.
 - The traffic lights are square (radius 4) or round following `appearance.traffic_light_shape`.
 
-Only SSD windows receive a titlebar (ADR 0014/0019). GTK/Libadwaita and the clients that request CSD keep their chrome; `window.decorations = "force_server"` can force the bar on third-party apps (at the risk of duplicating it). Telegram (Qt) may need its frame disabled in Settings › Advanced; with `window.qt_server_decorations = true` (default) the compositor requests server-side.
+Only SSD windows receive a titlebar (ADR 0014/0019). GTK/Libadwaita and the clients that request CSD keep their chrome; `window.decorations = "force_server"` can force the bar on third-party apps (at the risk of duplicating it). Telegram (Qt) may need its frame disabled in Settings › Advanced; with `window.qt_server_decorations = true` (default) the compositor requests server-side. `window.rules` restyles one app's SSD titlebar, for example tinting it from the window's own colour ([`options.md`](../configuration/options.md)).
 
 ## Our own apps
 

@@ -73,6 +73,22 @@ pub struct WindowConfig {
     pub corner_radius: Option<u32>,
     pub qt_server_decorations: bool,
     pub focus_titlebar_apps: Vec<String>,
+    pub rules: Vec<WindowRule>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WindowRule {
+    pub app_id: String,
+    #[serde(default)]
+    pub titlebar_from_content: bool,
+    #[serde(default)]
+    pub hide_titlebar_divider: bool,
+}
+
+impl WindowConfig {
+    pub fn rule_for(&self, app_id: &str) -> Option<&WindowRule> {
+        self.rules.iter().find(|rule| rule.app_id == app_id)
+    }
 }
 
 impl Default for WindowConfig {
@@ -88,6 +104,7 @@ impl Default for WindowConfig {
             focus_titlebar_apps: ["firefox", "brave-browser", "chromium-browser"]
                 .map(String::from)
                 .to_vec(),
+            rules: Vec::new(),
         }
     }
 }
@@ -135,6 +152,15 @@ where
 mod tests {
     use super::*;
     use ctappearance::{ColorScheme, TrafficLightStyle, WindowColorMode};
+
+    #[test]
+    fn a_window_rule_defaults_to_the_regular_titlebar() {
+        let window: WindowConfig =
+            toml::from_str("[[rules]]\napp_id = \"org.telegram.desktop\"\n").unwrap();
+        let rule = window.rule_for("org.telegram.desktop").unwrap();
+        assert!(!rule.titlebar_from_content && !rule.hide_titlebar_divider);
+        assert!(window.rule_for("firefox").is_none());
+    }
 
     #[test]
     fn per_domain_files_are_loaded_separately() {

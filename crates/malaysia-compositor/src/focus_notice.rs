@@ -115,6 +115,34 @@ impl State {
     }
 
     pub(crate) fn chrome_theme_of(&mut self, window: WindowId) -> crate::chrome::ChromeTheme {
+        let Some(surface) = self.windows.surface_of(window).cloned() else {
+            return self.wallpaper_theme_of(window);
+        };
+        let Some(rule) = self
+            .config
+            .window
+            .rule_for(&self.windows.app_id(&surface))
+            .cloned()
+        else {
+            return self.wallpaper_theme_of(window);
+        };
+        let Some(color) = rule
+            .titlebar_from_content
+            .then(|| crate::content_color::top_row_color(&surface))
+            .flatten()
+        else {
+            return self
+                .wallpaper_theme_of(window)
+                .for_rule(&rule, None, &self.config.appearance);
+        };
+        let content = self
+            .chrome
+            .fading_tint(window, color, std::time::Instant::now());
+        self.chrome_theme
+            .for_rule(&rule, Some(content), &self.config.appearance)
+    }
+
+    fn wallpaper_theme_of(&mut self, window: WindowId) -> crate::chrome::ChromeTheme {
         let Some(target) = self.wallpaper_behind(window) else {
             return self.chrome_theme;
         };
