@@ -115,6 +115,7 @@ pub(crate) fn backdrop<R: MalaysiaRenderer>(
         scale,
         state.rounded_clip.clone(),
         Vec::new(),
+        Detail::Blurred,
         |dst| Some((dst.intersection(frame)?, frame, radius, exponent)),
     )
 }
@@ -142,6 +143,7 @@ pub(crate) fn dock<R: MalaysiaRenderer>(
         scale,
         state.dock_glass.clone(),
         uniforms,
+        Detail::Sharp,
         |dst| {
             dst.overlaps(frame)
                 .then_some((ring, frame, radius, exponent))
@@ -165,6 +167,7 @@ pub(crate) fn layer<R: MalaysiaRenderer>(
         scale,
         state.rounded_clip.clone(),
         Vec::new(),
+        Detail::Blurred,
         |dst| {
             let dst = dst.intersection(frame)?;
             let radius = if dst.size.h < frame.size.h {
@@ -190,11 +193,18 @@ pub(crate) fn capsules<R: MalaysiaRenderer>(
         scale,
         state.rounded_clip.clone(),
         Vec::new(),
+        Detail::Blurred,
         |dst| Some((dst, dst, dst.size.w.min(dst.size.h) / 2, CIRCLE_EXPONENT)),
     )
 }
 
 const CIRCLE_EXPONENT: f32 = 2.0;
+
+#[derive(Clone, Copy)]
+enum Detail {
+    Blurred,
+    Sharp,
+}
 
 fn sampled<R: MalaysiaRenderer>(
     state: &State,
@@ -203,6 +213,7 @@ fn sampled<R: MalaysiaRenderer>(
     scale: f64,
     program: Option<GlesTexProgram>,
     uniforms: Vec<Uniform<'static>>,
+    detail: Detail,
     shape: impl Fn(
         Rectangle<i32, Physical>,
     ) -> Option<(Rectangle<i32, Physical>, Rectangle<i32, Physical>, i32, f32)>,
@@ -231,7 +242,11 @@ fn sampled<R: MalaysiaRenderer>(
         }
         ids.clone()
     });
-    let size = wallpaper.blurred.size();
+    let texture = match detail {
+        Detail::Blurred => &wallpaper.blurred,
+        Detail::Sharp => &wallpaper.source,
+    };
+    let size = texture.size();
     let output = Rectangle::from_size(Size::<i32, Physical>::from((size.w, size.h)));
     rects
         .into_iter()
@@ -248,7 +263,7 @@ fn sampled<R: MalaysiaRenderer>(
             );
             Some(
                 RoundedTextureElement::from_texture(
-                    wallpaper.blurred.clone(),
+                    texture.clone(),
                     id,
                     wallpaper.commit,
                     src,

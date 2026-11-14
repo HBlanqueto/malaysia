@@ -53,9 +53,10 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    namespace (`DOCK_LAYER_NAMESPACE`) and draws the card's glass and frame
    itself, under the Dock's surface, so magnified icons rise over the bar's
    edge (`scene_elements::dock_glass`, shader `grade-graphics/dock_frame.glsl`).
-   The glass bends the blurred backdrop along the frame's normal, deepest at the
-   rim and a little differently per colour channel, light and dark (`lens` in
-   `dock_glass.frag`, `DockSurface::lens`).
+   The glass takes the sharp backdrop, not the wallpaper's blur, softens it and
+   bends it as the Liquid Glass config's `liquid-glass.frag` does: the rim shows
+   what lies deeper in, a little differently per colour channel, light and dark
+   (`lens` in `dock_glass.frag`, `DockSurface::lens`).
    It gives the card no shadow: it would show through the glass. The Dock
    draws only its icons, dividers and labels. The frame is two lines, as
    macOS draws it ([`dock-macos-measured.html`](dock-macos-measured.html) shows
@@ -75,13 +76,13 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    white overlay would not, the glow fades into that rim and the outline is the
    glass darkened. The
    compositor reads the rim's backdrop pixel by pixel from the
-   Dock's blur; `dock/rim.rs` reads the wallpaper behind each divider. The
+   Dock's lens; `dock/rim.rs` reads the wallpaper behind each divider. The
    glass, outline and the two steps are `ctdesign::DockSurface`
    (`resolved.dock`): a grey with some opacity in light and in dark, solved
    from captures over black and over grey; with
    `appearance.reduce_transparency` the glass is a solid grey, as in macOS, and
    the compositor draws it without a blur. As in macOS the glass is a
-   thin veil over the blur, so the wallpaper and the windows that pass behind
+   thin veil over the lens, so the wallpaper and the windows that pass behind
    the Dock show through (ADR 0071, `"behind"`). It takes the bar tint only
    with `bars` in `appearance.tint_parts`.
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon_in`),
