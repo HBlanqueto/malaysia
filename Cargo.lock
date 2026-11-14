@@ -5469,6 +5469,8 @@ dependencies = [
  "ctappearance",
  "ctdesign",
  "nix",
+ "serde",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
  "zbus",

@@ -143,7 +143,9 @@ tint in GTK 3/4 and libadwaita through user CSS; dark GTK 3 through
 `settings.ini`; the portal starts with `malaysia-session.target`. **Live
 (2026-11-01, ADR 0055):** the portal publishes `org.malaysia.appearance`
 (`gtk4-css`, `accent-color`) and the patched libadwaita changes accent and tint
-without reopening the app; Flatpak and GTK 3 still need a reopen. Test:
+without reopening the app; Flatpak and GTK 3 still need a reopen. **Folder
+color (2026-11-14):** the portal writes `Malaysia-Tinted` and switches the GTK
+icon theme to it ([`appearance.icon_color`](configuration/options.md)). Test:
 `cargo test -p xdg-desktop-portal-malaysia`, and in a session open Nautilus with
 `window_color = "accent"`. Missing: `Screenshot`/`ScreenCast` and the
 permission dialogs. **12b:** notifications done (ADR 0068: server, history, banners, panel, Focus modes, Settings › Notifications and Focus, portal v2, reply, lock screen, Dock badges and progress, Live Activities for transfers, calls and printing; the panel has no widgets yet). Also pending: polkit, keyring/Secret

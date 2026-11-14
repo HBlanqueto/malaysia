@@ -202,6 +202,7 @@ pub fn watch(
     values: Arc<RwLock<Values>>,
     bridge: Option<Bridge>,
     qt: Option<crate::qt::Bridge>,
+    folders: Option<crate::folders::Folders>,
 ) {
     std::thread::spawn(move || {
         let watch = match ctappearance::watch::AppearanceWatch::new() {
@@ -242,6 +243,9 @@ pub fn watch(
             }
             if let Some(qt) = &qt {
                 qt.sync(appearance.as_ref(), load_dominant());
+            }
+            if let Some(folders) = &folders {
+                folders.sync(appearance.as_ref());
             }
             let new = Values::from_appearance(appearance.as_ref());
             let old = {

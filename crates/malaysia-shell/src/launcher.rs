@@ -4,7 +4,7 @@ use std::{
     env,
     path::PathBuf,
     rc::Rc,
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use bk::animation::Spring;
@@ -418,6 +418,7 @@ pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<Icon
 thread_local! {
     static THEMED_ICONS: RefCell<HashMap<(String, String, String), Option<IconData>>> =
         RefCell::default();
+    static ICON_THEME: RefCell<(&'static str, Option<SystemTime>)> = RefCell::default();
 }
 
 pub(crate) fn forget_icons() {
@@ -435,19 +436,40 @@ pub(crate) fn load_icon_in(
     if direct.is_absolute() && direct.is_file() {
         return icon_data(&direct, app);
     }
+    let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| malaysia_theme().to_string());
     THEMED_ICONS.with_borrow_mut(|found| {
         found
             .entry((icon.to_string(), sizes.join(","), contexts.join(",")))
-            .or_insert_with(|| find_themed(icon, sizes, contexts))
+            .or_insert_with(|| find_themed(&theme, icon, sizes, contexts))
             .clone()
     })
 }
 
-fn find_themed(icon: &str, sizes: &[&str], contexts: &[&str]) -> Option<IconData> {
+// xdg-desktop-portal-malaysia writes Malaysia-Tinted while the folders have a color; its index changes with it.
+fn malaysia_theme() -> &'static str {
+    let stamp = ctappearance::xdg::data_home().and_then(|home| {
+        std::fs::metadata(home.join("icons/Malaysia-Tinted/index.theme"))
+            .and_then(|meta| meta.modified())
+            .ok()
+    });
+    let theme = if stamp.is_some() {
+        "Malaysia-Tinted"
+    } else {
+        "Malaysia"
+    };
+    ICON_THEME.with_borrow_mut(|known| {
+        if *known != (theme, stamp) {
+            *known = (theme, stamp);
+            forget_icons();
+        }
+    });
+    theme
+}
+
+fn find_themed(theme: &str, icon: &str, sizes: &[&str], contexts: &[&str]) -> Option<IconData> {
     let data_dirs = crate::desktop::data_dirs();
-    let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| "Malaysia".to_string());
     let mut themes = Vec::new();
-    lookup_order(&theme, &data_dirs, &mut themes);
+    lookup_order(theme, &data_dirs, &mut themes);
     lookup_order("hicolor", &data_dirs, &mut themes);
     for theme in &themes {
         for dir in &data_dirs {

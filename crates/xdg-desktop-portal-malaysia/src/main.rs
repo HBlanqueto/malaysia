@@ -1,5 +1,6 @@
 #![deny(unsafe_code)]
 
+mod folders;
 mod gtk;
 mod notification;
 mod qt;
@@ -47,7 +48,11 @@ fn main() -> Result<()> {
     if let (Some(qt), Ok(appearance)) = (&qt, read_appearance()) {
         qt.sync(appearance.as_ref(), load_dominant());
     }
-    settings::watch(connection, values, gtk::Bridge::from_env(), qt);
+    let folders = folders::Folders::from_env();
+    if let (Some(folders), Ok(appearance)) = (&folders, read_appearance()) {
+        folders.sync(appearance.as_ref());
+    }
+    settings::watch(connection, values, gtk::Bridge::from_env(), qt, folders);
     tracing::info!(name = BUS_NAME, path = OBJECT_PATH, "portal backend ready");
 
     let signal = stop.wait()?;
