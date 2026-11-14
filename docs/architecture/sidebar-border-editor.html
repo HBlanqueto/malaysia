@@ -208,7 +208,7 @@
       <li>El modelo dibuja un fondo propio en degradado. Con él, el relleno sale con el croma y el tono que le da el fondo, igual que en el compositor.</li>
       <li>La rampa del borde del relleno parte de tus valores de oscuro (intensidad 0.70, caída 28 px, croma 0.25; claridad 0.10 y tope 0.18 fijos). Es lo que da al relleno su color cerca del borde, y la línea derivada lo hereda.</li>
       <li>En el algoritmo derivado el tope de la línea corta el croma de golpe, sin suavizarlo, para que el valor sea el que escribes.</li>
-      <li>Para llevar el derivado al compositor, el shader de la línea calcularía el relleno con los mismos valores del material, y habría tokens nuevos para el tope de la línea, lo que sube y el factor de croma. Lo de ahora (capa encima) no los necesita, pero su tope es el del vidrio.</li>
+      <li>El compositor ya usa el derivado: el shader de la línea calcula el relleno con la misma función que el material, y los tokens son <code>glass.rim</code> (opacidad, sube, sube más con fondo, croma × y tope). En claro la línea sube a blanco, sin croma.</li>
     </ul>
   </section>
 </main>

@@ -111,15 +111,16 @@ and the bottom.
    on the same corner, with no shadow and no outer border. It is the line
    `set_cards` already gets (ADR 0068), drawn above the surface. It is a line,
    white in dark and gray in light (a white line does not show on the light
-   panel), with `rim_chroma` of the chroma of B(p), the blurred wallpaper behind
-   that stretch, so its tint changes along the contour. Its token is white at
-   alpha 0.03 in dark (`rim_chroma` 1.00) and white at alpha 0.80 in light
-   (`rim_chroma` 0.00): a line of 1 px a little lighter than the fill, measured on
-   macOS (L 0.41 over 0.33 in dark, 0.98 over 0.97 in light). It shows nothing of
-   what is behind it. With an accent as window color the request's `rim` is
-   the accent and the rim takes its chroma from it, not from the wallpaper, so
-   border and fill stay uniform. In both cases the chroma saturates towards
-   `chroma_cap`.
+   panel). It is derived from the fill under it, which the rim shader works out
+   with the same function as the material: the line is `rim.lift` lighter
+   (`rim.lift-edge` more where the wallpaper shows, `exp(-d / span)` of the
+   edge), with `rim.chroma` times the fill's chroma, up to `rim.cap`, and the
+   fill's hue, at `rim.opacity`. So it follows the fill around the island, as
+   macOS's does, and where the fill is the same on every side the line is too.
+   In light the lift is 1.00 and the chroma 0.00, so the line is white at alpha
+   0.80, as measured (0.98 over 0.97). It shows nothing of what is behind it.
+   With an accent as window color `base` carries the accent, the fill and the
+   line with it, and the request's `rim` is unused: the kit sends 0.
 5. **States**, decided by the compositor:
 
    | State | Panel | Rim |
@@ -145,17 +146,20 @@ and the bottom.
    is `accent_share` (0.35) of the usual one. The values are `GLASS` in
    `components.window.sidebar.glass`, light and dark, chosen by the owner on the
    mockup (`docs/architecture/sidebar-glass-editor.html`) from the measures
-   above: `chroma` 0.00 and 0.05, `chroma_cap` 0.03 and 0.02, `lightness` 0.00
-   and 0.00, `rim_chroma` 0.00 and 1.00, `blur_passes` 4 and 6, the edge
-   (`intensity` 0.70 and 0.70, `span` 46 and 28 logical pixels, `chroma` 0.45 and
-   0.25, `lightness` 0.00 and 0.10, `cap` 0.04 and 0.18, `offset` 11) and the
+   above: `chroma` 0.00 and 0.05, `chroma_cap` 0.03 and 0.04, `lightness` 0.00
+   and 0.00, `blur_passes` 4 and 6, the edge
+   (`intensity` 0.70 and 0.70, `span` 46 and 60 logical pixels, `chroma` 0.45 and
+   0.45, `lightness` 0.00 and 0.10, `cap` 0.04 and 0.18, `offset` 11), the rim
+   (`opacity` 0.80 and 1.00, `lift` 1.00 and 0.06, `lift-edge` 0.00 and 0.05,
+   `chroma` 0.00 and 1.35, `cap` 0.25) and the
    shadow (`opacity` 0.13 and 0.00, `span` 25, `tint` 1.00, `lightness` 0.20).
    The mockup also let the owner set the blur of the center and of the edge
    apart (dark 5 and 6, light 8 and 4); the compositor has one blur per scheme
    for both, so it takes the edge's, which is where the wallpaper shows. The
-   tones are tokens: `sidebar-glass-base` (`#272727` dark, `#ebedee` light),
-   `sidebar-glass-solid` (`#f2f2f2` light, the same as base in dark) and
-   `sidebar-glass-rim`. The glass blurs what is behind it `glass_blur_passes`
+   tones are tokens: `sidebar-glass-base` (`#202020` dark, `#ebedee` light) and
+   `sidebar-glass-solid` (`#f2f2f2` light, the same as base in dark). The dark
+   edge, base and rim are the owner's «derived, like macOS» setting on
+   `docs/architecture/sidebar-border-editor.html`. The glass blurs what is behind it `glass_blur_passes`
    times, in its own cache.
 8. **Without this request** (another compositor, or version below 6) the kit
    keeps painting its opaque sidebar. Nothing else changes.

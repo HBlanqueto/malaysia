@@ -18,9 +18,18 @@ pub mod shaders {
     }
 
     pub const ROUNDED_CLIP: &str = texture_shader!("window_shape.glsl", "rounded_clip.frag");
-    pub const GLASS: &str = texture_shader!("window_shape.glsl", "oklab.glsl", "glass.frag");
-    pub const GLASS_RIM: &str =
-        texture_shader!("window_shape.glsl", "oklab.glsl", "glass_rim.frag");
+    pub const GLASS: &str = texture_shader!(
+        "window_shape.glsl",
+        "oklab.glsl",
+        "glass_fill.glsl",
+        "glass.frag"
+    );
+    pub const GLASS_RIM: &str = texture_shader!(
+        "window_shape.glsl",
+        "oklab.glsl",
+        "glass_fill.glsl",
+        "glass_rim.frag"
+    );
     pub const GLASS_SHADOW: &str =
         texture_shader!("window_shape.glsl", "oklab.glsl", "glass_shadow.frag");
     pub const DISPLAY_FILTER: &str = texture_shader!("display_filter.frag");

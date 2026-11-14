@@ -1,28 +1,24 @@
-#if defined(EXTERNAL)
-uniform samplerExternalOES tex;
-#else
-uniform sampler2D tex;
-#endif
-
 uniform float alpha;
 varying vec2 v_coords;
 
-uniform vec2 texture_size;
 uniform vec4 geometry;
 uniform float radius;
 uniform float exponent;
-uniform vec4 line;
-uniform float chroma;
-uniform float chroma_cap;
-uniform vec4 tint;
+uniform vec3 rim;
+uniform float rim_cap;
+uniform float opacity;
 uniform float width;
 
-// The inner border of the panel: a line of the token's lightness (white in dark, gray in light) that takes the chroma of the wallpaper behind each stretch, or of the accent (tint.a is 1).
+// The inner border of the panel, derived from the fill under it: rim.x lighter (rim.y more where the wallpaper shows), with rim.z times its chroma up to rim_cap and the same hue.
 void main() {
     vec2 px = v_coords * texture_size;
     float dist = frame_sdf(px, geometry, radius, exponent);
     float coverage = window_coverage(dist) - window_coverage(dist + width);
-    vec3 wallpaper = texture2D(tex, v_coords).rgb;
-    vec3 color = take_chroma_capped(line.rgb, mix(wallpaper, tint.rgb, tint.a), chroma, chroma_cap);
-    gl_FragColor = vec4(color * line.a, line.a) * (coverage * alpha);
+    float ramp;
+    vec3 fill = oklab_from_linear(linear_from_srgb(glass_fill(px, ramp)));
+    float fill_chroma = length(fill.yz);
+    vec2 ab = fill.yz * (min(fill_chroma * rim.z, rim_cap) / max(fill_chroma, 0.000001));
+    vec3 lab = vec3(min(fill.x + rim.x + rim.y * ramp, 1.0), ab);
+    vec3 color = clamp(srgb_from_linear(clamp(linear_from_oklab(lab), 0.0, 1.0)), 0.0, 1.0);
+    gl_FragColor = vec4(color, 1.0) * (coverage * alpha * opacity);
 }

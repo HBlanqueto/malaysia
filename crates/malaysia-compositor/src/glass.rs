@@ -1,7 +1,6 @@
 use std::sync::Mutex;
 
 use ctappearance::ColorScheme;
-use ctdesign::Rgba;
 use malaysia_scene::scene::WindowId;
 use smithay::backend::renderer::Texture;
 use smithay::backend::renderer::element::Id;
@@ -67,14 +66,6 @@ pub(crate) struct Frame {
     pub(crate) exponent: f32,
 }
 
-fn rim_line(scheme: ColorScheme) -> Rgba {
-    match scheme {
-        ColorScheme::Light => ctdesign::SIDEBAR_GLASS_RIM_LIGHT,
-        ColorScheme::Dark => ctdesign::SIDEBAR_GLASS_RIM_DARK,
-        ColorScheme::DarkTint => ctdesign::SIDEBAR_GLASS_RIM_DARK_TINT,
-    }
-}
-
 // An island panel has its own corner; a flat one takes the window's, clipped to the column.
 fn panel_shape(
     glass_radius: u32,
@@ -131,6 +122,7 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     let (_, chroma_cap) = ctappearance::glass_chroma(scheme);
     let lightness = ctappearance::glass_lightness(scheme);
     let edge = ctappearance::glass_edge(scheme);
+    let line = ctappearance::glass_rim(scheme);
     let shadow = ctappearance::glass_shadow(scheme);
     let physical = |logical: f32| (f64::from(logical) * scale) as f32;
     let screen_rect = |rect: Rectangle<i32, Physical>| {
@@ -158,6 +150,25 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
             window,
             scale,
         );
+        let fill = vec![
+            Uniform::new("base", glass.base),
+            Uniform::new("chroma", glass.chroma),
+            Uniform::new("chroma_cap", chroma_cap),
+            Uniform::new("lightness", lightness),
+            Uniform::new("panel", screen_rect(panel)),
+            Uniform::new("outer", screen_rect(window.rect)),
+            Uniform::new(
+                "edge",
+                [
+                    edge.intensity,
+                    physical(edge.span),
+                    edge.chroma,
+                    edge.lightness,
+                ],
+            ),
+            Uniform::new("edge_cap", edge.cap),
+            Uniform::new("edge_offset", physical(edge.offset)),
+        ];
         let drawn = Drawn {
             wallpaper: commit,
             panel,
@@ -206,27 +217,16 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                     exponent,
                     material.clone(),
                 )
-                .with_uniforms(vec![
-                    Uniform::new("base", glass.base),
-                    Uniform::new("solid", glass.solid),
-                    Uniform::new("chroma", glass.chroma),
-                    Uniform::new("chroma_cap", chroma_cap),
-                    Uniform::new("lightness", lightness),
-                    Uniform::new("settle", settle),
-                    Uniform::new("panel", screen_rect(panel)),
-                    Uniform::new("outer", screen_rect(window.rect)),
-                    Uniform::new(
-                        "edge",
-                        [
-                            edge.intensity,
-                            physical(edge.span),
-                            edge.chroma,
-                            edge.lightness,
+                .with_uniforms(
+                    [
+                        fill.clone(),
+                        vec![
+                            Uniform::new("solid", glass.solid),
+                            Uniform::new("settle", settle),
                         ],
-                    ),
-                    Uniform::new("edge_cap", edge.cap),
-                    Uniform::new("edge_offset", physical(edge.offset)),
-                ])
+                    ]
+                    .concat(),
+                )
                 .into(),
             );
         }
@@ -274,7 +274,6 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
             && settle < 1.0
             && let Some(dst) = visible(panel)
         {
-            let line = rim_line(scheme);
             rims.push(
                 RoundedTextureElement::from_texture(
                     texture.clone(),
@@ -287,16 +286,21 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                     exponent,
                     rim.clone(),
                 )
-                .with_uniforms(vec![
-                    Uniform::new("line", [line.r, line.g, line.b, line.a * (1.0 - settle)]),
-                    Uniform::new("tint", glass.rim_tint),
-                    Uniform::new("chroma", ctappearance::glass_rim_chroma(scheme)),
-                    Uniform::new("chroma_cap", chroma_cap),
-                    Uniform::new(
-                        "width",
-                        (f64::from(ctdesign::SIDEBAR.rim_width) * scale) as f32,
-                    ),
-                ])
+                .with_uniforms(
+                    [
+                        fill,
+                        vec![
+                            Uniform::new("rim", [line.lift, line.lift_edge, line.chroma]),
+                            Uniform::new("rim_cap", line.cap),
+                            Uniform::new("opacity", line.opacity * (1.0 - settle)),
+                            Uniform::new(
+                                "width",
+                                (f64::from(ctdesign::SIDEBAR.rim_width) * scale) as f32,
+                            ),
+                        ],
+                    ]
+                    .concat(),
+                )
                 .into(),
             );
         }
@@ -340,7 +344,7 @@ mod tests {
     use smithay::utils::{Scale, Transform};
 
     use super::*;
-    use crate::effects::{compile_glass, compile_glass_shadow};
+    use crate::effects::{compile_glass, compile_glass_rim, compile_glass_shadow};
     use crate::test_support::try_test_renderer;
 
     const SIDE: i32 = 64;
@@ -473,6 +477,52 @@ mod tests {
                 "{x}"
             );
         }
+    }
+
+    #[test]
+    fn the_rim_is_a_line_lighter_than_the_fill_in_dark_and_white_in_light() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        let program = compile_glass_rim(&mut renderer).expect("the rim shader compiles");
+        let gray = wallpaper(&mut renderer, |_| [128, 128, 128, 255]);
+        let panel = Rectangle::<i32, Physical>::new((12, 12).into(), (40, 40).into());
+        let mut rim = |lift: f32, chroma: f32, opacity: f32| {
+            let uniforms = vec![
+                Uniform::new("base", [0.125_f32; 3]),
+                Uniform::new("chroma", 0.0_f32),
+                Uniform::new("chroma_cap", 0.5_f32),
+                Uniform::new("lightness", 0.0_f32),
+                Uniform::new("panel", [12.0_f32, 12.0, 40.0, 40.0]),
+                Uniform::new("outer", [8.0_f32, 8.0, 48.0, 48.0]),
+                Uniform::new("edge", [0.0_f32, 16.0, 1.0, 0.0]),
+                Uniform::new("edge_cap", 0.5_f32),
+                Uniform::new("edge_offset", 3.0_f32),
+                Uniform::new("rim", [lift, 0.0, chroma]),
+                Uniform::new("rim_cap", 0.25_f32),
+                Uniform::new("opacity", opacity),
+                Uniform::new("width", 1.0_f32),
+            ];
+            draw(&mut renderer, &element(&gray, panel, 4, &program, uniforms))
+        };
+        let dark = rim(0.1, 1.35, 1.0);
+        let [red, green, blue, alpha] = pixel(&dark, 12, 32);
+        assert_eq!(alpha, 255);
+        assert!(
+            red.abs_diff(57) <= 2,
+            "0.1 lighter than the fill (32): {red}"
+        );
+        assert!(red.abs_diff(green) <= 1 && green.abs_diff(blue) <= 1);
+        assert_eq!(pixel(&dark, 32, 32)[3], 0, "only the line is drawn");
+        let light = rim(1.0, 0.0, 0.8);
+        let [red, green, blue, alpha] = pixel(&light, 12, 32);
+        assert!(
+            [red, green, blue, alpha]
+                .iter()
+                .all(|c| c.abs_diff(204) <= 2),
+            "white at 0.8: {red} {green} {blue} {alpha}"
+        );
     }
 
     #[test]

@@ -496,26 +496,29 @@ pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTe
         .ok()
 }
 
+fn glass_fill_uniforms() -> Vec<UniformName<'static>> {
+    vec![
+        UniformName::new("base", UniformType::_3f),
+        UniformName::new("chroma", UniformType::_1f),
+        UniformName::new("chroma_cap", UniformType::_1f),
+        UniformName::new("lightness", UniformType::_1f),
+        UniformName::new("panel", UniformType::_4f),
+        UniformName::new("outer", UniformType::_4f),
+        UniformName::new("edge", UniformType::_4f),
+        UniformName::new("edge_cap", UniformType::_1f),
+        UniformName::new("edge_offset", UniformType::_1f),
+    ]
+}
+
 pub(crate) fn compile_glass(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
-    compile_wallpaper_shape(
-        renderer,
-        grade_graphics::shaders::GLASS,
-        &[
-            UniformName::new("base", UniformType::_3f),
-            UniformName::new("solid", UniformType::_3f),
-            UniformName::new("chroma", UniformType::_1f),
-            UniformName::new("chroma_cap", UniformType::_1f),
-            UniformName::new("lightness", UniformType::_1f),
-            UniformName::new("settle", UniformType::_1f),
-            UniformName::new("panel", UniformType::_4f),
-            UniformName::new("outer", UniformType::_4f),
-            UniformName::new("edge", UniformType::_4f),
-            UniformName::new("edge_cap", UniformType::_1f),
-            UniformName::new("edge_offset", UniformType::_1f),
-        ],
-    )
-    .inspect_err(|error| tracing::warn!(?error, "failed to compile glass shader"))
-    .ok()
+    let mut uniforms = glass_fill_uniforms();
+    uniforms.extend([
+        UniformName::new("solid", UniformType::_3f),
+        UniformName::new("settle", UniformType::_1f),
+    ]);
+    compile_wallpaper_shape(renderer, grade_graphics::shaders::GLASS, &uniforms)
+        .inspect_err(|error| tracing::warn!(?error, "failed to compile glass shader"))
+        .ok()
 }
 
 pub(crate) fn compile_glass_shadow(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
@@ -535,19 +538,16 @@ pub(crate) fn compile_glass_shadow(renderer: &mut GlesRenderer) -> Option<GlesTe
 }
 
 pub(crate) fn compile_glass_rim(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
-    compile_wallpaper_shape(
-        renderer,
-        grade_graphics::shaders::GLASS_RIM,
-        &[
-            UniformName::new("line", UniformType::_4f),
-            UniformName::new("tint", UniformType::_4f),
-            UniformName::new("chroma", UniformType::_1f),
-            UniformName::new("chroma_cap", UniformType::_1f),
-            UniformName::new("width", UniformType::_1f),
-        ],
-    )
-    .inspect_err(|error| tracing::warn!(?error, "failed to compile glass rim shader"))
-    .ok()
+    let mut uniforms = glass_fill_uniforms();
+    uniforms.extend([
+        UniformName::new("rim", UniformType::_3f),
+        UniformName::new("rim_cap", UniformType::_1f),
+        UniformName::new("opacity", UniformType::_1f),
+        UniformName::new("width", UniformType::_1f),
+    ]);
+    compile_wallpaper_shape(renderer, grade_graphics::shaders::GLASS_RIM, &uniforms)
+        .inspect_err(|error| tracing::warn!(?error, "failed to compile glass rim shader"))
+        .ok()
 }
 
 fn dock_frame_uniforms() -> [UniformName<'static>; 6] {
