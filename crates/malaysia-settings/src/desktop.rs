@@ -172,6 +172,12 @@ fn dock_section(config: &DockConfig, error: State<Option<String>>) -> Section {
             error,
             |config, on| config.show_recents = on,
         ))
+        .row(switch_row(
+            tr!("dock-downloads"),
+            config.show_downloads,
+            error,
+            |config, on| config.show_downloads = on,
+        ))
 }
 
 fn dock_advanced_section(config: &DockConfig, error: State<Option<String>>) -> Section {

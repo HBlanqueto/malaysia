@@ -23,7 +23,7 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    window has an `app_id` that is no entry's id. The order is the kept apps (`persistent-apps` in
    `~/.local/share/malaysia/dock.state`), a separator, the open apps that are
    not kept and up to `DOCK_RECENTS` recent apps (`recent-apps`, with
-   `show-recents`), a separator, Downloads, one tile per minimized window
+   `show-recents`), a separator, Downloads (`show-downloads`), one tile per minimized window
    (unless `minimize-to-application`) and the Trash. `dock/motion.rs` keeps the
    tiles: a new one opens its slot in `DOCK_SLOT_MS` and a window that leaves
    keeps its tile, empty, until its slot is shut. `static-only` keeps only
@@ -113,13 +113,15 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    and the minimize effect, and opens Dock Settings; these write
    `dock.domain`.
 9. **Dragging.** Dragging the separator changes `tilesize`. Any app icon can
-   be dragged, kept, open or recent. It leaves its slot and follows the
+   be dragged, kept, open or recent, and so can Downloads. It leaves its slot and follows the
    pointer anywhere on the screen, over windows that keep drawing. The other
    icons slide apart where it would land: that gap opens in `DOCK_SLOT_MS`
    while the one it leaves closes (`dock/motion.rs`). Dropping it there
    keeps it in the Dock (`persistent-apps`), open or not. Dragging it away
    shows Remove, closes the gap and takes it out; an open app stays until it
-   quits.
+   quits. Downloads stays among the folders: dropped there it goes back to
+   its slot, and dropped away it turns `show-downloads` off; System Settings
+   › Desktop & Dock turns it back on.
 10. **Minimize target.** The Dock sends each window's slot with
     `set_minimize_target` (`zwlr_foreign_toplevel_handle_v1.set_rectangle`):
     the app's icon with `minimize-to-application`, otherwise the window's own

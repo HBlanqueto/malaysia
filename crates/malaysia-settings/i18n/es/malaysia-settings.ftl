@@ -36,6 +36,7 @@ dock-autohide = Ocultar y mostrar el Dock automáticamente
 dock-launchanim = Animar apertura de apps
 dock-indicators = Mostrar indicadores en las apps abiertas
 dock-recents = Mostrar apps recientes en el Dock
+dock-downloads = Mostrar Descargas en el Dock
 dock-advanced = Dock: avanzado
 dock-static-only = Mostrar solo apps abiertas
 dock-autohide-delay = Espera antes de mostrar

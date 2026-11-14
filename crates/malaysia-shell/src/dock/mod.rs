@@ -69,10 +69,35 @@ struct DockState {
 struct Drag {
     id: String,
     kept: bool,
+    downloads: bool,
     from: (f32, f32),
     at: (f32, f32),
     moved: bool,
+    away: bool,
     order: Vec<String>,
+}
+
+impl Drag {
+    fn start(id: String, kept: bool, downloads: bool, at: (f32, f32), order: Vec<String>) -> Self {
+        Self {
+            id,
+            kept,
+            downloads,
+            from: at,
+            at,
+            moved: false,
+            away: false,
+            order,
+        }
+    }
+
+    fn lifts(&self, item: &Item) -> bool {
+        match item {
+            Item::App(app) => !self.downloads && app.id == self.id,
+            Item::Downloads => self.downloads,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -450,13 +475,12 @@ impl App for DockApp {
             &tile_windows,
         );
         // macOS: the dragged icon leaves its slot and the others slide apart where it would land.
-        let landing = lifted.and_then(|drag| {
-            list.iter()
-                .position(|item| matches!(item, Item::App(app) if app.id == drag.id))
-        });
-        if let Some(index) = landing {
+        let lifted_from = lifted.and_then(|drag| list.iter().position(|item| drag.lifts(item)));
+        if let Some(index) = lifted_from {
             list.remove(index);
         }
+        let landing =
+            lifted_from.filter(|_| lifted.is_none_or(|drag| !(drag.downloads && drag.away)));
         let mut gaps: Vec<(usize, f32)> = motion::use_slots(lifted.map(|_| {
             landing
                 .map(|index| (index as u64, index))
@@ -636,6 +660,13 @@ impl App for DockApp {
                 .unwrap_or_else(|| id.to_string());
             on_grid(icon(&name, &["apps"]).as_ref(), &app_name(id), size)
         };
+        let downloads_icon = |size: f32| {
+            app_icon(
+                icon("folder-download", &["places"]).as_ref(),
+                tr!("dock-downloads"),
+                size,
+            )
+        };
 
         let open_app = {
             let toplevels = toplevels.clone();
@@ -784,14 +815,13 @@ impl App for DockApp {
                             let at = event.global_location();
                             let at = frame.canonical((at.x as f32, at.y as f32));
                             after_drag_down.set(false);
-                            dragging.set(Some(Drag {
-                                id: id.clone(),
+                            dragging.set(Some(Drag::start(
+                                id.clone(),
                                 kept,
-                                from: at,
+                                false,
                                 at,
-                                moved: false,
-                                order: state.peek().persistent_apps.clone(),
-                            }));
+                                state.peek().persistent_apps.clone(),
+                            )));
                         })
                         .on_press(move |_| {
                             let dragged = dragging.peek().as_ref().is_some_and(|drag| drag.moved);
@@ -903,17 +933,36 @@ impl App for DockApp {
                 }
                 Item::Downloads => {
                     let folder = downloads_dir();
+                    let after_drag = after_drag.clone();
+                    let after_drag_down = after_drag.clone();
                     children.push(
                         placed(frame.area(slot.start, icon_cross, slot.length, slot.size))
                             .center()
-                            .child(app_icon(
-                                icon("folder-download", &["places"]).as_ref(),
-                                tr!("dock-downloads"),
-                                slot.size,
-                            ))
+                            .child(downloads_icon(slot.size))
+                            .on_pointer_down(move |event: Event<PointerEventData>| {
+                                if !primary(&event) {
+                                    return;
+                                }
+                                let at = event.global_location();
+                                let at = frame.canonical((at.x as f32, at.y as f32));
+                                after_drag_down.set(false);
+                                dragging.set(Some(Drag::start(
+                                    String::new(),
+                                    false,
+                                    true,
+                                    at,
+                                    state.peek().persistent_apps.clone(),
+                                )));
+                            })
                             .on_press({
                                 let folder = folder.clone();
-                                move |_| xdg_open(&folder)
+                                move |_| {
+                                    let dragged =
+                                        dragging.peek().as_ref().is_some_and(|drag| drag.moved);
+                                    if !(dragged || after_drag.replace(false)) {
+                                        xdg_open(&folder)
+                                    }
+                                }
                             })
                             .on_secondary_down({
                                 let anchor = menu.anchor(slot.start, slot.length, slot.size);
@@ -1028,11 +1077,14 @@ impl App for DockApp {
 
         if let Some(drag) = lifted {
             let (main, cross) = drag.at;
-            let removing = cross > cross0 + layout.thickness + tile;
             children.push(
                 placed(frame.area(main - tile / 2.0, cross - tile / 2.0, tile, tile))
-                    .child(app_icon_named(&drag.id, tile))
-                    .maybe_child(removing.then(|| {
+                    .child(if drag.downloads {
+                        downloads_icon(tile)
+                    } else {
+                        app_icon_named(&drag.id, tile)
+                    })
+                    .maybe_child(drag.away.then(|| {
                         rect()
                             .position(
                                 Position::new_absolute()
@@ -1128,7 +1180,7 @@ impl App for DockApp {
                         let (dx, dy) = (main - drag.from.0, cross - drag.from.1);
                         drag.moved |= dx.hypot(dy) > DRAG.threshold;
                         drag.at = (main, cross);
-                        let removing = cross > cross0 + thickness + tile;
+                        drag.away = cross > cross0 + thickness + tile;
                         let before = targets
                             .iter()
                             .find(|(_, center)| main < *center)
@@ -1137,8 +1189,11 @@ impl App for DockApp {
                             && targets
                                 .last()
                                 .is_some_and(|(_, center)| main > center + tile * 1.5);
-                        let keep = !removing && !(past_kept && !drag.kept);
-                        drag.order = items::dropped(&drag.order, &drag.id, before.as_deref(), keep);
+                        let keep = !drag.away && !(past_kept && !drag.kept);
+                        if !drag.downloads {
+                            drag.order =
+                                items::dropped(&drag.order, &drag.id, before.as_deref(), keep);
+                        }
                         dragging.set(Some(drag));
                     }
                 }
@@ -1153,7 +1208,12 @@ impl App for DockApp {
                     return;
                 }
                 after_drag.set(true);
-                edit_state(state, |state| state.persistent_apps = drag.order);
+                // macOS keeps Downloads among the folders; dragged out, it leaves the Dock.
+                if !drag.downloads {
+                    edit_state(state, |state| state.persistent_apps = drag.order);
+                } else if drag.away {
+                    edit_config(|config| config.show_downloads = false);
+                }
             })
             .children(children)
     }

@@ -100,7 +100,7 @@ pub(crate) fn items(
         items.extend(unkept.iter().chain(recents.iter()).map(|id| tile(id)));
     }
     items.push(Item::Separator);
-    if !config.static_only {
+    if !config.static_only && config.show_downloads {
         items.push(Item::Downloads);
     }
     items.extend(tiles.iter().cloned().map(Item::Window));
