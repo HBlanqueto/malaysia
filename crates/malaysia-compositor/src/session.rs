@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use smithay::backend::SwapBuffersError;
+use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::drm::{DrmDeviceFd, DrmNode};
 use smithay::backend::egl::EGLDevice;
 use smithay::backend::renderer::ImportDma;
@@ -438,9 +439,18 @@ fn dispatch_clients(session: &mut Session) {
 }
 
 pub(crate) fn import_pending_dmabufs(state: &mut State, renderer: &mut GlesRenderer) {
+    settle_dmabuf_imports(state, |dmabuf| {
+        renderer.import_dmabuf(dmabuf, None).map(drop)
+    });
+}
+
+fn settle_dmabuf_imports(
+    state: &mut State,
+    mut import: impl FnMut(&Dmabuf) -> Result<(), GlesError>,
+) {
     for pending in state.pending_dmabuf_imports.drain(..) {
-        match renderer.import_dmabuf(&pending.dmabuf, None) {
-            Ok(_) => {
+        match import(&pending.dmabuf) {
+            Ok(()) => {
                 if let Err(error) = pending.notifier.successful::<State>() {
                     tracing::warn!(
                         ?error,

@@ -2,17 +2,17 @@ use std::error::Error;
 use std::fmt;
 
 use smithay::backend::allocator::{Fourcc, Modifier};
-use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
+use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay, Error as EGLError};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
-use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+use smithay::backend::renderer::gles::{GlesError, GlesRenderer, GlesTexture};
 use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
 use smithay::utils::{Buffer as BufferCoord, Logical, Physical, Point, Rectangle, Size, Transform};
 
-use super::{describe_chain, import_pending_dmabufs, physical_point, winit_mode_source};
+use super::{describe_chain, physical_point, settle_dmabuf_imports, winit_mode_source};
 use crate::cursor::OutputRenderElement;
 use crate::scene_elements::{
     cursor_origin, frame_has_border, frame_order, frame_radius, physical_rect,
@@ -597,11 +597,10 @@ fn the_global_filter_does_not_stall_the_next_client() {
 fn a_failed_create_immed_is_drained_and_posts_the_protocol_error() {
     use std::os::unix::io::AsFd;
     use std::sync::mpsc;
+    use std::time::{Duration, Instant};
 
     use sctk::reexports::client::Connection;
     use sctk::reexports::client::globals::registry_queue_init;
-
-    let mut renderer = offscreen_renderer();
 
     let (_event_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
 
@@ -677,18 +676,31 @@ fn a_failed_create_immed_is_drained_and_posts_the_protocol_error() {
         "the single create_immed queues exactly one import"
     );
 
-    import_pending_dmabufs(&mut state, &mut renderer);
+    // llvmpipe accepts any fd and fails only when it maps it, so the driver's refusal comes from here.
+    settle_dmabuf_imports(&mut state, |_| {
+        Err(GlesError::BindBufferEGLError(
+            EGLError::EGLImageCreationFailed,
+        ))
+    });
     assert!(
         state.pending_dmabuf_imports.is_empty(),
         "the queue must be drained before a frame can be drawn"
     );
-    display
-        .flush_clients()
-        .expect("the error must reach the client");
 
-    let dead = sent_rx
-        .recv()
-        .expect("the client should report its verdict");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let dead = loop {
+        display
+            .flush_clients()
+            .expect("the error must reach the client");
+        if let Ok(dead) = sent_rx.try_recv() {
+            break dead;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the client never reported its verdict"
+        );
+        display.dispatch_clients(&mut state).expect("dispatch");
+    };
     assert!(
         dead,
         "the failed create_immed must kill the client, never leave a black window"
