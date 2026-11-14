@@ -430,8 +430,8 @@ searching `crates/malaysia-compositor/src`.
   xdg-toplevel-icon,
   xdg-toplevel-tag, xdg-foreign, xdg-system-bell, single-pixel-buffer,
   alpha-modifier, content-type, fifo, commit-timing, drm-lease,
-  ext-data-control (no clipboard managers without it),
-  ext-background-effect and xwayland-keyboard-grab.
+  ext-data-control (no clipboard managers without it)
+  and xwayland-keyboard-grab.
 - **Protocols without a Smithay module** (niri implements them):
   wlr-gamma-control (night light), wlr-output-management (kanshi,
   wdisplays), ext-workspace (ADR 0051 spaces) and tearing-control.
@@ -449,8 +449,7 @@ searching `crates/malaysia-compositor/src`.
   Sidebars of BarrierKit windows get a glass panel with the wallpaper's
   chroma and a line derived from their fill ([ADR 0078](decisions/0078-sidebar-glass-panels.md)),
   accepted 2026-11-13. The protocol, the kit and the compositor's material, edge, rim and island shadow are written, built and unit-tested, the shaders with a real GL context (2026-11-13), but not yet run on a screen; the values come from the owner's mockup and the dark unfocused state is not measured.
-- **Shell:** supervision and overview (ADR 0023), notifications daemon,
-  polkit agent, volume/network/battery/brightness
+- **Shell:** supervision and overview (ADR 0023), polkit agent, volume/network/battery/brightness
   indicators (network, Bluetooth and battery done, ADR 0069), OSD and
   media keys.
 

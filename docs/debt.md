@@ -1,6 +1,6 @@
 # Open technical debt
 
-Open findings, checked again on 2026-11-08 (Remake-Redo); fixed findings and those of the toolkit moved to barrierkit are not listed. Missing features live in [`roadmap.md`](roadmap.md#not-in-a-block-yet). The 2026-11-03 audit that found most of them is in git history (`git show 7fa3d19:docs/audit-2026-11-03.md`).
+Open findings, checked again on 2026-11-08; fixed findings and those of the toolkit moved to barrierkit are not listed. Missing features live in [`roadmap.md`](roadmap.md#not-in-a-block-yet). The 2026-11-03 audit that found most of them is in git history (`git show 7fa3d19:docs/audit-2026-11-03.md`).
 
 | id | where | what | batch |
 |---|---|---|---|
@@ -12,7 +12,8 @@ Open findings, checked again on 2026-11-08 (Remake-Redo); fixed findings and tho
 | S-02 | Smithay `65aa86fa`, `src/backend/drm/compositor/mod.rs` | `DrmCompositor` does not set the planes' `pixel blend mode` property (grep `blend` in `src/backend/drm`: 0). On Intel i915, overlays with alpha blend wrongly. That is why `debug.overlay_planes` is off by default. nongio's fork fixes it in [`734ebe91`](https://github.com/nongio/smithay/commit/734ebe91) and [`33b10703`](https://github.com/nongio/smithay/commit/33b10703); it is only a reference: the fix belongs in upstream Smithay or in bumping its revision. | upstream |
 | S-03 | `crates/malaysia-compositor/src/virtual_input.rs` | Switching back from a virtual keyboard's keymap restores the configured keymap but not the group or locked modifiers, unlike niri (`src/handlers/virtual_keyboard.rs`). The fix is per-device xkb state. | L6 |
 | G-01 | `crates/xdg-desktop-portal-malaysia/src/gtk.rs` (`ADWAITA_LIGHT`, `ADWAITA_DARK`) | The base Adwaita backgrounds are pinned to libadwaita 1.6+. | L2b |
-| R-01 | `crates/malaysia-compositor/src/session/tests.rs` (`a_failed_create_immed_is_drained_and_posts_the_protocol_error`) | Hangs on llvmpipe (no `EGL_ANDROID_native_fence_sync`); `./dev.sh check` needs a GPU to finish. `check-client-dispatch.sh` stops for the same reason. | — |
+| R-01 | `scripts/check-client-dispatch.sh` | Stops on llvmpipe (no `EGL_ANDROID_native_fence_sync`); it needs a GPU. | — |
 | R-02 | `crates/malaysia-wallpaper/src/render.rs` (`cover_matches_reference_at_1280x800`, `minified_quadrants_keep_orientation`) | Fail on lavapipe with wgpu 24 and 30 alike; not checked on a hardware GPU. | — |
 | R-04 | `NOTICE` | `bandura.jpg` has no origin or licence; the 31 `share/wallpapers/solid-colors/` PNGs carry macOS names and no origin. The author's call. | — |
 | R-05 | `crates/malaysia-shell/src/menubar/dbusmenu.rs` (`set_registrar`) | The bar owns `com.canonical.AppMenu.Registrar` so that patched Electron publishes its Wayland appmenu, but it never matches `RegisterWindow` entries to windows. An X11 app under xwayland-satellite that hides its own menu when a Registrar exists (Qt on xcb) shows no menu anywhere. Fix: match by pid (roadmap block 14). | — |
+| R-06 | `deny.toml` | `cargo deny check licenses` rejects BSL-1.0, CC0-1.0, MPL-2.0 and Apache-2.0 WITH LLVM-exception, all already in the graph. Allow them or replace the crates. The author's call. | — |
