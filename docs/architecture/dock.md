@@ -43,8 +43,11 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    is as deep as the bar plus room for magnified and bouncing icons and the
    name label. The exclusive zone is only the bar, so windows do not move
    when icons grow; with `autohide` it is 0. `set_input_region` takes the
-   pointer on the bar only (on the magnified icons while the pointer is
-   there), so clicks above it reach the windows.
+   pointer from the screen edge to the top of the bar, along the bar (to the
+   magnified icons while the pointer is there): the margin under the bar
+   counts, and clicks above it reach the windows. While an icon is dragged
+   the surface asks for the whole screen, the compositor fits it to the
+   output, and all of it takes the pointer.
 5. **Frame.** The bar is a card (ADR 0068) with a continuous corner of
    `DOCK_RADIUS` × its thickness. The compositor knows the Dock by its
    namespace (`DOCK_LAYER_NAMESPACE`) and draws the card's glass and frame
@@ -109,8 +112,11 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    separator it turns hiding and magnification on or off, sets the position
    and the minimize effect, and opens Dock Settings; these write
    `dock.domain`.
-9. **Dragging.** Dragging the separator changes `tilesize`. While an app is
-   dragged the other icons make room where it would land; dropping it there
+9. **Dragging.** Dragging the separator changes `tilesize`. Any app icon can
+   be dragged, kept, open or recent. It leaves its slot and follows the
+   pointer anywhere on the screen, over windows that keep drawing. The other
+   icons slide apart where it would land: that gap opens in `DOCK_SLOT_MS`
+   while the one it leaves closes (`dock/motion.rs`). Dropping it there
    keeps it in the Dock (`persistent-apps`), open or not. Dragging it away
    shows Remove, closes the gap and takes it out; an open app stays until it
    quits.
@@ -124,8 +130,10 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
     thumbnail's width out from the window's shape.
 11. **Hiding.** With `autohide`, the bar slides off the edge when the pointer
    leaves. A strip of `DOCK_REVEAL_STRIP` px at the edge takes the pointer;
-   after `autohide-delay` seconds the bar slides back in. The slide lasts
-   `DOCK_HIDE_MS` × `autohide-time-modifier`.
+   after `autohide-delay` seconds the bar slides back in. While the bar is
+   out the strip still takes the pointer, so a pointer at the edge keeps it
+   up. The slide lasts `DOCK_HIDE_MS` × `autohide-time-modifier`; one that
+   turns back midway goes on from where it is.
 
 ## Compositor side
 
@@ -147,6 +155,10 @@ takes over. The effect is drawn over the Dock, so it leaves and reaches the
 tile in sight. While it restores, the window is drawn only by the effect; the frame
 where it ends already draws the window.
 
+A layer surface is never larger than its output. It keeps its place until
+the client acks a new size (`layers.rs`), so a Dock that grows for a drag
+does not show its old buffer at the top of the screen.
+
 A popup whose root parent is a layer surface, such as a Dock menu, is drawn
 above the `Top` and `Overlay` layers and takes the pointer before them; the
 popups of windows stay below the shell. A card's blur is clipped to its
@@ -156,5 +168,4 @@ space, so focus spaces hide it like the bottom one.
 ## Divergences
 
 - `zwlr_foreign_toplevel_management_v1` by hand (ADR 0023 allows for it).
-- The drag image stays inside the Dock's surface.
 - `activate` carries no press serial in this version of the XML, so it is not validated against the implicit grab.

@@ -64,6 +64,7 @@ struct DockState {
     recent_apps: Vec<String>,
 }
 
+// `from` and `at` are (along the Dock, away from its edge): the surface grows while an icon is dragged.
 #[derive(Clone, Debug, PartialEq)]
 struct Drag {
     id: String,
@@ -175,13 +176,20 @@ fn anchors(orientation: DockOrientation) -> Anchors {
     }
 }
 
-// The surface leaves room above the bar for magnified and bouncing icons and the name label.
-fn layer_geometry(config: &DockConfig, thickness: f32) -> LayerGeometry {
+// The compositor fits a layer to its output, so this asks for the whole screen.
+const SCREEN: u32 = u16::MAX as u32;
+
+// The surface leaves room above the bar for magnified and bouncing icons and the name label,
+// and takes the screen while an icon is dragged, so the icon can leave the Dock.
+fn layer_geometry(config: &DockConfig, thickness: f32, lifted: bool) -> LayerGeometry {
     let requested = config.tilesize();
     let headroom = (config.largesize() - requested).max(requested * DOCK_BOUNCE_HEIGHT);
     let label = 2.0 * (DOCK_LABEL_GAP + DOCK_LABEL_PADDING_Y) + DOCK_LABEL_FONT_SIZE;
-    let extent =
-        (DOCK_EDGE_MARGIN + geometry::thickness(requested) + headroom + label).ceil() as u32;
+    let extent = if lifted {
+        SCREEN
+    } else {
+        (DOCK_EDGE_MARGIN + geometry::thickness(requested) + headroom + label).ceil() as u32
+    };
     LayerGeometry {
         anchors: anchors(config.orientation),
         exclusive_zone: if config.autohide {
@@ -340,7 +348,6 @@ impl App for DockApp {
             .clone();
         let launcher_entries = use_launcher_entries();
         let state = use_state(|| load_restoration::<DockState>(DOMAIN));
-        let mut size = use_state(|| (0.0f32, 0.0f32));
         let mut pointer = use_state(|| None::<(f32, f32)>);
         let mut hovering = use_state(|| false);
         let menu_open = use_state(|| false);
@@ -422,7 +429,9 @@ impl App for DockApp {
         });
         let phase = bounce.get().value();
 
-        let (width, height) = *size.read();
+        // on_sized comes a frame after the surface grows for a drag; the platform has the size already.
+        let root = *Platform::get().current_window().root_size.read();
+        let (width, height) = (root.width, root.height);
         let frame = Frame {
             orientation: config.orientation,
             width,
@@ -430,24 +439,42 @@ impl App for DockApp {
         };
         let dock_state = state.read().clone();
         let drag_now = dragging.read().clone();
-        // While an icon is dragged the others make room for it, as in macOS.
-        let kept_shown = match &drag_now {
-            Some(drag) if drag.moved => &drag.order,
-            _ => &dock_state.persistent_apps,
-        };
+        let lifted = drag_now.as_ref().filter(|drag| drag.moved);
         let tile_windows: Vec<ToplevelInfo> =
             tiles.iter().map(|tile| tile.window.clone()).collect();
-        let list = items::items(
+        let mut list = items::items(
             &config,
-            kept_shown,
+            lifted.map_or(&dock_state.persistent_apps, |drag| &drag.order),
             &dock_state.recent_apps,
             &running,
             &tile_windows,
         );
+        // macOS: the dragged icon leaves its slot and the others slide apart where it would land.
+        let landing = lifted.and_then(|drag| {
+            list.iter()
+                .position(|item| matches!(item, Item::App(app) if app.id == drag.id))
+        });
+        if let Some(index) = landing {
+            list.remove(index);
+        }
+        let mut gaps: Vec<(usize, f32)> = motion::use_slots(lifted.map(|_| {
+            landing
+                .map(|index| (index as u64, index))
+                .into_iter()
+                .collect()
+        }))
+        .iter()
+        .map(|gap| (gap.window, gap.presence))
+        .collect();
+        gaps.sort_by_key(|&(index, _)| std::cmp::Reverse(index));
+        for (index, presence) in gaps {
+            list.insert(index.min(list.len()), Item::Gap(presence));
+        }
         let slots: Vec<Slot> = list
             .iter()
             .map(|item| match item {
                 Item::Separator => Slot::Separator,
+                Item::Gap(presence) => Slot::Wide(*presence),
                 Item::Window(window) => Slot::Wide(
                     thumbnails
                         .read()
@@ -477,7 +504,7 @@ impl App for DockApp {
         let envelope = layout.thickness.max(layout.padding + largesize);
 
         let applied_layer = use_hook(|| Rc::new(Cell::new(None::<LayerGeometry>)));
-        let layer = layer_geometry(&config, layout.thickness);
+        let layer = layer_geometry(&config, layout.thickness, lifted.is_some());
         if width > 0.0 && applied_layer.replace(Some(layer)) != Some(layer) {
             set_layer_geometry(layer);
         }
@@ -487,16 +514,33 @@ impl App for DockApp {
             layout.bar_length,
             layout.thickness,
         );
-        let input = if config.autohide && visible < 0.01 {
-            frame.area(0.0, 0.0, frame.main_length(), DOCK_REVEAL_STRIP as f32)
-        } else if *hovering.read() {
-            frame.area(layout.bar_start, cross0, layout.bar_length, envelope)
+        let strip = frame.area(0.0, 0.0, frame.main_length(), DOCK_REVEAL_STRIP as f32);
+        let reach = if *hovering.read() {
+            envelope
         } else {
-            bar
+            layout.thickness
+        };
+        // The bar takes the pointer from the screen edge, the margin under it included; while it
+        // slides, the strip that revealed it keeps the pointer too, so it does not hide again.
+        let column = frame.area(
+            layout.bar_start,
+            0.0,
+            layout.bar_length,
+            (cross0 + reach).max(0.0),
+        );
+        // smithay's click grab follows a surface that grows only where the surface takes the pointer.
+        let input = if lifted.is_some() {
+            vec![(0.0, 0.0, width, height)]
+        } else if !config.autohide {
+            vec![column]
+        } else if visible < 0.01 {
+            vec![strip]
+        } else {
+            vec![strip, column]
         };
         let radius = (layout.thickness * DOCK_RADIUS).round();
-        let regions = (
-            vec![region(input)],
+        let regions: Regions = (
+            input.into_iter().map(region).collect(),
             if visible > 0.01 {
                 vec![region(bar)]
             } else {
@@ -644,6 +688,7 @@ impl App for DockApp {
         for (item, slot) in list.iter().zip(&layout.placed) {
             let center = slot.start + slot.length / 2.0;
             match item {
+                Item::Gap(_) => {}
                 Item::Separator => {
                     let length = tile * DOCK_SEPARATOR_LENGTH;
                     let line = if frame.vertical() {
@@ -690,9 +735,6 @@ impl App for DockApp {
                     } else {
                         0.0
                     };
-                    let dragged = drag_now
-                        .as_ref()
-                        .is_some_and(|drag| drag.moved && drag.id == app.id);
                     let launcher = launcher_entry(&launcher_entries, &app.id);
                     let badge = launcher
                         .as_ref()
@@ -716,7 +758,6 @@ impl App for DockApp {
                     let (kept, id) = (app.kept, app.id.clone());
                     children.push(
                         placed(frame.area(slot.start, icon_cross + lift, slot.size, slot.size))
-                            .opacity(if dragged { 0.0 } else { 1.0 })
                             .child(app_icon_named(&app.id, slot.size))
                             .maybe_child(badge.map(|count| {
                                 rect()
@@ -741,7 +782,7 @@ impl App for DockApp {
                                 return;
                             }
                             let at = event.global_location();
-                            let at = (at.x as f32, at.y as f32);
+                            let at = frame.canonical((at.x as f32, at.y as f32));
                             after_drag_down.set(false);
                             dragging.set(Some(Drag {
                                 id: id.clone(),
@@ -937,7 +978,7 @@ impl App for DockApp {
                     Item::Window(window) => window_title(window),
                     Item::Downloads => tr!("dock-downloads").to_string(),
                     Item::Trash => tr!("dock-trash").to_string(),
-                    Item::Separator => return None,
+                    Item::Separator | Item::Gap(_) => return None,
                 };
                 Some((label, layout.placed[index]))
             });
@@ -985,11 +1026,11 @@ impl App for DockApp {
             children.push(lane.child(bubble).into_element());
         }
 
-        if let Some(drag) = drag_now.as_ref().filter(|drag| drag.moved) {
-            let (_, cross) = frame.canonical(drag.at);
+        if let Some(drag) = lifted {
+            let (main, cross) = drag.at;
             let removing = cross > cross0 + layout.thickness + tile;
             children.push(
-                placed((drag.at.0 - tile / 2.0, drag.at.1 - tile / 2.0, tile, tile))
+                placed(frame.area(main - tile / 2.0, cross - tile / 2.0, tile, tile))
                     .child(app_icon_named(&drag.id, tile))
                     .maybe_child(removing.then(|| {
                         rect()
@@ -1032,9 +1073,6 @@ impl App for DockApp {
         rect()
             .width(Size::fill())
             .height(Size::fill())
-            .on_sized(move |event: Event<SizedEventData>| {
-                size.set_if_modified((event.area.width(), event.area.height()))
-            })
             .on_pointer_move(move |event: Event<PointerEventData>| {
                 let at = event.global_location();
                 let at = (at.x as f32, at.y as f32);
@@ -1086,10 +1124,10 @@ impl App for DockApp {
                     }
                     let moving = dragging.peek().clone();
                     if let Some(mut drag) = moving {
-                        let (dx, dy) = (at.0 - drag.from.0, at.1 - drag.from.1);
-                        drag.moved |= dx.hypot(dy) > DRAG.threshold;
-                        drag.at = at;
                         let (main, cross) = frame.canonical(at);
+                        let (dx, dy) = (main - drag.from.0, cross - drag.from.1);
+                        drag.moved |= dx.hypot(dy) > DRAG.threshold;
+                        drag.at = (main, cross);
                         let removing = cross > cross0 + thickness + tile;
                         let before = targets
                             .iter()
@@ -1346,7 +1384,7 @@ fn on_separator_command(command: String) {
 
 pub fn run() -> anyhow::Result<()> {
     let config: DockConfig = load_defaults(DOMAIN);
-    let geometry = layer_geometry(&config, geometry::thickness(config.tilesize()));
+    let geometry = layer_geometry(&config, geometry::thickness(config.tilesize()), false);
     let app = AppComponent::new(DockApp);
     run_layer(
         app,

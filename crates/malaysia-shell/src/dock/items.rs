@@ -19,6 +19,8 @@ pub(crate) enum Item {
     Downloads,
     Window(ToplevelInfo),
     Trash,
+    // Where a dragged icon would land, as wide as its share of a tile while it opens or closes.
+    Gap(f32),
 }
 
 pub(crate) fn app_key(toplevel: &ToplevelInfo, entries: &[DesktopEntry]) -> String {
@@ -181,6 +183,7 @@ mod tests {
                 Item::Downloads => "downloads".to_string(),
                 Item::Window(window) => format!("window:{}", window.id),
                 Item::Trash => "trash".to_string(),
+                Item::Gap(_) => "gap".to_string(),
             })
             .collect()
     }

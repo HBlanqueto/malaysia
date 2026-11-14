@@ -113,20 +113,20 @@ impl<T: Clone> Motion<T> {
     }
 }
 
-// Re-renders the Dock every frame while a slot opens or closes.
-pub(crate) fn use_tiles(windows: &[ToplevelInfo], into_app: bool) -> Vec<Shown<ToplevelInfo>> {
+// Re-renders the Dock every frame while a slot opens or closes. `None` clears the slots, so the
+// next ones start open.
+pub(crate) fn use_slots<T: Clone + 'static>(present: Option<Vec<(u64, T)>>) -> Vec<Shown<T>> {
     let frame = use_state(|| 0u64);
-    let motion = use_hook(|| Rc::new(RefCell::new(Motion::<ToplevelInfo>::default())));
+    let motion = use_hook(|| Rc::new(RefCell::new(Motion::<T>::default())));
     let scheduled = use_hook(|| Rc::new(Cell::new(false)));
     let _ = *frame.read();
     let now = Instant::now();
-    let minimized: Vec<(u64, ToplevelInfo)> = windows
-        .iter()
-        .filter(|window| window.minimized && !into_app)
-        .map(|window| (window.id, window.clone()))
-        .collect();
     let mut motion = motion.borrow_mut();
-    motion.update(&minimized, now);
+    let Some(present) = present else {
+        *motion = Motion::default();
+        return Vec::new();
+    };
+    motion.update(&present, now);
     if motion.moving(now) && !scheduled.replace(true) {
         Timers::get().after(FRAME, move || {
             scheduled.set(false);
@@ -135,6 +135,16 @@ pub(crate) fn use_tiles(windows: &[ToplevelInfo], into_app: bool) -> Vec<Shown<T
         });
     }
     motion.shown(now)
+}
+
+pub(crate) fn use_tiles(windows: &[ToplevelInfo], into_app: bool) -> Vec<Shown<ToplevelInfo>> {
+    use_slots(Some(
+        windows
+            .iter()
+            .filter(|window| window.minimized && !into_app)
+            .map(|window| (window.id, window.clone()))
+            .collect(),
+    ))
 }
 
 #[cfg(test)]
