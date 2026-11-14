@@ -1427,9 +1427,9 @@ fn dock_frame_uniforms(
         .bar_tint
         .map_or(dock.glass, |(tint, factor)| dock.glass.mix(tint, factor));
     let outline = dock.outline;
-    let glow = dock.tone.map_or(ctdesign::DOCK_RIM_GLOW, |tone| tone.glow);
+    let glow = dock.glow;
     let (tone, tone_outline) = dock.tone.map_or(([0.0; 3], [0.0; 2]), |tone| {
-        ([tone.chroma, tone.lift, tone.gain], tone.outline)
+        ([tone.chroma, tone.lift, 1.0], tone.outline)
     });
     vec![
         Uniform::new("glass", [glass.r, glass.g, glass.b, glass.a]),

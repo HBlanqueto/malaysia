@@ -47,7 +47,7 @@ vec3 srgb_from_oklab(vec3 lab) {
     return srgb_from_linear(clamp(linear_from_oklab(vec3(lab.x, lab.yz * fit)), 0.0, 1.0));
 }
 
-// ctdesign::DockTone, sent as tone = (chroma, lift, gain); a gain of 0 keeps the rim and outline of `rim` and `outline`.
+// ctdesign::DockTone, sent as tone = (chroma, lift, 1); tone.z 0 keeps the white or black rim and `outline`.
 vec3 toned_glass(vec3 seen, vec3 behind) {
     return srgb_from_oklab(vec3(oklab_from_srgb(seen).x + tone.y, oklab_from_srgb(behind).yz * tone.x));
 }
@@ -78,7 +78,9 @@ vec4 dock_frame(vec2 px, vec4 rect, float radius, float exponent, vec3 behind) {
     vec4 line = outline;
     if (tone.z > 0.0) {
         vec3 body = toned_glass(seen, behind);
-        inside = mix(body, min(body * tone.z, vec3(1.0)), clamp(edge, 0.0, 1.0));
+        float body_luminance = max(luminance(body), 0.001);
+        float gain = (rim.x + rim.y * body_luminance) / body_luminance;
+        inside = mix(body, min(body * gain, vec3(1.0)), clamp(edge, 0.0, 1.0));
         line = vec4(toned_outline(body), 1.0);
     } else {
         vec4 light = rim_overlay(luminance(seen));
