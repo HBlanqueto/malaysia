@@ -50,7 +50,9 @@ use serde::{Deserialize, Serialize};
 use torin::prelude::{Gaps, Position};
 
 use crate::desktop::{self, DesktopEntry};
-use crate::launcher::{ICON_SIZES, IconData, app_icon, forget_icons, launch, load_icon_in};
+use crate::launcher::{
+    ICON_SIZES, IconData, app_icon, forget_icons, launch, load_icon_in, use_folder_color,
+};
 use crate::launcher_entry::{self, Entries, Entry};
 use crate::localize::tr;
 use crate::menubar::{find_entry, resolve_app_name};
@@ -408,6 +410,7 @@ impl App for DockApp {
         let thumbnails = use_thumbnails(&windows);
         let tiles = motion::use_tiles(&windows, config.minimize_to_application);
         let wallpaper = use_watched(ctappearance::load_wallpaper_state);
+        use_folder_color();
         let running = items::running(&windows, entries);
         let running_ids: Vec<String> = running.iter().map(|(id, _)| id.clone()).collect();
         let previous = use_hook(|| Rc::new(RefCell::new(Vec::<String>::new())));

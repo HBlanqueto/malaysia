@@ -16,7 +16,7 @@ pub const GNOME_NAMESPACE: &str = "org.gnome.desktop.interface";
 pub const LIVE_NAMESPACE: &str = "org.malaysia.appearance";
 pub const WM_NAMESPACE: &str = "org.gnome.desktop.wm.preferences";
 
-const KEYS: [(&str, &str); 9] = [
+const KEYS: [(&str, &str); 10] = [
     (NAMESPACE, "color-scheme"),
     (NAMESPACE, "accent-color"),
     (NAMESPACE, "contrast"),
@@ -25,6 +25,7 @@ const KEYS: [(&str, &str); 9] = [
     (GNOME_NAMESPACE, "text-scaling-factor"),
     (LIVE_NAMESPACE, "gtk4-css"),
     (LIVE_NAMESPACE, "accent-color"),
+    (LIVE_NAMESPACE, "folder-color"),
     (WM_NAMESPACE, "button-layout"),
 ];
 
@@ -41,6 +42,7 @@ pub struct Values {
     text_scaling_factor: f64,
     live_css: String,
     live_accent: (f64, f64, f64),
+    folder_color: (f64, f64, f64),
 }
 
 impl Values {
@@ -87,6 +89,9 @@ impl Values {
             text_scaling_factor: f64::from(appearance.text_size_for(Toolkit::Gtk)),
             live_css,
             live_accent,
+            folder_color: crate::folders::tint(appearance).map_or(UNSET_ACCENT, |[r, g, b]| {
+                (f64::from(r), f64::from(g), f64::from(b))
+            }),
         }
     }
 
@@ -100,6 +105,7 @@ impl Values {
             (GNOME_NAMESPACE, "text-scaling-factor") => Value::new(self.text_scaling_factor),
             (LIVE_NAMESPACE, "gtk4-css") => Value::new(self.live_css.clone()),
             (LIVE_NAMESPACE, "accent-color") => Value::new(self.live_accent),
+            (LIVE_NAMESPACE, "folder-color") => Value::new(self.folder_color),
             (WM_NAMESPACE, "button-layout") => Value::new(gtk::button_layout()),
             _ => return None,
         };
@@ -410,7 +416,7 @@ mod tests {
         assert_eq!(on.live_css, gtk::live_css(&appearance, None));
         assert!(on.live_css.contains("window_bg_color"));
         assert_eq!(on.live_accent, on.accent);
-        assert_eq!(on.all(LIVE_NAMESPACE).len(), 2);
+        assert_eq!(on.all(LIVE_NAMESPACE).len(), 3);
 
         let off = Values::from_parts(&appearance, None, false);
         assert!(off.live_css.is_empty());

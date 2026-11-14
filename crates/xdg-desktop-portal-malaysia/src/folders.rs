@@ -74,9 +74,7 @@ impl Folders {
     }
 
     pub fn sync(&self, appearance: Option<&AppearanceConfig>) {
-        let tint =
-            appearance.and_then(|appearance| appearance.icon_color.or(appearance.accent_color));
-        let result = match (tint, installed()) {
+        let result = match (appearance.and_then(tint), installed()) {
             (Some([r, g, b]), Some(installed)) => self
                 .write(&installed, Rgba { r, g, b, a: 1.0 })
                 .map(|()| use_theme(TINTED)),
@@ -119,6 +117,10 @@ impl Folders {
             _ => Ok(()),
         }
     }
+}
+
+pub fn tint(appearance: &AppearanceConfig) -> Option<[f32; 3]> {
+    appearance.icon_color.or(appearance.accent_color)
 }
 
 fn installed() -> Option<PathBuf> {

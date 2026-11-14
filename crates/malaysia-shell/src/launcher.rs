@@ -466,6 +466,41 @@ fn malaysia_theme() -> &'static str {
     theme
 }
 
+// The portal announces the folder color once Malaysia-Tinted is written, so this redraw finds the new folders.
+pub(crate) fn use_folder_color() {
+    let revision = use_state(|| 0u64);
+    use_hook(move || {
+        let wake = Timers::get().wakeup(move || {
+            let mut revision = revision;
+            *revision.write() += 1;
+        });
+        std::thread::spawn(move || {
+            if let Err(error) = follow_folder_color(|| wake.wake()) {
+                tracing::warn!(%error, "the shell does not follow the folder color");
+            }
+        });
+    });
+    revision.read();
+}
+
+fn follow_folder_color(changed: impl Fn()) -> zbus::Result<()> {
+    let connection = zbus::blocking::Connection::session()?;
+    let portal = zbus::blocking::Proxy::new(
+        &connection,
+        "org.freedesktop.impl.portal.desktop.malaysia",
+        "/org/freedesktop/portal/desktop",
+        "org.freedesktop.impl.portal.Settings",
+    )?;
+    for signal in portal.receive_signal("SettingChanged")? {
+        let (namespace, key, _): (String, String, zbus::zvariant::OwnedValue) =
+            signal.body().deserialize()?;
+        if namespace == "org.malaysia.appearance" && key == "folder-color" {
+            changed();
+        }
+    }
+    Ok(())
+}
+
 fn find_themed(theme: &str, icon: &str, sizes: &[&str], contexts: &[&str]) -> Option<IconData> {
     let data_dirs = crate::desktop::data_dirs();
     let mut themes = Vec::new();
