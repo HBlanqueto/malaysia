@@ -63,11 +63,13 @@ pub(crate) struct Cards {
     pub(crate) id: u64,
     pub(crate) radius: u32,
     pub(crate) rects: Vec<Rectangle<i32, Logical>>,
+    pub(crate) plate_corner: u32,
+    pub(crate) plates: Vec<Rectangle<i32, Logical>>,
 }
 
 static NEXT_ALERT: AtomicU64 = AtomicU64::new(0);
 
-const VERSION: u32 = 7;
+const VERSION: u32 = 8;
 
 const MAX_GLASS_PANELS: usize = 16;
 
@@ -139,22 +141,23 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 radius,
                 cards,
             } => {
-                let id = with_states(&surface, |states| {
-                    states.data_map.insert_if_missing_threadsafe(|| {
-                        CardStyle(Mutex::new(Cards {
-                            id: NEXT_ALERT.fetch_add(1, Ordering::Relaxed),
-                            radius: 0,
-                            rects: Vec::new(),
-                        }))
-                    });
-                    let style = states.data_map.get::<CardStyle>()?;
-                    let mut known = style
-                        .0
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let id = update_cards(&surface, |known| {
                     known.radius = radius;
                     known.rects = card_rects(&cards);
-                    Some(known.id)
+                });
+                if let Some(id) = id {
+                    state.chrome.remove_cards(id);
+                }
+                state.request_redraw();
+            }
+            infinity_window_style_v1::Request::SetPlates {
+                surface,
+                corner,
+                plates,
+            } => {
+                let id = update_cards(&surface, |known| {
+                    known.plate_corner = corner;
+                    known.plates = card_rects(&plates);
                 });
                 if let Some(id) = id {
                     state.chrome.remove_cards(id);
@@ -230,6 +233,28 @@ pub(crate) fn panel(surface: &WlSurface) -> Option<Panel> {
     with_states(surface, |states| {
         let style = states.data_map.get::<PanelStyle>()?;
         Some(Panel::from_bits_truncate(style.0.load(Ordering::Relaxed)))
+    })
+}
+
+// The plates belong to the card layer that asks for them, so they share its `CardStyle`.
+fn update_cards(surface: &WlSurface, update: impl FnOnce(&mut Cards)) -> Option<u64> {
+    with_states(surface, |states| {
+        states.data_map.insert_if_missing_threadsafe(|| {
+            CardStyle(Mutex::new(Cards {
+                id: NEXT_ALERT.fetch_add(1, Ordering::Relaxed),
+                radius: 0,
+                rects: Vec::new(),
+                plate_corner: 0,
+                plates: Vec::new(),
+            }))
+        });
+        let style = states.data_map.get::<CardStyle>()?;
+        let mut known = style
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        update(&mut known);
+        Some(known.id)
     })
 }
 
@@ -430,6 +455,11 @@ pub(crate) fn corner_extent(radius: u32) -> f64 {
     f64::from(radius) * f64::from(ctdesign::WINDOW_CORNER.expansion)
 }
 
+// A plate's corner is a share of its shorter side in thousandths, so plates of any size keep one shape.
+pub(crate) fn plate_radius(corner: u32, short_side: i32) -> u32 {
+    (f64::from(short_side) * f64::from(corner) / 1000.0).round() as u32
+}
+
 // Freya's compute_smooth_corner fades the smoothing on short shapes; a card's frame must match its clip.
 pub(crate) fn card_corner(radius: u32, short_side: i32) -> (f64, f32) {
     let half = f64::from(short_side) / 2.0;
@@ -467,6 +497,13 @@ mod tests {
         let rects = super::card_rects(&bytes);
         assert_eq!(rects.len(), 2);
         assert_eq!((rects[1].loc.y, rects[1].size.h), (106, 120));
+    }
+
+    #[test]
+    fn a_plates_corner_is_a_share_of_its_short_side_so_a_magnified_plate_keeps_its_shape() {
+        assert_eq!(super::plate_radius(159, 52), 8);
+        assert_eq!(super::plate_radius(159, 104), 17);
+        assert_eq!(super::plate_radius(0, 104), 0);
     }
 
     #[test]

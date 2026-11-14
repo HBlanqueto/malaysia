@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use malaysia_scene::scene::WindowId;
@@ -46,7 +47,7 @@ struct Blurred {
 }
 
 #[derive(Default)]
-struct BackdropIds(Mutex<Vec<Id>>);
+struct BackdropIds(Mutex<HashMap<(usize, usize), Id>>);
 
 pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<Blur> {
     let uniforms = [
@@ -115,6 +116,7 @@ pub(crate) fn backdrop<R: MalaysiaRenderer>(
         scale,
         state.rounded_clip.clone(),
         Vec::new(),
+        0,
         Detail::Blurred,
         |dst| Some((dst.intersection(frame)?, frame, radius, exponent)),
     )
@@ -131,6 +133,7 @@ pub(crate) fn dock<R: MalaysiaRenderer>(
     exponent: f32,
     scale: f64,
     uniforms: Vec<Uniform<'static>>,
+    part: usize,
 ) -> Vec<OutputRenderElement<R>> {
     let ring = Rectangle::new(
         (frame.loc.x - 1, frame.loc.y - 1).into(),
@@ -143,6 +146,7 @@ pub(crate) fn dock<R: MalaysiaRenderer>(
         scale,
         state.dock_glass.clone(),
         uniforms,
+        part,
         Detail::Sharp,
         |dst| {
             dst.overlaps(frame)
@@ -167,6 +171,7 @@ pub(crate) fn layer<R: MalaysiaRenderer>(
         scale,
         state.rounded_clip.clone(),
         Vec::new(),
+        0,
         Detail::Blurred,
         |dst| {
             let dst = dst.intersection(frame)?;
@@ -193,6 +198,7 @@ pub(crate) fn capsules<R: MalaysiaRenderer>(
         scale,
         state.rounded_clip.clone(),
         Vec::new(),
+        0,
         Detail::Blurred,
         |dst| Some((dst, dst, dst.size.w.min(dst.size.h) / 2, CIRCLE_EXPONENT)),
     )
@@ -214,6 +220,7 @@ fn sampled<R: MalaysiaRenderer>(
     scale: f64,
     program: Option<GlesTexProgram>,
     uniforms: Vec<Uniform<'static>>,
+    part: usize,
     detail: Detail,
     shape: impl Fn(
         Rectangle<i32, Physical>,
@@ -238,10 +245,9 @@ fn sampled<R: MalaysiaRenderer>(
             .0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if ids.len() < rects.len() {
-            ids.resize_with(rects.len(), Id::new);
-        }
-        ids.clone()
+        (0..rects.len())
+            .map(|index| ids.entry((part, index)).or_insert_with(Id::new).clone())
+            .collect::<Vec<_>>()
     });
     let texture = match detail {
         Detail::Blurred => &wallpaper.blurred,

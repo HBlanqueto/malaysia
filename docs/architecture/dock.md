@@ -96,7 +96,14 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    macOS. Every icon sits on macOS's
    grid: an app icon already sits on it, because a Malaysia theme draws it so and the kit puts
    any other on a plate (`Image::app_icon`, in the user's `appearance.icon_style` and color scheme); the
-   places fill their canvas, so they are drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon, touching its slot, marks an
+   places fill their canvas, so they are drawn at `DOCK_ICON_BODY` of the slot.
+   With `icon_style = "clear"` the compositor draws each app icon's plate as
+   glass, the bar's glass again, under the Dock's surface: the Dock sends each
+   plate's body (`DOCK_ICON_BODY` of the slot, at its magnified size and bounce)
+   with `set_plate_frames`, `infinity_window_style_v1.set_plates`, and the corner
+   `ICON_PLATE.corner`; the icon draws only its logo (`Image::glass_plate`). A
+   dragged icon, the small icon of a window tile and the places keep their own
+   look, and with `appearance.reduce_transparency` the plates stay the kit's. A dot under the icon, touching its slot, marks an
    open app (`show-process-indicators`). The name label shows over the icon
    under the pointer, in a popup with the `label` popover shape (ADR 0059):
    an arrow points at the icon. It follows the icon while it magnifies

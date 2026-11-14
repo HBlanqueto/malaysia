@@ -1332,10 +1332,16 @@ fn append_cards<R: MalaysiaRenderer>(
     let mut backdrops = Vec::new();
     let mut shadows = Vec::new();
     let dock = crate::window_style::is_dock_layer(surface);
-    for (index, card) in cards.rects.iter().enumerate() {
+    let plates = cards.plates.iter().filter(|_| dock).map(|plate| {
+        let radius =
+            crate::window_style::plate_radius(cards.plate_corner, plate.size.w.min(plate.size.h));
+        (plate, radius)
+    });
+    let rects = cards.rects.iter().map(|card| (card, cards.radius));
+    for (index, (card, radius)) in rects.chain(plates).enumerate() {
         let card = Rectangle::new(surface_rect.loc + card.loc, card.size);
         let (extent, exponent) =
-            crate::window_style::card_corner(cards.radius, card.size.w.min(card.size.h));
+            crate::window_style::card_corner(radius, card.size.w.min(card.size.h));
         let frame = Frame {
             owner: crate::chrome::FrameOwner::Card(cards.id, index),
             rect: physical_rect(card, scale),
@@ -1347,7 +1353,14 @@ fn append_cards<R: MalaysiaRenderer>(
             arrow: crate::effects::Arrow::default(),
         };
         if dock {
-            backdrops.extend(dock_glass(state, surface, surface_rect.loc, &frame, scale));
+            backdrops.extend(dock_glass(
+                state,
+                surface,
+                surface_rect.loc,
+                &frame,
+                scale,
+                index,
+            ));
             continue;
         }
         backdrops.extend(crate::blur::backdrop(
@@ -1378,6 +1391,7 @@ fn dock_glass<R: MalaysiaRenderer>(
     origin: Point<i32, Logical>,
     frame: &Frame,
     scale: f64,
+    part: usize,
 ) -> Vec<OutputRenderElement<R>> {
     use smithay::backend::renderer::gles::Uniform;
     let uniforms = dock_frame_uniforms(&state.chrome_theme.resolved);
@@ -1392,6 +1406,7 @@ fn dock_glass<R: MalaysiaRenderer>(
         frame.exponent,
         scale,
         glass_uniforms,
+        part,
     );
     if !glass.is_empty() {
         return glass;

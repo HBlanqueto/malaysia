@@ -245,8 +245,18 @@ pub(crate) fn with_activation_token(
 const ICON_RASTER_AGE: Duration = Duration::from_secs(10);
 
 pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
+    plated_icon(icon, name, size, false)
+}
+
+// In the clear style the compositor draws the plate of `glass_plate` icons, so they draw only their logo.
+pub(crate) fn plated_icon(
+    icon: Option<&IconData>,
+    name: &str,
+    size: f32,
+    glass_plate: bool,
+) -> Element {
     match icon {
-        Some(icon) if icon.app => app_image(icon, size),
+        Some(icon) if icon.app => app_image(icon, size, glass_plate),
         Some(IconData {
             path,
             svg: Some(bytes),
@@ -283,7 +293,7 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
 }
 
 // An icon of a Malaysia theme already is a plate; any other app icon gets one from the kit.
-fn app_image(icon: &IconData, size: f32) -> Element {
+fn app_image(icon: &IconData, size: f32, glass_plate: bool) -> Element {
     let resolved = theme::resolved();
     let dark = resolved.icon_dark || resolved.icon_style == IconStyle::Clear;
     let Some(bytes) = icon
@@ -299,10 +309,15 @@ fn app_image(icon: &IconData, size: f32) -> Element {
             .into_element();
     };
     let image = Image::data(bytes).size(size);
-    if icon.path.to_string_lossy().contains("/icons/Malaysia") {
+    let image = if icon.path.to_string_lossy().contains("/icons/Malaysia") {
         image.icon_style(resolved.icon_style)
     } else {
         image.app_icon()
+    };
+    if glass_plate {
+        image.glass_plate()
+    } else {
+        image
     }
     .into_element()
 }

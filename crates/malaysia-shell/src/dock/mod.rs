@@ -27,8 +27,9 @@ use bk::popup_button::{arrow_band, pop_up_menu};
 use bk::prelude::*;
 use bk::shell::{
     Activation, Anchors, BlurRegion, CardFrames, InputRegion, KeyboardInteractivity, Layer,
-    LayerGeometry, LayerSpec, MinimizeTarget, ToplevelInfo, Toplevels, capture_window, run_layer,
-    set_blur_region, set_card_frames, set_input_region, set_layer_geometry, set_minimize_target,
+    LayerGeometry, LayerSpec, MinimizeTarget, PlateFrames, ToplevelInfo, Toplevels, capture_window,
+    run_layer, set_blur_region, set_card_frames, set_input_region, set_layer_geometry,
+    set_minimize_target, set_plate_frames,
 };
 use bk::styles::Animation;
 use bk::theme;
@@ -40,7 +41,7 @@ use ctdesign::{
     DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS,
     DOCK_MAGNIFY_MS, DOCK_MENU_GAP, DOCK_MINIMIZE_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS,
     DOCK_REMOVE_MS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN,
-    DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, TEXT_LINE_HEIGHT,
+    DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, ICON_PLATE, TEXT_LINE_HEIGHT,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_components::image_viewer::{DecodeMode, ImageViewer};
@@ -51,7 +52,8 @@ use torin::prelude::{Gaps, Position};
 
 use crate::desktop::{self, DesktopEntry};
 use crate::launcher::{
-    ICON_SIZES, IconData, app_icon, forget_icons, launch, load_icon_in, use_folder_theme,
+    ICON_SIZES, IconData, app_icon, forget_icons, launch, load_icon_in, plated_icon,
+    use_folder_theme,
 };
 use crate::launcher_entry::{self, Entries, Entry};
 use crate::localize::tr;
@@ -183,15 +185,26 @@ fn placed((x, y, width, height): Area) -> Rect {
 
 // macOS draws every icon on one 1024 grid with an 824 body. An app icon already sits on it: a Malaysia
 // theme draws it so, and the kit puts any other on a plate. The places fill their canvas, so they shrink to the body.
-fn on_grid(icon: Option<&IconData>, name: &str, size: f32) -> Element {
+fn on_grid(icon: Option<&IconData>, name: &str, size: f32, glass_plate: bool) -> Element {
     let gridded = icon.is_some_and(|icon| icon.app);
     let drawn = if gridded { size } else { size * DOCK_ICON_BODY };
     rect()
         .width(Size::px(size))
         .height(Size::px(size))
         .center()
-        .child(app_icon(icon, name, drawn))
+        .child(plated_icon(icon, name, drawn, glass_plate))
         .into_element()
+}
+
+// An icon's plate is its body on the 1024 grid, centred in its slot, in whole pixels for the compositor.
+fn plate((x, y, width, height): Area) -> (i32, i32, i32, i32) {
+    let body = width.min(height) * DOCK_ICON_BODY;
+    (
+        (x + (width - body) / 2.0).round() as i32,
+        (y + (height - body) / 2.0).round() as i32,
+        body.round() as i32,
+        body.round() as i32,
+    )
 }
 
 fn region((x, y, width, height): Area) -> (i32, i32, i32, i32) {
@@ -702,6 +715,10 @@ impl App for DockApp {
 
         let resolved = bk::theme::resolved();
         let dock = resolved.dock;
+        // In the clear style the compositor draws each app icon's plate as glass under the Dock's surface.
+        let glass_plates = resolved.icon_style == IconStyle::Clear && !resolved.reduce_transparency;
+        let applied_plates = use_hook(|| Rc::new(RefCell::new(None::<PlateFrames>)));
+        let mut plates = Vec::new();
         let label_fill = theme::color(resolved.shell.bar);
         let ink = theme::color(resolved.shell.text);
         let progress_track = theme::color(resolved.shell.tile);
@@ -714,11 +731,16 @@ impl App for DockApp {
             Some(entry) => entry.name.clone(),
             None => resolve_app_name(Some(id), entries),
         };
-        let app_icon_named = |id: &str, size: f32| {
+        let app_icon_named = |id: &str, size: f32, glass_plate: bool| {
             let name = entry_for(id, entries)
                 .and_then(|entry| entry.icon.clone())
                 .unwrap_or_else(|| id.to_string());
-            on_grid(icon(&name, &["apps"]).as_ref(), &app_name(id), size)
+            on_grid(
+                icon(&name, &["apps"]).as_ref(),
+                &app_name(id),
+                size,
+                glass_plate,
+            )
         };
         let downloads_icon = |size: f32| {
             app_icon(
@@ -845,9 +867,13 @@ impl App for DockApp {
                     let items = app_menu(app);
                     let anchor = menu.anchor(resting.start, resting.length, resting.size);
                     let (kept, id) = (app.kept, app.id.clone());
+                    let icon_area = frame.area(slot.start, icon_cross + lift, slot.size, slot.size);
+                    if glass_plates {
+                        plates.push(plate(icon_area));
+                    }
                     children.push(
-                        placed(frame.area(slot.start, icon_cross + lift, slot.size, slot.size))
-                            .child(app_icon_named(&app.id, slot.size))
+                        placed(icon_area)
+                            .child(app_icon_named(&app.id, slot.size, glass_plates))
                             .maybe_child(badge.map(|count| {
                                 rect()
                                     .position(Position::new_absolute().top(0.0).right(0.0))
@@ -950,13 +976,13 @@ impl App for DockApp {
                                 .corner_radius(slot.size * DOCK_RADIUS / 2.0)
                                 .background(progress_track)
                                 .center()
-                                .child(app_icon_named(&key, slot.size * DOCK_WINDOW_ICON))
+                                .child(app_icon_named(&key, slot.size * DOCK_WINDOW_ICON, false))
                                 .into_element(),
                         })
                         .maybe_child(picture.is_some().then(|| {
                             rect()
                                 .position(Position::new_absolute().right(0.0).bottom(0.0))
-                                .child(app_icon_named(&key, slot.size * DOCK_WINDOW_BADGE))
+                                .child(app_icon_named(&key, slot.size * DOCK_WINDOW_BADGE, false))
                         }))
                         .interactive(false)
                         .into_element(),
@@ -1037,6 +1063,7 @@ impl App for DockApp {
                                 icon("user-trash", &["places"]).as_ref(),
                                 tr!("dock-trash"),
                                 slot.size,
+                                false,
                             ))
                             .interactive(false)
                             .into_element(),
@@ -1105,7 +1132,7 @@ impl App for DockApp {
                     .child(if drag.downloads {
                         downloads_icon(tile)
                     } else {
-                        app_icon_named(&drag.id, tile)
+                        app_icon_named(&drag.id, tile, false)
                     })
                     .maybe_child(drag.removing.then(|| {
                         rect()
@@ -1136,6 +1163,15 @@ impl App for DockApp {
                     }))
                     .into_element(),
             );
+        }
+
+        let frames = PlateFrames {
+            corner: (ICON_PLATE.corner * 1000.0).round() as u32,
+            plates: if visible > 0.01 { plates } else { Vec::new() },
+        };
+        if width > 0.0 && applied_plates.borrow().as_ref() != Some(&frames) {
+            set_plate_frames(frames.clone());
+            *applied_plates.borrow_mut() = Some(frames);
         }
 
         let bar_span = (layout.bar_start, layout.bar_start + layout.bar_length);
