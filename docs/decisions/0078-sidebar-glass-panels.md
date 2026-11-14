@@ -152,7 +152,7 @@ and the bottom.
    0.45, `lightness` 0.00 and 0.10, `cap` 0.04 and 0.18, `offset` 11), the rim
    (`opacity` 0.80 and 1.00, `lift` 1.00 and 0.06, `lift-edge` 0.00 and 0.05,
    `chroma` 0.00 and 1.35, `cap` 0.25) and the
-   shadow (`opacity` 0.13 and 0.00, `span` 25, `tint` 1.00, `lightness` 0.20).
+   shadow (`opacity` 0.13 and 0.00, `span` 25, `tint` 0.50, `lightness` 0.20).
    The mockup also let the owner set the blur of the center and of the edge
    apart (dark 5 and 6, light 8 and 4); the compositor has one blur per scheme
    for both, so it takes the edge's, which is where the wallpaper shows. The
