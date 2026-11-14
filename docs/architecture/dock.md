@@ -53,6 +53,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    namespace (`DOCK_LAYER_NAMESPACE`) and draws the card's glass and frame
    itself, under the Dock's surface, so magnified icons rise over the bar's
    edge (`scene_elements::dock_glass`, shader `grade-graphics/dock_frame.glsl`).
+   The glass bends the blurred backdrop along the frame's normal, deepest at the
+   rim and a little differently per colour channel (`lens` in `dock_glass.frag`).
    It gives the card no shadow: it would show through the glass. The Dock
    draws only its icons, dividers and labels. The frame is two lines, as
    macOS draws it ([`dock-macos-measured.html`](dock-macos-measured.html) shows

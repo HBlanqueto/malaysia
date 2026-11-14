@@ -12,7 +12,25 @@ uniform vec4 geometry;
 uniform float radius;
 uniform float exponent;
 
+const float LENS_DEPTH = 0.6;
+const float LENS_SHIFT = 0.45;
+const float LENS_SPLIT = 0.25;
+
+// liquid-glass.frag with the frame's normal: the blurred backdrop bends along it, deepest at the rim, and each channel bends a little differently.
+vec3 lens(vec2 px) {
+    float thickness = min(geometry.z, geometry.w);
+    float depth = LENS_DEPTH * 0.5 * thickness;
+    float inward = clamp(-frame_sdf(px, geometry, radius, exponent) / depth, 0.0, 1.0);
+    float bend = 1.0 - sqrt(max(1.0 - (1.0 - inward) * (1.0 - inward), 0.0));
+    vec2 shift = frame_normal(px, geometry, radius, exponent) * bend * LENS_SHIFT * thickness;
+    return vec3(
+        texture2D(tex, (px - shift * (1.0 - LENS_SPLIT)) / texture_size).r,
+        texture2D(tex, (px - shift) / texture_size).g,
+        texture2D(tex, (px - shift * (1.0 + LENS_SPLIT)) / texture_size).b
+    );
+}
+
 void main() {
     vec2 px = v_coords * texture_size;
-    gl_FragColor = dock_frame(px, geometry, radius, exponent, texture2D(tex, v_coords).rgb) * alpha;
+    gl_FragColor = dock_frame(px, geometry, radius, exponent, lens(px)) * alpha;
 }
