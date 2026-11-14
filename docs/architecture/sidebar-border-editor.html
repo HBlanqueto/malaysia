@@ -68,6 +68,9 @@
   figcaption { display: grid; gap: 2px; }
   figcaption b { font: 600 15px var(--font-head); }
   figcaption span { font: 12.5px/1.5 var(--font-mono); color: var(--muted); }
+  #big { max-width: 830px; margin: 0 auto; image-rendering: auto; }
+  .segment { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   canvas { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); background: #000; image-rendering: pixelated; }
   .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 20px; }
   .tuning { display: grid; gap: 8px; align-content: start; }
@@ -130,6 +133,28 @@
   </section>
 
   <section class="panel">
+    <h2>Ventana completa</h2>
+    <div class="segment" role="group" aria-label="Qué ventana ver">
+      <span class="label">Mostrar</span>
+      <button type="button" id="big-now" aria-pressed="false">Ahora en el compositor</button>
+      <button type="button" id="big-macos" aria-pressed="false">Derivado, como macOS</button>
+      <button type="button" id="big-custom" aria-pressed="true">Tu ajuste</button>
+    </div>
+    <canvas id="big" role="img" aria-label="Una ventana completa con su sidebar entera"></canvas>
+    <p style="margin-top:10px">Una ventana de 770 × 810 px como la de Ajustes, con la sidebar entera: la línea cambia de color y de brillo a lo largo del borde, y a la derecha, donde está el contenido, casi desaparece. Los controles de abajo mueven esta ventana.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Tu ajuste</h2>
+    <div class="groups" id="groups"></div>
+    <div class="copy">
+      <button type="button" id="copy">Copiar valores</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+    <div class="readout" id="readout"></div>
+  </section>
+
+  <section class="panel">
     <h2>Corte del borde, un píxel por celda</h2>
     <div class="strips" id="strips"></div>
     <div class="legend" style="margin-top:12px">
@@ -177,16 +202,6 @@
   </section>
 
   <section class="panel">
-    <h2>Tu ajuste</h2>
-    <div class="groups" id="groups"></div>
-    <div class="copy">
-      <button type="button" id="copy">Copiar valores</button>
-      <span class="status" id="status" role="status"></span>
-    </div>
-    <div class="readout" id="readout"></div>
-  </section>
-
-  <section class="panel">
     <h2>Cómo leerlo</h2>
     <ul class="notes">
       <li>Las dos capturas usan fondos azul y violeta con croma parecido (0.18 a 0.22), así que se pueden comparar, pero son de apps distintas. Compara las relaciones, no los colores absolutos: cuánto más clara y más saturada es la línea que el relleno, y cuánto más oscuro es el marco.</li>
@@ -212,6 +227,7 @@
   };
   const CORNER = { w: PW, h: PH, window: WINDOW_BOX, island: ISLAND_BOX };
   const FULL = { w: 330, h: 330, window: { x: 20, y: 20, w: 300, h: 290 }, island: { x: 28, y: 28, w: 216, h: 274 }, contentX: 252 };
+  const BIG = { w: 830, h: 870, window: { x: 30, y: 30, w: 770, h: 810 }, island: { x: 38, y: 38, w: 230, h: 794 }, contentX: 276 };
   const CONTENT = [32, 34, 43];
   const NOW = { algo: 'overlay', baseL: 0.273, chroma: 0.05, cap: 0.02, alpha: 0.03, width: 1, tint: 1, rimCap: 0.02, rimL: 1, lift: 0.096, liftEdge: 0, boost: 1.41, frameL: 0.257, frameTint: 0.1, edgeIntensity: 0.7, edgeSpan: 28, edgeChroma: 0.25 };
   const MACOS = { algo: 'derived', baseL: 0.245, chroma: 0.05, cap: 0.04, alpha: 1, width: 1, tint: 1, rimCap: 0.25, rimL: 1, lift: 0.06, liftEdge: 0.05, boost: 1.35, frameL: 0.234, frameTint: 0.19, edgeIntensity: 0.7, edgeSpan: 60, edgeChroma: 0.45 };
@@ -233,7 +249,7 @@
   ];
   const MODEL_RANGES = { frame: [5, 11], line: [12, 12], fill: [14, 19] };
 
-  const state = { wallpaper: 'violet', params: { ...MACOS } };
+  const state = { wallpaper: 'violet', params: { ...MACOS }, big: 'custom' };
   const $ = id => document.getElementById(id);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const mix = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
@@ -277,34 +293,50 @@
     return mix(mix(scene.bottom, scene.top, t), scene.right, clamp((px / l.w - 0.45) * 1.4, 0, 0.7));
   };
 
-  function pixelColor(px, py, p, l = CORNER) {
-    const scene = SCENES[state.wallpaper], meanLab = toLab(mix(scene.bottom, scene.top, 0.5));
-    const backdrop = wall(px, py, l), q = toLab(backdrop), W = l.window, I = l.island;
-    const frame = toRgb(tintLab([p.frameL, 0, 0], meanLab, p.frameTint, 0, 0.2));
-    const dW = boxSdf(px, py, W, WINDOW_R), dI = boxSdf(px, py, I, ISLAND_R);
-    let c = mix(backdrop, mix(backdrop, [0, 0, 0], 0.9), cover(dW - 1) - cover(dW));
-    c = mix(c, frame, cover(dW));
-    if (l.contentX && px >= l.contentX) c = mix(c, CONTENT, cover(dW));
-    c = mix(c, mix(l.contentX && px >= l.contentX ? CONTENT : frame, [255, 255, 255], 0.1), cover(dW) - cover(dW + 1));
-    if (cover(dI) <= 0) return c;
-    const solid = tintLab([p.baseL, 0, 0], meanLab, SOLID_TINT, 0, p.cap);
-    const centre = p.chroma > 0 ? tintLab(solid, q, p.chroma, 0, p.cap) : solid;
-    const left = Math.exp(-Math.max(px - I.x, 0) / p.edgeSpan), top = Math.exp(-Math.max(py - I.y, 0) / p.edgeSpan), bottom = Math.exp(-Math.max(I.y + I.h - py, 0) / p.edgeSpan);
-    const taken = [toLab(wall(W.x - EDGE.offset, py, l)), toLab(wall(px, W.y - EDGE.offset, l)), toLab(wall(px, W.y + W.h + EDGE.offset, l))];
-    const outside = [0, 1, 2].map(k => (left * taken[0][k] + top * taken[1][k] + bottom * taken[2][k]) / (left + top + bottom + 1e-9));
-    const ramp = Math.max(left, top, bottom);
-    const edge = tintLab([p.baseL, 0, 0], outside, p.edgeChroma, EDGE.lightness, EDGE.cap);
-    const fill = mix(centre, edge, ramp * p.edgeIntensity);
-    c = mix(c, toRgb(fill), cover(dI));
-    const band = cover(dI) - cover(dI + p.width);
-    if (band <= 0 || p.alpha <= 0) return c;
-    let rim;
-    if (p.algo === 'overlay') rim = toRgb(tintLab([p.rimL, 0, 0], q, p.tint, 0, p.rimCap));
-    else {
-      const chroma = Math.hypot(fill[1], fill[2]), target = Math.min(chroma * p.boost, p.rimCap), k = chroma > 1e-6 ? target / chroma : 0;
-      rim = toRgb([Math.min(1, fill[0] + p.lift + p.liftEdge * ramp), fill[1] * k, fill[2] * k]);
-    }
-    return mix(c, rim, band * p.alpha);
+  // The colour of any point of the window, for the given settings and layout. What does not depend on the point is worked out once.
+  function makeShader(p, l = CORNER) {
+    const scene = SCENES[state.wallpaper], meanLab = toLab(mix(scene.bottom, scene.top, 0.5)), W = l.window, I = l.island;
+    const frame = toRgb(tintLab([p.frameL, 0, 0], meanLab, p.frameTint, 0, 0.2)), solid = tintLab([p.baseL, 0, 0], meanLab, SOLID_TINT, 0, p.cap), baseLab = [p.baseL, 0, 0];
+    // The fill of the island at a point, and how much of the wallpaper shows there (1 at the left, top and bottom edges, 0 far from them).
+    const fillAt = (px, py) => {
+      const q = toLab(wall(px, py, l)), centre = p.chroma > 0 ? tintLab(solid, q, p.chroma, 0, p.cap) : solid;
+      const left = Math.exp(-Math.max(px - I.x, 0) / p.edgeSpan), top = Math.exp(-Math.max(py - I.y, 0) / p.edgeSpan), bottom = Math.exp(-Math.max(I.y + I.h - py, 0) / p.edgeSpan);
+      const ramp = Math.max(left, top, bottom);
+      if (ramp <= 0.002) return { fill: centre, ramp, q };
+      const taken = [toLab(wall(W.x - EDGE.offset, py, l)), toLab(wall(px, W.y - EDGE.offset, l)), toLab(wall(px, W.y + W.h + EDGE.offset, l))];
+      const outside = [0, 1, 2].map(k => (left * taken[0][k] + top * taken[1][k] + bottom * taken[2][k]) / (left + top + bottom));
+      return { fill: mix(centre, tintLab(baseLab, outside, p.edgeChroma, EDGE.lightness, EDGE.cap), ramp * p.edgeIntensity), ramp, q };
+    };
+    // Away from the line the fill is smooth: it is worked out once per 3 px cell.
+    const cells = new Map();
+    const interior = (px, py) => {
+      const ix = Math.floor(px / 3), iy = Math.floor(py / 3), key = ix * 4096 + iy;
+      if (!cells.has(key)) cells.set(key, toRgb(fillAt((ix + 0.5) * 3, (iy + 0.5) * 3).fill));
+      return cells.get(key);
+    };
+    return (px, py) => {
+      const dI = boxSdf(px, py, I, ISLAND_R);
+      if (dI < -p.width - 1.5) return interior(px, py);
+      const dW = boxSdf(px, py, W, WINDOW_R), onContent = l.contentX && px >= l.contentX;
+      if (dW > 1) return wall(px, py, l);
+      if (dW < -1.5 && dI > 1) return onContent ? CONTENT : frame;
+      const backdrop = wall(px, py, l);
+      let c = mix(backdrop, mix(backdrop, [0, 0, 0], 0.9), cover(dW - 1) - cover(dW));
+      c = mix(c, onContent ? CONTENT : frame, cover(dW));
+      c = mix(c, mix(onContent ? CONTENT : frame, [255, 255, 255], 0.1), cover(dW) - cover(dW + 1));
+      if (cover(dI) <= 0) return c;
+      const { fill, ramp, q } = fillAt(px, py);
+      c = mix(c, toRgb(fill), cover(dI));
+      const band = cover(dI) - cover(dI + p.width);
+      if (band <= 0 || p.alpha <= 0) return c;
+      let rim;
+      if (p.algo === 'overlay') rim = toRgb(tintLab([p.rimL, 0, 0], q, p.tint, 0, p.rimCap));
+      else {
+        const chroma = Math.hypot(fill[1], fill[2]), target = Math.min(chroma * p.boost, p.rimCap), k = chroma > 1e-6 ? target / chroma : 0;
+        rim = toRgb([Math.min(1, fill[0] + p.lift + p.liftEdge * ramp), fill[1] * k, fill[2] * k]);
+      }
+      return mix(c, rim, band * p.alpha);
+    };
   }
 
   const stats = (cells, [from, to]) => {
@@ -314,7 +346,7 @@
   };
   const brightest = (cells, [from, to]) => { const labs = cells.slice(from, to + 1).map(c => [c, toLab(c)[0]]); return labs.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]; };
 
-  function modelCells(p) { return Array.from({ length: 20 }, (_, i) => pixelColor(STRIP_X + i + 0.5, STRIP_Y, p).map(Math.round)); }
+  function modelCells(p) { const shade = makeShader(p); return Array.from({ length: 20 }, (_, i) => shade(STRIP_X + i + 0.5, STRIP_Y).map(Math.round)); }
   const f2 = v => v.toFixed(3), f0 = v => Math.round(v);
   function row(name, note, cells, ranges) {
     const frame = stats(cells, ranges.frame), fill = stats(cells, ranges.fill);
@@ -334,23 +366,24 @@
     $('metrics').innerHTML = rows.map(r => row(r.name, r.note, r.cells, r.ranges).html).join('');
   }
 
-  function renderLayout(canvas, p, l, zoom) {
+  function renderLayout(canvas, p, l, zoom, after) {
     canvas.width = l.w * zoom; canvas.height = l.h * zoom;
-    const ctx = canvas.getContext('2d'), image = ctx.createImageData(l.w * zoom, l.h * zoom);
+    const ctx = canvas.getContext('2d'), image = ctx.createImageData(l.w * zoom, l.h * zoom), shade = makeShader(p, l);
     for (let y = 0; y < l.h; y++) for (let x = 0; x < l.w; x++) {
-      const [r, g, b] = pixelColor(x + 0.5, y + 0.5, p, l);
+      const [r, g, b] = shade(x + 0.5, y + 0.5);
       for (let dy = 0; dy < zoom; dy++) for (let dx = 0; dx < zoom; dx++) {
         const o = (((y * zoom + dy) * l.w * zoom) + x * zoom + dx) * 4;
         image.data[o] = r; image.data[o + 1] = g; image.data[o + 2] = b; image.data[o + 3] = 255;
       }
     }
     ctx.putImageData(image, 0, 0);
+    if (after) { ctx.save(); ctx.scale(zoom, zoom); after(ctx, l); ctx.restore(); }
   }
   const renderCorner = (canvas, p) => renderLayout(canvas, p, CORNER, Z);
 
   // The line and the fill at five points along each side of the full island, as Oklab L, chroma and hue.
   function sideStats(p) {
-    const I = FULL.island, at = (i, n) => (i + 0.5) / n, n = 5, inward = 8, out = {};
+    const I = FULL.island, at = (i, n) => (i + 0.5) / n, n = 5, inward = 8, out = {}, shade = makeShader(p, FULL);
     const spots = {
       left: Array.from({ length: n }, (_, i) => [I.x + 0.5, I.y + 50 + at(i, n) * (I.h - 100), inward, 0]),
       right: Array.from({ length: n }, (_, i) => [I.x + I.w - 0.5, I.y + 50 + at(i, n) * (I.h - 100), -inward, 0]),
@@ -358,7 +391,7 @@
       bottom: Array.from({ length: n }, (_, i) => [I.x + 50 + at(i, n) * (I.w - 100), I.y + I.h - 0.5, 0, -inward]),
     };
     for (const side of SIDES) {
-      const rim = spots[side].map(([x, y]) => toLab(pixelColor(x, y, p, FULL))), fill = spots[side].map(([x, y, dx, dy]) => toLab(pixelColor(x + dx, y + dy, p, FULL)));
+      const rim = spots[side].map(([x, y]) => toLab(shade(x, y))), fill = spots[side].map(([x, y, dx, dy]) => toLab(shade(x + dx, y + dy)));
       const mean = list => [0, 1, 2].map(k => list.reduce((sum, v) => sum + v[k], 0) / list.length);
       const r = lch(mean(rim)), f = lch(mean(fill));
       out[side] = { L: r.L, C: r.C, h: r.h, fL: f.L, fC: f.C };
@@ -369,6 +402,38 @@
     const rows = [...MEASURED_SIDES, { name: 'Modelo: ahora', note: 'capa encima, tokens', sides: sideStats(NOW) }, { name: 'Modelo: derivado, como macOS', note: 'sube por lado, croma ×1.35', sides: sideStats(MACOS) }, { name: 'Modelo: tu ajuste', note: state.params.algo === 'overlay' ? 'capa encima' : 'derivado', sides: sideStats(state.params) }];
     const cell = d => `<td class="num">${f2(d.L)} · ${f2(d.C)} · ${d.C < 0.012 ? '—' : f0(d.h) + '°'}<br><span class="muted">${d.L - d.fL >= 0 ? '+' : ''}${f2(d.L - d.fL)} · croma ×${(d.C / Math.max(d.fC, 1e-6)).toFixed(2)}</span></td>`;
     $('sides').innerHTML = rows.map(r => `<tr><td>${r.name}<br><span class="muted">${r.note}</span></td>${SIDES.map(side => cell((r.sides || r)[side])).join('')}</tr>`).join('');
+  }
+  const SIDEBAR_ITEMS = [['Wi-Fi', '#2f7cf6'], ['Bluetooth', '#2f7cf6'], ['Red', '#2f7cf6'], ['VPN', '#2f7cf6'], ['Batería', '#34c759'], null, ['Accesibilidad', '#2f7cf6'], ['Apariencia', '#222'], ['Escritorio y Dock', '#3a3a3c'], ['Fondo de pantalla', '#3a86f0'], ['Notificaciones', '#ff453a'], ['Concentración', '#7d5ce0']];
+  function drawWindow(ctx, l) {
+    const I = l.island, W = l.window, ink = '#eceff4', soft = 'rgba(236,239,244,.6)';
+    ctx.textBaseline = 'middle';
+    [['#ff5f57', 0], ['#febc2e', 1], ['#28c840', 2]].forEach(([color, i]) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(I.x + 19 + i * 23, I.y + 19, 6, 0, 7); ctx.fill(); });
+    ctx.fillStyle = 'rgba(255,255,255,.09)'; ctx.beginPath(); ctx.roundRect(I.x + 10, I.y + 54, I.w - 20, 24, 8); ctx.fill();
+    ctx.fillStyle = soft; ctx.font = '12px system-ui, sans-serif'; ctx.fillText('Buscar', I.x + 34, I.y + 66);
+    ctx.fillStyle = '#5a5f6a'; ctx.beginPath(); ctx.arc(I.x + 34, I.y + 108, 17, 0, 7); ctx.fill();
+    ctx.fillStyle = ink; ctx.font = '600 11px system-ui, sans-serif'; ctx.fillText('HB', I.x + 27, I.y + 108);
+    ctx.font = '600 13px system-ui, sans-serif'; ctx.fillText('H. Blanqueto', I.x + 60, I.y + 102);
+    ctx.fillStyle = soft; ctx.font = '12px system-ui, sans-serif'; ctx.fillText('Cuenta local', I.x + 60, I.y + 118);
+    let y = I.y + 160;
+    for (const item of SIDEBAR_ITEMS) {
+      if (!item) { y += 20; continue; }
+      const [name, color] = item, selected = name === 'Apariencia';
+      if (selected) { ctx.fillStyle = '#2f6fe4'; ctx.beginPath(); ctx.roundRect(I.x + 10, y - 15, I.w - 20, 31, 8); ctx.fill(); }
+      ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(I.x + 19, y - 10, 20, 20, 5); ctx.fill();
+      ctx.fillStyle = selected ? '#fff' : ink; ctx.font = '13px system-ui, sans-serif'; ctx.fillText(name, I.x + 49, y);
+      y += 32;
+    }
+    ctx.fillStyle = ink; ctx.font = '600 14px system-ui, sans-serif'; ctx.fillText('Apariencia', l.contentX + 64, W.y + 28);
+    for (let i = 0; i < 6; i++) {
+      const top = W.y + 66 + i * 70;
+      ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.beginPath(); ctx.roundRect(l.contentX + 16, top, W.x + W.w - l.contentX - 32, 56, 10); ctx.fill();
+      ctx.fillStyle = ink; ctx.font = '13px system-ui, sans-serif'; ctx.fillText(['Apariencia', 'Idioma', 'Color de acento', 'Estilo de los íconos', 'Teñir las ventanas', 'Color del tinte'][i], l.contentX + 32, top + 28);
+    }
+  }
+  function renderBig() {
+    const p = state.big === 'now' ? NOW : state.big === 'macos' ? MACOS : state.params;
+    renderLayout($('big'), p, BIG, 2, drawWindow);
+    for (const id of ['now', 'macos', 'custom']) $('big-' + id).setAttribute('aria-pressed', state.big === id);
   }
   const f2s = v => v.toFixed(2);
   const describe = p => p.algo === 'overlay'
@@ -419,7 +484,7 @@
     cancelAnimationFrame(pending);
     pending = requestAnimationFrame(() => {
       renderCorner($('custom'), state.params); $('custom-values').textContent = describe(state.params);
-      renderLayout($('full-custom'), state.params, FULL, 2); renderStrips(); sidesTable(); $('readout').textContent = readout();
+      renderLayout($('full-custom'), state.params, FULL, 2); renderStrips(); sidesTable(); renderBig(); $('readout').textContent = readout();
       for (const group of SLIDERS) for (const s of group.items) $(s.key + '-out').textContent = state.params[s.key].toFixed(s.digits);
     });
   }
@@ -434,6 +499,7 @@
     for (const el of document.querySelectorAll('[data-algo]')) el.hidden = el.dataset.algo !== state.params.algo;
   }
 
+  for (const id of ['now', 'macos', 'custom']) $('big-' + id).onclick = () => { state.big = id; renderBig(); };
   $('algo').onchange = e => { state.params.algo = e.target.value; syncControls(); renderCustom(); };
   $('wallpaper').onchange = e => { state.wallpaper = e.target.value; renderAll(); };
   $('from-now').onclick = () => { state.params = { ...NOW }; syncControls(); renderCustom(); };
