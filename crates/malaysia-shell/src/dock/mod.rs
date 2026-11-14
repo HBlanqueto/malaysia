@@ -38,8 +38,8 @@ use ctdesign::{
     DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
     DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_ARROW_HEIGHT, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP,
     DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS,
-    DOCK_MAGNIFY_MS, DOCK_MINIMIZE_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REMOVE_MS,
-    DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN,
+    DOCK_MAGNIFY_MS, DOCK_MENU_GAP, DOCK_MINIMIZE_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS,
+    DOCK_REMOVE_MS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN,
     DOCK_WINDOW_BADGE, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, TEXT_LINE_HEIGHT,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
@@ -1095,7 +1095,10 @@ impl App for DockApp {
         let label_colors = bk::theme::popover_palette(&resolved, bk::theme::SurfaceKind::Toplevel);
         show_label(
             &shown_label,
-            hovered.map(|(text, slot)| (text, menu.anchor(slot.start, slot.length, slot.size))),
+            hovered.map(|(text, slot)| {
+                let anchor = menu.beside(slot.start, slot.length, slot.size, DOCK_LABEL_GAP);
+                (text, anchor)
+            }),
             menu.placement(),
             (theme::color(label_colors.bg), theme::color(label_colors.fg)),
         );
@@ -1287,12 +1290,15 @@ impl Menus {
     }
 
     fn anchor(self, start: f32, length: f32, reach: f32) -> (i32, i32, u32, u32) {
-        let (x, y, width, height) = region(self.frame.area(
-            start,
-            self.cross0,
-            length,
-            self.padding + reach + DOCK_LABEL_GAP,
-        ));
+        self.beside(start, length, reach, DOCK_MENU_GAP)
+    }
+
+    fn beside(self, start: f32, length: f32, reach: f32, gap: f32) -> (i32, i32, u32, u32) {
+        let (x, y, width, height) =
+            region(
+                self.frame
+                    .area(start, self.cross0, length, self.padding + reach + gap),
+            );
         (x, y, width.max(1) as u32, height.max(1) as u32)
     }
 

@@ -114,9 +114,11 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    `LauncherEntry` is `urgent` bounces until one of its windows is active. A minimized
    window tile restores that window. Downloads and Trash open in the file
    manager (`xdg-open`).
-8. **Menus.** A secondary click opens the menu beside the icon, centred on
-   it, toward the screen (`pop_up_menu`): above it on a bottom Dock, with the
-   `menu` popover shape, so its arrow points at the icon. The Dock
+8. **Menus.** A secondary click opens the menu beside the icon, toward the
+   screen (`pop_up_menu`), as macOS 26 does: above it on a bottom Dock, with
+   the `menu` popover shape. Its arrow sits in the corner where the menu
+   starts, `DOCK_MENU_GAP` (22) from the icon, and the menu grows to the right
+   (down on a side Dock). The Dock
    stays up until the menu closes, but its magnification eases back to the
    resting size; the arrow points where the icon comes to rest. On an app it lists the
    windows (a diamond marks a minimized one), Options › Keep in Dock, and

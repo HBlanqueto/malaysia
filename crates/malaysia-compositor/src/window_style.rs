@@ -343,6 +343,8 @@ pub(crate) fn popover_metrics(shape: PopoverShape) -> ctdesign::PopoverMetrics {
     match shape {
         PopoverShape::Menu => ctdesign::PopoverMetrics {
             radius: ctdesign::POPUP.corner_radius as f32,
+            arrow_tip_radius: ctdesign::DOCK_MENU_ARROW_TIP_RADIUS,
+            arrow_fillet: ctdesign::DOCK_MENU_ARROW_FILLET,
             ..popover
         },
         PopoverShape::Label => ctdesign::PopoverMetrics {
