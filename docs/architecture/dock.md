@@ -106,7 +106,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 8. **Menus.** A secondary click opens the menu beside the icon, centred on
    it, toward the screen (`pop_up_menu`): above it on a bottom Dock, with the
    `menu` popover shape, so its arrow points at the icon. The Dock
-   stays up and magnified until the menu closes. On an app it lists the
+   stays up until the menu closes, but its magnification eases back to the
+   resting size; the arrow points where the icon comes to rest. On an app it lists the
    windows (a diamond marks a minimized one), Options › Keep in Dock, and
    Hide and Quit (or Open). On Downloads and the Trash it has Open; the Trash adds Empty Trash, which
    asks first (`malaysia-shell empty-trash`) and erases the home trash

@@ -417,8 +417,13 @@ impl App for DockApp {
             shown.set(!*autohide)
         });
 
+        let mut magnifying = use_state(|| false);
+        let magnified = *hovering.read() && !*menu_open.read();
+        use_side_effect_with_deps(&magnified, move |magnified: &bool| {
+            magnifying.set(*magnified)
+        });
         let magnify = use_switch_progress(
-            hovering,
+            magnifying,
             Animation::Ease {
                 duration_ms: DOCK_MAGNIFY_MS,
             },
@@ -527,6 +532,15 @@ impl App for DockApp {
             frame.main_length() / 2.0,
             pointer_at.map(|at| frame.canonical(at).0),
             magnify,
+        );
+        // An open menu lets the Dock settle, so its arrow points where the icon comes to rest.
+        let rest = geometry::layout(
+            &slots,
+            tile,
+            largesize,
+            frame.main_length() / 2.0,
+            None,
+            0.0,
         );
         let cross0 = DOCK_EDGE_MARGIN - (layout.thickness + DOCK_EDGE_MARGIN) * (1.0 - visible);
         let icon_cross = cross0 + layout.padding;
@@ -721,7 +735,7 @@ impl App for DockApp {
             .find(|(_, windows)| windows.iter().any(|window| window.active))
             .map(|(_, windows)| windows.iter().map(|window| window.id).collect())
             .unwrap_or_default();
-        for (item, slot) in list.iter().zip(&layout.placed) {
+        for ((item, slot), resting) in list.iter().zip(&layout.placed).zip(&rest.placed) {
             let center = slot.start + slot.length / 2.0;
             match item {
                 Item::Gap(_) => {}
@@ -756,7 +770,7 @@ impl App for DockApp {
                             })
                             .on_secondary_down({
                                 let items = separator_menu(&config);
-                                let anchor = menu.anchor(slot.start, slot.length, tile);
+                                let anchor = menu.anchor(resting.start, resting.length, tile);
                                 move |_| menu.open(items.clone(), anchor, on_separator_command)
                             })
                             .into_element(),
@@ -790,7 +804,7 @@ impl App for DockApp {
                         open: open_app.clone(),
                     });
                     let items = app_menu(app);
-                    let anchor = menu.anchor(slot.start, slot.length, slot.size + lift);
+                    let anchor = menu.anchor(resting.start, resting.length, resting.size);
                     let (kept, id) = (app.kept, app.id.clone());
                     children.push(
                         placed(frame.area(slot.start, icon_cross + lift, slot.size, slot.size))
@@ -923,7 +937,7 @@ impl App for DockApp {
                             toplevels.activate(id);
                         })
                         .on_secondary_down({
-                            let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                            let anchor = menu.anchor(resting.start, resting.length, resting.size);
                             move |_| {
                                 let close = close.clone();
                                 menu.open(
@@ -970,7 +984,8 @@ impl App for DockApp {
                                 }
                             })
                             .on_secondary_down({
-                                let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                                let anchor =
+                                    menu.anchor(resting.start, resting.length, resting.size);
                                 move |_| {
                                     let folder = folder.clone();
                                     menu.open(open_menu(), anchor, move |_: String| {
@@ -1001,7 +1016,7 @@ impl App for DockApp {
                         ))
                         .on_press(move |_| xdg_open(TRASH))
                         .on_secondary_down({
-                            let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                            let anchor = menu.anchor(resting.start, resting.length, resting.size);
                             move |_| {
                                 let mut items = open_menu();
                                 items.push(
