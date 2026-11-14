@@ -32,8 +32,8 @@ It is bold (`MENUBAR_APP_NAME_WEIGHT`, 700), color `ink-strong`, 13 px, with the
 
 1. The bar reads `menubar.domain` and `wallpaper.state` and redraws when either changes.
 2. It takes the wallpaper color under the bar from the grid of the shown desktop (`WallpaperState::grid_for` with `Toplevels::desktop`, from Infinity's `desktop` event; then `WallpaperGrid::behind` over its own rectangle). A desktop without its own wallpaper and a focus space use the shared grid.
-3. `solid` paints `shell-bar`, opaque, with the theme's text. `translucent` paints the glass and ink of `colors_over` for that color. `floating` uses the same ink with no background.
-4. `translucent` asks the compositor to blur the wallpaper under the whole bar (`set_blur_region`); `floating` asks for it only under the pill of the open title. The blur stops while the screen locks.
+3. `solid` paints `shell-bar` at `MENUBAR_CLASSIC_ALPHA`, with the theme's text. `translucent` paints the glass and ink of `colors_over` for that color. `floating` uses the same ink with no background.
+4. `solid` and `translucent` ask the compositor to blur the wallpaper under the whole bar (`set_blur_region`); `floating` asks for it only under the pill of the open title. The blur stops while the screen locks.
 5. With `reduce_transparency`, every style is an opaque `solid` bar without blur.
 6. When the height changes, the bar sends its new size and exclusive zone together (`set_layer_geometry`). The lock screen row, the menus and the live activities read the same height.
 

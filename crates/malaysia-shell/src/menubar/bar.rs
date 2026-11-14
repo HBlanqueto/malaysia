@@ -13,7 +13,7 @@ use bk::shell::{
     LayerGeometry, LayerSpec, ToplevelInfo, Toplevels, run_layer, set_blur_region,
     set_layer_geometry, use_status_items,
 };
-use ctappearance::menubar::{MenubarConfig, MenubarStyle, colors_over};
+use ctappearance::menubar::{MenubarConfig, MenubarStyle, classic_bar, colors_over};
 use ctappearance::tinting::WallpaperGrid;
 use ctappearance::{MenuBarSize, WallpaperState};
 use ctdesign::{
@@ -864,12 +864,16 @@ fn bar_look(style: MenubarStyle, under: Option<Rgba>, across: Option<Vec<Rgba>>)
     };
     match style {
         MenubarStyle::Solid => BarLook {
-            background: Rgba { a: 1.0, ..solid },
+            background: classic_bar(solid, resolved.reduce_transparency),
             across: Vec::new(),
             ink: resolved.shell.text,
             selection: theme::menu_palette(&resolved, theme::SurfaceKind::LayerShell)
                 .bar_title_open_bg,
-            blur: BarBlur::None,
+            blur: if resolved.reduce_transparency {
+                BarBlur::None
+            } else {
+                BarBlur::Bar
+            },
         },
         MenubarStyle::Translucent => BarLook {
             background: over.glass,

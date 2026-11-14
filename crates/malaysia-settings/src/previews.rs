@@ -3,7 +3,7 @@ use ctdesign::SETTINGS;
 use torin::prelude::Position;
 
 use bk::theme::{SurfaceKind, color as rgba, surface_background};
-use ctappearance::menubar::{MenubarConfig, MenubarHeight, MenubarStyle, colors_over};
+use ctappearance::menubar::{MenubarConfig, MenubarHeight, MenubarStyle, classic_bar, colors_over};
 use ctappearance::{AppearanceConfig, ColorScheme, Resolved, resolve};
 use ctdesign::{MENUBAR_HEIGHT, Rgba};
 use torin::prelude::Gaps;
@@ -141,7 +141,10 @@ pub fn menubar_preview(
     let solid = surface_background(resolved, SurfaceKind::LayerShell);
     let over = colors_over(resolved.accent);
     let (background, ink) = match style {
-        MenubarStyle::Solid => (Rgba { a: 1.0, ..solid }, resolved.shell.text),
+        MenubarStyle::Solid => (
+            classic_bar(solid, resolved.reduce_transparency),
+            resolved.shell.text,
+        ),
         MenubarStyle::Translucent => (over.glass, over.ink),
         MenubarStyle::Floating => (
             Rgba {

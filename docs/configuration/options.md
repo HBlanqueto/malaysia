@@ -433,7 +433,7 @@ compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhib
 | `menubar.show_battery_percentage` | bool | `true` | **active** | shell (percentage next to the battery); System Settings › Battery writes it |
 | `menubar.show_vpn` | bool | `true` | **active** | shell (VPN menu, only with a VPN profile); System Settings › VPN writes it |
 | `menubar.show_printer` | bool | `true` | **active** | shell (printer while CUPS has a queued job, on the bar and the lock screen; ADR 0074) |
-| `menubar.style` | `solid` / `translucent` / `floating` | `translucent` | **active** | shell: the bar background and ink; `solid` (Classic) is opaque, `translucent` blurs the wallpaper under the bar, `floating` only under the open menu's pill; System Settings › Desktop & Dock writes it (ADR 0075) |
+| `menubar.style` | `solid` / `translucent` / `floating` | `translucent` | **active** | shell: the bar background and ink; `solid` (Classic) is the theme's bar color, translucent, over the blurred wallpaper; `translucent` is a light or dark glass that follows the wallpaper, `floating` only under the open menu's pill; System Settings › Desktop & Dock writes it (ADR 0075) |
 | `menubar.bar_height` | `slim` / `wide` | `slim` | **active** | shell: 30 or 38 px, for the bar and the lock screen; System Settings › Desktop & Dock writes it (ADR 0075) |
 
 ## `wifi` — Wi-Fi (System Settings → Wi-Fi; ADR 0069)

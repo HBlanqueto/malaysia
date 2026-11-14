@@ -24,9 +24,9 @@ wallpaper alone and shows it behind any surface that asks for it with
    menus, Dock and sidebar use their translucent tokens, and the compositor
    draws the blur.
 2. `menubar.style` chooses the background:
-   - `solid` (Classic in System Settings): the theme's `shell-bar`, opaque
-     and without blur, as in macOS Catalina: white or gray. The text follows
-     the color scheme.
+   - `solid` (Classic in System Settings): the theme's `shell-bar` at
+     `MENUBAR_CLASSIC_ALPHA` over the blurred wallpaper, as in macOS Catalina:
+     white or gray glass. The text follows the color scheme.
    - `translucent` (default): a light or dark glass over the blurred wallpaper. The
      shell reads the color of the wallpaper under the bar from the wallpaper
      grid in `wallpaper.state`, and `ctappearance::menubar::colors_over` picks
@@ -35,12 +35,12 @@ wallpaper alone and shows it behind any surface that asks for it with
    - `floating`: the same ink as `translucent`, with no glass. Only the pill
      of an open menu title is blurred.
 3. The blur shows only the wallpaper, never the windows. The bar asks for it
-   with `set_blur_region`: `translucent` over its whole surface, `floating`
+   with `set_blur_region`: `solid` and `translucent` over their whole surface, `floating`
    over the open pill only. It stops asking while the screen locks. The
    compositor rounds a blur rectangle shorter than the bar with the pill's
    radius (`title-open.radius`).
 4. With `reduce_transparency` (or Increase contrast) every style draws as an
-   opaque `solid` bar without blur.
+   opaque `solid` bar without blur (`ctappearance::menubar::classic_bar`).
 5. `menubar.bar_height` is `slim` (`MENUBAR_HEIGHT`, 30 px, default) or
    `wide` (`MENUBAR_HEIGHT_WIDE`, 38 px), like the taller bar of a Mac with a
    notch. `MenubarConfig::height()` is the only place that maps it. The bar
