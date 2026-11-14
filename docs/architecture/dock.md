@@ -65,7 +65,12 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    shows over what is behind it and move it (the rim's to `lift + share ×` that
    luminance, a fixed step in light and a shrinking one in dark; the divider's
    by a fixed step, `ctdesign::dock_divider`), so they fade and come back along
-   the bar. The compositor reads the rim's backdrop pixel by pixel from the
+   the bar. The translucent light Dock takes its frame's colours from what is
+   behind it instead (`DockSurface::tone`, `ctdesign::DockTone`): the glass
+   takes the backdrop's chroma, the rim is that glass brightened channel by
+   channel, so it keeps the wallpaper's hue where a white overlay would not, the
+   glow fades into that rim and the outline is the glass darkened. The
+   compositor reads the rim's backdrop pixel by pixel from the
    Dock's blur; `dock/rim.rs` reads the wallpaper behind each divider. The
    glass, outline and the two steps are `ctdesign::DockSurface`
    (`resolved.dock`): a grey with some opacity in light and in dark, solved
