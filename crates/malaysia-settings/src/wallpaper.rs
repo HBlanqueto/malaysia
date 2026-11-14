@@ -665,10 +665,8 @@ fn hero(
         WallpaperSource::ShuffleColors | WallpaperSource::ShuffleCollection(_)
     );
     let framed = !shuffled && !is_color && kind != Some(WallpaperKind::Shader);
-    let scale_control = || {
-        let draft = CropDraft::new(shown.as_deref(), edited, selection, look);
-        scale_button(scale, draft, edited, wallpaper, error).into_element()
-    };
+    let scale_control =
+        || scale_button(scale, shown.clone(), look, edited, wallpaper, error).into_element();
     let first = if shuffled {
         Some(shuffle_button(selection.shuffle, wallpaper, error).into_element())
     } else if framed && dynamic {
@@ -953,7 +951,8 @@ fn mode_button(
 
 fn scale_button(
     scale: WallpaperScale,
-    framed: Option<CropDraft>,
+    shown: Option<PathBuf>,
+    look: WallpaperAppearance,
     desktop: Option<u32>,
     wallpaper: Wallpaper,
     error: State<Option<String>>,
@@ -970,7 +969,9 @@ fn scale_button(
         .selected(selected)
         .on_change(move |index: usize| match SCALES[index] {
             WallpaperScale::Custom => {
-                if let Some(draft) = framed.clone() {
+                if let Some(draft) =
+                    CropDraft::new(shown.as_deref(), desktop, &selection.peek(), look)
+                {
                     cropping.set(Some(draft));
                 }
             }
