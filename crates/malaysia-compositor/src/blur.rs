@@ -363,7 +363,11 @@ fn requested(state: &State) -> bool {
 }
 
 fn behind_requested(state: &State) -> bool {
+    let dock_hidden = state.space_slide.is_none()
+        && state.layers.chrome_hidden()
+        && !state.layers.dock_revealed();
     !state.locked
+        && !dock_hidden
         && state.layers.on_layer(Layer::Top).any(|entry| {
             crate::window_style::is_dock_layer(entry.surface.wl_surface())
                 && !blur_region(entry.surface.wl_surface()).is_empty()
