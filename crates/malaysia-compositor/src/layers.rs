@@ -45,16 +45,20 @@ impl LayerEntry {
         if self.moved {
             geometry.loc = self.geometry.loc;
         }
-        let exclusive_zone = exclusive_zone_of(&state);
+        self.exclusive_zone = exclusive_zone_of(&state);
         self.anchors = state.anchor;
         self.keyboard_interactivity = state.keyboard_interactivity;
-        if geometry != self.geometry || exclusive_zone != self.exclusive_zone {
-            self.surface.with_pending_state(|pending| {
-                pending.size = Some(geometry.size);
-            });
-            self.surface.send_pending_configure();
+        self.surface.with_pending_state(|pending| {
+            pending.size = Some(geometry.size);
+        });
+        self.surface.send_pending_configure();
+        // wlr-layer-shell: until the client acks the new size its buffer has the old one, and
+        // placing it by the new size would show it out of place for a frame.
+        let acked = self
+            .surface
+            .with_committed_state(|acked| acked.and_then(|acked| acked.size));
+        if acked == Some(geometry.size) {
             self.geometry = geometry;
-            self.exclusive_zone = exclusive_zone;
         }
     }
 }
@@ -421,15 +425,20 @@ fn geometry_of(
         (0, 0)
     };
 
+    let room = (
+        output_size.w - margins.left - margins.right,
+        output_size.h - avoided_top - avoided_bottom - margins.top - margins.bottom,
+    );
+    // A layer never outgrows its output: the Dock asks for the whole screen while an icon is dragged.
     let width = if anchors.anchored_horizontally() {
-        output_size.w - margins.left - margins.right
+        room.0
     } else {
-        state.size.w
+        state.size.w.min(room.0)
     };
     let height = if anchors.anchored_vertically() {
-        output_size.h - avoided_top - avoided_bottom - margins.top - margins.bottom
+        room.1
     } else {
-        state.size.h
+        state.size.h.min(room.1)
     };
 
     let x = if anchors.contains(Anchor::LEFT) {
@@ -463,6 +472,21 @@ fn exclusive_zone_of(state: &LayerSurfaceCachedState) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_layer_never_outgrows_its_output() {
+        let state = LayerSurfaceCachedState {
+            size: Size::from((0, 65535)),
+            anchor: Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+            exclusive_zone: ExclusiveZone::Exclusive(80),
+            ..LayerSurfaceCachedState::default()
+        };
+        let geometry = geometry_of(&state, Size::from((1920, 1080)), (30, 0));
+        assert_eq!(
+            geometry,
+            Rectangle::new(Point::from((0, 0)), Size::from((1920, 1080)))
+        );
+    }
 
     #[test]
     fn a_layer_without_an_input_region_accepts_the_pointer() {
