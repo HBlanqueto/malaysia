@@ -399,7 +399,7 @@ desktop (`shown`, `shuffled_at`).
 | `dock.static-only` | bool | `false` | **active** | shell (dock) |
 | `dock.minimize-to-application` | bool | `false` | **active** | shell (dock): no tile per minimized window |
 | `dock.show-recents` | bool | `true` | **active** | shell (dock): up to 3 |
-| `dock.show-downloads` | bool | `true` | **active** | shell (dock): the Downloads folder; dragging it out of the Dock turns it off |
+| `dock.show-downloads` | bool | `true` | **active** | shell (dock): the Downloads folder; dragging it out of the Dock turns it off; the separator's menu toggles it |
 | `dock.launchanim` | bool | `true` | **active** | shell (dock): the icon bounces while the app starts |
 | `dock.autohide-delay` | float (seconds) | `0.0` | **active** | shell (dock): wait before the hidden Dock shows |
 | `dock.autohide-time-modifier` | float | `1.0` | **active** | shell (dock): multiplies the show and hide animation; `0` removes it |

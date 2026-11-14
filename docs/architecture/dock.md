@@ -113,7 +113,7 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    asks first (`malaysia-shell empty-trash`) and erases the home trash
    (`$XDG_DATA_HOME/Trash`) and the user's trash on every mounted volume
    (`$topdir/.Trash/$uid` or `$topdir/.Trash-$uid`). On the
-   separator it turns hiding and magnification on or off, sets the position
+   separator it turns hiding and magnification on or off, shows or hides Downloads, sets the position
    and the minimize effect, and opens Dock Settings; these write
    `dock.domain`.
 9. **Dragging.** Dragging the separator changes `tilesize`. Any app icon can
@@ -124,8 +124,8 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    keeps it in the Dock (`persistent-apps`), open or not. Dragging it away
    shows Remove, closes the gap and takes it out; an open app stays until it
    quits. Downloads stays among the folders: dropped there it goes back to
-   its slot, and dropped away it turns `show-downloads` off; System Settings
-   › Desktop & Dock turns it back on.
+   its slot, and dropped away it turns `show-downloads` off; the separator's
+   menu or System Settings › Desktop & Dock turns it back on.
 10. **Minimize target.** The Dock sends each window's slot with
     `set_minimize_target` (`zwlr_foreign_toplevel_handle_v1.set_rectangle`):
     the app's icon with `minimize-to-application`, otherwise the window's own

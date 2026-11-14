@@ -1479,6 +1479,14 @@ fn separator_menu(config: &DockConfig) -> Vec<MenuItem> {
                 tr!("dock-magnification-on")
             },
         ),
+        MenuItem::action(
+            "downloads",
+            if config.show_downloads {
+                tr!("dock-downloads-off")
+            } else {
+                tr!("dock-downloads-on")
+            },
+        ),
         MenuItem::Separator,
         MenuItem::submenu(
             tr!("dock-position"),
@@ -1505,6 +1513,7 @@ fn on_separator_command(command: String) {
     match command.as_str() {
         "hiding" => edit_config(|config| config.autohide = !config.autohide),
         "magnification" => edit_config(|config| config.magnification = !config.magnification),
+        "downloads" => edit_config(|config| config.show_downloads = !config.show_downloads),
         "settings" => open_settings("desktop-dock"),
         id => {
             if let Some((value, _)) = ORIENTATIONS.iter().find(|(_, key)| *key == id) {
