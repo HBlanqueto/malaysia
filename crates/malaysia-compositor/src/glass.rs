@@ -122,7 +122,6 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
     let (_, chroma_cap) = ctappearance::glass_chroma(scheme);
     let lightness = ctappearance::glass_lightness(scheme);
     let edge = ctappearance::glass_edge(scheme);
-    let line = ctappearance::glass_rim(scheme);
     let shadow = ctappearance::glass_shadow(scheme);
     let physical = |logical: f32| (f64::from(logical) * scale) as f32;
     let screen_rect = |rect: Rectangle<i32, Physical>| {
@@ -290,9 +289,16 @@ pub(crate) fn panels<R: MalaysiaRenderer>(
                     [
                         fill,
                         vec![
-                            Uniform::new("rim", [line.lift, line.lift_edge, line.chroma]),
-                            Uniform::new("rim_cap", line.cap),
-                            Uniform::new("opacity", line.opacity * (1.0 - settle)),
+                            Uniform::new(
+                                "rim",
+                                [
+                                    ctdesign::GLASS.rim_lift,
+                                    ctdesign::GLASS.rim_lift_edge,
+                                    ctdesign::GLASS.rim_chroma,
+                                ],
+                            ),
+                            Uniform::new("rim_cap", ctdesign::GLASS.rim_cap),
+                            Uniform::new("opacity", ctdesign::GLASS.rim_opacity * (1.0 - settle)),
                             Uniform::new(
                                 "width",
                                 (f64::from(ctdesign::SIDEBAR.rim_width) * scale) as f32,
@@ -480,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn the_rim_is_a_line_lighter_than_the_fill_in_dark_and_white_in_light() {
+    fn the_rim_is_a_line_lighter_than_the_fill_and_never_brighter_than_white() {
         let Some(mut renderer) = try_test_renderer() else {
             eprintln!("skipping: no EGL device");
             return;
@@ -521,7 +527,7 @@ mod tests {
             [red, green, blue, alpha]
                 .iter()
                 .all(|c| c.abs_diff(204) <= 2),
-            "white at 0.8: {red} {green} {blue} {alpha}"
+            "a lift beyond the headroom is white, here at 0.8: {red} {green} {blue} {alpha}"
         );
     }
 

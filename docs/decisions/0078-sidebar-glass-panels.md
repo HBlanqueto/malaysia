@@ -117,8 +117,10 @@ and the bottom.
    edge), with `rim.chroma` times the fill's chroma, up to `rim.cap`, and the
    fill's hue, at `rim.opacity`. So it follows the fill around the island, as
    macOS's does, and where the fill is the same on every side the line is too.
-   In light the lift is 1.00 and the chroma 0.00, so the line is white at alpha
-   0.80, as measured (0.98 over 0.97). It shows nothing of what is behind it.
+   The values are the same in light and dark: in light the lift takes the fill
+   (L about 0.94) to white, with the slight tint of the fill where the
+   wallpaper shows, as measured (0.98 over 0.97). It shows nothing of what is
+   behind it.
    With an accent as window color `base` carries the accent, the fill and the
    line with it, and the request's `rim` is unused: the kit sends 0.
 5. **States**, decided by the compositor:
@@ -150,9 +152,9 @@ and the bottom.
    and 0.00, `blur_passes` 4 and 6, the edge
    (`intensity` 0.70 and 0.70, `span` 46 and 60 logical pixels, `chroma` 0.45 and
    0.45, `lightness` 0.00 and 0.10, `cap` 0.04 and 0.18, `offset` 11), the rim
-   (`opacity` 0.80 and 1.00, `lift` 1.00 and 0.06, `lift-edge` 0.00 and 0.05,
-   `chroma` 0.00 and 1.35, `cap` 0.25) and the
-   shadow (`opacity` 0.13 and 0.00, `span` 25, `tint` 0.50, `lightness` 0.20).
+   (`opacity` 1.00, `lift` 0.06, `lift-edge` 0.05, `chroma` 1.35 and `cap` 0.25,
+   the same in both) and the
+   shadow (`opacity` 0.13 and 0.00, `span` 25, `tint` 1.00, `lightness` 0.20).
    The mockup also let the owner set the blur of the center and of the edge
    apart (dark 5 and 6, light 8 and 4); the compositor has one blur per scheme
    for both, so it takes the edge's, which is where the wallpaper shows. The
