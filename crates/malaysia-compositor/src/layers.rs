@@ -28,6 +28,10 @@ impl LayerEntry {
             && self.exclusive_zone > 0
     }
 
+    pub fn is_dock(&self) -> bool {
+        crate::window_style::is_dock_layer(self.surface.wl_surface())
+    }
+
     pub fn is_shell_chrome(&self) -> bool {
         let side_dock = self.anchors.contains(Anchor::TOP | Anchor::BOTTOM)
             && self.anchors.contains(Anchor::LEFT) != self.anchors.contains(Anchor::RIGHT)
@@ -69,6 +73,7 @@ pub struct Layers {
     mapped: Vec<LayerEntry>,
     chrome_hidden: bool,
     bar_revealed: bool,
+    dock_revealed: bool,
 }
 
 impl Layers {
@@ -169,7 +174,8 @@ impl Layers {
                 if !matches!(entry.layer, Layer::Top | Layer::Overlay)
                     || (self.chrome_hidden
                         && entry.is_shell_chrome()
-                        && !(self.bar_revealed && entry.is_desktop_bar()))
+                        && !(self.bar_revealed && entry.is_desktop_bar())
+                        && !(self.dock_revealed && entry.is_dock()))
                     || !entry.surface.wl_surface().alive()
                     || !entry.geometry.to_f64().contains(point)
                 {
@@ -194,6 +200,18 @@ impl Layers {
 
     pub fn chrome_hidden(&self) -> bool {
         self.chrome_hidden
+    }
+
+    pub fn set_dock_revealed(&mut self, revealed: bool) -> bool {
+        std::mem::replace(&mut self.dock_revealed, revealed) != revealed
+    }
+
+    pub fn dock_revealed(&self) -> bool {
+        self.dock_revealed
+    }
+
+    pub fn dock(&self) -> Option<&LayerEntry> {
+        self.mapped.iter().find(|entry| entry.is_dock())
     }
 
     pub fn on_layer(&self, layer: Layer) -> impl Iterator<Item = &LayerEntry> {

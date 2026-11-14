@@ -283,6 +283,7 @@ fn append_desktop<R: MalaysiaRenderer>(
         append_focus_transition(state, renderer, frame, scale, elements);
     }
     let chrome_hidden = slide.is_none() && state.layers.chrome_hidden();
+    let dock_revealed = state.layers.dock_revealed();
     let reveal = state.reveal_frame(now);
     let reveal_drop = reveal.map(|frame| {
         let travel = frame.bar
@@ -332,7 +333,9 @@ fn append_desktop<R: MalaysiaRenderer>(
         Point::from((0, 0)),
         |entry| {
             (slide.is_none() || !entry.is_desktop_bar())
-                && !(chrome_hidden && entry.is_shell_chrome())
+                && !(chrome_hidden
+                    && entry.is_shell_chrome()
+                    && !(dock_revealed && entry.is_dock()))
                 && (with_bar || !crate::lock_transition::is_menubar(entry))
         },
     );

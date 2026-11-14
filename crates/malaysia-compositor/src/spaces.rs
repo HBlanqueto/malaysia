@@ -6,6 +6,7 @@ use malaysia_scene::geometry::{
 use malaysia_scene::scene::WindowId;
 use malaysia_scene::spaces::{SpaceId, SpaceKind, SpacesError};
 use smithay::utils::{Logical, Point, Rectangle, Size};
+use smithay::wayland::shell::wlr_layer::Anchor;
 
 use crate::state::State;
 
@@ -181,6 +182,7 @@ impl State {
         if self.focus_owner().is_none() {
             return;
         }
+        self.update_dock_reveal(location);
         if location.y <= 1.0 {
             self.set_focus_reveal(true);
             return;
@@ -229,6 +231,21 @@ impl State {
         Some((outer, insets))
     }
 
+    // macOS: in a full-screen space the Dock comes up when the pointer reaches its edge, and goes
+    // when the pointer leaves it with no menu open.
+    fn update_dock_reveal(&mut self, location: Point<f64, Logical>) {
+        let Some(dock) = self.layers.dock() else {
+            return;
+        };
+        let revealed = at_dock_edge(dock.anchors, location, self.logical_output_size())
+            || (self.layers.dock_revealed()
+                && (dock.geometry.to_f64().contains(location)
+                    || self.windows.topmost_popup().is_some()));
+        if self.layers.set_dock_revealed(revealed) {
+            self.request_redraw();
+        }
+    }
+
     fn reset_focus_reveal(&mut self) {
         if let Some(window) = self.focus_reveal.notified {
             if self.focus_reveal.shifted {
@@ -238,6 +255,7 @@ impl State {
         }
         self.focus_reveal = FocusReveal::default();
         self.layers.set_bar_revealed(false);
+        self.layers.set_dock_revealed(false);
         self.send_space_state();
     }
 
@@ -636,6 +654,20 @@ impl State {
     }
 }
 
+fn at_dock_edge(
+    anchors: Anchor,
+    location: Point<f64, Logical>,
+    output: Size<i32, Logical>,
+) -> bool {
+    if !anchors.contains(Anchor::TOP) {
+        location.y >= f64::from(output.h) - 1.0
+    } else if !anchors.contains(Anchor::RIGHT) {
+        location.x <= 1.0
+    } else {
+        location.x >= f64::from(output.w) - 1.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::cubic_bezier;
@@ -677,5 +709,22 @@ mod tests {
             assert!(y >= previous);
             previous = y;
         }
+    }
+
+    #[test]
+    fn the_dock_comes_up_at_the_edge_it_is_anchored_to() {
+        use super::at_dock_edge;
+        use smithay::utils::{Point, Size};
+        use smithay::wayland::shell::wlr_layer::Anchor;
+
+        let output = Size::from((1920, 1080));
+        let bottom = Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
+        let left = Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM;
+        let right = Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM;
+        assert!(at_dock_edge(bottom, Point::from((900.0, 1079.5)), output));
+        assert!(!at_dock_edge(bottom, Point::from((900.0, 1070.0)), output));
+        assert!(at_dock_edge(left, Point::from((0.0, 500.0)), output));
+        assert!(!at_dock_edge(left, Point::from((1919.5, 500.0)), output));
+        assert!(at_dock_edge(right, Point::from((1919.5, 500.0)), output));
     }
 }
