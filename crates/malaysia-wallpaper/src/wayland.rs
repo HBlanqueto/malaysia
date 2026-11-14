@@ -351,6 +351,8 @@ impl App {
             Err(error) => error!(%error, "cannot read the wallpaper selection"),
         }
         let appearance = ctappearance::load_appearance();
+        // At an automatic switch the wallpaper.state write tells every process to restyle.
+        let scheme_changed = self.dark != appearance.color_scheme.is_dark();
         self.dark = appearance.color_scheme.is_dark();
         self.reduced_motion = appearance.reduced_motion;
         let now = epoch_seconds();
@@ -361,7 +363,7 @@ impl App {
             .as_ref()
             .map(|_| self.selection.own_desktops().map(Some).collect::<Vec<_>>())
             .unwrap_or_default();
-        let mut changed = self.selection != previous_selection;
+        let mut changed = self.selection != previous_selection || scheme_changed;
         let mut shown = BTreeMap::new();
         for desktop in std::iter::once(None).chain(own) {
             let key = desktop_key(desktop);

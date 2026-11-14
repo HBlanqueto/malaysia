@@ -105,7 +105,12 @@ impl Config {
 
     pub fn load_from_dir(config_dir: &std::path::Path) -> Self {
         Self {
-            appearance: load_section(config_dir, "appearance"),
+            appearance: ctappearance::read_appearance_from(&config_dir.join("appearance.domain"))
+                .unwrap_or_else(|error| {
+                    tracing::warn!(%error, "appearance domain ignored");
+                    None
+                })
+                .unwrap_or_default(),
             window: load_section(config_dir, "window"),
             menubar: load_section(config_dir, "menubar"),
             dock: load_section(config_dir, "dock"),

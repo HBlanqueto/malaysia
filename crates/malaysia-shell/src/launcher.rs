@@ -14,7 +14,6 @@ use bk::shell::{
     Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer,
 };
 use bk::views::feedback::ContentUnavailableView;
-use ctappearance::ColorScheme;
 use ctdesign::{
     LAUNCHER_CLOSE_MS, LAUNCHER_CORNER_RADIUS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
     LAUNCHER_ICON_SIZE, LAUNCHER_MAX_RESULTS, LAUNCHER_OPEN_MS, LAUNCHER_PADDING,
@@ -284,7 +283,7 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
 // An icon of a Malaysia theme already is a plate; any other app icon gets one from the kit.
 fn app_image(icon: &IconData, size: f32) -> Element {
     let resolved = theme::resolved();
-    let dark = resolved.scheme == ColorScheme::Dark || resolved.icon_style == IconStyle::Clear;
+    let dark = resolved.icon_dark || resolved.icon_style == IconStyle::Clear;
     let Some(bytes) = icon
         .dark
         .clone()
@@ -512,7 +511,7 @@ fn icon_data(path: &std::path::Path, app: bool) -> Option<IconData> {
     })
 }
 
-// The Malaysia theme's icon has a graphite twin in Malaysia-Dark, which a dark scheme or the clear style draws.
+// The Malaysia theme's icon has a graphite twin in Malaysia-Dark, which dark icons or the clear style draw.
 fn dark_twin(path: &std::path::Path) -> Option<Bytes> {
     let path = path.to_str()?;
     let twin = path.replace("/icons/Malaysia/", "/icons/Malaysia-Dark/");

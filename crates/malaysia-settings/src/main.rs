@@ -7,6 +7,7 @@ mod desktop;
 mod dock;
 mod energy;
 mod freedesktop;
+mod icons;
 mod localize;
 mod menubar;
 mod network;

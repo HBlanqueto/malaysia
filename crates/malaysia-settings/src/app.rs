@@ -25,14 +25,14 @@ use crate::crop::crop_sheet;
 use crate::desktop::desktop_pane;
 use crate::energy::energy_pane;
 use crate::freedesktop::{Themes, confirm, freedesktop};
+use crate::icons::{icon_color_row, icon_style_row};
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
-use crate::previews::theme_preview;
+use crate::previews::{automatic_preview, theme_preview};
 use crate::state::{account_name, initials, save_config};
 use crate::wallpaper::{color_sheet, use_wallpaper, wallpaper_pane};
 use crate::wifi::{WifiDialog, wifi_dialog, wifi_pane};
 use bk::app::{use_defaults, use_menu_action};
-use ctappearance::icon_style::IconStyle;
 use ctappearance::menubar::MenubarConfig;
 use malaysia_services::SETTINGS_PANE_ACTION as PANE_ACTION;
 use malaysia_services::bluez::{BlueZ, BluetoothCommand};
@@ -55,12 +55,6 @@ const SCROLL_BARS: [ScrollBars; 3] = [
 ];
 const SCROLL_CLICKS: [ScrollBarClick; 2] = [ScrollBarClick::NextPage, ScrollBarClick::ClickedSpot];
 const MENU_BAR_SIZES: [MenuBarSize; 2] = [MenuBarSize::Default, MenuBarSize::Large];
-const ICON_STYLES: [IconStyle; 4] = [
-    IconStyle::Default,
-    IconStyle::Monochrome,
-    IconStyle::Clear,
-    IconStyle::Tinted,
-];
 const COLOR_FILTERS: [ColorFilter; 4] = [
     ColorFilter::Grayscale,
     ColorFilter::RedGreen,
@@ -236,7 +230,7 @@ fn failure_alert(mut failure: State<Option<String>>) -> Option<Element> {
     )
 }
 
-fn edit<T: 'static>(
+pub(crate) fn edit<T: 'static>(
     error: State<Option<String>>,
     apply: impl Fn(&mut AppearanceConfig, T) + 'static,
 ) -> Callback<T, ()> {
@@ -272,35 +266,22 @@ fn appearance(
         .section(
             Section::new()
                 .row(
-                    Row::new(tr!("appearance"))
+                    Row::new(tr!("appearance-scheme"))
                         .keywords(tr_list!("appearance-keywords"))
                         .control(scheme_cards(config, dominant, error)),
                 )
                 .row(system_language_row()),
         )
         .section(
-            Section::titled(tr!("color"))
-                .row(accent)
-                .row(
-                    Row::new(tr!("icon-style"))
-                        .keywords(tr_list!("icon-style-keywords"))
-                        .stacked()
-                        .control(
-                            RadioGroup::new(tr!("icon-style"))
-                                .option(tr!("icon-style-default"))
-                                .option(tr!("icon-style-monochrome"))
-                                .option(tr!("icon-style-clear"))
-                                .option(tr!("icon-style-tinted"))
-                                .selected(position(&ICON_STYLES, config.icon_style))
-                                .on_change(edit(error, |config, index: usize| {
-                                    config.icon_style = ICON_STYLES[index];
-                                })),
-                        ),
-                )
-                .row(
-                    Row::page(tr!("tint-windows"), "tint-windows")
-                        .keywords(tr_list!("tint-windows-keywords")),
-                ),
+            Section::titled(tr!("theme")).row(accent).row(
+                Row::page(tr!("tint-windows"), "tint-windows")
+                    .keywords(tr_list!("tint-windows-keywords")),
+            ),
+        )
+        .section(
+            Section::new()
+                .row(icon_style_row(config, resolved, error))
+                .row(icon_color_row(config, resolved, error)),
         )
         .section(
             Section::titled(tr!("windows"))
@@ -746,22 +727,27 @@ fn scheme_cards(
     dominant: Option<Rgba>,
     error: State<Option<String>>,
 ) -> ChoiceCards {
-    let selected = match config.color_scheme {
-        ColorScheme::DarkTint => 1,
-        scheme => position(&SCHEMES, scheme),
+    let selected = match (config.automatic_scheme, config.color_scheme) {
+        (true, _) => SCHEMES.len(),
+        (false, ColorScheme::DarkTint) => 1,
+        (false, scheme) => position(&SCHEMES, scheme),
     };
     [tr!("scheme-light"), tr!("scheme-dark")]
         .into_iter()
         .zip(SCHEMES)
         .fold(
-            ChoiceCards::new(tr!("appearance")),
+            ChoiceCards::new(tr!("appearance-scheme")),
             |cards, (caption, scheme)| {
                 cards.option(caption, theme_preview(scheme, config, dominant))
             },
         )
+        .option(tr!("scheme-automatic"), automatic_preview(config, dominant))
         .selected(selected)
         .on_change(edit(error, |config, index: usize| {
-            config.color_scheme = SCHEMES[index];
+            config.automatic_scheme = index == SCHEMES.len();
+            if let Some(&scheme) = SCHEMES.get(index) {
+                config.color_scheme = scheme;
+            }
         }))
 }
 

@@ -5,7 +5,7 @@ use torin::prelude::Position;
 use bk::theme::{SurfaceKind, color as rgba, surface_background};
 use ctappearance::menubar::{MenubarConfig, MenubarHeight, MenubarStyle, classic_bar, colors_over};
 use ctappearance::{AppearanceConfig, ColorScheme, Resolved, resolve};
-use ctdesign::{MENUBAR_HEIGHT, Rgba};
+use ctdesign::{BACKDROP, MENUBAR_HEIGHT, Rgba};
 use torin::prelude::Gaps;
 
 use crate::wallpaper::{Picture, appearance, over_artwork, preview};
@@ -32,13 +32,36 @@ pub fn theme_preview(
         over_artwork(Position::new_absolute())
             .width(Size::percent(100.0))
             .height(Size::percent(100.0))
-            .child(preview_panel(&theme))
-            .child(preview_menu(&theme, theme.accent))
-            .child(preview_app(&theme)),
+            .child(preview_menubar_dot(&theme))
+            .child(preview_menu(&theme))
+            .child(preview_window(&theme)),
     )
 }
 
-fn wallpaper_background(dark: bool) -> Rect {
+pub fn automatic_preview(base_config: &AppearanceConfig, dominant: Option<Rgba>) -> Rect {
+    let half = SETTINGS.card_width as f32 / 2.0;
+    let side = |scheme: ColorScheme, left: f32| {
+        rect()
+            .position(Position::new_absolute().left(left))
+            .width(Size::px(half))
+            .height(Size::percent(100.0))
+            .overflow(Overflow::Clip)
+            .child(
+                rect()
+                    .position(Position::new_absolute().left(-left))
+                    .width(Size::px(SETTINGS.card_width as f32))
+                    .height(Size::px(SETTINGS.card_height as f32))
+                    .child(theme_preview(scheme, base_config, dominant)),
+            )
+    };
+    rect()
+        .width(Size::fill())
+        .height(Size::fill())
+        .child(side(ColorScheme::Light, 0.0))
+        .child(side(ColorScheme::Dark, half))
+}
+
+pub(crate) fn wallpaper_background(dark: bool) -> Rect {
     rect()
         .width(Size::fill())
         .height(Size::fill())
@@ -50,15 +73,18 @@ fn wallpaper_background(dark: bool) -> Rect {
         }))
 }
 
-fn preview_panel(resolved: &Resolved) -> Rect {
+fn preview_menubar_dot(resolved: &Resolved) -> Rect {
+    let inset = SETTINGS.preview_menubar_dot_inset as f32;
+    let dot = SETTINGS.preview_menubar_dot as f32;
     rect()
-        .position(Position::new_absolute().top(0.0).left(0.0))
-        .width(Size::px(SETTINGS.preview_panel_w as f32))
-        .height(Size::px(SETTINGS.preview_panel_h as f32))
-        .background(rgba(resolved.surfaces.window))
+        .position(Position::new_absolute().left(inset).top(inset))
+        .width(Size::px(dot))
+        .height(Size::px(dot))
+        .corner_radius(dot / 2.0)
+        .background(rgba(colors_over(resolved.accent).ink))
 }
 
-fn preview_menu(resolved: &Resolved, accent: Rgba) -> VStack {
+fn preview_menu(resolved: &Resolved) -> VStack {
     let padding = SETTINGS.preview_menu_padding as f32;
     VStack::new()
         .main_align(Alignment::Start)
@@ -73,58 +99,57 @@ fn preview_menu(resolved: &Resolved, accent: Rgba) -> VStack {
         .padding(padding)
         .spacing(padding)
         .corner_radius(SETTINGS.preview_radius as f32)
-        .background(rgba(resolved.surfaces.window))
-        .child(
-            rect()
-                .width(Size::fill())
-                .height(Size::px(SETTINGS.preview_panel_h as f32))
-                .corner_radius(SETTINGS.preview_menu_line_radius as f32)
-                .background(rgba(accent)),
-        )
-        .child(preview_menu_line(resolved))
-        .child(preview_menu_line(resolved))
+        .background(rgba(Rgba {
+            a: BACKDROP.island,
+            ..resolved.surfaces.window
+        }))
+        .child(preview_menu_line(
+            SETTINGS.preview_menu_accent_h,
+            resolved.accent,
+        ))
+        .child(preview_menu_line(
+            SETTINGS.preview_menu_line_h,
+            resolved.surfaces.control,
+        ))
 }
 
-fn preview_menu_line(resolved: &Resolved) -> Rect {
+fn preview_menu_line(height: u32, color: Rgba) -> Rect {
     rect()
         .width(Size::fill())
-        .height(Size::px(SETTINGS.preview_menu_line_h as f32))
+        .height(Size::px(height as f32))
         .corner_radius(SETTINGS.preview_menu_line_radius as f32)
-        .background(rgba(resolved.surfaces.control))
+        .background(rgba(color))
 }
 
-fn preview_app(resolved: &Resolved) -> Rect {
-    let inset = SETTINGS.preview_app_inset as f32;
-    let dot = SETTINGS.preview_light as f32;
-    let dot_gap = SETTINGS.preview_dot_gap as f32;
+fn preview_window(resolved: &Resolved) -> Rect {
+    let radius = SETTINGS.preview_window_radius as f32;
+    let (x, y) = (
+        SETTINGS.preview_window_x as f32,
+        SETTINGS.preview_window_y as f32,
+    );
+    let light = SETTINGS.preview_light as f32;
+    let corner = resolved.traffic_shape.corner_radius(light);
     rect()
-        .position(Position::new_absolute().right(inset).bottom(inset))
-        .width(Size::px(SETTINGS.preview_app_w as f32))
-        .height(Size::px(SETTINGS.preview_app_h as f32))
-        .corner_radius(SETTINGS.preview_radius as f32)
+        .position(Position::new_absolute().left(x).top(y))
+        .width(Size::px(SETTINGS.card_width as f32 - x + radius))
+        .height(Size::px(SETTINGS.card_height as f32 - y + radius))
+        .corner_radius(radius)
         .background(rgba(resolved.surfaces.window))
-        .overflow(Overflow::Clip)
-        .child(
-            rect()
-                .position(Position::new_absolute().top(0.0).bottom(0.0).left(0.0))
-                .width(Size::px(SETTINGS.preview_app_side_w as f32))
-                .background(rgba(resolved.surfaces.sunken)),
-        )
         .child(
             HStack::new()
                 .main_align(Alignment::Start)
                 .cross_align(Alignment::Start)
                 .position(
                     Position::new_absolute()
-                        .left(SETTINGS.preview_dots_inset as f32)
-                        .top(SETTINGS.preview_dots_inset as f32),
+                        .left(SETTINGS.preview_dots_x as f32)
+                        .top(SETTINGS.preview_dots_y as f32),
                 )
-                .spacing(dot_gap)
+                .spacing(SETTINGS.preview_dot_gap as f32)
                 .children(resolved.lights.iter().map(|color| {
                     rect()
-                        .width(Size::px(dot))
-                        .height(Size::px(dot))
-                        .corner_radius(SETTINGS.preview_dot_radius as f32)
+                        .width(Size::px(light))
+                        .height(Size::px(light))
+                        .corner_radius(corner)
                         .background(rgba(*color))
                         .into_element()
                 })),

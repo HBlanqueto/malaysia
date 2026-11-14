@@ -103,6 +103,8 @@ They are not domain options; they are fixed and documented here:
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
 | `appearance.color_scheme` | `"light"` \| `"dark"` \| `"dark_tint"` | `"light"` | **active** | portal `org.freedesktop.appearance`, shell, **System Settings**; an old `"auto"` reads as `"light"` |
+| `appearance.automatic_scheme` | bool | `false` | **active** | «Auto» in **System Settings › Appearance**: light by day and dark from `automatic_dark_from` until `automatic_dark_until`, local time; a `"dark_tint"` scheme stays dark-tint at night. Every reader puts the scheme of the hour in `color_scheme`, and `malaysia-wallpaper` rewrites `wallpaper.state` at the switch so every process restyles within a minute |
+| `appearance.automatic_dark_from`, `appearance.automatic_dark_until` | hour 0–23 | `19`, `7` | **active** | the night of `automatic_scheme` |
 | `appearance.accent_color` | `[r,g,b]` in `[0,1]` or `null` | `null` | **active** | `null` is «Automatic» (the rainbow swatch): the theme's blue, and apps with their own accent keep it; the portal then reports no accent preference. A color forces that accent on every app. Portal, shell, effects, **System Settings**; the retired key `wallpaper_accent` is no longer read and System Settings removes it |
 | `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`), kit (`ctappearance::resolve`; also reduces transparency), **System Settings › Accessibility › Display** |
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
@@ -124,7 +126,9 @@ They are not domain options; they are fixed and documented here:
 | `appearance.text_size` | a value of `TEXT_SIZES` | `1.0` | **active** | the preferred reading size of every toolkit without its own, **System Settings › Accessibility › Display › Text size** |
 | `appearance.text_sizes` | table: `barrierkit`, `gtk`, `qt`, each a value of `TEXT_SIZES` | empty | **active** | kit (`Text`, sidebar items), portal (`text-scaling-factor` for GTK 4), shell (`GDK_DPI_SCALE` for the GTK 3 apps it opens) and the Qt bridge (qt6ct font, only with `qt_bridge`); a missing key uses `text_size` (ADR 0067). **System Settings**: `barrierkit` in Accessibility › Display › Text size, `gtk` and `qt` in Accessibility › freedesktop Options |
 | `appearance.menu_bar_size` | `"default"` \| `"large"` | `"default"` | **active** | shell: menu bar text size, **System Settings › Accessibility › Display** |
-| `appearance.icon_style` | `"default"` \| `"monochrome"` \| `"clear"` \| `"tinted"` | `"default"` | **active** | shell: every app icon it draws (Dock, launcher, notifications, dialogs) is put on a plate by the kit, `bk::symbol::Image::app_icon`, in this style and the color scheme: the icon's own hue by default (graphite in dark), translucent for `clear`, the accent for `tinted`. An icon of a Malaysia theme already is a plate and is only restyled; in a dark scheme, or with `clear`, the shell draws its `Malaysia-Dark` twin. SVG and PNG; the places keep their colors; **System Settings › Appearance** |
+| `appearance.icon_style` | `"default"` \| `"dark"` \| `"clear"` \| `"tinted"` | `"default"` | **active** | shell: every app icon it draws (Dock, launcher, notifications, dialogs) is put on a plate by the kit, `bk::symbol::Image::app_icon`, in this style: the icon's own hue by default, which never turns dark; graphite for `dark`; translucent for `clear`; `icon_color` for `tinted`. An icon of a Malaysia theme already is a plate and is only restyled; when the icons are dark, or with `clear`, the shell draws its `Malaysia-Dark` twin. The retired `"monochrome"` reads as `"tinted"` with a graphite `icon_color`. SVG and PNG; the places keep their colors; **System Settings › Appearance** («Icon style») |
+| `appearance.icon_tone` | `"light"` \| `"dark"` \| `"automatic"` | `"automatic"` | **active** | whether `dark`, `clear` and `tinted` icons are dark; `"automatic"` follows the color scheme. `dark` offers «Always» (`"dark"`) and «Automatic»; **System Settings › Appearance** |
+| `appearance.icon_color` | `[r,g,b]` in `[0,1]` or absent | absent | **active** | color of `tinted` icons and of the folders; absent follows the accent. **System Settings › Appearance** («Folder color», «Icon and folder color» with `tinted`) |
 | `appearance.shake_to_locate` | bool | `true` | **active** | compositor: shaking the pointer enlarges it, **System Settings › Accessibility › Display** |
 | `appearance.pointer_size` | a value of `POINTER_SIZES` | `1.0` | **active** | compositor: size of the cursors it draws; a cursor an app draws itself keeps the app's size (ADR 0066), **System Settings › Accessibility › Display** |
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
@@ -543,6 +547,9 @@ Like macOS, one file per domain in `~/.config/malaysia/`:
 ```toml
 # ~/.config/malaysia/appearance.domain
 color_scheme = "dark"           # light | dark | dark_tint
+automatic_scheme = false        # «Auto»: dark from automatic_dark_from until automatic_dark_until
+automatic_dark_from = 19
+automatic_dark_until = 7
 accent_color = [0.208, 0.518, 0.894]   # leave it out for «Automatic»
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
@@ -562,7 +569,8 @@ differentiate_without_color = false
 display_contrast = 1.0
 text_size = 1.0
 menu_bar_size = "default"
-icon_style = "default"
+icon_style = "default"          # default | dark | clear | tinted
+icon_tone = "automatic"         # light | dark | automatic
 shake_to_locate = true
 pointer_size = 1.0
 color_filters = false
