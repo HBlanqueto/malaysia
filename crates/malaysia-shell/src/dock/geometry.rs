@@ -1,5 +1,6 @@
 use ctdesign::{
     DOCK_MAGNIFY_RADIUS, DOCK_PADDING, DOCK_PADDING_SCALE, DOCK_SEPARATOR, DOCK_SIDE_MARGIN,
+    DOCK_SLOT_GAP, DOCK_VERTICAL_PADDING,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -20,6 +21,7 @@ pub(crate) struct Placed {
 pub(crate) struct Layout {
     tile: f32,
     pub(crate) padding: f32,
+    pub(crate) vertical_padding: f32,
     pub(crate) thickness: f32,
     pub(crate) bar_start: f32,
     pub(crate) bar_length: f32,
@@ -30,8 +32,12 @@ fn padding(tile: f32) -> f32 {
     DOCK_PADDING + DOCK_PADDING_SCALE * tile
 }
 
+fn vertical_padding(tile: f32) -> f32 {
+    DOCK_VERTICAL_PADDING * tile
+}
+
 pub(crate) fn thickness(tile: f32) -> f32 {
-    tile + 2.0 * padding(tile)
+    tile + 2.0 * vertical_padding(tile)
 }
 
 fn units(slots: &[Slot]) -> f32 {
@@ -45,12 +51,24 @@ fn units(slots: &[Slot]) -> f32 {
         .sum()
 }
 
+fn gap_units(slots: &[Slot]) -> f32 {
+    slots
+        .iter()
+        .map(|slot| match slot {
+            Slot::Tile => 1.0,
+            Slot::Wide(width) => *width,
+            Slot::Separator => 0.0,
+        })
+        .sum()
+}
+
 pub(crate) fn fit(requested: f32, main_length: f32, slots: &[Slot]) -> f32 {
     if main_length <= 0.0 {
         return requested;
     }
     let available = main_length * (1.0 - 2.0 * DOCK_SIDE_MARGIN) - 2.0 * DOCK_PADDING;
-    let fitted = available / (units(slots).max(1.0) + 2.0 * DOCK_PADDING_SCALE);
+    let fitted = (available - DOCK_SLOT_GAP * gap_units(slots))
+        / (units(slots).max(1.0) + 2.0 * DOCK_PADDING_SCALE);
     requested.min(fitted).max(1.0)
 }
 
@@ -69,8 +87,15 @@ pub(crate) fn layout(
     pointer: Option<f32>,
     magnify: f32,
 ) -> Layout {
-    let base_start = center - units(slots) * tile / 2.0;
-    let mut cursor = base_start;
+    let base_total: f32 = slots
+        .iter()
+        .map(|slot| match slot {
+            Slot::Separator => tile * DOCK_SEPARATOR,
+            Slot::Tile => tile + DOCK_SLOT_GAP,
+            Slot::Wide(width) => (tile + DOCK_SLOT_GAP) * *width,
+        })
+        .sum();
+    let mut cursor = center - base_total / 2.0;
     let sized: Vec<(f32, f32)> = slots
         .iter()
         .map(|slot| match slot {
@@ -83,14 +108,15 @@ pub(crate) fn layout(
                     Slot::Wide(width) => *width,
                     _ => 1.0,
                 };
-                let base_center = cursor + tile * width / 2.0;
-                cursor += tile * width;
+                let base_length = (tile + DOCK_SLOT_GAP) * width;
+                let base_center = cursor + base_length / 2.0;
+                cursor += base_length;
                 let grow = pointer
                     .map(|at| falloff((at - base_center).abs() / tile))
                     .unwrap_or(0.0)
                     * magnify;
                 let size = tile + (largesize.max(tile) - tile) * grow;
-                (size * width, size)
+                (size * width + DOCK_SLOT_GAP * width, size)
             }
         })
         .collect();
@@ -109,10 +135,12 @@ pub(crate) fn layout(
         })
         .collect();
     let padding = padding(tile);
+    let vertical_padding = vertical_padding(tile);
     Layout {
         tile,
         padding,
-        thickness: tile + 2.0 * padding,
+        vertical_padding,
+        thickness: tile + 2.0 * vertical_padding,
         bar_start: center - total / 2.0 - padding,
         bar_length: total + 2.0 * padding,
         placed,
@@ -147,7 +175,7 @@ mod tests {
     #[test]
     fn the_screen_width_caps_the_largest_size() {
         let tile = fit(128.0, 1920.0, &macos_screenshot_dock());
-        assert!((82.0..84.0).contains(&tile), "{tile}");
+        assert!((78.0..79.0).contains(&tile), "{tile}");
     }
 
     #[test]
@@ -184,11 +212,11 @@ mod tests {
     fn a_window_slot_is_as_wide_as_its_share_of_tiles_and_magnifies_with_the_same_height() {
         let slots = [Slot::Tile, Slot::Wide(1.5), Slot::Tile];
         let rest = layout(&slots, 40.0, 80.0, 100.0, None, 1.0);
-        assert_eq!(rest.placed[1].length, 60.0);
+        assert_eq!(rest.placed[1].length, 66.0);
         assert_eq!(rest.placed[1].size, 40.0);
         let grown = layout(&slots, 40.0, 80.0, 100.0, Some(100.0), 1.0);
         assert_eq!(grown.placed[1].size, 80.0);
-        assert_eq!(grown.placed[1].length, 120.0);
+        assert_eq!(grown.placed[1].length, 126.0);
     }
 
     #[test]
@@ -210,9 +238,9 @@ mod tests {
     #[test]
     fn a_point_in_a_slot_stands_for_its_centre_and_one_in_no_slot_for_itself() {
         let layout = layout(&[Slot::Tile, Slot::Tile], 40.0, 40.0, 40.0, None, 0.0);
-        assert_eq!(centre_of_slot_at(&layout, 1.0), 20.0);
-        assert_eq!(centre_of_slot_at(&layout, 79.0), 60.0);
-        assert_eq!(centre_of_slot_at(&layout, 81.0), 81.0);
+        assert_eq!(centre_of_slot_at(&layout, 1.0), 18.0);
+        assert_eq!(centre_of_slot_at(&layout, 79.0), 62.0);
+        assert_eq!(centre_of_slot_at(&layout, 85.0), 85.0);
     }
 
     #[test]
@@ -220,6 +248,6 @@ mod tests {
         let layout = layout(&[Slot::Tile, Slot::Tile], 40.0, 40.0, 40.0, None, 0.0);
         assert_eq!(slot_at(&layout, 1.0), Some(0));
         assert_eq!(slot_at(&layout, 41.0), Some(1));
-        assert_eq!(slot_at(&layout, 81.0), None);
+        assert_eq!(slot_at(&layout, 85.0), None);
     }
 }

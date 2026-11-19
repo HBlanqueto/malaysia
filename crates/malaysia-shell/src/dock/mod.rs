@@ -656,8 +656,8 @@ impl App for DockApp {
             0.0,
         );
         let cross0 = DOCK_EDGE_MARGIN - (layout.thickness + DOCK_EDGE_MARGIN) * (1.0 - visible);
-        let icon_cross = cross0 + layout.padding;
-        let envelope = layout.thickness.max(layout.padding + largesize);
+        let icon_cross = cross0 + layout.vertical_padding;
+        let envelope = layout.thickness.max(layout.vertical_padding + largesize);
 
         let applied_layer = use_hook(|| Rc::new(Cell::new(None::<LayerGeometry>)));
         let layer = layer_geometry(&config, layout.thickness, lifted.is_some());
@@ -761,7 +761,7 @@ impl App for DockApp {
         let menu = Menus {
             frame,
             cross0,
-            padding: layout.padding,
+            padding: layout.vertical_padding,
             menu_open,
             hovering,
             shown,
@@ -840,7 +840,8 @@ impl App for DockApp {
                     let menu_launch = open_app.clone();
                     let anchor = menu.anchor(resting.start, resting.length, resting.size);
                     let (kept, id) = (app.kept, app.id.clone());
-                    let icon_area = frame.area(slot.start, icon_cross + lift, slot.size, slot.size);
+                    let icon_left = slot.start + (slot.length - slot.size) / 2.0;
+                    let icon_area = frame.area(icon_left, icon_cross + lift, slot.size, slot.size);
                     if glass_plates {
                         plates.push(plate(icon_area));
                     }
@@ -863,8 +864,8 @@ impl App for DockApp {
                         placed(frame.area(
                             slot.start,
                             cross0,
-                            slot.size,
-                            layout.padding + lift + slot.size,
+                            slot.length,
+                            layout.vertical_padding + lift + slot.size,
                         ))
                         .on_pointer_down(on_down(
                             move |at| {
@@ -909,7 +910,7 @@ impl App for DockApp {
                         children.push(
                             placed(frame.area(
                                 center - dot / 2.0,
-                                cross0 + layout.padding - dot,
+                                cross0 + layout.vertical_padding - dot,
                                 dot,
                                 dot,
                             ))
@@ -955,7 +956,7 @@ impl App for DockApp {
                             slot.start,
                             cross0,
                             slot.length,
-                            layout.padding + slot.size,
+                            layout.vertical_padding + slot.size,
                         ))
                         .on_press(move |_| {
                             toplevels.unset_minimized(id);
@@ -1020,7 +1021,8 @@ impl App for DockApp {
                 }
                 Item::Trash => {
                     children.push(
-                        placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
+                        placed(frame.area(slot.start, icon_cross, slot.length, slot.size))
+                            .center()
                             .child(DockPlace {
                                 place: Place::Trash { full: trash_full },
                                 theme_revision,
@@ -1034,8 +1036,8 @@ impl App for DockApp {
                         placed(frame.area(
                             slot.start,
                             cross0,
-                            slot.size,
-                            layout.padding + slot.size,
+                            slot.length,
+                            layout.vertical_padding + slot.size,
                         ))
                         .on_press(move |_| xdg_open(TRASH))
                         .on_secondary_down({

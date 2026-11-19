@@ -73,7 +73,7 @@ pub(crate) fn minimize_targets(
             let slot = layout.placed[index];
             let rect = region(frame.area(
                 slot.start + slot.length / 2.0 - slot.size / 2.0,
-                DOCK_EDGE_MARGIN + layout.padding,
+                DOCK_EDGE_MARGIN + layout.vertical_padding,
                 slot.size,
                 slot.size,
             ));
