@@ -1,0 +1,87 @@
+ids = ["github-desktop", "GitHub Desktop", "io.github.shiftey.Desktop"]
+sources = [
+  "https://raw.githubusercontent.com/shiftkey/desktop/linux/app/src/main-process/menu/build-default-menu.ts",
+  "https://raw.githubusercontent.com/desktop/desktop/development/app/src/main-process/menu/build-default-menu.ts",
+  "https://raw.githubusercontent.com/electron/electron/v33.0.0/lib/browser/api/menu-item-roles.ts",
+  "https://raw.githubusercontent.com/flathub/io.github.shiftey.Desktop/master/io.github.shiftey.Desktop.desktop",
+  "https://raw.githubusercontent.com/shiftkey/desktop/linux/app/package.json",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-repository", "Ctrl+N"],
+  [],
+  ["add-local-repository", "Ctrl+O"],
+  ["clone-repository", "Ctrl+Shift+O"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["show-changes", "Ctrl+1"],
+  ["show-history", "Ctrl+2"],
+  ["repository-list", "Ctrl+T"],
+  ["branches-list", "Ctrl+B"],
+  [],
+  ["go-to-summary", "Ctrl+G"],
+  ["toggle-stashed-changes", "Ctrl+H"],
+  [],
+  ["zoom-reset", "Ctrl+0"],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+]
+
+[[menus]]
+label = "repository"
+items = [
+  ["push", "Ctrl+P"],
+  ["pull", "Ctrl+Shift+P"],
+  ["fetch", "Ctrl+Shift+T"],
+  [],
+  ["remove-repository", "Ctrl+BackSpace"],
+  [],
+  ["view-on-github", "Ctrl+Shift+G"],
+  ["open-in-terminal", "Ctrl+grave"],
+  ["show-in-file-manager", "Ctrl+Shift+F"],
+  ["open-in-editor", "Ctrl+Shift+A"],
+  ["create-issue", "Ctrl+I"],
+]
+
+[[menus]]
+label = "branch"
+items = [
+  ["new-branch", "Ctrl+Shift+N"],
+  ["rename-branch", "Ctrl+Shift+R"],
+  ["delete-branch", "Ctrl+Shift+D"],
+  [],
+  ["discard-all-changes", "Ctrl+Shift+BackSpace"],
+  ["stash-all-changes", "Ctrl+Shift+S"],
+  [],
+  ["update-from-default-branch", "Ctrl+Shift+U"],
+  ["compare-to-branch", "Ctrl+Shift+B"],
+  ["merge-into-current-branch", "Ctrl+Shift+M"],
+  ["squash-and-merge", "Ctrl+Shift+H"],
+  ["rebase-branch", "Ctrl+Shift+E"],
+  [],
+  ["compare-on-github", "Ctrl+Shift+C"],
+  ["view-branch-on-github", "Ctrl+Alt+B"],
+  ["preview-pull-request", "Ctrl+Alt+P"],
+  ["create-pull-request", "Ctrl+R"],
+]

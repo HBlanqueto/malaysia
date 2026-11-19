@@ -1,0 +1,67 @@
+ids = ["cc.arduino.IDE2", "arduino-ide", "Arduino IDE"]
+sources = [
+  "https://github.com/arduino/arduino-ide/tree/2d712a9c24d7dc46e7c11ef32a769ebc78bba645/arduino-ide-extension/src/browser/contributions (new-sketch.ts, open-sketch.ts, save-sketch.ts, save-as-sketch.ts, open-settings.ts, edit-contributions.ts, interface-scale.ts, verify-sketch.ts, upload-sketch.ts, open-sketch-external.ts, sketch-control.ts)",
+  "https://github.com/arduino/arduino-ide/blob/2d712a9c24d7dc46e7c11ef32a769ebc78bba645/arduino-ide-extension/src/browser/serial/monitor/monitor-view-contribution.tsx",
+  "https://github.com/arduino/arduino-ide/blob/2d712a9c24d7dc46e7c11ef32a769ebc78bba645/arduino-ide-extension/src/browser/theia/core/common-frontend-contribution.ts",
+  "https://github.com/arduino/arduino-ide/blob/2d712a9c24d7dc46e7c11ef32a769ebc78bba645/electron-app/package.json",
+  "https://raw.githubusercontent.com/eclipse-theia/theia/v1.57.0/packages/core/src/browser/common-frontend-contribution.ts",
+  "https://raw.githubusercontent.com/flathub/cc.arduino.IDE2/master/cc.arduino.IDE2.desktop",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["copy-for-forum", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["go-to-line", "Ctrl+L"],
+  ["toggle-comment", "Ctrl+slash"],
+  ["format-document", "Ctrl+T"],
+  [],
+  ["increase-font-size", "Ctrl+equal"],
+  ["decrease-font-size", "Ctrl+minus"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "Ctrl+G"],
+  ["find-previous", "Ctrl+Shift+G"],
+  ["use-selection-for-find", "Ctrl+E"],
+]
+
+[[menus]]
+label = "sketch"
+items = [
+  ["verify", "Ctrl+R"],
+  ["upload", "Ctrl+U"],
+  ["upload-using-programmer", "Ctrl+Shift+U"],
+  ["export-binary", "Ctrl+Alt+S"],
+  [],
+  ["show-sketch-folder", "Ctrl+Alt+K"],
+  [],
+  ["new-tab", "Ctrl+Shift+N"],
+  ["previous-tab", "Ctrl+Alt+Left"],
+  ["next-tab", "Ctrl+Alt+Right"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["serial-monitor", "Ctrl+Shift+M"],
+]

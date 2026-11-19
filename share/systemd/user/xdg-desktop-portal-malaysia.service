@@ -1,0 +1,14 @@
+[Unit]
+Description=Malaysia portal backend and GTK bridge
+PartOf=malaysia-session.target
+After=malaysia-session.target
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.impl.portal.desktop.malaysia
+ExecStart=/bin/sh -c 'exec "$${MALAYSIA_BIN_DIR:-@out@/bin}/xdg-desktop-portal-malaysia"'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=malaysia-session.target

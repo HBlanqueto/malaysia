@@ -1,0 +1,98 @@
+ids = ["firefox", "org.mozilla.firefox", "firefox-esr", "librewolf", "io.gitlab.librewolf-community"]
+sources = [
+  "https://raw.githubusercontent.com/mozilla-firefox/firefox/release/browser/base/content/browser-sets.inc.xhtml",
+  "https://raw.githubusercontent.com/mozilla-firefox/firefox/release/browser/base/content/browser-menubar.inc.xhtml",
+  "https://raw.githubusercontent.com/mozilla-firefox/firefox/release/browser/locales/en-US/browser/browserSets.ftl",
+  "https://raw.githubusercontent.com/mozilla-firefox/firefox/release/browser/locales/en-US/browser/screenshots.ftl",
+  "https://raw.githubusercontent.com/mozilla-firefox/firefox/release/toolkit/locales/en-US/toolkit/global/textActions.ftl",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-tab", "Ctrl+T"],
+  ["new-window", "Ctrl+N"],
+  ["new-private-window", "Ctrl+Shift+P"],
+  [],
+  ["open-location", "Ctrl+L"],
+  ["open", "Ctrl+O"],
+  [],
+  ["close-tab", "Ctrl+W"],
+  [],
+  ["save-as", "Ctrl+S"],
+  [],
+  ["print", "Ctrl+P"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["delete", "Delete"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "Ctrl+G"],
+  ["find-previous", "Ctrl+Shift+G"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+  [],
+  ["reload", "Ctrl+R"],
+  ["reload-skip-cache", "Ctrl+Shift+R"],
+  ["stop", "Escape"],
+  [],
+  ["toggle-sidebar", "Ctrl+Alt+Z"],
+  ["toggle-reading-view", "Ctrl+Alt+R"],
+  ["mute-tab", "Ctrl+M"],
+]
+
+[[menus]]
+label = "history"
+items = [
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  ["home", "Alt+Home"],
+  [],
+  ["history-sidebar", "Ctrl+H"],
+  ["show-all-history", "Ctrl+Shift+H"],
+  ["clear-recent-history", "Ctrl+Shift+Delete"],
+  [],
+  ["reopen-tab", "Ctrl+Shift+T"],
+  ["reopen-window", "Ctrl+Shift+N"],
+  ["search-tabs", "Ctrl+Shift+A"],
+]
+
+[[menus]]
+label = "bookmarks"
+items = [
+  ["bookmark-page", "Ctrl+D"],
+  ["bookmark-all-tabs", "Ctrl+Shift+D"],
+  [],
+  ["bookmarks-sidebar", "Ctrl+B"],
+  ["toggle-bookmarks-toolbar", "Ctrl+Shift+B"],
+  ["manage-bookmarks", "Ctrl+Shift+O"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["downloads", "Ctrl+Shift+Y"],
+  ["add-ons", "Ctrl+Shift+F"],
+  ["screenshot", "Ctrl+Shift+S"],
+  [],
+  ["view-source", "Ctrl+U"],
+  ["page-info", "Ctrl+I"],
+  ["task-manager", "Shift+Escape"],
+]

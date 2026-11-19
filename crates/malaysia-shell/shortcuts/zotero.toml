@@ -1,0 +1,75 @@
+ids = ["zotero", "org.zotero.Zotero"]
+sources = [
+  "https://www.zotero.org/support/kb/keyboard_shortcuts",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-item", "Ctrl+Shift+N"],
+  ["new-note", "Ctrl+Shift+O"],
+  [],
+  ["import", "Ctrl+Shift+I"],
+  ["import-from-clipboard", "Ctrl+Shift+Alt+I"],
+  [],
+  ["print", "Ctrl+P"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-plain", "Ctrl+Shift+V"],
+  ["delete", "Delete"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["copy-citation", "Ctrl+Shift+A"],
+  ["copy-bibliography", "Ctrl+Shift+C"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "Ctrl+G"],
+  ["find-previous", "Ctrl+Shift+G"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-tag-selector", "Ctrl+Shift+T"],
+  ["focus-libraries", "Ctrl+Shift+L"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  ["go-to-page", "Ctrl+Alt+G"],
+  [],
+  ["next-tab", "Ctrl+Page_Down"],
+  ["previous-tab", "Ctrl+Page_Up"],
+  ["list-tabs", "Ctrl+semicolon"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["highlight-tool", "Alt+1"],
+  ["underline-tool", "Alt+2"],
+  ["note-tool", "Alt+3"],
+  ["text-tool", "Alt+4"],
+  ["area-tool", "Alt+5"],
+  ["ink-tool", "Alt+6"],
+  ["eraser-tool", "Alt+7"],
+  [],
+  ["mark-all-feed-items-read", "Ctrl+Shift+R"],
+]

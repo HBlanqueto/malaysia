@@ -1,0 +1,25 @@
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+]
+confidence-threshold = 0.8
+
+exceptions = [
+]
+
+[licenses.private]
+ignore = false
+
+[sources]
+allow-git = [
+    "https://github.com/HBlanqueto/barrierkit",
+    "https://github.com/HBlanqueto/ferricast",
+    "https://github.com/SergioRibera/cros-libva",
+    "https://github.com/Smithay/smithay",
+]

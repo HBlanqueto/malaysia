@@ -1,0 +1,91 @@
+ids = ["wps-office-wps", "wps", "com.wps.Office.wps", "wps-office-prometheus", "wpsoffice", "com.wps.Office"]
+sources = [
+  "https://help.wps.com/c/wps-docs-quick-start/2104741990649942018-how-to-create-a-new-wps-docs-document",
+  "https://www.wps.com/office-quick-solution/office-app-problems/how-to-open-multiple-word-documents-in-one-window/",
+  "https://help.wps.com/c/wps-docs-quick-start/2104741989408428034-wps-docs-save-and-save-as-feature-guide",
+  "https://www.wps.com/academy/how-to-use-wps-writer-to-print-documents-quick-tutorials-1861561/",
+  "https://www.wps.com/academy/how-to-undo-and-redo-an-operation-quick-tutorials-1861531/",
+  "https://wps.com/academy/three-commonly-shortcut-keys-in-wps-office-copy-paste-and-cut-quick-tutorials-1861623",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104742019968126978-wps-writer-copy-cut-and-paste-feature-guide",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104742032064499713-wps-clear-all-formatting-feature-user-guide",
+  "https://www.wps.com/academy/how-to-use-the-selection-feature/1861696/",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104742029543723010-wps-docs-find-replace-and-locate-feature-user-guide",
+  "https://www.wps.com/academy/different-usages-of-the-break-feature/1861701/",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104742035512217601-wps-docs-hyperlink-feature-user-guide",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104741997499240449-wps-docs-bold-feature-user-guide",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104741996538744834-wps-docs-italic-feature-user-guide",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104741994852634625-wps-docs-underline-feature-user-guide",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104741994613559298-wps-docs-superscript-and-subscript-feature-user-guide",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104742021369024513-wps-docs-font-and-font-size-feature-guide",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104742021855563777-wps-docs-character-spacing-feature-user-guide",
+  "https://help.wps.com/c/wps-docs-editing-collaboration/2104742022363074562-wps-docs-alignment-feature-usage-guide",
+  "https://www.wps.com/academy/application-of-track-changes/1862164/",
+  "https://help.wps.com/c/wps-docs-references-toc/2104741986040401922-wps-docs-cross-reference-feature-user-guide",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  [],
+  ["print", "Ctrl+P"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-special", "Ctrl+Alt+V"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["replace", "Ctrl+H"],
+  ["go-to", "Ctrl+G"],
+]
+
+[[menus]]
+label = "insert"
+items = [
+  ["insert-page-break", "Ctrl+Return"],
+  ["insert-line-break", "Shift+Return"],
+  [],
+  ["insert-link", "Ctrl+K"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  [],
+  ["superscript", "Ctrl+Shift+equal"],
+  ["subscript", "Ctrl+equal"],
+  [],
+  ["increase-font-size", "Ctrl+bracketright"],
+  ["decrease-font-size", "Ctrl+bracketleft"],
+  ["font", "Ctrl+D"],
+  [],
+  ["align-left", "Ctrl+L"],
+  ["align-center", "Ctrl+E"],
+  ["align-right", "Ctrl+R"],
+  ["justify", "Ctrl+J"],
+  ["distribute", "Ctrl+Shift+J"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["track-changes", "Ctrl+Shift+E"],
+  [],
+  ["update-fields", "F9"],
+  ["toggle-field-codes", "Alt+F9"],
+]

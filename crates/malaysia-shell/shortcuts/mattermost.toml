@@ -1,0 +1,90 @@
+ids = ["mattermost-desktop", "Mattermost.Desktop", "com.mattermost.Desktop", "Mattermost"]
+sources = [
+  "https://github.com/mattermost/desktop/blob/v6.3.2/src/app/menus/appMenu/file.ts",
+  "https://github.com/mattermost/desktop/blob/v6.3.2/src/app/menus/appMenu/edit.ts",
+  "https://github.com/mattermost/desktop/blob/v6.3.2/src/app/menus/appMenu/view.ts",
+  "https://github.com/mattermost/desktop/blob/v6.3.2/src/app/menus/appMenu/history.ts",
+  "https://github.com/mattermost/desktop/blob/v6.3.2/src/app/menus/appMenu/window.ts",
+  "https://github.com/mattermost/desktop/blob/v6.3.2/package.json",
+  "https://github.com/flathub/com.mattermost.Desktop/blob/master/com.mattermost.Desktop.desktop",
+  "https://docs.mattermost.com/end-user-guide/collaborate/keyboard-shortcuts.html",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+N"],
+  ["new-tab", "Ctrl+T"],
+  [],
+  ["attach-file", "Ctrl+U"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-plain", "Ctrl+Shift+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["search", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-right-panel", "Ctrl+period"],
+  ["toggle-mentions", "Ctrl+Shift+M"],
+  [],
+  ["reload", "Ctrl+R"],
+  ["reload-skip-cache", "Ctrl+Shift+R"],
+  [],
+  ["zoom-reset", "Ctrl+0"],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["insert-link", "Ctrl+Alt+K"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  [],
+  ["quick-open", "Ctrl+K"],
+  ["direct-messages", "Ctrl+Shift+K"],
+  [],
+  ["previous-conversation", "Alt+Up"],
+  ["next-conversation", "Alt+Down"],
+  ["previous-unread", "Shift+Alt+Up"],
+  ["next-unread", "Shift+Alt+Down"],
+  [],
+  ["focus-composer", "Ctrl+Shift+L"],
+  [],
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+  ["show-servers", "Ctrl+Shift+S"],
+]
+
+[[menus]]
+label = "conversation"
+items = [
+  ["add-reaction", "Ctrl+Shift+backslash"],
+  [],
+  ["start-call", "Ctrl+Alt+S"],
+  ["toggle-microphone", "Ctrl+Shift+space"],
+]

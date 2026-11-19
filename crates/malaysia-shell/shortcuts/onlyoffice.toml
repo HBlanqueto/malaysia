@@ -1,0 +1,140 @@
+ids = ["onlyoffice-desktopeditors", "onlyoffice-desktopeditors-enterprise", "ONLYOFFICE", "org.onlyoffice.desktopeditors"]
+sources = [
+  "https://helpcenter.onlyoffice.com/docs/userguides/document_editor/keyboardshortcuts.aspx",
+  "https://helpcenter.onlyoffice.com/docs/userguides/spreadsheet_editor/KeyboardShortcuts.aspx",
+  "https://helpcenter.onlyoffice.com/docs/userguides/presentation_editor/KeyboardShortcuts.aspx",
+  "https://raw.githubusercontent.com/ONLYOFFICE/desktop-apps/master/package/common/linux/desktopeditors.desktop.m4",
+  "https://raw.githubusercontent.com/ONLYOFFICE/desktop-apps/master/package/common/linux/defines.m4",
+  "https://raw.githubusercontent.com/ONLYOFFICE/desktop-apps/master/package/Makefile",
+  "https://raw.githubusercontent.com/flathub/org.onlyoffice.desktopeditors/master/org.onlyoffice.desktopeditors.json",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  [],
+  ["print", "Ctrl+P"],
+  [],
+  ["close-document", "Ctrl+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-plain", "Ctrl+Shift+V"],
+  [],
+  ["copy-style", "Ctrl+Alt+C"],
+  ["apply-style", "Ctrl+Alt+V"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["replace", "Ctrl+H"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+  [],
+  ["show-comments", "Ctrl+Shift+H"],
+  ["show-nonprinting", "Ctrl+Shift+8"],
+  [],
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]
+
+[[menus]]
+label = "insert"
+items = [
+  ["insert-link", "Ctrl+K"],
+  ["insert-comment", "Alt+H"],
+  [],
+  ["insert-page-break", "Ctrl+Return"],
+  ["insert-column-break", "Ctrl+Shift+Return"],
+  ["insert-page-number", "Ctrl+Shift+P"],
+  [],
+  ["insert-footnote", "Ctrl+Alt+F"],
+  ["insert-endnote", "Ctrl+Alt+D"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  ["strikethrough", "Ctrl+5"],
+  ["subscript", "Ctrl+period"],
+  ["superscript", "Ctrl+comma"],
+  [],
+  ["increase-font-size", "Ctrl+bracketright"],
+  ["decrease-font-size", "Ctrl+bracketleft"],
+  [],
+  ["align-left", "Ctrl+L"],
+  ["align-center", "Ctrl+E"],
+  ["align-right", "Ctrl+R"],
+  ["justify", "Ctrl+J"],
+  [],
+  ["bullet-list", "Ctrl+Shift+L"],
+  ["increase-indent", "Ctrl+M"],
+  ["decrease-indent", "Ctrl+Shift+M"],
+  [],
+  ["heading-1", "Alt+1"],
+  ["heading-2", "Alt+2"],
+  ["heading-3", "Alt+3"],
+  [],
+  ["clear-formatting", "Ctrl+space"],
+]
+
+[[menus]]
+label = "data"
+items = [
+  ["insert-function", "Shift+F3"],
+  ["autosum", "Alt+equal"],
+  ["show-formulas", "Ctrl+grave"],
+  ["recalculate", "F9"],
+  [],
+  ["edit-cell", "F2"],
+  ["insert-cells", "Ctrl+Shift+equal"],
+  ["delete-cells", "Ctrl+Shift+minus"],
+  ["insert-date", "Ctrl+semicolon"],
+  ["insert-time", "Ctrl+Shift+semicolon"],
+  [],
+  ["number-format", "Ctrl+1"],
+  ["format-as-table", "Ctrl+L"],
+  ["toggle-filter", "Ctrl+Shift+L"],
+  ["refresh-pivot-table", "Alt+F5"],
+  [],
+  ["previous-sheet", "Alt+Page_Up"],
+  ["next-sheet", "Alt+Page_Down"],
+]
+
+[[menus]]
+label = "slide"
+items = [
+  ["new-slide", "Ctrl+M"],
+  ["duplicate", "Ctrl+D"],
+  [],
+  ["move-slide-up", "Ctrl+Up"],
+  ["move-slide-down", "Ctrl+Down"],
+  ["move-slide-to-start", "Ctrl+Shift+Up"],
+  ["move-slide-to-end", "Ctrl+Shift+Down"],
+  [],
+  ["group", "Ctrl+G"],
+  ["ungroup", "Ctrl+Shift+G"],
+  [],
+  ["start-slideshow", "Ctrl+F5"],
+]

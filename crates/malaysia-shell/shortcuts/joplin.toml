@@ -1,0 +1,88 @@
+ids = ["joplin", "Joplin", "appimagekit-joplin", "net.cozic.joplin_desktop"]
+sources = [
+  "https://raw.githubusercontent.com/laurent22/joplin/v3.7.22/packages/lib/services/KeymapService.ts",
+  "https://raw.githubusercontent.com/laurent22/joplin/v3.7.22/packages/app-desktop/gui/MenuBar.tsx",
+  "https://raw.githubusercontent.com/laurent22/joplin/dev/packages/app-desktop/package.json",
+  "https://raw.githubusercontent.com/laurent22/joplin/dev/Joplin_install_and_update.sh",
+  "https://raw.githubusercontent.com/flathub/net.cozic.joplin_desktop/master/net.cozic.joplin_desktop.yml",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-note", "Ctrl+N"],
+  ["new-todo", "Ctrl+T"],
+  ["open-note-in-new-window", "Ctrl+Alt+N"],
+  [],
+  ["synchronize", "Ctrl+S"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-plain", "Ctrl+Shift+V"],
+  ["paste-markdown", "Ctrl+Shift+Alt+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["delete-line", "Ctrl+D"],
+  ["duplicate-line", "Ctrl+Shift+D"],
+  ["move-line-up", "Alt+Up"],
+  ["move-line-down", "Alt+Down"],
+  ["sort-lines", "Ctrl+Alt+S"],
+  ["toggle-comment", "Ctrl+slash"],
+  [],
+  ["find", "Ctrl+F"],
+  ["search", "F6"],
+  ["external-editing", "Ctrl+E"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-sidebar", "F10"],
+  ["toggle-note-list", "F11"],
+  ["toggle-editor-layout", "Ctrl+L"],
+  ["toggle-editors", "Ctrl+Alt+E"],
+  [],
+  ["zoom-reset", "Ctrl+0"],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["go-to-anything", "Ctrl+P"],
+  ["command-palette", "Ctrl+Shift+P"],
+  [],
+  ["focus-sidebar", "Ctrl+Shift+S"],
+  ["focus-note-list", "Ctrl+Shift+L"],
+  ["focus-note-title", "Ctrl+Shift+N"],
+  ["focus-note-body", "Ctrl+Shift+B"],
+  ["focus-toolbar", "Ctrl+Shift+O"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["inline-code", "Ctrl+grave"],
+  ["insert-link", "Ctrl+K"],
+  ["link-to-note", "Shift+Alt+L"],
+  [],
+  ["bullet-list", "Ctrl+Alt+minus"],
+  ["increase-indent", "Ctrl+bracketright"],
+  ["decrease-indent", "Ctrl+bracketleft"],
+  [],
+  ["insert-date-time", "Ctrl+Shift+T"],
+  ["set-tags", "Ctrl+Alt+T"],
+]

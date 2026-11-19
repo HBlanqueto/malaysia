@@ -1,0 +1,165 @@
+ids = ["jetbrains-idea", "jetbrains-idea-ce", "jetbrains-pycharm", "jetbrains-pycharm-ce", "jetbrains-webstorm", "jetbrains-clion", "jetbrains-goland", "jetbrains-rustrover", "jetbrains-phpstorm", "jetbrains-studio", "com.jetbrains.IntelliJ-IDEA-Ultimate", "com.jetbrains.IntelliJ-IDEA-Community", "com.jetbrains.PyCharm-Community", "com.jetbrains.PyCharm-Professional", "com.jetbrains.WebStorm", "com.jetbrains.CLion", "com.jetbrains.GoLand", "com.jetbrains.RustRover", "com.jetbrains.PhpStorm", "com.google.AndroidStudio"]
+sources = [
+  "https://www.jetbrains.com/help/idea/reference-keymap-win-default.html",
+  "https://www.jetbrains.com/help/idea/mastering-keyboard-shortcuts.html",
+  "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/platform-resources/src/keymaps/$default.xml",
+  "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/platform-resources/src/keymaps/Default%20for%20XWin.xml",
+  "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/platform-impl/src/com/intellij/openapi/keymap/impl/DefaultKeymap.kt",
+  "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/platform-impl/src/com/intellij/ui/AppUIUtil.kt",
+  "https://flathub.org/api/v2/appstream/com.jetbrains.IntelliJ-IDEA-Ultimate",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-scratch-file", "Ctrl+Shift+Alt+Insert"],
+  [],
+  ["save-all", "Ctrl+S"],
+  ["reload-from-disk", "Ctrl+Alt+Y"],
+  [],
+  ["close-tab", "Ctrl+F4"],
+  [],
+  ["settings", "Ctrl+Alt+S"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-plain", "Ctrl+Shift+Alt+V"],
+  ["paste-from-history", "Ctrl+Shift+V"],
+  ["copy-path", "Ctrl+Shift+C"],
+  [],
+  ["select-all", "Ctrl+A"],
+  ["extend-selection", "Ctrl+W"],
+  ["shrink-selection", "Ctrl+Shift+W"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  ["replace", "Ctrl+R"],
+  ["find-in-files", "Ctrl+Shift+F"],
+  ["replace-in-files", "Ctrl+Shift+R"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+A"],
+  ["recent-files", "Ctrl+E"],
+  ["file-structure", "Ctrl+F12"],
+  ["quick-documentation", "Ctrl+Q"],
+  [],
+  ["toggle-sidebar", "Alt+1"],
+  ["bookmarks-window", "Alt+2"],
+  ["find-window", "Alt+3"],
+  ["run-window", "Alt+4"],
+  ["debug-window", "Alt+5"],
+  ["problems-window", "Alt+6"],
+  ["structure-window", "Alt+7"],
+  ["version-control-window", "Alt+9"],
+  ["commit-window", "Alt+0"],
+  ["toggle-terminal", "Alt+F12"],
+  ["hide-all-tool-windows", "Ctrl+Shift+F12"],
+  [],
+  ["zoom-in", "Ctrl+Shift+Alt+equal"],
+  ["zoom-out", "Ctrl+Shift+Alt+minus"],
+  ["zoom-reset", "Ctrl+Shift+Alt+0"],
+]
+
+[[menus]]
+label = "navigate"
+items = [
+  ["back", "Ctrl+Alt+Left"],
+  ["forward", "Ctrl+Alt+Right"],
+  ["last-edit-location", "Ctrl+Shift+BackSpace"],
+  [],
+  ["quick-open", "Ctrl+Shift+N"],
+  ["go-to-class", "Ctrl+N"],
+  ["go-to-symbol", "Ctrl+Shift+Alt+N"],
+  ["go-to-line", "Ctrl+G"],
+  [],
+  ["go-to-definition", "Ctrl+B"],
+  ["go-to-implementation", "Ctrl+Alt+B"],
+  ["go-to-type-declaration", "Ctrl+Shift+B"],
+  ["go-to-super-method", "Ctrl+U"],
+  ["go-to-test", "Ctrl+Shift+T"],
+  ["find-usages", "Alt+F7"],
+  [],
+  ["next-error", "F2"],
+  ["previous-error", "Shift+F2"],
+  ["next-tab", "Alt+Right"],
+  ["previous-tab", "Alt+Left"],
+  ["toggle-bookmark", "F11"],
+  ["show-bookmarks", "Shift+F11"],
+]
+
+[[menus]]
+label = "code"
+items = [
+  ["show-context-actions", "Alt+Return"],
+  ["complete-code", "Ctrl+space"],
+  ["generate-code", "Alt+Insert"],
+  ["surround-with", "Ctrl+Alt+T"],
+  ["parameter-info", "Ctrl+P"],
+  [],
+  ["toggle-comment", "Ctrl+slash"],
+  ["toggle-block-comment", "Ctrl+Shift+slash"],
+  ["format-document", "Ctrl+Alt+L"],
+  ["optimize-imports", "Ctrl+Alt+O"],
+  ["auto-indent-lines", "Ctrl+Alt+I"],
+  [],
+  ["duplicate", "Ctrl+D"],
+  ["delete-line", "Ctrl+Y"],
+  ["join-lines", "Ctrl+Shift+J"],
+  ["toggle-case", "Ctrl+Shift+U"],
+  ["move-line-up", "Shift+Alt+Up"],
+  ["move-line-down", "Shift+Alt+Down"],
+]
+
+[[menus]]
+label = "refactor"
+items = [
+  ["refactor-this", "Ctrl+Shift+Alt+T"],
+  [],
+  ["rename-symbol", "Shift+F6"],
+  ["change-signature", "Ctrl+F6"],
+  [],
+  ["extract-method", "Ctrl+Alt+M"],
+  ["introduce-variable", "Ctrl+Alt+V"],
+  ["introduce-field", "Ctrl+Alt+F"],
+  ["introduce-constant", "Ctrl+Alt+C"],
+  ["introduce-parameter", "Ctrl+Alt+P"],
+  ["inline", "Ctrl+Alt+N"],
+  [],
+  ["move-element", "F6"],
+  ["copy-element", "F5"],
+  ["safe-delete", "Alt+Delete"],
+]
+
+[[menus]]
+label = "run"
+items = [
+  ["run", "Shift+F10"],
+  ["debug", "Shift+F9"],
+  ["run-configuration", "Shift+Alt+F10"],
+  ["debug-configuration", "Shift+Alt+F9"],
+  ["rerun", "Ctrl+F5"],
+  ["stop", "Ctrl+F2"],
+  [],
+  ["build-project", "Ctrl+F9"],
+  [],
+  ["step-over", "F8"],
+  ["step-into", "F7"],
+  ["step-out", "Shift+F8"],
+  ["resume", "F9"],
+  ["evaluate-expression", "Alt+F8"],
+  [],
+  ["toggle-breakpoint", "Ctrl+F8"],
+  ["view-breakpoints", "Ctrl+Shift+F8"],
+]

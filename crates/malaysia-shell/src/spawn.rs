@@ -1,0 +1,316 @@
+use std::collections::HashMap;
+use std::env;
+use std::ffi::OsStr;
+use std::fs::OpenOptions;
+use std::io;
+use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+const WRAPPER_ENV: [&str; 4] = [
+    "LD_LIBRARY_PATH",
+    "__EGL_VENDOR_LIBRARY_DIRS",
+    "LIBGL_DRIVERS_PATH",
+    "GBM_BACKENDS_PATH",
+];
+
+pub(crate) fn app_command(program: impl AsRef<OsStr>, app_id: Option<&str>) -> Command {
+    if std::env::var_os("INVOCATION_ID").is_none() {
+        return Command::new(program);
+    }
+    let mut command = Command::new("systemd-run");
+    command.args([
+        "--user",
+        "--scope",
+        "--slice=app.slice",
+        "--collect",
+        "--quiet",
+    ]);
+    if let Some(app_id) = app_id {
+        command.arg(format!(
+            "--unit={}",
+            crate::app_scope::scope_name(app_id, unique())
+        ));
+    }
+    command.arg("--").arg(program);
+    command
+}
+
+fn unique() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos() as u64)
+}
+
+fn detached(mut command: Command) -> io::Result<()> {
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = command.spawn()?;
+    std::thread::spawn(move || child.wait());
+    Ok(())
+}
+
+pub(crate) fn spawn_client(mut command: Command) -> io::Result<()> {
+    sanitize_client_env(&mut command);
+    if let Some(language) = ctappearance::language::system_language() {
+        command.env("LANGUAGE", language);
+    }
+    apply_gtk3_text_size(&mut command);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    detached(command)
+}
+
+fn apply_gtk3_text_size(command: &mut Command) {
+    if env::var_os("GDK_DPI_SCALE").is_none() {
+        let scale = ctappearance::load_appearance().text_size_for(ctappearance::Toolkit::Gtk);
+        command.env("GDK_DPI_SCALE", scale.to_string());
+    }
+}
+
+pub(crate) fn spawn_component(component: &str) {
+    spawn_component_with(component, &[]);
+}
+
+pub(crate) fn spawn_component_with(component: &str, args: &[&str]) {
+    let mut command = Command::new(
+        sibling_binary("malaysia-shell").unwrap_or_else(|| PathBuf::from("malaysia-shell")),
+    );
+    command.arg(component).args(args);
+    spawn_kit(&format!("malaysia-shell-{component}"), command);
+}
+
+pub(crate) fn spawn_settings() {
+    spawn_settings_with(&[]);
+}
+
+fn spawn_settings_with(args: &[&str]) {
+    let program = sibling_binary("malaysia-settings")
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| PathBuf::from("malaysia-settings"));
+    let mut command = Command::new(program);
+    command.args(args);
+    spawn_kit("malaysia-settings", command);
+}
+
+pub(crate) fn open_settings(pane: &str) {
+    let pane = pane.to_string();
+    let spawned = std::thread::Builder::new()
+        .name("open-settings".to_string())
+        .spawn(move || {
+            if let Err(error) = forward_to_settings(&pane) {
+                tracing::debug!(%error, "System Settings not running");
+                spawn_settings_with(&[&pane]);
+            }
+        });
+    if let Err(error) = spawned {
+        tracing::warn!(%error, "no thread to open System Settings");
+    }
+}
+
+pub(crate) fn application_path(app_id: &str) -> String {
+    format!("/{}", app_id.replace('.', "/").replace('-', "_"))
+}
+
+fn forward_to_settings(pane: &str) -> zbus::Result<()> {
+    let app_id = bk::titlebar::app_id("settings");
+    let path = application_path(&app_id);
+    let bus = zbus::blocking::Connection::session()?;
+    let platform_data: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
+    let action = format!("{}{pane}", malaysia_services::SETTINGS_PANE_ACTION);
+    let no_parameter: Vec<zbus::zvariant::Value> = Vec::new();
+    bus.call_method(
+        Some(app_id.as_str()),
+        path.as_str(),
+        Some("org.freedesktop.Application"),
+        "ActivateAction",
+        &(action, no_parameter, &platform_data),
+    )?;
+    bus.call_method(
+        Some(app_id.as_str()),
+        path.as_str(),
+        Some("org.freedesktop.Application"),
+        "Activate",
+        &(&platform_data,),
+    )?;
+    Ok(())
+}
+
+fn spawn_kit(name: &str, mut command: Command) {
+    if env::var_os("WAYLAND_DISPLAY").is_none() {
+        tracing::warn!(name, "cannot spawn kit binary: WAYLAND_DISPLAY not set");
+        return;
+    }
+    let log = kit_log_path(name);
+    let output = || log.as_deref().map_or_else(Stdio::null, open_log);
+    command
+        .stdin(Stdio::null())
+        .stdout(output())
+        .stderr(output());
+    restore_original_env(&mut command);
+    tracing::info!(name, program = %Path::new(command.get_program()).display(), "spawning kit binary");
+    if let Err(error) = detached(command) {
+        tracing::warn!(name, %error, "could not spawn kit binary");
+    }
+}
+
+fn sibling_binary(name: &str) -> Option<PathBuf> {
+    Some(env::current_exe().ok()?.parent()?.join(name))
+}
+
+pub(crate) fn xdg_open(path: impl AsRef<Path>) {
+    let path = path.as_ref();
+    let mut command = app_command("xdg-open", None);
+    command.arg(path);
+    match spawn_client(command) {
+        Ok(()) => tracing::debug!(path = %path.display(), "xdg-open"),
+        Err(error) => tracing::warn!(path = %path.display(), %error, "could not open"),
+    }
+}
+
+fn sanitize_client_env(command: &mut Command) {
+    for name in WRAPPER_ENV {
+        command.env_remove(name);
+    }
+    restore_original_env(command);
+}
+
+fn restore_original_env(command: &mut Command) {
+    for name in WRAPPER_ENV {
+        let saved = format!("MALAYSIA_ORIG_{name}");
+        if let Some(value) = env::var_os(&saved).filter(|value| !value.is_empty()) {
+            command.env(name, value);
+        }
+        command.env_remove(saved);
+    }
+}
+
+fn kit_log_path(name: &str) -> Option<PathBuf> {
+    let runtime = env::var_os("XDG_RUNTIME_DIR")?;
+    let dir = PathBuf::from(runtime).join("malaysia");
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        tracing::warn!(dir = %dir.display(), %error, "could not create log dir");
+        return None;
+    }
+    Some(dir.join(format!("{name}.log")))
+}
+
+fn open_log(path: &Path) -> Stdio {
+    match OpenOptions::new().create(true).append(true).open(path) {
+        Ok(file) => Stdio::from(file),
+        Err(_) => Stdio::null(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use std::process::Command;
+
+    use super::{restore_original_env, sanitize_client_env};
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn with_env<F: FnOnce()>(f: F) {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        f();
+    }
+
+    struct EnvGuard<'a> {
+        name: &'a str,
+        old: Option<std::ffi::OsString>,
+    }
+
+    impl Drop for EnvGuard<'_> {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.old {
+                    Some(value) => env::set_var(self.name, value),
+                    None => env::remove_var(self.name),
+                }
+            }
+        }
+    }
+
+    fn guard(name: &str) -> EnvGuard<'_> {
+        EnvGuard {
+            name,
+            old: env::var_os(name),
+        }
+    }
+
+    #[test]
+    fn client_env_strips_wrapper_and_restores_original() {
+        with_env(|| {
+            let _ld = guard("LD_LIBRARY_PATH");
+            let _orig = guard("MALAYSIA_ORIG_LD_LIBRARY_PATH");
+            unsafe {
+                env::set_var("LD_LIBRARY_PATH", "/wrapper/lib");
+                env::set_var("MALAYSIA_ORIG_LD_LIBRARY_PATH", "/orig/lib");
+            }
+
+            let mut command = Command::new("env");
+            sanitize_client_env(&mut command);
+            let output = command.output().expect("env should run");
+            let text = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                text.contains("LD_LIBRARY_PATH=/orig/lib"),
+                "sanitized env should restore the original path: {text}"
+            );
+            assert!(
+                !text.contains("/wrapper/lib"),
+                "sanitized env should drop the wrapper path: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn kit_env_keeps_dev_library_path_when_no_original_saved() {
+        with_env(|| {
+            let _ld = guard("LD_LIBRARY_PATH");
+            let _orig = guard("MALAYSIA_ORIG_LD_LIBRARY_PATH");
+            unsafe {
+                env::set_var("LD_LIBRARY_PATH", "/dev/lib");
+                env::remove_var("MALAYSIA_ORIG_LD_LIBRARY_PATH");
+            }
+
+            let mut command = Command::new("env");
+            restore_original_env(&mut command);
+            let output = command.output().expect("env should run");
+            let text = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                text.contains("LD_LIBRARY_PATH=/dev/lib"),
+                "kit env should keep the dev shell path: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn kit_env_restores_original_when_it_was_saved() {
+        with_env(|| {
+            let _ld = guard("LD_LIBRARY_PATH");
+            let _orig = guard("MALAYSIA_ORIG_LD_LIBRARY_PATH");
+            unsafe {
+                env::set_var("LD_LIBRARY_PATH", "/wrapper/lib");
+                env::set_var("MALAYSIA_ORIG_LD_LIBRARY_PATH", "/orig/lib");
+            }
+
+            let mut command = Command::new("env");
+            restore_original_env(&mut command);
+            let output = command.output().expect("env should run");
+            let text = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                text.contains("LD_LIBRARY_PATH=/orig/lib"),
+                "kit env should restore the original path when it was saved: {text}"
+            );
+        });
+    }
+}

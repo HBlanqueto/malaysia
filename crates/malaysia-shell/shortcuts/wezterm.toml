@@ -1,0 +1,39 @@
+ids = ["org.wezfurlong.wezterm", "wezterm"]
+sources = [
+  "https://wezterm.org/config/default-keys.html",
+  "https://raw.githubusercontent.com/wezterm/wezterm/main/assets/wezterm.desktop",
+  "https://raw.githubusercontent.com/wezterm/wezterm/main/ci/deploy.sh",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+N"],
+  ["new-tab", "Ctrl+Shift+T"],
+  [],
+  ["close-tab", "Ctrl+Shift+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+  [],
+  ["find", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]

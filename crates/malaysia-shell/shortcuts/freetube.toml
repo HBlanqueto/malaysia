@@ -1,0 +1,58 @@
+ids = ["freetube", "io.freetubeapp.FreeTube", "FreeTube"]
+sources = [
+  "https://github.com/FreeTubeApp/FreeTube/blob/v0.26.0-beta/src/main/index.js",
+  "https://github.com/FreeTubeApp/FreeTube/blob/v0.26.0-beta/src/constants.js",
+  "https://github.com/FreeTubeApp/FreeTube/blob/v0.26.0-beta/static/locales/en-US.yaml",
+  "https://github.com/FreeTubeApp/FreeTube/blob/v0.26.0-beta/_scripts/ebuilder.config.mjs",
+  "https://github.com/electron/electron/blob/main/shell/browser/api/electron_api_menu_roles.cc",
+  "https://github.com/flathub/io.freetubeapp.FreeTube/blob/master/io.freetubeapp.FreeTube.desktop",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+N"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-plain", "Ctrl+Shift+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["search", "Ctrl+L"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-reset", "Ctrl+0"],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  [],
+  ["history", "Ctrl+H"],
+]
+
+[[menus]]
+label = "playback"
+items = [
+  ["seek-backward", "Left"],
+  ["seek-forward", "Right"],
+  ["previous-chapter", "Ctrl+Left"],
+  ["next-chapter", "Ctrl+Right"],
+  [],
+  ["volume-up", "Up"],
+  ["volume-down", "Down"],
+]

@@ -1,0 +1,40 @@
+ids = ["kitty"]
+sources = [
+  "https://sw.kovidgoyal.net/kitty/overview/",
+  "https://sw.kovidgoyal.net/kitty/conf/",
+  "https://sw.kovidgoyal.net/kitty/invocation/",
+  "https://raw.githubusercontent.com/kovidgoyal/kitty/master/setup.py",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+N"],
+  ["new-tab", "Ctrl+Shift+T"],
+  [],
+  ["close-tab", "Ctrl+Shift+Q"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+  [],
+  ["find", "Ctrl+Shift+slash"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+Shift+equal"],
+  ["zoom-out", "Ctrl+Shift+minus"],
+  ["zoom-reset", "Ctrl+Shift+BackSpace"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]

@@ -1,0 +1,65 @@
+ids = ["org.telegram.desktop", "telegramdesktop", "TelegramDesktop"]
+sources = [
+  "https://raw.githubusercontent.com/telegramdesktop/tdesktop/dev/Telegram/SourceFiles/core/shortcuts.cpp",
+  "https://raw.githubusercontent.com/telegramdesktop/tdesktop/dev/Telegram/SourceFiles/core/shortcuts.h",
+  "https://raw.githubusercontent.com/telegramdesktop/tdesktop/dev/lib/xdg/org.telegram.desktop.desktop",
+  "https://raw.githubusercontent.com/desktop-app/lib_ui/master/ui/widgets/fields/input_field.h",
+  "https://raw.githubusercontent.com/desktop-app/lib_ui/master/ui/widgets/fields/input_field.cpp",
+  "https://doc.qt.io/qt-6/qkeysequence.html",
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["search", "Ctrl+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["next-folder", "Ctrl+Shift+Down"],
+  ["previous-folder", "Ctrl+Shift+Up"],
+  [],
+  ["saved-messages", "Ctrl+0"],
+  ["archived-chats", "Ctrl+9"],
+  ["contacts", "Ctrl+J"],
+  [],
+  ["lock-app", "Ctrl+L"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  ["strikethrough", "Ctrl+Shift+X"],
+  ["inline-code", "Ctrl+Shift+M"],
+  ["quote", "Ctrl+Shift+period"],
+  ["spoiler", "Ctrl+Shift+P"],
+  [],
+  ["insert-link", "Ctrl+K"],
+  [],
+  ["clear-formatting", "Ctrl+Shift+N"],
+]
+
+[[menus]]
+label = "conversation"
+items = [
+  ["next-conversation", "Ctrl+Page_Down"],
+  ["previous-conversation", "Ctrl+Page_Up"],
+  ["first-conversation", "Ctrl+Alt+Home"],
+  ["last-conversation", "Ctrl+Alt+End"],
+  [],
+  ["conversation-menu", "Ctrl+backslash"],
+  ["conversation-preview", "Ctrl+bracketright"],
+]

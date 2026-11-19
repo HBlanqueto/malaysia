@@ -1,0 +1,85 @@
+ids = ["com.logseq.Logseq", "Logseq"]
+sources = [
+  "https://github.com/logseq/logseq/blob/2.0.2/src/main/frontend/modules/shortcut/config.cljs",
+  "https://github.com/logseq/logseq/blob/2.0.2/src/electron/electron/core.cljs",
+  "https://github.com/logseq/logseq/blob/2.0.2/src/resources/dicts/en.edn",
+  "https://github.com/electron/electron/blob/main/shell/browser/api/electron_api_menu_roles.cc",
+  "https://github.com/flathub/com.logseq.Logseq/blob/master/com.logseq.Logseq.desktop",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+N"],
+  ["open-graph", "Shift+Alt+G"],
+  [],
+  ["save", "Ctrl+S"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["copy-as-text", "Ctrl+Shift+C"],
+  ["copy-block-embed", "Ctrl+Shift+E"],
+  ["paste-one-block", "Ctrl+Shift+V"],
+  [],
+  ["select-all-blocks", "Ctrl+Shift+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "Ctrl+G"],
+  ["find-previous", "Ctrl+Shift+G"],
+  ["search-in-page", "Ctrl+Shift+K"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  ["toggle-contents", "Shift+Alt+C"],
+  [],
+  ["expand-block", "Ctrl+Down"],
+  ["collapse-block", "Ctrl+Up"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+  [],
+  ["reload", "Ctrl+R"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["strikethrough", "Ctrl+Shift+S"],
+  ["highlight", "Ctrl+Shift+H"],
+  [],
+  ["insert-link", "Ctrl+L"],
+  ["insert-comment", "Ctrl+space"],
+  ["add-property", "Ctrl+Alt+P"],
+  ["cycle-todo", "Ctrl+Return"],
+  [],
+  ["move-block-up", "Shift+Alt+Up"],
+  ["move-block-down", "Shift+Alt+Down"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["back", "Ctrl+bracketleft"],
+  ["forward", "Ctrl+bracketright"],
+  [],
+  ["go-to-search", "Ctrl+K"],
+  ["follow-link", "Ctrl+O"],
+  ["open-link-in-sidebar", "Ctrl+Shift+O"],
+  ["open-today-in-sidebar", "Shift+Alt+J"],
+  [],
+  ["quick-add", "Ctrl+Alt+E"],
+  ["toggle-favorite", "Ctrl+Shift+F"],
+]

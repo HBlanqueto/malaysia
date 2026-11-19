@@ -1,0 +1,100 @@
+ids = ["planmaker-2024", "planmaker-free24", "planmaker-nx", "pm"]
+sources = [
+  "https://www.softmaker.net/down/pm2024manual_en.pdf",
+  "https://www.softmaker.net/down/pm2026manual_en.pdf",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  [],
+  ["print", "Ctrl+P"],
+  [],
+  ["file-manager", "F12"],
+  ["close-document", "Ctrl+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  ["repeat", "Ctrl+Shift+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["replace", "Ctrl+H"],
+  ["find-next", "F3"],
+  ["go-to", "Ctrl+G"],
+  [],
+  ["edit-cell", "F2"],
+  ["insert-cells", "Ctrl+equal"],
+  ["delete-cells", "Ctrl+minus"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-ribbon", "Ctrl+F1"],
+  [],
+  ["next-sheet", "Ctrl+Tab"],
+  ["previous-sheet", "Ctrl+Shift+Tab"],
+  [],
+  ["next-document", "Ctrl+F6"],
+  ["previous-document", "Ctrl+Shift+F6"],
+]
+
+[[menus]]
+label = "insert"
+items = [
+  ["insert-function", "F7"],
+  ["insert-table", "Ctrl+T"],
+  ["insert-link", "Ctrl+K"],
+  ["insert-comment", "Shift+F2"],
+  [],
+  ["insert-date", "Ctrl+period"],
+  ["insert-time", "Ctrl+Shift+period"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["format-cells", "Ctrl+1"],
+  ["font", "Ctrl+D"],
+  [],
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  [],
+  ["align-left", "Ctrl+L"],
+  ["align-center", "Ctrl+E"],
+  ["align-right", "Ctrl+R"],
+  ["justify", "Ctrl+J"],
+  [],
+  ["format-currency", "Ctrl+Shift+4"],
+  ["format-percentage", "Ctrl+Shift+5"],
+  [],
+  ["hide-rows", "Ctrl+9"],
+  ["show-rows", "Ctrl+Shift+9"],
+  ["hide-columns", "Ctrl+8"],
+  ["show-columns", "Ctrl+Shift+8"],
+]
+
+[[menus]]
+label = "data"
+items = [
+  ["recalculate", "F9"],
+  ["recalculate-sheet", "Shift+F9"],
+  ["update-charts", "F8"],
+  [],
+  ["next-error", "Ctrl+F3"],
+]

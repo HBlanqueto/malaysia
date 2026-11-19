@@ -1,0 +1,32 @@
+ids = ["heroic", "com.heroicgameslauncher.hgl"]
+sources = [
+  "https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/blob/v2.22.4/src/frontend/helpers/shortcuts.ts",
+  "https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/blob/v2.22.4/src/backend/main.ts",
+  "https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/blob/v2.22.4/electron-builder.yml",
+  "https://github.com/flathub/com.heroicgameslauncher.hgl/blob/master/com.heroicgameslauncher.hgl.desktop",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["settings", "Ctrl+K"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["search", "Ctrl+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["reload", "Ctrl+R"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["library", "Ctrl+L"],
+  ["downloads", "Ctrl+J"],
+]

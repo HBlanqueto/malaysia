@@ -1,0 +1,99 @@
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
+
+use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
+use smithay::backend::renderer::element::utils::{Relocate, RelocateRenderElement};
+use smithay::backend::renderer::element::{Element, Kind};
+use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+use smithay::utils::{Physical, Point, Rectangle, Scale, Transform};
+
+use crate::cursor::OutputRenderElement;
+use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
+use crate::state::State;
+use crate::theme_fade::{ease, progress};
+
+const DURATION: Duration = Duration::from_millis(ctdesign::DURATION_BASE);
+
+pub(crate) struct PopupFade {
+    texture: TextureBuffer<GlesTexture>,
+    location: Point<i32, Physical>,
+    start: Instant,
+}
+
+pub(crate) fn start_requested(state: &mut State, renderer: &mut GlesRenderer, scale: f64) {
+    let Some(window) = state.popup_fade_request.take() else {
+        return;
+    };
+    let roots = state.root_popups_of(window);
+    let shown: HashSet<_> = roots
+        .iter()
+        .flat_map(|root| state.windows.popup_subtree(*root))
+        .collect();
+    match snapshot(state, renderer, scale, &shown) {
+        Some((texture, location)) => state.popup_fades.push(PopupFade {
+            texture: TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None),
+            location,
+            start: Instant::now(),
+        }),
+        None => tracing::warn!("popup fade snapshot failed; dismissing without a fade"),
+    }
+    for root in roots {
+        state.dismiss_popups(root);
+    }
+}
+
+fn snapshot(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    scale: f64,
+    shown: &HashSet<malaysia_scene::scene::PopupId>,
+) -> Option<(GlesTexture, Point<i32, Physical>)> {
+    let output = Rectangle::from_size(state.output.current_mode()?.size);
+    let mut elements = Vec::new();
+    crate::scene_elements::append_popups(state, renderer, scale, &mut elements, |id| {
+        shown.contains(&id)
+    });
+    let scale = Scale::from(scale);
+    let area = elements
+        .iter()
+        .map(|element| element.geometry(scale))
+        .reduce(Rectangle::merge)?
+        .intersection(output)?;
+    let elements: Vec<_> = elements
+        .into_iter()
+        .map(|element| {
+            RelocateRenderElement::from_element(
+                element,
+                Point::from((-area.loc.x, -area.loc.y)),
+                Relocate::Relative,
+            )
+        })
+        .collect();
+    let texture =
+        crate::renderer::render_to_texture(renderer, area.size, scale, &elements, [0.0; 4])?;
+    Some((texture, area.loc))
+}
+
+pub(crate) fn append<R: MalaysiaRenderer>(
+    state: &mut State,
+    now: Instant,
+    elements: &mut Vec<OutputRenderElement<R>>,
+) {
+    state
+        .popup_fades
+        .retain(|fade| now.saturating_duration_since(fade.start) < DURATION);
+    for fade in &state.popup_fades {
+        let alpha = 1.0 - ease(progress(fade.start, now, DURATION));
+        elements.push(
+            PrimaryGpu(TextureRenderElement::from_texture_buffer(
+                fade.location.to_f64(),
+                &fade.texture,
+                Some(alpha),
+                None,
+                None,
+                Kind::Unspecified,
+            ))
+            .into(),
+        );
+    }
+}

@@ -1,0 +1,76 @@
+ids = ["calibre-ebook-viewer"]
+sources = [
+  "https://manual.calibre-ebook.com/viewer.html",
+  "https://raw.githubusercontent.com/kovidgoyal/calibre/master/manual/viewer.rst",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["export-pdf", "Ctrl+P"],
+  ["edit-book", "Ctrl+D"],
+  ["reload", "Ctrl+Alt+R"],
+  ["book-metadata", "Ctrl+N"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+C"],
+  ["copy-location", "Alt+C"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-toc", "Ctrl+T"],
+  ["toggle-highlights", "Ctrl+H"],
+  ["toggle-lookup", "Ctrl+L"],
+  ["toggle-inspector", "Ctrl+I"],
+  [],
+  ["increase-font-size", "Ctrl+equal"],
+  ["decrease-font-size", "Ctrl+minus"],
+  ["reset-font-size", "Ctrl+0"],
+  [],
+  ["toggle-paged-mode", "Ctrl+M"],
+  ["more-pages-per-screen", "Ctrl+bracketright"],
+  ["fewer-pages-per-screen", "Ctrl+bracketleft"],
+  [],
+  ["toggle-toolbar", "Ctrl+F11"],
+  ["toggle-scrollbar", "Ctrl+W"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  ["go-to", "Ctrl+G"],
+  [],
+  ["previous-section", "Ctrl+Page_Up"],
+  ["next-section", "Ctrl+Page_Down"],
+  [],
+  ["book-start", "Ctrl+Home"],
+  ["book-end", "Ctrl+End"],
+]
+
+[[menus]]
+label = "bookmarks"
+items = [
+  ["show-bookmarks", "Ctrl+B"],
+  ["add-bookmark", "Ctrl+Alt+B"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["read-aloud", "Ctrl+S"],
+  ["auto-scroll", "Ctrl+space"],
+]

@@ -1,0 +1,51 @@
+ids = ["dev.warp.Warp", "warp-terminal"]
+sources = [
+  "https://docs.warp.dev/getting-started/keyboard-shortcuts.md",
+  "https://www.warp.dev/blog/warp-for-linux",
+  "https://releases.warp.dev/linux/deb/dists/stable/main/binary-amd64/Packages",
+  "https://releases.warp.dev/stable/v0.2026.11.04.08.17.stable_01/warp-terminal_0.2026.11.04.08.17.stable.01_amd64.deb",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-tab", "Ctrl+Shift+T"],
+  ["reopen-tab", "Ctrl+Alt+T"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+  [],
+  ["find", "Ctrl+Shift+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "terminal"
+items = [
+  ["split-right", "Ctrl+Shift+D"],
+  ["split-down", "Ctrl+Shift+E"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["next-tab", "Ctrl+Page_Down"],
+  ["previous-tab", "Ctrl+Page_Up"],
+]

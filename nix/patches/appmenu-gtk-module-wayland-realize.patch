@@ -1,0 +1,23 @@
+--- a/src/hijack.c
++++ b/src/hijack.c
+@@ -78,16 +78,16 @@
+ 	if (visual && (hint == GDK_WINDOW_TYPE_HINT_DND))
+ 		gtk_widget_set_visual(widget, visual);
+ 
+-// In Wayland the DBUS Menu need to be register before realize the window.
++	if (pre_hijacked_window_realize != NULL)
++		pre_hijacked_window_realize(widget);
++
++// gdk_wayland_window_set_dbus_properties_libgtk_only needs the GdkWindow that realize creates.
+ #ifdef GDK_WINDOWING_WAYLAND
+ 	if (GDK_IS_WAYLAND_DISPLAY(gdk_display_get_default()) && is_hint_viable &&
+ 	    (!GTK_IS_APPLICATION_WINDOW(GTK_WINDOW(widget))))
+ 		gtk_window_get_window_data(GTK_WINDOW(widget));
+ #endif
+ 
+-	if (pre_hijacked_window_realize != NULL)
+-		pre_hijacked_window_realize(widget);
+-
+ #ifdef GDK_WINDOWING_X11
+ 	if (is_hint_viable
+ #if GTK_MAJOR_VERSION == 3

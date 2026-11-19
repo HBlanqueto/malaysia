@@ -1,0 +1,54 @@
+ids = ["spotify", "com.spotify.Client"]
+sources = [
+  "https://support.spotify.com/us/article/keyboard-shortcuts/",
+  "https://raw.githubusercontent.com/flathub/com.spotify.Client/master/com.spotify.Client.desktop",
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["select-all", "Ctrl+A"],
+  [],
+  ["search", "Ctrl+K"],
+  ["toggle-filter", "Ctrl+F"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-sidebar", "Shift+Alt+L"],
+  ["toggle-now-playing-view", "Shift+Alt+R"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["home", "Shift+Alt+H"],
+  ["go-to-search", "Ctrl+L"],
+  [],
+  ["your-library", "Shift+Alt+0"],
+  ["playlists", "Shift+Alt+1"],
+  ["podcasts", "Shift+Alt+2"],
+  ["artists", "Shift+Alt+3"],
+  ["albums", "Shift+Alt+4"],
+  ["audiobooks", "Shift+Alt+5"],
+  [],
+  ["liked-songs", "Shift+Alt+S"],
+  ["made-for-you", "Shift+Alt+M"],
+  ["new-releases", "Shift+Alt+N"],
+  ["charts", "Shift+Alt+C"],
+  [],
+  ["now-playing", "Shift+Alt+J"],
+  ["queue", "Shift+Alt+Q"],
+]
+
+[[menus]]
+label = "playback"
+items = [
+  ["shuffle", "Ctrl+S"],
+  ["repeat", "Ctrl+R"],
+  [],
+  ["like-song", "Shift+Alt+B"],
+]

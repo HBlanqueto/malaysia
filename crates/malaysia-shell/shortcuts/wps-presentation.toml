@@ -1,0 +1,84 @@
+ids = ["wps-office-wpp", "wpp", "com.wps.Office.wpp"]
+sources = [
+  "https://help.wps.com/c/wps-slides-quick-start/2104502262621130753-wps-slides-save-and-save-as-feature-guide",
+  "https://help.wps.com/c/wps-slides-presentation-printing/2104502299388399617-wps-slides-printing-feature-guide",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2101969046303014914-guide-to-using-undo-and-redo-feature-in-wps-slides",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2079144738454835202-guide-to-using-copy-paste-and-cut-features-in-wps-slides",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2104502322079584257-wps-slides-find-and-replace-feature-guide",
+  "https://wps.com/academy/must-have-shortcut-tricks-in-making-slides/1862879",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2104502328723361794-wps-slides-hyperlink-feature-guide",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2079479500034306049-guide-to-using-bold-feature-in-wps-slides",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2079490652067885057-guide-to-using-italic-feature-in-wps-slides",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2079731853413339137-guide-to-using-the-underline-feature-in-wps-slides",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2079737453778063361-guide-to-using-superscript-and-subscript-features-in-wps-slides",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2079134739720638465-guide-to-using-font-and-font-size-feature-in-wps-slides",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2079769557611913218-guide-to-using-text-alignment-features-in-wps-slides",
+  "https://help.wps.com/c/wps-slides-slide-show/2104502300382449665-wps-slides-slideshow-feature-user-guide",
+  "https://wps.com/academy/must-have-shortcut-tricks-in-showing-slides/1862885",
+  "https://help.wps.com/c/wps-slides-editing-collaboration/2079513473330475010-guide-to-using-vb-editor-feature-in-wps-slides",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["save", "Ctrl+S"],
+  [],
+  ["print", "Ctrl+P"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["find", "Ctrl+F"],
+  ["replace", "Ctrl+H"],
+]
+
+[[menus]]
+label = "insert"
+items = [
+  ["new-slide", "Ctrl+Return"],
+  [],
+  ["insert-link", "Ctrl+K"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  [],
+  ["superscript", "Ctrl+Shift+equal"],
+  ["subscript", "Ctrl+equal"],
+  [],
+  ["increase-font-size", "Ctrl+bracketright"],
+  ["decrease-font-size", "Ctrl+bracketleft"],
+  [],
+  ["align-left", "Ctrl+L"],
+  ["align-center", "Ctrl+E"],
+  ["align-right", "Ctrl+R"],
+  ["justify", "Ctrl+J"],
+  [],
+  ["group", "Ctrl+G"],
+  ["ungroup", "Ctrl+Shift+G"],
+]
+
+[[menus]]
+label = "slide"
+items = [
+  ["start-slideshow", "F5"],
+  ["start-slideshow-current", "Shift+F5"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["vb-editor", "Alt+F11"],
+]

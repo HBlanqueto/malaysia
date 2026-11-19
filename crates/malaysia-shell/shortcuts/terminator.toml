@@ -1,0 +1,48 @@
+ids = ["terminator"]
+sources = [
+  "https://raw.githubusercontent.com/gnome-terminator/terminator/master/terminatorlib/config.py",
+  "https://raw.githubusercontent.com/gnome-terminator/terminator/master/doc/terminator_config.adoc",
+  "https://raw.githubusercontent.com/gnome-terminator/terminator/master/terminatorlib/container.py",
+  "https://raw.githubusercontent.com/gnome-terminator/terminator/master/terminatorlib/version.py",
+  "https://raw.githubusercontent.com/gnome-terminator/terminator/master/data/terminator.desktop.in",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+I"],
+  ["new-tab", "Ctrl+Shift+T"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+  [],
+  ["find", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "terminal"
+items = [
+  ["split-right", "Ctrl+Shift+E"],
+  ["split-down", "Ctrl+Shift+O"],
+  [],
+  ["close-pane", "Ctrl+Shift+W"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["next-tab", "Ctrl+Page_Down"],
+  ["previous-tab", "Ctrl+Page_Up"],
+]

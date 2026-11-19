@@ -1,0 +1,45 @@
+From the palette, so Qt 6 apps learn light or dark (QStyleHints::colorScheme).
+diff -ru a/src/qt6ct-qtplugin/qt6ctplatformtheme.cpp b/src/qt6ct-qtplugin/qt6ctplatformtheme.cpp
+--- a/src/qt6ct-qtplugin/qt6ctplatformtheme.cpp	2026-11-08 18:00:33.870448580 +0000
++++ b/src/qt6ct-qtplugin/qt6ctplatformtheme.cpp	2026-11-08 18:00:33.923170798 +0000
+@@ -51,6 +51,7 @@
+ 
+ #include <QStringList>
+ #include <qpa/qplatformthemefactory_p.h>
++#include <qpa/qwindowsysteminterface.h>
+ 
+ Q_LOGGING_CATEGORY(lqt6ct, "qt6ct", QtWarningMsg)
+ 
+@@ -148,6 +149,13 @@
+     return QIcon::fromTheme(type.iconName());
+ }
+ 
++Qt::ColorScheme Qt6CTPlatformTheme::colorScheme() const
++{
++    if(m_palette.color(QPalette::Window).lightness() < m_palette.color(QPalette::WindowText).lightness())
++        return Qt::ColorScheme::Dark;
++    return Qt::ColorScheme::Light;
++}
++
+ void Qt6CTPlatformTheme::applySettings()
+ {
+     if(!QGuiApplication::desktopSettingsAware() || m_isIgnored)
+@@ -195,6 +203,7 @@
+     {
+         QIconLoader::instance()->updateSystemTheme(); //apply icons
+         QGuiApplication::setPalette(QGuiApplication::palette()); //apply palette
++        QWindowSystemInterface::handleThemeChange(); //report the color scheme of the new palette
+     }
+ 
+ #ifdef QT_WIDGETS_LIB
+diff -ru a/src/qt6ct-qtplugin/qt6ctplatformtheme.h b/src/qt6ct-qtplugin/qt6ctplatformtheme.h
+--- a/src/qt6ct-qtplugin/qt6ctplatformtheme.h	2026-11-08 18:00:33.871959993 +0000
++++ b/src/qt6ct-qtplugin/qt6ctplatformtheme.h	2026-11-08 18:00:33.922934172 +0000
+@@ -62,6 +62,7 @@
+     virtual const QFont *font(Font type = SystemFont) const override;
+     virtual QVariant themeHint(ThemeHint hint) const override;
+     virtual QIcon fileIcon(const QFileInfo &fileInfo, QPlatformTheme::IconOptions iconOptions = {}) const override;
++    virtual Qt::ColorScheme colorScheme() const override;
+     //virtual QPixmap standardPixmap(StandardPixmap sp, const QSizeF &size) const;
+     //virtual QPixmap fileIconPixmap(const QFileInfo &fileInfo, const QSizeF &size,
+     //                               QPlatformTheme::IconOptions iconOptions = 0) const;

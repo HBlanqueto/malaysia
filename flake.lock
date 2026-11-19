@@ -1,0 +1,86 @@
+{
+  "nodes": {
+    "barrierkit": {
+      "inputs": {
+        "crane": [
+          "crane"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795121977,
+        "narHash": "sha256-/cpaciERw3WY++JS/DZnSxaVTXAmntkotVFJ8mPC36Q=",
+        "owner": "HBlanqueto",
+        "repo": "barrierkit",
+        "rev": "b95b5a4295d650d4b73f406667e8ca27b47d93c9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "HBlanqueto",
+        "repo": "barrierkit",
+        "rev": "b95b5a4295d650d4b73f406667e8ca27b47d93c9",
+        "type": "github"
+      }
+    },
+    "crane": {
+      "locked": {
+        "lastModified": 1792350552,
+        "narHash": "sha256-292lvpvxTGKryKxh3/3tcIVi85CwYGdl4oOi113Sob8=",
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "e675a36b7377bebe41d548388a2501cbb16d380d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ipetkov",
+        "repo": "crane",
+        "type": "github"
+      }
+    },
+    "malaysia-icon-theme": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794976368,
+        "narHash": "sha256-lAjrC2lmDlFFRRKER5hjey3vNcKGNtIzH8iIWPpUcKc=",
+        "owner": "HBlanqueto",
+        "repo": "malaysia-icon-theme",
+        "rev": "1e6c26fbfb572d0c442f2e1298adc79cc273054f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "HBlanqueto",
+        "repo": "malaysia-icon-theme",
+        "rev": "1e6c26fbfb572d0c442f2e1298adc79cc273054f",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1793110635,
+        "narHash": "sha256-dhoW6VgFWlaodSY5jrBn+CF2FLmaUvDVgM7+C7T2+NM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "31ecbaca1bdefa45dffc409f0250bd8039ea0010",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "barrierkit": "barrierkit",
+        "crane": "crane",
+        "malaysia-icon-theme": "malaysia-icon-theme",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

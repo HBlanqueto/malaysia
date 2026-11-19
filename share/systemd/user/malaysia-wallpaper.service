@@ -1,0 +1,17 @@
+[Unit]
+Description=Malaysia Vulkan wallpaper client
+PartOf=malaysia-session.target
+After=malaysia-session.target
+StartLimitBurst=10
+StartLimitIntervalSec=30
+
+[Service]
+Type=simple
+ExecStart=/bin/sh -c 'exec "$${MALAYSIA_BIN_DIR:-@out@/bin}/malaysia-wallpaper"'
+Restart=on-failure
+RestartSec=2
+Nice=10
+CPUWeight=20
+
+[Install]
+WantedBy=malaysia-session.target

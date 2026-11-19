@@ -1,0 +1,54 @@
+ids = ["bitwarden", "Bitwarden", "com.bitwarden.desktop"]
+sources = [
+  "https://raw.githubusercontent.com/bitwarden/clients/main/apps/desktop/src/main/menu/menu.file.ts",
+  "https://raw.githubusercontent.com/bitwarden/clients/main/apps/desktop/src/main/menu/menu.first.ts",
+  "https://raw.githubusercontent.com/bitwarden/clients/main/apps/desktop/src/main/menu/menu.edit.ts",
+  "https://raw.githubusercontent.com/bitwarden/clients/main/apps/desktop/src/main/menu/menu.view.ts",
+  "https://raw.githubusercontent.com/electron/electron/v33.0.0/lib/browser/api/menu-item-roles.ts",
+  "https://bitwarden.com/help/keyboard-shortcuts/",
+  "https://raw.githubusercontent.com/bitwarden/clients/main/apps/desktop/electron-builder.json",
+  "https://raw.githubusercontent.com/flathub/com.bitwarden.desktop/master/com.bitwarden.desktop.yaml",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-login", "Ctrl+N"],
+  ["new-card", "Ctrl+Shift+C"],
+  ["new-identity", "Ctrl+Shift+I"],
+  ["new-secure-note", "Ctrl+Shift+S"],
+  ["new-ssh-key", "Ctrl+Shift+K"],
+  [],
+  ["settings", "Ctrl+comma"],
+  ["lock-app", "Ctrl+L"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["copy-username", "Ctrl+U"],
+  ["copy-password", "Ctrl+P"],
+  ["copy-totp", "Ctrl+T"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["search", "Ctrl+F"],
+  [],
+  ["password-generator", "Ctrl+G"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+  [],
+  ["reload", "Ctrl+Shift+R"],
+]

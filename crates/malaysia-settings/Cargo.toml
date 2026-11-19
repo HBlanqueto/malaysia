@@ -1,0 +1,42 @@
+[package]
+name = "malaysia-settings"
+description = "Ajustes del sistema de Malaysia (System Settings), a BarrierKit app."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "malaysia-settings"
+path = "src/main.rs"
+
+[dependencies]
+bk.workspace = true
+ctappearance.workspace = true
+ctdesign.workspace = true
+
+async-channel.workspace = true
+async-io.workspace = true
+png.workspace = true
+freya-clipboard.workspace = true
+tracing.workspace = true
+zbus.workspace = true
+malaysia-services.workspace = true
+zeroize.workspace = true
+serde.workspace = true
+freya-core.workspace = true
+freya-components.workspace = true
+torin.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
+rust-embed.workspace = true
+
+[dev-dependencies]
+freya-testing.workspace = true
+
+[package.metadata.cargo-shear]
+ignored = ["i18n-embed", "i18n-embed-fl", "rust-embed"]
+
+[package.metadata.cargo-machete]
+ignored = ["i18n-embed", "i18n-embed-fl", "rust-embed"]

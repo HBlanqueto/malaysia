@@ -1,0 +1,63 @@
+ids = ["element", "element-desktop", "im.riot.Riot"]
+sources = [
+  "https://github.com/element-hq/element-web/blob/develop/apps/web/src/accessibility/KeyboardShortcuts.ts",
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["sticker-picker", "Ctrl+semicolon"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-space-panel", "Ctrl+Shift+D"],
+  ["toggle-right-panel", "Ctrl+period"],
+  ["user-menu", "Ctrl+grave"],
+  [],
+  ["keyboard-shortcuts", "Ctrl+slash"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["home", "Ctrl+Alt+H"],
+  ["quick-open", "Ctrl+K"],
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  [],
+  ["previous-conversation", "Alt+Up"],
+  ["next-conversation", "Alt+Down"],
+  ["previous-unread", "Shift+Alt+Up"],
+  ["next-unread", "Shift+Alt+Down"],
+  [],
+  ["jump-to-unread", "Shift+Page_Up"],
+  ["scroll-to-top", "Ctrl+Home"],
+  ["scroll-to-bottom", "Ctrl+End"],
+  [],
+  ["next-section", "F6"],
+  ["previous-section", "Shift+F6"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["inline-code", "Ctrl+E"],
+  ["quote", "Ctrl+Shift+period"],
+  ["insert-link", "Ctrl+Shift+L"],
+]
+
+[[menus]]
+label = "conversation"
+items = [
+  ["attach-file", "Ctrl+Shift+U"],
+  [],
+  ["toggle-microphone", "Ctrl+D"],
+  ["toggle-camera", "Ctrl+E"],
+]

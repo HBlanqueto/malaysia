@@ -1,0 +1,141 @@
+ids = ["code", "code-oss", "codium", "VSCodium", "com.visualstudio.code", "com.visualstudio.CodeOSS", "com.vscodium.codium"]
+sources = [
+  "https://code.visualstudio.com/shortcuts/keyboard-shortcuts-linux.pdf",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/editor/browser/editorExtensions.ts",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/editor/contrib/clipboard/browser/clipboard.ts",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/editor/contrib/linesOperations/browser/linesOperations.ts",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/workbench/browser/actions/windowActions.ts",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/workbench/browser/parts/editor/editorActions.ts",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/workbench/contrib/debug/browser/debugCommands.ts",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/resources/linux/code.desktop",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/build/gulpfile.vscode.linux.ts",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/build/gulpfile.vscode.ts",
+  "https://raw.githubusercontent.com/microsoft/vscode/main/product.json",
+  "https://raw.githubusercontent.com/flathub/com.visualstudio.code/master/com.visualstudio.code.desktop",
+  "https://raw.githubusercontent.com/VSCodium/vscodium/master/prepare_vscode.sh",
+  "https://github.com/flathub/com.vscodium.codium (com.vscodium.codium.yaml, patches/codium.desktop.patch, patches/package.json.patch)",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["new-window", "Ctrl+Shift+N"],
+  [],
+  ["open", "Ctrl+O"],
+  ["open-recent", "Ctrl+R"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  [],
+  ["close-tab", "Ctrl+W"],
+  ["reopen-tab", "Ctrl+Shift+T"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  ["replace", "Ctrl+H"],
+  ["find-in-files", "Ctrl+Shift+F"],
+  ["replace-in-files", "Ctrl+Shift+H"],
+  [],
+  ["toggle-comment", "Ctrl+slash"],
+  ["toggle-block-comment", "Ctrl+Shift+A"],
+  ["format-document", "Ctrl+Shift+I"],
+  ["rename-symbol", "F2"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  ["toggle-sidebar", "Ctrl+B"],
+  [],
+  ["show-explorer", "Ctrl+Shift+E"],
+  ["show-source-control", "Ctrl+Shift+G"],
+  ["show-debug", "Ctrl+Shift+D"],
+  ["show-extensions", "Ctrl+Shift+X"],
+  ["show-problems", "Ctrl+Shift+M"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  [],
+  ["split-editor", "Ctrl+backslash"],
+  ["toggle-word-wrap", "Alt+Z"],
+]
+
+[[menus]]
+label = "selection"
+items = [
+  ["select-all", "Ctrl+A"],
+  ["expand-selection", "Shift+Alt+Right"],
+  ["shrink-selection", "Shift+Alt+Left"],
+  [],
+  ["copy-line-up", "Ctrl+Shift+Alt+Up"],
+  ["copy-line-down", "Ctrl+Shift+Alt+Down"],
+  ["move-line-up", "Alt+Up"],
+  ["move-line-down", "Alt+Down"],
+  [],
+  ["add-cursor-above", "Shift+Alt+Up"],
+  ["add-cursor-below", "Shift+Alt+Down"],
+  ["cursors-to-line-ends", "Shift+Alt+I"],
+  ["add-next-occurrence", "Ctrl+D"],
+  ["select-all-occurrences", "Ctrl+Shift+L"],
+  ["select-line", "Ctrl+L"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["back", "Ctrl+Alt+minus"],
+  ["forward", "Ctrl+Shift+minus"],
+  [],
+  ["quick-open", "Ctrl+P"],
+  ["go-to-symbol", "Ctrl+Shift+O"],
+  ["go-to-symbol-workspace", "Ctrl+T"],
+  ["go-to-line", "Ctrl+G"],
+  [],
+  ["go-to-definition", "F12"],
+  ["find-references", "Shift+F12"],
+  ["go-to-bracket", "Ctrl+Shift+backslash"],
+  [],
+  ["next-problem", "F8"],
+  ["previous-problem", "Shift+F8"],
+  [],
+  ["next-tab", "Ctrl+Page_Down"],
+  ["previous-tab", "Ctrl+Page_Up"],
+]
+
+[[menus]]
+label = "run"
+items = [
+  ["debug", "F5"],
+  ["run", "Ctrl+F5"],
+  ["stop", "Shift+F5"],
+  ["restart-debugging", "Ctrl+Shift+F5"],
+  [],
+  ["step-over", "F10"],
+  ["step-into", "F11"],
+  ["step-out", "Shift+F11"],
+  [],
+  ["toggle-breakpoint", "F9"],
+]
+
+[[menus]]
+label = "terminal"
+items = [
+  ["new-terminal", "Ctrl+Shift+grave"],
+  ["toggle-terminal", "Ctrl+grave"],
+]

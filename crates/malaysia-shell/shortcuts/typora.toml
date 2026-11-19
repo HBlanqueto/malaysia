@@ -1,0 +1,102 @@
+ids = ["typora", "Typora", "io.typora.Typora"]
+sources = [
+  "https://support.typora.io/Shortcut-Keys/",
+  "https://raw.githubusercontent.com/flathub/io.typora.Typora/master/io.typora.Typora.json",
+  "https://raw.githubusercontent.com/flathub/io.typora.Typora/master/io.typora.Typora.desktop",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["new-window", "Ctrl+Shift+N"],
+  ["open", "Ctrl+O"],
+  ["quick-open", "Ctrl+P"],
+  ["reopen-file", "Ctrl+Shift+T"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["copy-markdown", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-plain", "Ctrl+Shift+V"],
+  [],
+  ["select-all", "Ctrl+A"],
+  ["select-line", "Ctrl+L"],
+  ["select-word", "Ctrl+D"],
+  ["delete-word", "Ctrl+Shift+D"],
+  [],
+  ["scroll-to-top", "Ctrl+Home"],
+  ["jump-to-selection", "Ctrl+J"],
+  ["scroll-to-bottom", "Ctrl+End"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  ["replace", "Ctrl+H"],
+]
+
+[[menus]]
+label = "paragraph"
+items = [
+  ["heading-1", "Ctrl+1"],
+  ["heading-2", "Ctrl+2"],
+  ["heading-3", "Ctrl+3"],
+  ["heading-4", "Ctrl+4"],
+  ["heading-5", "Ctrl+5"],
+  ["heading-6", "Ctrl+6"],
+  ["body-text", "Ctrl+0"],
+  ["increase-heading-level", "Ctrl+equal"],
+  ["decrease-heading-level", "Ctrl+minus"],
+  [],
+  ["insert-table", "Ctrl+T"],
+  ["delete-table-row", "Ctrl+Shift+BackSpace"],
+  ["code-block", "Ctrl+Shift+K"],
+  ["math-block", "Ctrl+Shift+M"],
+  ["quote", "Ctrl+Shift+Q"],
+  [],
+  ["numbered-list", "Ctrl+Shift+bracketleft"],
+  ["bullet-list", "Ctrl+Shift+bracketright"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  ["inline-code", "Ctrl+Shift+grave"],
+  ["strikethrough", "Shift+Alt+5"],
+  [],
+  ["insert-link", "Ctrl+K"],
+  ["insert-image", "Ctrl+Shift+I"],
+  [],
+  ["clear-formatting", "Ctrl+backslash"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-sidebar", "Ctrl+Shift+L"],
+  ["show-outline", "Ctrl+Shift+1"],
+  ["show-articles", "Ctrl+Shift+2"],
+  ["show-file-tree", "Ctrl+Shift+3"],
+  [],
+  ["source-code-mode", "Ctrl+slash"],
+  ["focus-mode", "F8"],
+  ["typewriter-mode", "F9"],
+  [],
+  ["zoom-reset", "Ctrl+Shift+0"],
+  ["zoom-in", "Ctrl+Shift+equal"],
+  ["zoom-out", "Ctrl+Shift+minus"],
+  [],
+  ["next-tab", "Ctrl+Tab"],
+]
