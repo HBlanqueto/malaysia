@@ -154,7 +154,7 @@ Code: `crates/malaysia-compositor/src/xwayland.rs`, `crates/malaysia-compositor/
 Decision:
 - A window's radius follows the bar it sends with `infinity_window_style_v1.set_bar`: `titlebar` 16, `unified_compact` 20, `unified` 26, `utility` 15. Without it, CSD windows and dialogs get 26, SSD windows 16, fullscreen 0. `window.corner_radius` overrides them.
 - Frames, shadows, borders and blur use a continuous corner: a superellipse that starts 1.52866 × R from the vertex, exponent 3.34 (`WINDOW_CORNER`).
-- `menubar.style` is `translucent` (default: glass and ink picked from the wallpaper under the bar), `solid` (the theme bar at `MENUBAR_CLASSIC_ALPHA`) or `floating` (no glass; only the open title pill blurs).
+- `menubar.style` is `floating` (default: a clear bar, ink picked from the wallpaper under it, and only the open title pill blurs), `translucent` (glass and ink picked from the wallpaper) or `solid` (the theme bar at `MENUBAR_CLASSIC_ALPHA`).
 - `menubar.bar_height` is `slim` (30 px, default) or `wide` (38 px). `MenubarConfig::height()` is the only mapping.
 - `appearance.reduce_transparency` defaults to `false`. With it, or with Increase contrast, every style draws an opaque solid bar.
 - The bar's blur shows only the wallpaper, never windows.

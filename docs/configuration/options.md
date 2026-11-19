@@ -429,7 +429,7 @@ desktop (`shown`, `shuffled_at`).
 | `dock.autohide` | bool | `false` | **active** | shell (dock): slides off the edge; exclusive zone 0 |
 | `dock.orientation` | `"bottom"` \| `"left"` \| `"right"` | `"bottom"` | **active** | shell (dock) |
 | `dock.magnification` | bool | `false` | **active** | shell (dock) |
-| `dock.tilesize` | integer (px, 16–128) | `48` | **active** | shell (dock): fitted to the screen; dragging the separator writes it |
+| `dock.tilesize` | integer (px, 16–128) | `64` | **active** | shell (dock): fitted to the screen; dragging the separator writes it |
 | `dock.largesize` | integer (px, 16–128) | `64` | **active** | shell (dock): magnified size, at least `DOCK_MAGNIFY_MIN` × `tilesize` |
 | `dock.mineffect` | `"genie"` \| `"scale"` \| `"suck"` | `"genie"` | **active** | compositor: minimizes and restores toward the Dock tile, `DOCK_MINIMIZE_MS` |
 | `dock.show-process-indicators` | bool | `true` | **active** | shell (dock) |
@@ -475,7 +475,7 @@ of a window in sight (fullscreen video) stops the clock.
 | `menubar.show_battery_percentage` | bool | `true` | **active** | shell (percentage inside the battery); System Settings › Battery writes it |
 | `menubar.show_vpn` | bool | `true` | **active** | shell (VPN menu, only with a VPN profile); System Settings › VPN writes it |
 | `menubar.show_printer` | bool | `true` | **active** | shell (printer while CUPS has a queued job, on the bar and the lock screen) |
-| `menubar.style` | `solid` / `translucent` / `floating` | `translucent` | **active** | shell: the bar background and ink; `solid` (Classic) is the theme's bar color, translucent, over the blurred wallpaper; `translucent` is a light or dark glass that follows the wallpaper, `floating` only under the open menu's pill; System Settings › Desktop & Dock writes it |
+| `menubar.style` | `solid` / `translucent` / `floating` | `floating` | **active** | shell: the bar background and ink; `solid` (Classic) is the theme's bar color, translucent, over the blurred wallpaper; `translucent` is a light or dark glass that follows the wallpaper, `floating` (default) is a clear bar and blurs only under the open menu's pill; System Settings › Desktop & Dock writes it |
 | `menubar.bar_height` | `slim` / `wide` | `slim` | **active** | shell: 30 or 38 px, for the bar and the lock screen; System Settings › Desktop & Dock writes it |
 
 ## `wifi` — Wi-Fi (System Settings → Wi-Fi)
@@ -672,7 +672,7 @@ idle_timeout_seconds = 300      # 0 disables auto-lock
 autohide = false
 orientation = "bottom"          # bottom | left | right
 magnification = false
-tilesize = 48
+tilesize = 64
 largesize = 64
 mineffect = "genie"             # genie | scale | suck
 show-process-indicators = true
