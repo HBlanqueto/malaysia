@@ -1072,8 +1072,16 @@ mod tests {
 
     #[test]
     fn neutral_keeps_the_base_palette_and_macos_lights() {
-        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
-        assert_eq!(theme.palette, LIGHT);
+        let theme = ChromeTheme::from_parts(
+            &AppearanceConfig {
+                traffic_lights: TrafficLightStyle::Standard,
+                ..AppearanceConfig::default()
+            },
+            None,
+        );
+        let mut expected = LIGHT;
+        expected.hairline = theme.resolved.surfaces.line;
+        assert_eq!(theme.palette, expected);
         assert_eq!(
             theme.lights,
             [
@@ -1258,7 +1266,13 @@ mod tests {
     }
     fn render_with(input: TrafficInput, scale: f64) -> (Vec<u8>, i32, i32) {
         let mut text = TextEngine::new();
-        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
+        let theme = ChromeTheme::from_parts(
+            &AppearanceConfig {
+                traffic_lights: TrafficLightStyle::Standard,
+                ..AppearanceConfig::default()
+            },
+            None,
+        );
         text.rasterize("", 400, scale, theme, input)
     }
 

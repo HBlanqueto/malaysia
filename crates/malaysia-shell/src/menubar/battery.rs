@@ -1,17 +1,13 @@
 use std::fmt::Write;
 
-use ctdesign::{MENUBAR_BATTERY_TRACK, Rgba};
+use ctdesign::{
+    MENUBAR_BATTERY_BODY_HEIGHT, MENUBAR_BATTERY_BODY_WIDTH, MENUBAR_BATTERY_BOLT_GAP,
+    MENUBAR_BATTERY_DIGIT_HEIGHT, MENUBAR_BATTERY_DIGIT_PITCH, MENUBAR_BATTERY_HUNDRED_GAP,
+    MENUBAR_BATTERY_HUNDRED_HEIGHT, MENUBAR_BATTERY_LEVEL_MIN, MENUBAR_BATTERY_TRACK, Rgba,
+};
 
 const BODY: &str = "M4 0h16a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4z";
 const NUB: &str = "M25 4h.6a1.4 1.4 0 0 1 1.4 1.4v1.2a1.4 1.4 0 0 1-1.4 1.4H25z";
-const BODY_WIDTH: f32 = 24.0;
-const BODY_HEIGHT: f32 = 12.0;
-const DIGIT_PITCH: f32 = 5.9;
-const DIGIT_HEIGHT: f32 = 7.27;
-const HUNDRED_HEIGHT: f32 = 6.25;
-const HUNDRED_GAP: f32 = 1.5;
-const BOLT_GAP: f32 = 0.75;
-const LEVEL_MIN: f32 = 1.5;
 
 struct Glyph {
     width: f32,
@@ -24,8 +20,8 @@ struct Glyph {
 
 const fn digit(x0: f32, y0: f32, rest: &'static str) -> Glyph {
     Glyph {
-        width: DIGIT_PITCH,
-        height: DIGIT_HEIGHT,
+        width: MENUBAR_BATTERY_DIGIT_PITCH,
+        height: MENUBAR_BATTERY_DIGIT_HEIGHT,
         gap: 0.0,
         x0,
         y0,
@@ -36,8 +32,8 @@ const fn digit(x0: f32, y0: f32, rest: &'static str) -> Glyph {
 const fn hundred(width: f32, x0: f32, y0: f32, rest: &'static str) -> Glyph {
     Glyph {
         width,
-        height: HUNDRED_HEIGHT,
-        gap: HUNDRED_GAP,
+        height: MENUBAR_BATTERY_HUNDRED_HEIGHT,
+        gap: MENUBAR_BATTERY_HUNDRED_GAP,
         x0,
         y0,
         rest,
@@ -47,7 +43,7 @@ const fn hundred(width: f32, x0: f32, y0: f32, rest: &'static str) -> Glyph {
 static BOLT: Glyph = Glyph {
     width: 5.15,
     height: 8.16,
-    gap: BOLT_GAP,
+    gap: MENUBAR_BATTERY_BOLT_GAP,
     x0: 3.27,
     y0: 0.14,
     rest: "q.1-.14 .26-.1q.25 .05 .19 .3l-.63 2.79h1.79q.08 0 .14 .05q.1 .07 .12 .16q.01 .08-.06 .19l-3.2 4.5q-.1 .13-.26 .09q-.12-.02-.17-.1q-.05-.07-.02-.19l.63-2.8h-1.78q-.08 0-.15-.05q-.1-.07-.12-.16q-.01-.08 .06-.18z",
@@ -133,7 +129,8 @@ pub(super) fn svg(
         ..ink
     });
     let fill = rgba(fill);
-    let level = (f32::from(percent) / 100.0 * BODY_WIDTH).max(LEVEL_MIN);
+    let level =
+        (f32::from(percent) / 100.0 * MENUBAR_BATTERY_BODY_WIDTH).max(MENUBAR_BATTERY_LEVEL_MIN);
     let body = format!("{BODY}{}", knockout(percent, charging, show_percentage));
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 27 12"><defs><clipPath id="level"><rect width="{level:.2}" height="12"/></clipPath><clipPath id="rest"><rect x="{level:.2}" width="27" height="12"/></clipPath></defs><path d="{body}" fill-rule="evenodd" fill="{fill}" clip-path="url(#level)"/><path d="{body}" fill-rule="evenodd" fill="{track}" clip-path="url(#rest)"/><path d="{NUB}" fill="{track}"/></svg>"#
@@ -165,13 +162,13 @@ fn glyphs(percent: u8, charging: bool, show_percentage: bool) -> ([&'static Glyp
 fn knockout(percent: u8, charging: bool, show_percentage: bool) -> String {
     let (glyphs, count) = glyphs(percent, charging, show_percentage);
     let glyphs = &glyphs[..count];
-    let mut x = (BODY_WIDTH - group_width(glyphs)) / 2.0;
+    let mut x = (MENUBAR_BATTERY_BODY_WIDTH - group_width(glyphs)) / 2.0;
     let mut path = String::new();
     for (index, glyph) in glyphs.iter().enumerate() {
         if index > 0 {
             x += glyph.gap;
         }
-        let y = (BODY_HEIGHT - glyph.height) / 2.0;
+        let y = (MENUBAR_BATTERY_BODY_HEIGHT - glyph.height) / 2.0;
         write!(
             path,
             "M{:.2} {:.2}{}",
@@ -209,7 +206,7 @@ mod tests {
                 let (glyphs, count) = glyphs(percent, charging, true);
                 let width = group_width(&glyphs[..count]);
                 assert!(
-                    width <= BODY_WIDTH - 2.0 * MARGIN_MIN,
+                    width <= MENUBAR_BATTERY_BODY_WIDTH - 2.0 * MARGIN_MIN,
                     "{percent} {charging} {width}"
                 );
             }
