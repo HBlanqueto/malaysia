@@ -1122,8 +1122,7 @@ mod tests {
         };
         let side = Size::<i32, BufferCoords>::from((SIDE, SIDE));
         let mut source =
-            Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, side)
-                .unwrap();
+            Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, side).unwrap();
         let mut tracker = OutputDamageTracker::new(output(), Scale::from(1.0), Transform::Normal);
         let quarter_white = [
             solid(64, 64, [1.0, 1.0, 1.0, 1.0]),
