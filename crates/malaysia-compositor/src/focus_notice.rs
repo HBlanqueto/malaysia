@@ -24,11 +24,13 @@ struct FocusNoticeSurfaceData {
     overlay: AtomicBool,
     wallpaper: AtomicU32,
     desktop: AtomicU32,
+    glass: AtomicU32,
 }
 
-const VERSION: u32 = 4;
+const VERSION: u32 = 5;
 const NO_DESKTOP: u32 = u32::MAX;
 const NO_WALLPAPER: u32 = u32::MAX;
+const NO_GLASS: u32 = u32::MAX;
 
 impl FocusNoticeGlobalData {
     pub(crate) fn create_global(display_handle: &DisplayHandle) -> GlobalId {
@@ -68,6 +70,7 @@ impl Dispatch2<InfinityFocusManagerV1, State> for FocusNoticeGlobalData {
                     overlay: AtomicBool::new(false),
                     wallpaper: AtomicU32::new(NO_WALLPAPER),
                     desktop: AtomicU32::new(NO_DESKTOP),
+                    glass: AtomicU32::new(NO_GLASS),
                 },
             );
             state.focus_notices.push(notice);
@@ -152,6 +155,42 @@ impl State {
                 notice.wallpaper(rgb);
             }
         }
+    }
+
+    pub(crate) fn send_glass_luma(&self) {
+        let Some(backdrop) = crate::blur::popups_backdrop(self) else {
+            return;
+        };
+        let panel =
+            ctappearance::menu::panel_over(&self.chrome_theme.resolved.menu_glass, backdrop);
+        let luma = ctappearance::menu::panel_luma(panel);
+        let thousandths = (luma * infinity_protocol::THOUSANDTHS).round() as u32;
+        for notice in &self.focus_notices {
+            let Some(data) = notice.data::<FocusNoticeSurfaceData>() else {
+                continue;
+            };
+            if notice.version() < 5 || !self.popup_surface_has_glass(&data.surface) {
+                continue;
+            }
+            let sent = data.glass.load(Ordering::Relaxed);
+            let ink_changed = sent == NO_GLASS
+                || ctappearance::menu::dark_ink_over(sent as f32 / infinity_protocol::THOUSANDTHS)
+                    != ctappearance::menu::dark_ink_over(luma);
+            if ink_changed {
+                data.glass.store(thousandths, Ordering::Relaxed);
+                notice.glass(thousandths);
+            }
+        }
+    }
+
+    fn popup_surface_has_glass(&self, surface: &WlSurface) -> bool {
+        self.windows.iter_popups().any(|(id, _, _)| {
+            self.popup_has_glass(id)
+                && self
+                    .popups
+                    .popup_of(id)
+                    .is_some_and(|popup| popup.wl_surface() == surface)
+        })
     }
 
     pub(crate) fn focus_overlay(&self, window: WindowId) -> bool {

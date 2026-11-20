@@ -11,7 +11,7 @@ use smithay::backend::renderer::gles::{
     GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
 };
 use smithay::backend::renderer::utils::CommitCounter;
-use smithay::backend::renderer::{Bind, Frame, Offscreen, Renderer, Texture};
+use smithay::backend::renderer::{Bind, ExportMem, Frame, Offscreen, Renderer, Texture};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{
     Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
@@ -39,7 +39,12 @@ pub(crate) struct Blur {
     dialogs: Option<Blurred>,
     behind: [Option<Behind>; GLASSES.len()],
     veil: Option<Behind>,
+    probe: Option<GlesTexture>,
+    probed: CommitCounter,
+    popups_backdrop: Option<ctdesign::Rgba>,
 }
+
+const PROBE_SIDE: i32 = 4;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Glass {
@@ -123,7 +128,14 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<Blur> {
         dialogs: None,
         behind: std::array::from_fn(|_| None),
         veil: None,
+        probe: None,
+        probed: CommitCounter::default(),
+        popups_backdrop: None,
     })
+}
+
+pub(crate) fn popups_backdrop(state: &State) -> Option<ctdesign::Rgba> {
+    state.blur.as_ref()?.popups_backdrop
 }
 
 pub(crate) fn drawn(state: &State) -> bool {
@@ -153,6 +165,7 @@ pub(crate) fn update(
     if !drawn(state) {
         blur.behind = Default::default();
         blur.veil = None;
+        blur.popups_backdrop = None;
     }
     state.blur = Some(blur);
     if drawn(state) {
@@ -523,6 +536,18 @@ fn behind_requested(state: &State, glass: Glass) -> bool {
 }
 
 impl Blur {
+    fn probe_popups(&mut self, renderer: &mut GlesRenderer) {
+        let Some(behind) = self.behind[Glass::Popups as usize].as_ref() else {
+            self.popups_backdrop = None;
+            return;
+        };
+        if self.popups_backdrop.is_some() && behind.commit == self.probed {
+            return;
+        }
+        self.probed = behind.commit;
+        self.popups_backdrop = average_color(renderer, &behind.softened, &mut self.probe);
+    }
+
     fn refresh(
         &mut self,
         state: &mut State,
@@ -629,6 +654,7 @@ fn refresh_behind(
             *cache = None;
         }
     }
+    blur.probe_popups(renderer);
     let veiled = veil_area.and_then(|area| {
         render_behind(
             &mut blur.veil,
@@ -868,10 +894,10 @@ impl Behind {
             ]
         };
         let (source, across) = (&self.source, &mut self.across);
-        draw_pass(renderer, program, source, across, &along([1.0, 0.0]))?;
+        draw_pass(renderer, Some(program), source, across, &along([1.0, 0.0]))?;
         draw_pass(
             renderer,
-            program,
+            Some(program),
             &self.across,
             &mut self.softened,
             &along([0.0, 1.0]),
@@ -959,12 +985,45 @@ fn pass(
         ),
         Uniform::new("offset", offset),
     ];
-    draw_pass(renderer, program, from, to, &uniforms)
+    draw_pass(renderer, Some(program), from, to, &uniforms)
+}
+
+fn average_color(
+    renderer: &mut GlesRenderer,
+    from: &GlesTexture,
+    probe: &mut Option<GlesTexture>,
+) -> Option<ctdesign::Rgba> {
+    let side = Size::<i32, BufferCoords>::from((PROBE_SIDE, PROBE_SIDE));
+    if probe.is_none() {
+        *probe = Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, side).ok();
+    }
+    let probe = probe.as_mut()?;
+    draw_pass(renderer, None, from, probe, &[])?;
+    let target = renderer.bind(probe).ok()?;
+    let mapping = renderer
+        .copy_framebuffer(&target, Rectangle::from_size(side), Fourcc::Abgr8888)
+        .ok()?;
+    let bytes = renderer.map_texture(&mapping).ok()?;
+    let (pixels, _) = bytes.as_chunks::<4>();
+    let count = pixels.len() as f32 * 255.0;
+    let [red, green, blue] = pixels.iter().fold([0.0; 3], |sum, [r, g, b, _]| {
+        [
+            sum[0] + f32::from(*r),
+            sum[1] + f32::from(*g),
+            sum[2] + f32::from(*b),
+        ]
+    });
+    Some(ctdesign::Rgba {
+        r: red / count,
+        g: green / count,
+        b: blue / count,
+        a: 1.0,
+    })
 }
 
 fn draw_pass(
     renderer: &mut GlesRenderer,
-    program: &GlesTexProgram,
+    program: Option<&GlesTexProgram>,
     from: &GlesTexture,
     to: &mut GlesTexture,
     uniforms: &[Uniform<'_>],
@@ -986,7 +1045,7 @@ fn draw_pass(
             &[],
             Transform::Normal,
             1.0,
-            Some(program),
+            program,
             uniforms,
         )
         .ok()?;
@@ -997,7 +1056,6 @@ fn draw_pass(
 mod tests {
     use super::*;
     use crate::test_support::try_test_renderer;
-    use smithay::backend::renderer::ExportMem;
     use smithay::backend::renderer::element::Kind;
     use smithay::backend::renderer::element::solid::{SolidColorBuffer, SolidColorRenderElement};
 
@@ -1054,6 +1112,26 @@ mod tests {
         assert!(!behind_the_glass(&left, area));
         let above = SceneRect::new(ScenePoint::new(60.0, 0.0), SceneSize::new(40.0, 40.0));
         assert!(!behind_the_glass(&above, area));
+    }
+
+    #[test]
+    fn the_probe_averages_the_color_behind_the_glass() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        let side = Size::<i32, BufferCoords>::from((SIDE, SIDE));
+        let mut source =
+            Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, side)
+                .unwrap();
+        let mut tracker = OutputDamageTracker::new(output(), Scale::from(1.0), Transform::Normal);
+        let quarter_white = [
+            solid(64, 64, [1.0, 1.0, 1.0, 1.0]),
+            solid(0, SIDE, [0.0, 0.0, 0.0, 1.0]),
+        ];
+        redraw(&mut tracker, &mut source, &mut renderer, &quarter_white).unwrap();
+        let average = average_color(&mut renderer, &source, &mut None).unwrap();
+        assert!((average.r - 0.25).abs() < 0.02, "{average:?}");
     }
 
     #[test]

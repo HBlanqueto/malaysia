@@ -411,6 +411,7 @@ pub fn run() -> Result<(), SessionError> {
             session.backend.window().request_redraw();
         }
         session.state.send_wallpaper_colors();
+        session.state.send_glass_luma();
         if let Err(error) = session.display.flush_clients() {
             tracing::warn!(%error, "failed to flush clients");
         }

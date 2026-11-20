@@ -90,7 +90,7 @@ cursor are drawn.
 | `infinity_window_manager_v1` | shell → compositor | arrange, restore, force quit, send a shortcut; app menu addresses, spaces and desktops back |
 | `infinity_window_style_v1` | BarrierKit apps and the wallpaper → compositor | bar, panel, popover, glass, cards and the desktop of a surface |
 | `infinity_session_v1` | compositor → shell | `locking` and `unlocked` |
-| `infinity_focus_manager_v1` | compositor ↔ patched libadwaita | focus mode bar and the wallpaper color behind a window |
+| `infinity_focus_manager_v1` | compositor ↔ patched libadwaita | focus mode bar, the wallpaper color behind a window and how light the glass under a popup is |
 | `.domain` files | Settings and the shell write; every process reads | preferences, watched with inotify |
 | `.state` files | each has one writer | wallpaper selection and colors, dock, Recent Items, notifications |
 | `org.freedesktop.appearance`, `org.malaysia.appearance` | portal → apps | color scheme, accent, contrast and the live GTK colors |

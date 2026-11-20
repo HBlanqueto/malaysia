@@ -570,6 +570,7 @@ impl Udev {
             self.redraw();
         }
         self.state.send_wallpaper_colors();
+        self.state.send_glass_luma();
         if let Err(error) = self.display.flush_clients() {
             warn!(%error, "flushing clients");
         }
