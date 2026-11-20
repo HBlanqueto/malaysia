@@ -245,7 +245,7 @@ impl State {
     }
 
     pub(crate) fn popup_has_glass(&self, id: PopupId) -> bool {
-        crate::blur::drawn(self)
+        crate::blur::popups_drawn(self)
             && self
                 .popup_root_surface(id)
                 .is_some_and(|root| crate::window_style::is_kit_client(&root))

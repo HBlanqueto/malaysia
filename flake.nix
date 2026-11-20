@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/2bd4cc8ee66d10aed73bcdb8cf93532cb2c75457";
+      url = "github:HBlanqueto/barrierkit/e6aa2a0ff2a2fa7e2fd707d71c2f8c9e036a7ee5";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
@@ -72,8 +72,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca" =
               "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=2bd4cc8ee66d10aed73bcdb8cf93532cb2c75457#2bd4cc8ee66d10aed73bcdb8cf93532cb2c75457" =
-              "sha256-rP+JAreYT8Ig6q2eTIzr2ni2aFOlrvd1Opur6HwIcTQ=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=e6aa2a0ff2a2fa7e2fd707d71c2f8c9e036a7ee5#e6aa2a0ff2a2fa7e2fd707d71c2f8c9e036a7ee5" =
+              "sha256-aI5vzyGo4YZ5Owl3AjSXPwgyJIwBnl4R20Xs0JGsD5I=";
             "git+https://github.com/HBlanqueto/ferricast?rev=eb29421bb27aed41a7c2bd76fcb1044b5453d30c#eb29421bb27aed41a7c2bd76fcb1044b5453d30c" =
               "sha256-iH4ZhFUm228dgC0jlB3SNzMNMoUZvI5iDMpYwQDd1VY=";
             "git+https://github.com/SergioRibera/cros-libva?branch=fix/vp9-encpicparam-fields#627695c5a145e5d3d9d0ba78f37bfb3db0178cba" =

@@ -1120,7 +1120,7 @@ mod tests {
         assert_eq!(
             theme.palette.hairline,
             tint(
-                LIGHT.line,
+                LIGHT.separator,
                 accent,
                 WINDOW_TINT_ACCENT[0] * ctdesign::LAYER_FACTOR_LINE * ctdesign::ACCENT_CHROMA_GAIN
             )

@@ -288,7 +288,11 @@ impl App for NotificationsApp {
                 }
             })
             .padding(Gaps::new(
-                NOTIFICATION_GAP + if panel_shown { bar_height } else { 0.0 },
+                if panel_shown {
+                    NOTIFICATION_GAP + bar_height
+                } else {
+                    0.0
+                },
                 NOTIFICATION_MARGIN as f32,
                 NOTIFICATION_GAP,
                 NOTIFICATION_MARGIN as f32,
@@ -470,7 +474,7 @@ fn banners(
         .width(Size::fill())
         .spacing(NOTIFICATION_GAP)
         .on_sized(move |event: Event<SizedEventData>| {
-            height.set_if_modified(event.area.height() + 2.0 * NOTIFICATION_GAP)
+            height.set_if_modified(event.area.height() + NOTIFICATION_GAP)
         })
         .children(
             shown

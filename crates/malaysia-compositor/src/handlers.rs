@@ -741,7 +741,7 @@ impl smithay::wayland::shell::xdg::dialog::XdgDialogHandler for State {}
 
 impl smithay::wayland::background_effect::ExtBackgroundEffectHandler for State {
     fn capabilities(&self) -> smithay::wayland::background_effect::Capability {
-        if crate::blur::drawn(self) {
+        if crate::blur::popups_drawn(self) {
             smithay::wayland::background_effect::Capability::Blur
         } else {
             smithay::wayland::background_effect::Capability::empty()

@@ -64,7 +64,7 @@ Code: `crates/malaysia-compositor/src/decoration.rs`, `crates/malaysia-composito
 
 ## 0020 · 0038 · 0065 · 0071 — Blur and wallpaper tinting
 Decision:
-- Blur is drawn only while `appearance.reduce_transparency` and `appearance.contrast` are `false` (both default `false`). Only then does `ext_background_effect_manager_v1` advertise `blur`.
+- Blur is drawn only while `appearance.reduce_transparency` and `appearance.contrast` are `false` (both default `false`), except the glass of kit menus: it survives `reduce_transparency`, as on macOS, and stops only with `contrast`. `ext_background_effect_manager_v1` advertises `blur` while that glass is drawn.
 - A surface gets blur only in the region it sends through `ext-background-effect-v1`. The shell and the kit use the same protocol.
 - By default the blur shows the `Background` layer, blurred once per output into a cache. The Dock, notification cards and glass popups blur what is really behind them, each from its own cached render.
 - The shaders are Dual Kawase in `grade-graphics`. `ctdesign::BACKGROUND_BLUR_PASSES` and `BACKGROUND_BLUR_OFFSET` set the strength; no user option does.
@@ -180,7 +180,7 @@ Decision:
 - Delivered notifications and the active Focus persist in `~/.local/share/malaysia/notifications.state`; per-app and Focus settings live in `notifications.domain`.
 - The app id comes from GTK or the portal, else the sender's cgroup scope. The card icon is always the app's desktop-entry icon, so no notification borrows another app's.
 - Urgency 2 is critical only for apps the user allows; otherwise it is active and never breaks through a Focus. The user, not the app, picks style and locations.
-- Banners sit top right; the front app's notifications skip the banner. The panel opens from the clock or a two-finger swipe at the screen's right edge. Cards wear the Dock's glass, unlike macOS.
+- Banners sit top right; the front app's notifications skip the banner. The panel opens from the clock or a two-finger swipe at the screen's right edge. Cards wear the menu's veil and tone, with their own light veil, in the Dock's frame.
 - Focus has four modes (Do Not Disturb, Sleep, Personal, Work), each with allowed apps and time-sensitive alerts; silenced notifications go quietly to the panel. A secondary click on the clock toggles Do Not Disturb.
 - The lock screen lists apps allowed there and hides content unless previews are «Always»; it rereads `notifications.state` every 2 s.
 - The Dock reads badges and progress from `com.canonical.Unity.LauncherEntry`. Live Activities (KDE jobs, `call.ongoing`, CUPS jobs) are Malaysia's own `Activities` property.

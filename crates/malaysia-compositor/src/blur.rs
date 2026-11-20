@@ -142,6 +142,10 @@ pub(crate) fn drawn(state: &State) -> bool {
     !state.config.appearance.transparency_reduced()
 }
 
+pub(crate) fn popups_drawn(state: &State) -> bool {
+    !state.config.appearance.contrast
+}
+
 pub(crate) fn update(
     state: &mut State,
     renderer: &mut GlesRenderer,
@@ -162,13 +166,13 @@ pub(crate) fn update(
         blur.glass = None;
         blur.dialogs = None;
     }
-    if !drawn(state) {
+    if !popups_drawn(state) {
         blur.behind = Default::default();
         blur.veil = None;
         blur.popups_backdrop = None;
     }
     state.blur = Some(blur);
-    if drawn(state) {
+    if popups_drawn(state) {
         refresh_behind(state, renderer, output_size);
     }
 }
@@ -346,7 +350,10 @@ pub(crate) fn sampled<R: MalaysiaRenderer>(
             .blur
             .as_ref()
             .and_then(|blur| sampled_cache(blur, sampling.detail))
-            .filter(|_| drawn(state)),
+            .filter(|_| match sampling.detail {
+                Detail::Behind(Glass::Popups) => popups_drawn(state),
+                _ => drawn(state),
+            }),
         sampling.program,
     ) else {
         return Vec::new();
@@ -529,10 +536,11 @@ fn behind_requested(state: &State, glass: Glass) -> bool {
         Glass::Notifications => Layer::Overlay,
         Glass::Popups => return !glass_popups(state).is_empty(),
     };
-    state.layers.on_layer(layer).any(|entry| {
-        glass_of(entry.surface.wl_surface()) == Some(glass)
-            && !blur_region(entry.surface.wl_surface()).is_empty()
-    })
+    drawn(state)
+        && state.layers.on_layer(layer).any(|entry| {
+            glass_of(entry.surface.wl_surface()) == Some(glass)
+                && !blur_region(entry.surface.wl_surface()).is_empty()
+        })
 }
 
 impl Blur {
@@ -1100,6 +1108,24 @@ mod tests {
 
     fn center_pixel(renderer: &mut GlesRenderer, blurred: &mut Blurred) -> [u8; 4] {
         pixel_at(renderer, &mut blurred.blurred, (SIDE / 2, SIDE / 2))
+    }
+
+    #[test]
+    fn reduce_transparency_keeps_the_menu_glass_and_only_increase_contrast_drops_it() {
+        use smithay::wayland::background_effect::{Capability, ExtBackgroundEffectHandler};
+        let (_loop, _display, mut state) = crate::test_support::test_state((1280, 720));
+        for (reduce_transparency, contrast, other_glass, menu_glass) in [
+            (false, false, true, true),
+            (true, false, false, true),
+            (false, true, false, false),
+            (true, true, false, false),
+        ] {
+            state.config.appearance.reduce_transparency = reduce_transparency;
+            state.config.appearance.contrast = contrast;
+            assert_eq!(drawn(&state), other_glass);
+            assert_eq!(popups_drawn(&state), menu_glass);
+            assert_eq!(state.capabilities().contains(Capability::Blur), menu_glass);
+        }
     }
 
     #[test]
