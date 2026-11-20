@@ -204,7 +204,10 @@ mod tests {
         assert!(!config.appearance.reduced_motion);
         assert_eq!(config.appearance.window_color, WindowColorMode::Neutral);
         assert!(!config.appearance.tint_parts.bars);
-        assert_eq!(config.appearance.traffic_lights, TrafficLightStyle::Wallpaper);
+        assert_eq!(
+            config.appearance.traffic_lights,
+            TrafficLightStyle::Wallpaper
+        );
         assert_eq!(config.window.decorations, DecorationPolicy::Default);
         assert!(config.menubar.app_menus);
         assert_eq!(config.display.scale, 1.0);
