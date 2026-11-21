@@ -98,9 +98,9 @@ impl Values {
         let resolved = resolve(appearance, dominant);
         let color_scheme = if resolved.scheme.is_dark() { 1 } else { 2 };
         let accent = (
-            f64::from(resolved.accent.r),
-            f64::from(resolved.accent.g),
-            f64::from(resolved.accent.b),
+            f64::from(resolved.control_accent.r),
+            f64::from(resolved.control_accent.g),
+            f64::from(resolved.control_accent.b),
         );
         let (live_css, live_accent) = if bridge {
             (gtk::live_css(appearance, dominant), accent)

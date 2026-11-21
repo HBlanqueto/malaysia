@@ -144,7 +144,7 @@ pub(crate) fn services_submenu() -> MenuItem {
 pub(crate) fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
     vec![
         MenuItem::SearchField {
-            placeholder: tr!("menu-search").to_string(),
+            placeholder: tr!("menu-search").into(),
         },
         MenuItem::action("app-help", tr!("app-help", app = app_name)).with_enabled(false),
         MenuItem::Separator,

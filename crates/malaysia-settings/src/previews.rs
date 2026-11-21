@@ -5,7 +5,7 @@ use torin::prelude::Position;
 use bk::theme::{SurfaceKind, color as rgba, surface_background};
 use ctappearance::menubar::{MenubarConfig, MenubarHeight, MenubarStyle, classic_bar, colors_over};
 use ctappearance::{AppearanceConfig, ColorScheme, Resolved, resolve};
-use ctdesign::{BACKDROP, MENUBAR_HEIGHT, Rgba};
+use ctdesign::{MENUBAR_HEIGHT, Rgba};
 use torin::prelude::Gaps;
 
 use crate::wallpaper::{Picture, appearance, over_artwork, preview};
@@ -99,10 +99,7 @@ fn preview_menu(resolved: &Resolved) -> VStack {
         .padding(padding)
         .spacing(padding)
         .corner_radius(SETTINGS.preview_radius as f32)
-        .background(rgba(Rgba {
-            a: BACKDROP.island,
-            ..resolved.surfaces.window
-        }))
+        .background(rgba(resolved.surfaces.raised))
         .child(preview_menu_line(
             SETTINGS.preview_menu_accent_h,
             resolved.accent,
@@ -128,7 +125,7 @@ fn preview_window(resolved: &Resolved) -> Rect {
         SETTINGS.preview_window_y as f32,
     );
     let light = SETTINGS.preview_light as f32;
-    let corner = resolved.traffic_shape.corner_radius(light);
+    let corner = light / 2.0;
     rect()
         .position(Position::new_absolute().left(x).top(y))
         .width(Size::px(SETTINGS.card_width as f32 - x + radius))
@@ -145,14 +142,22 @@ fn preview_window(resolved: &Resolved) -> Rect {
                         .top(SETTINGS.preview_dots_y as f32),
                 )
                 .spacing(SETTINGS.preview_dot_gap as f32)
-                .children(resolved.lights.iter().map(|color| {
-                    rect()
-                        .width(Size::px(light))
-                        .height(Size::px(light))
-                        .corner_radius(corner)
-                        .background(rgba(*color))
-                        .into_element()
-                })),
+                .children(
+                    [
+                        resolved.traffic_lights.close.base,
+                        resolved.traffic_lights.minimize.base,
+                        resolved.traffic_lights.zoom.base,
+                    ]
+                    .iter()
+                    .map(|color| {
+                        rect()
+                            .width(Size::px(light))
+                            .height(Size::px(light))
+                            .corner_radius(corner)
+                            .background(rgba(*color))
+                            .into_element()
+                    }),
+                ),
         )
 }
 
@@ -245,7 +250,7 @@ mod tests {
             ..AppearanceConfig::default()
         };
         let preview = preview_for_theme(&config, ColorScheme::Light, None);
-        assert_eq!(preview.accent, accent);
+        assert_eq!(preview.accent, ctappearance::resolve(&config, None).accent);
         assert!(preview.window_tint.is_none());
     }
 }

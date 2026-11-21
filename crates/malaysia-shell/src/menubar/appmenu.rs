@@ -220,7 +220,7 @@ fn help_menu_items() -> Vec<MenuItem> {
     let topics = help_topics::topics();
     vec![
         MenuItem::SearchField {
-            placeholder: tr!("menu-search").to_string(),
+            placeholder: tr!("menu-search").into(),
         },
         topics[0].item(Some(MenuIcon::svg(icons::BOOK))),
         topics[1].item(Some(MenuIcon::svg(icons::KEYBOARD))),
@@ -360,9 +360,7 @@ mod tests {
                 continue;
             };
             if *enabled {
-                let wired = shortcut
-                    .as_ref()
-                    .is_some_and(|s| WIRED.contains(&s.as_str()));
+                let wired = shortcut.as_ref().is_some_and(|s| WIRED.contains(&&**s));
                 assert!(
                     shortcut.is_none() || wired,
                     "enabled item «{label}» shows a shortcut that is not wired globally"

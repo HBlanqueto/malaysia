@@ -27,7 +27,7 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
     if prop::<String>(props, "children-display").as_deref() == Some("submenu") {
         return Some(MenuItem::Submenu {
             id: Some(item.id.to_string()),
-            label,
+            label: label.into(),
             enabled,
             items: children,
             icon: None,
@@ -36,8 +36,8 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
 
     Some(MenuItem::Action {
         id: format!("dbusmenu:{}", item.id),
-        label,
-        shortcut: shortcut(props),
+        label: label.into(),
+        shortcut: shortcut(props).map(Into::into),
         enabled,
         check: toggle(props),
         icon: None,

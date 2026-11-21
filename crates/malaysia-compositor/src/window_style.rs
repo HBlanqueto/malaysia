@@ -438,7 +438,6 @@ pub(crate) fn popover_metrics(shape: PopoverShape) -> ctdesign::PopoverMetrics {
             arrow_height: ctdesign::DOCK_LABEL_ARROW_HEIGHT,
             arrow_tip_radius: ctdesign::DOCK_LABEL_ARROW_TIP_RADIUS,
             arrow_fillet: ctdesign::DOCK_LABEL_ARROW_FILLET,
-            ..popover
         },
         _ => popover,
     }

@@ -225,9 +225,9 @@ mod tests {
             let config = ctappearance::load_appearance();
             let accent = config.accent_color.expect("accent color must be written");
             assert!(
-                (accent[0] - 0.557).abs() < 0.001
-                    && (accent[1] - 0.357).abs() < 0.001
-                    && (accent[2] - 0.847).abs() < 0.001,
+                (accent[0] - purple.r).abs() < 0.001
+                    && (accent[1] - purple.g).abs() < 0.001
+                    && (accent[2] - purple.b).abs() < 0.001,
                 "choosing purple must round to three decimals: {accent:?}"
             );
         });

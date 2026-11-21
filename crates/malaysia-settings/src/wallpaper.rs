@@ -852,7 +852,7 @@ fn toolbar(wallpaper: Wallpaper, collections: &WallpaperConfig) -> Section {
             .child(
                 IconButton::new(Symbol::XMark, tr!("wallpaper-clear-filter"))
                     .style(move |style| IconButtonStyle {
-                        size: metrics.filter_control,
+                        size: (metrics.filter_control, metrics.filter_control),
                         icon_size: metrics.filter_close_icon,
                         ..style
                     })
@@ -866,7 +866,7 @@ fn toolbar(wallpaper: Wallpaper, collections: &WallpaperConfig) -> Section {
     } else {
         IconButton::new(Symbol::MagnifyingGlass, tr!("wallpaper-filter"))
             .style(|style| IconButtonStyle {
-                size: ctdesign::TEXT_FIELD.height,
+                size: (ctdesign::TEXT_FIELD.height, ctdesign::TEXT_FIELD.height),
                 background: StateValue::new(ShapeStyle::Role(Role::ControlBackground))
                     .hovered(ShapeStyle::Role(Role::ControlHover)),
                 ..style

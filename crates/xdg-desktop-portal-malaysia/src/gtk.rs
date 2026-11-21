@@ -3,14 +3,11 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use ctappearance::backdrop::{Oklab, WallpaperTinting, lift};
-use ctappearance::traffic::{ButtonVisual, TrafficInput, glyph_svg, inset, visual};
-use ctappearance::{
-    AppearanceConfig, ColorScheme, Resolved, TintParts, TrafficLightShape, TrafficLightStyle, ini,
-    palette, resolve,
-};
+use ctappearance::traffic::{ButtonVisual, Glyph, TrafficInput, glyph_svg, inset, visual};
+use ctappearance::{AppearanceConfig, ColorScheme, Resolved, TintParts, ini, palette, resolve};
 use ctdesign::{
     ButtonKind, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba, TITLEBAR,
-    TITLEBAR_CLIENT_HEIGHT, TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH, TrafficRim,
+    TITLEBAR_CLIENT_HEIGHT, TRAFFIC_RING_WIDTH, TrafficHalo, TrafficLooks,
 };
 
 const BEGIN: &str = "/* malaysia:gtk-bridge begin */";
@@ -74,19 +71,10 @@ struct SchemeColors {
     dark: bool,
     colors: Vec<(&'static str, Rgba)>,
     behind: Vec<(&'static str, String)>,
-    traffic: Traffic,
+    traffic: TrafficLooks,
 }
 
 const BEHIND: &str = "--malaysia-behind";
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct Traffic {
-    lights: [Rgba; 3],
-    style: TrafficLightStyle,
-    shape: TrafficLightShape,
-    inactive: Rgba,
-    rim: TrafficRim,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Toolkit {
@@ -103,13 +91,7 @@ impl SchemeColors {
         let resolved = resolve(&concrete, dominant);
         let dark = resolved.scheme.is_dark();
         let on_accent = palette(resolved.scheme).on_accent;
-        let traffic = Traffic {
-            lights: resolved.lights,
-            style: resolved.traffic_style,
-            shape: resolved.traffic_shape,
-            inactive: palette(resolved.scheme).traffic_lights_inactive,
-            rim: palette(resolved.scheme).traffic_rim,
-        };
+        let traffic = resolved.traffic_lights;
         let mut colors = vec![
             ("accent_bg_color", resolved.accent),
             ("accent_fg_color", on_accent),
@@ -354,17 +336,20 @@ fn gtk_button_name(kind: ButtonKind) -> &'static str {
     }
 }
 
-fn traffic_states(traffic: &Traffic, focused: bool, group_hovered: bool) -> [ButtonVisual; 3] {
+fn traffic_states(
+    looks: &TrafficLooks,
+    focused: bool,
+    group_hovered: bool,
+    pressed: Option<ButtonKind>,
+) -> [ButtonVisual; 3] {
     visual(
-        traffic.lights,
-        traffic.style,
-        traffic.inactive,
-        traffic.rim,
+        looks,
         TrafficInput {
             focused,
             group_hovered,
-            pressed: None,
+            pressed,
             zoom_supported: true,
+            fullscreen: false,
         },
     )
 }
@@ -387,15 +372,8 @@ const BACKDROP_DIMMED: [&str; 5] = [
     "headerbar:backdrop > windowhandle > box > widget > box > :not(windowcontrols)",
 ];
 
-const GLYPH_OVERSAMPLE: f32 = 4.0;
-
-fn glyph_image(index: usize, glyph: Rgba) -> String {
-    let svg = glyph_svg(
-        index,
-        glyph,
-        false,
-        TRAFFIC_GLYPHS.box_size * GLYPH_OVERSAMPLE,
-    );
+fn glyph_image(index: usize, color: Rgba) -> String {
+    let svg = glyph_svg(Glyph::of(index, false, false), color);
     let encoded: String = svg
         .bytes()
         .map(|byte| {
@@ -409,12 +387,56 @@ fn glyph_image(index: usize, glyph: Rgba) -> String {
     format!("url(\"data:image/svg+xml,{encoded}\")")
 }
 
-fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, indent: &str) {
+fn gradient(colors: &[Rgba]) -> String {
+    let last = (colors.len() - 1) as f32;
+    let stops: Vec<String> = colors
+        .iter()
+        .enumerate()
+        .map(|(index, color)| format!("{} {:.2}%", css_color(*color), index as f32 / last * 100.0))
+        .collect();
+    format!("linear-gradient(to bottom, {})", stops.join(", "))
+}
+
+fn light_images(index: usize, visual: &ButtonVisual, fill: &[Rgba]) -> String {
+    match visual.glyph {
+        Some(color) => format!("{}, {}", glyph_image(index, color), gradient(fill)),
+        None => gradient(fill),
+    }
+}
+
+fn pressed_fill(visual: &ButtonVisual, backdrop: Rgba) -> [Rgba; 4] {
+    visual.fill.map(|color| {
+        let lift = |channel: f32, ground: f32| {
+            ((channel * color.a + ground * (1.0 - color.a)) / (1.0 - visual.dodge)).min(1.0)
+        };
+        Rgba {
+            r: lift(color.r, backdrop.r),
+            g: lift(color.g, backdrop.g),
+            b: lift(color.b, backdrop.b),
+            a: 1.0,
+        }
+    })
+}
+
+fn light_shadow(ring: &[Rgba; 3], halo: TrafficHalo) -> String {
+    let width = TRAFFIC_RING_WIDTH;
+    format!(
+        "inset 0 {width}px 0 0 {}, inset 0 -{width}px 0 0 {}, inset 0 0 0 {width}px {}, 0 {}px {}px {}",
+        css_color(ring[0]),
+        css_color(ring[2]),
+        css_color(ring[1]),
+        halo.dy,
+        halo.blur * 2.0,
+        css_color(halo.color)
+    )
+}
+
+fn push_window_controls(out: &mut String, looks: &TrafficLooks, toolkit: Toolkit, indent: &str) {
     let buttons = &TITLEBAR.buttons;
-    let radius = traffic.shape.corner_radius(buttons.diameter as f32);
-    let focused = traffic_states(traffic, true, false);
-    let backdrop = traffic_states(traffic, false, false);
-    let hovered = traffic_states(traffic, true, true);
+    let radius = buttons.diameter as f32 / 2.0;
+    let focused = traffic_states(looks, true, false, None);
+    let backdrop = traffic_states(looks, false, false, None);
+    let hovered = traffic_states(looks, true, true, None);
     let mut rule = |selector: &str, body: &str| {
         out.push_str(&format!("{indent}{selector} {{ {body} }}\n"));
     };
@@ -435,10 +457,7 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
     }
     for (index, button) in buttons.order.iter().enumerate() {
         let name = gtk_button_name(button.kind);
-        let pressed = hovered[index].fill.darken(ctdesign::TRAFFIC_PRESSED_DARKEN);
-        let glyph = hovered[index]
-            .glyph
-            .map_or("none".to_string(), |glyph| glyph_image(index, glyph));
+        let pressed = traffic_states(looks, true, true, Some(button.kind))[index];
         let (button, light, hover) = match toolkit {
             Toolkit::Gtk4 => (
                 format!("windowcontrols > button.{name}"),
@@ -453,12 +472,11 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
         };
         let shape = format!(
             "border: none; border-radius: {radius}px; box-shadow: {}; background: {};",
-            rim(focused[index].rim),
-            css_color(focused[index].fill)
+            light_shadow(&focused[index].ring, looks.halo),
+            gradient(&focused[index].fill)
         );
         match toolkit {
             Toolkit::Gtk4 => {
-                let padding = (buttons.diameter as f32 - TRAFFIC_GLYPHS.box_size) / 2.0;
                 rule(
                     &button,
                     "min-width: 0; min-height: 0; padding: 0; margin: 0; border: none; \
@@ -467,9 +485,9 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
                 rule(
                     &light,
                     &format!(
-                        "min-width: 0; min-height: 0; padding: {padding}px; \
+                        "min-width: 0; min-height: 0; padding: 0; \
                          -gtk-icon-size: {}px; color: transparent; {shape}",
-                        TRAFFIC_GLYPHS.box_size
+                        buttons.diameter
                     ),
                 );
             }
@@ -508,30 +526,29 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
             &backdrop_light,
             &format!(
                 "background: {}; box-shadow: {};",
-                css_color(backdrop[index].fill),
-                rim(backdrop[index].rim)
+                gradient(&backdrop[index].fill),
+                light_shadow(&backdrop[index].ring, looks.halo)
             ),
         );
         rule(
             &hover,
             &format!(
-                "background-color: {}; background-image: {glyph}; background-position: center; \
-                 background-repeat: no-repeat; background-size: {box_size}px {box_size}px; \
+                "background-image: {}; background-position: center; \
+                 background-repeat: no-repeat; background-size: {d}px {d}px; \
                  box-shadow: {};",
-                css_color(hovered[index].fill),
-                rim(hovered[index].rim),
-                box_size = TRAFFIC_GLYPHS.box_size
+                light_images(index, &hovered[index], &hovered[index].fill),
+                light_shadow(&hovered[index].ring, looks.halo),
+                d = buttons.diameter
             ),
         );
         rule(
             &active,
-            &format!("background-color: {};", css_color(pressed)),
+            &format!(
+                "background-image: {};",
+                light_images(index, &pressed, &pressed_fill(&pressed, looks.backdrop))
+            ),
         );
     }
-}
-
-fn rim(color: Rgba) -> String {
-    format!("inset 0 0 0 {TRAFFIC_RIM_WIDTH}px {}", css_color(color))
 }
 
 fn firefox_classes(kind: ButtonKind) -> &'static [&'static str] {
@@ -558,18 +575,16 @@ fn firefox_icons(kind: ButtonKind, scope: &str, state: &str) -> String {
         .join(", ")
 }
 
-fn push_firefox_controls(out: &mut String, traffic: &Traffic, indent: &str) {
+fn push_firefox_controls(out: &mut String, looks: &TrafficLooks, indent: &str) {
     let buttons = &TITLEBAR.buttons;
-    let box_size = TRAFFIC_GLYPHS.box_size;
-    let radius = traffic.shape.corner_radius(buttons.diameter as f32);
-    let focused = traffic_states(traffic, true, false);
-    let backdrop = traffic_states(traffic, false, false);
-    let hovered = traffic_states(traffic, true, true);
-    let paint = |visual: &ButtonVisual| {
+    let radius = buttons.diameter as f32 / 2.0;
+    let focused = traffic_states(looks, true, false, None);
+    let backdrop = traffic_states(looks, false, false, None);
+    let hovered = traffic_states(looks, true, true, None);
+    let paint = |visual: &ButtonVisual, images: String| {
         format!(
-            "background-color: {} !important; box-shadow: {} !important;",
-            css_color(visual.fill),
-            rim(visual.rim)
+            "background-image: {images} !important; box-shadow: {} !important;",
+            light_shadow(&visual.ring, looks.halo)
         )
     };
     let mut rule = |selector: &str, body: &str| {
@@ -597,31 +612,34 @@ fn push_firefox_controls(out: &mut String, traffic: &Traffic, indent: &str) {
             "width: {d}px !important; height: {d}px !important; \
              border-radius: {radius}px !important; background-image: none !important; \
              background-position: center !important; background-repeat: no-repeat !important; \
-             background-size: {box_size}px {box_size}px !important; transition: none !important;",
+             background-size: {d}px {d}px !important; transition: none !important;",
             d = buttons.diameter
         ),
     );
     for (index, button) in buttons.order.iter().enumerate() {
         let kind = button.kind;
-        let glyph = hovered[index]
-            .glyph
-            .map_or("none".to_string(), |glyph| glyph_image(index, glyph));
-        let pressed = hovered[index].fill.darken(ctdesign::TRAFFIC_PRESSED_DARKEN);
-        rule(&firefox_icons(kind, "", ""), &paint(&focused[index]));
+        let pressed = traffic_states(looks, true, true, Some(kind))[index];
+        rule(
+            &firefox_icons(kind, "", ""),
+            &paint(&focused[index], gradient(&focused[index].fill)),
+        );
         rule(
             &firefox_icons(kind, "", ":-moz-window-inactive"),
-            &paint(&backdrop[index]),
+            &paint(&backdrop[index], gradient(&backdrop[index].fill)),
         );
         rule(
             &firefox_icons(kind, ".titlebar-buttonbox:hover ", ""),
-            &format!(
-                "{} background-image: {glyph} !important;",
-                paint(&hovered[index])
+            &paint(
+                &hovered[index],
+                light_images(index, &hovered[index], &hovered[index].fill),
             ),
         );
         rule(
             &firefox_icons(kind, "", ":hover:active"),
-            &format!("background-color: {} !important;", css_color(pressed)),
+            &format!(
+                "background-image: {} !important;",
+                light_images(index, &pressed, &pressed_fill(&pressed, looks.backdrop))
+            ),
         );
     }
 }
@@ -629,7 +647,7 @@ fn push_firefox_controls(out: &mut String, traffic: &Traffic, indent: &str) {
 fn controls_blocks(
     appearance: &AppearanceConfig,
     dominant: Option<Rgba>,
-    push_controls: impl Fn(&mut String, &Traffic, &str),
+    push_controls: impl Fn(&mut String, &TrafficLooks, &str),
 ) -> String {
     let (light, dark) = schemes(appearance);
     let mut out = String::new();
@@ -1008,7 +1026,7 @@ mod tests {
     fn every_toolkit_gets_the_traffic_light_rules_for_each_scheme() {
         let gtk4 = gtk4_css(&AppearanceConfig::default(), None);
         assert_eq!(gtk4.matches("windowcontrols > button.close {").count(), 2);
-        assert!(gtk4.contains("windowcontrols:hover > button.close > image { background-color:"));
+        assert!(gtk4.contains("windowcontrols:hover > button.close > image { background-image:"));
         let gtk3 = gtk3_css(&AppearanceConfig::default(), None);
         assert!(gtk3.contains("button.titlebutton.close:backdrop"));
         assert!(live_css(&AppearanceConfig::default(), None).contains("windowcontrols"));
@@ -1222,7 +1240,7 @@ mod tests {
         );
         assert!(css.contains(".titlebar-max > .toolbarbutton-icon, .titlebar-restore >"));
         assert!(css.contains(
-            ".titlebar-buttonbox:hover .titlebar-min > .toolbarbutton-icon { background-color:"
+            ".titlebar-buttonbox:hover .titlebar-min > .toolbarbutton-icon { background-image:"
         ));
         assert!(css.contains(".titlebar-close:-moz-window-inactive > .toolbarbutton-icon"));
     }

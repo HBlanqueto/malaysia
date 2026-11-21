@@ -126,7 +126,9 @@ fn title_labels(items: &[MenuItem]) -> Vec<String> {
     items
         .iter()
         .filter_map(|item| match item {
-            MenuItem::Submenu { label, .. } | MenuItem::Action { label, .. } => Some(label.clone()),
+            MenuItem::Submenu { label, .. } | MenuItem::Action { label, .. } => {
+                Some(label.to_string())
+            }
             _ => None,
         })
         .collect()
@@ -752,7 +754,7 @@ fn local_title_specs(
         .into_iter()
         .map(|label| MenuItem::Submenu {
             id: Some("0".to_string()),
-            label,
+            label: label.into(),
             enabled: true,
             items: Vec::new(),
             icon: None,

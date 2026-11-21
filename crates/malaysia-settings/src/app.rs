@@ -9,8 +9,8 @@ use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
     AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick, ScrollBars,
-    TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle, WindowColorMode,
-    lights_for, load_appearance, palette,
+    TintParts, TintStrength, Toolkit, TrafficLightStyle, WindowColorMode, load_appearance, palette,
+    resolve,
 };
 use ctdesign::{
     ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, GLASS_BLUR_FULL, MENU_POPOVER,
@@ -317,7 +317,7 @@ fn appearance(
                 .row(
                     Row::new(tr!("traffic-lights"))
                         .keywords(tr_list!("traffic-lights-keywords"))
-                        .control(traffic_popup(config, resolved, dominant, error)),
+                        .control(traffic_popup(config, dominant, error)),
                 )
                 .row(
                     Row::new(tr!("scroll-bars"))
@@ -649,7 +649,7 @@ pub(crate) fn toolkit_text_size(
     Row::new(title).control(
         text_size_names()
             .iter()
-            .fold(PopUpButton::new(title), |popup, name| popup.item(name))
+            .fold(PopUpButton::new(title), |popup, name| popup.item(*name))
             .selected(selected)
             .on_change(edit(error, move |config, index: usize| {
                 *config.text_sizes.get_mut(toolkit) =
@@ -782,7 +782,6 @@ fn option_column(control: impl IntoElement) -> Rect {
 
 fn traffic_popup(
     config: &AppearanceConfig,
-    resolved: &Resolved,
     dominant: Option<Rgba>,
     error: State<Option<String>>,
 ) -> PopUpButton {
@@ -791,8 +790,8 @@ fn traffic_popup(
         .fold(
             PopUpButton::new(tr!("traffic-lights")),
             |popup, (style, label)| {
-                let lights = traffic_lights(style, config, resolved, dominant);
-                let svg = traffic_row_svg(lights, config.traffic_light_shape);
+                let lights = traffic_lights(style, config, dominant);
+                let svg = traffic_row_svg(lights);
                 popup.icon_item(label(), MenuIcon::Svg(svg.into()))
             },
         )
@@ -808,22 +807,25 @@ fn traffic_popup(
 fn traffic_lights(
     style: TrafficLightStyle,
     config: &AppearanceConfig,
-    resolved: &Resolved,
     dominant: Option<Rgba>,
 ) -> [Rgba; 3] {
-    let normal_accent = config
-        .accent_color
-        .map(|[r, g, b]| Rgba { r, g, b, a: 1.0 })
-        .unwrap_or(palette(resolved.scheme).accent);
-    lights_for(style, normal_accent, dominant)
+    let looks = resolve(
+        &AppearanceConfig {
+            traffic_lights: style,
+            ..config.clone()
+        },
+        dominant,
+    )
+    .traffic_lights;
+    [looks.close.base, looks.minimize.base, looks.zoom.base]
 }
 
-fn traffic_row_svg(lights: [Rgba; 3], shape: TrafficLightShape) -> String {
+fn traffic_row_svg(lights: [Rgba; 3]) -> String {
     let height = MENU_POPOVER.swatch_grid_size;
     let dot = MENU_POPOVER.swatch_grid_dot;
     let gap = MENU_POPOVER.swatch_grid_gap;
     let width = 3.0 * dot + 2.0 * gap;
-    let corner = shape.corner_radius(dot);
+    let corner = dot / 2.0;
     let y = (height - dot) / 2.0;
     let circles: String = lights
         .iter()

@@ -3,14 +3,14 @@ use std::sync::Once;
 use std::time::{Duration, Instant};
 
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
-use ctappearance::traffic::{self, TrafficInput};
+use ctappearance::traffic::{self, ButtonVisual, Glyph, TrafficInput};
 use ctappearance::{
-    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, WindowColorMode,
-    load_dominant, palette as base_palette, resolve,
+    AppearanceConfig, ColorScheme, Resolved, WindowColorMode, load_dominant,
+    palette as base_palette, resolve,
 };
 use ctdesign::{
-    ButtonKind, FocusPair, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
-    TRAFFIC_RIM_WIDTH,
+    ButtonKind, FocusPair, Palette, Rgba, Segment, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
+    TRAFFIC_RING_WIDTH, TrafficHalo, TrafficLooks, Triangle,
 };
 use malaysia_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
 use malaysia_scene::scene::{PopupId, WindowId};
@@ -36,9 +36,7 @@ pub(crate) struct ChromeTheme {
     pub(crate) palette: Palette,
     pub(crate) resolved: Resolved,
     scheme: ColorScheme,
-    lights: [Rgba; 3],
-    traffic_style: TrafficLightStyle,
-    traffic_shape: TrafficLightShape,
+    traffic: TrafficLooks,
     signature: u64,
 }
 
@@ -66,22 +64,17 @@ impl ChromeTheme {
         };
         palette.hairline = resolved.surfaces.line;
 
-        let traffic_style = appearance.traffic_lights;
         let signature = signature(
             resolved.scheme,
             appearance.window_color,
-            appearance.traffic_lights,
-            appearance.traffic_light_shape,
             palette,
-            resolved.lights,
+            &resolved.traffic_lights,
         );
         Self {
             palette,
             resolved,
             scheme: resolved.scheme,
-            lights: resolved.lights,
-            traffic_style,
-            traffic_shape: appearance.traffic_light_shape,
+            traffic: resolved.traffic_lights,
             signature,
         }
     }
@@ -90,10 +83,8 @@ impl ChromeTheme {
 fn signature(
     scheme: ColorScheme,
     mode: WindowColorMode,
-    style: TrafficLightStyle,
-    shape: TrafficLightShape,
     palette: Palette,
-    lights: [Rgba; 3],
+    lights: &TrafficLooks,
 ) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     let mut add = |bits: u64| {
@@ -102,21 +93,26 @@ fn signature(
     };
     add(scheme as u64);
     add(mode as u64);
-    add(style as u64);
-    add(u64::from(shape.radius()));
     for color in [
         palette.titlebar_bg.focused,
         palette.titlebar_bg.unfocused,
         palette.hairline,
-        lights[0],
-        lights[1],
-        lights[2],
-    ] {
+    ]
+    .into_iter()
+    .chain(light_colors(lights))
+    {
         for channel in [color.r, color.g, color.b, color.a] {
             add(u64::from(channel.to_bits()));
         }
     }
     hash
+}
+
+fn light_colors(looks: &TrafficLooks) -> impl Iterator<Item = Rgba> {
+    [looks.close, looks.minimize, looks.zoom, looks.inactive]
+        .into_iter()
+        .flat_map(|look| look.fill.into_iter().chain(look.ring).chain([look.glyph]))
+        .chain([looks.halo.color, looks.backdrop])
 }
 
 pub(crate) const OUTER_BORDER_SLOT: u8 = 0;
@@ -591,30 +587,21 @@ impl TextEngine {
         let diameter = (f64::from(TITLEBAR.buttons.diameter) * scale)
             .round()
             .max(1.0) as i32;
-        let visuals = traffic::visual(
-            theme.lights,
-            theme.traffic_style,
-            palette.traffic_lights_inactive,
-            palette.traffic_rim,
-            input,
-        );
+        let visuals = traffic::visual(&theme.traffic, input);
         for (index, visual) in visuals.iter().enumerate() {
             let (x, y, size) = traffic::button_rect(index);
-            let center_x = ((x + size / 2.0) * scale).round() as i32;
-            let center_y = ((y + size / 2.0) * scale).round() as i32;
-            let radius = theme.traffic_shape.corner_radius(diameter as f32);
-            let center = (center_x, center_y);
-            canvas.fill_rounded_square(center, diameter, radius, visual.fill);
-            canvas.stroke_rounded_square(
-                center,
-                diameter,
-                radius,
-                (f64::from(TRAFFIC_RIM_WIDTH) * scale) as f32,
-                visual.rim,
-            );
-            if let Some(glyph) = visual.glyph {
-                canvas.draw_glyph(center, diameter as f32, index, glyph);
-            }
+            let unit = diameter as f32 / TITLEBAR.buttons.diameter as f32 * visual.scale;
+            let light = Light {
+                center: (
+                    ((x + size / 2.0) * scale).round() as f32,
+                    ((y + size / 2.0) * scale).round() as f32,
+                ),
+                unit,
+                looks: &theme.traffic,
+                visual,
+                glyph: Glyph::of(index, false, input.fullscreen),
+            };
+            canvas.draw_light(&light);
         }
         let gap = (f64::from(TITLEBAR.buttons.spacing) * scale).round() as i32;
         let margin = (traffic::button_rect(0).0 * scale).round() as i32;
@@ -753,49 +740,124 @@ impl Canvas {
         blend(&mut self.pixels[index..index + 4], color, coverage);
     }
 
-    fn draw_glyph(
-        &mut self,
-        (center_x, center_y): (i32, i32),
-        diameter: f32,
-        index: usize,
-        color: Rgba,
-    ) {
-        let canvas = diameter * TRAFFIC_GLYPHS.box_size / TITLEBAR.buttons.diameter as f32;
-        let unit = canvas / TRAFFIC_GLYPHS.box_size;
-        let origin_x = center_x as f32 - canvas / 2.0;
-        let origin_y = center_y as f32 - canvas / 2.0;
-        let min_x = origin_x.floor() as i32;
-        let max_x = (origin_x + canvas).ceil() as i32;
-        let min_y = origin_y.floor() as i32;
-        let max_y = (origin_y + canvas).ceil() as i32;
-        let stroke = TRAFFIC_GLYPHS.stroke * unit;
+    fn around(&self, (cx, cy): (f32, f32), reach: f32) -> impl Iterator<Item = (i32, i32)> + use<> {
+        let rows =
+            ((cy - reach).floor() as i32).max(0)..((cy + reach).ceil() as i32).min(self.height);
+        let cols =
+            ((cx - reach).floor() as i32).max(0)..((cx + reach).ceil() as i32).min(self.width);
+        rows.flat_map(move |row| cols.clone().map(move |col| (col, row)))
+    }
 
-        for row in min_y.max(0)..max_y.min(self.height) {
-            for col in min_x.max(0)..max_x.min(self.width) {
-                let coverage = match index {
-                    0 => segment_coverage(
-                        TRAFFIC_GLYPHS.close,
-                        col,
-                        row,
-                        origin_x,
-                        origin_y,
-                        unit,
-                        stroke,
-                    ),
-                    1 => segment_coverage(
-                        TRAFFIC_GLYPHS.minimize,
-                        col,
-                        row,
-                        origin_x,
-                        origin_y,
-                        unit,
-                        stroke,
-                    ),
-                    _ => triangle_coverage(TRAFFIC_GLYPHS.zoom, col, row, origin_x, origin_y, unit),
-                };
-                if coverage > 0.0 {
-                    self.blend(col, row, color, coverage);
+    fn draw_light(&mut self, light: &Light) {
+        let Light {
+            looks,
+            visual,
+            unit,
+            ..
+        } = *light;
+        let disc = light.disc();
+        self.paint_halo(&disc, looks.halo, unit);
+        if visual.dodge > 0.0 {
+            self.fill_disc(&disc, &[looks.backdrop]);
+        }
+        self.fill_disc(&disc, &visual.fill);
+        self.stroke_ring(&disc, TRAFFIC_RING_WIDTH * unit, &visual.ring);
+        if let Some(color) = visual.glyph {
+            self.paint_glyph(&light.frame(), light.glyph, color);
+        }
+        if visual.dodge > 0.0 {
+            self.dodge_disc(&disc, visual.dodge);
+        }
+    }
+
+    fn paint_halo(&mut self, disc: &Disc, halo: TrafficHalo, unit: f32) {
+        if halo.color.a <= 0.0 {
+            return;
+        }
+        let sigma = (halo.blur * unit).max(0.01);
+        let offset = halo.dy * unit;
+        for pixel in self.around(disc.center, disc.radius + 3.0 * sigma + offset.abs()) {
+            let (x, y) = (pixel.0 as f32 + 0.5, pixel.1 as f32 + 0.5);
+            let beyond_shadow = (x - disc.center.0).hypot(y - disc.center.1 - offset) - disc.radius;
+            let shadow = 0.5
+                * (1.0
+                    - erf(f64::from(
+                        beyond_shadow / (sigma * std::f32::consts::SQRT_2),
+                    )) as f32);
+            let amount = shadow * (1.0 - disc.coverage(pixel));
+            if amount > 0.0 {
+                self.blend(pixel.0, pixel.1, halo.color, amount);
+            }
+        }
+    }
+
+    fn fill_disc(&mut self, disc: &Disc, colors: &[Rgba]) {
+        for pixel in self.around(disc.center, disc.radius + 1.0) {
+            let coverage = disc.coverage(pixel);
+            if coverage > 0.0 {
+                let color = gradient(colors, disc.height_fraction(pixel.1));
+                self.blend(pixel.0, pixel.1, color, coverage);
+            }
+        }
+    }
+
+    fn stroke_ring(&mut self, disc: &Disc, width: f32, colors: &[Rgba]) {
+        for pixel in self.around(disc.center, disc.radius + 1.0) {
+            let distance = (disc.distance(pixel) - (disc.radius - width / 2.0)).abs();
+            let coverage = (0.5 + width / 2.0 - distance).clamp(0.0, width.min(1.0));
+            if coverage > 0.0 {
+                let color = gradient(colors, disc.height_fraction(pixel.1));
+                self.blend(pixel.0, pixel.1, color, coverage);
+            }
+        }
+    }
+
+    fn dodge_disc(&mut self, disc: &Disc, amount: f32) {
+        for pixel in self.around(disc.center, disc.radius + 1.0) {
+            let coverage = disc.coverage(pixel);
+            if coverage > 0.0 {
+                let index = (pixel.1 * self.width + pixel.0) as usize * 4;
+                for channel in &mut self.pixels[index..index + 3] {
+                    let base = f32::from(*channel) / 255.0;
+                    let dodged = (base / (1.0 - amount)).min(1.0);
+                    *channel = ((base + (dodged - base) * coverage) * 255.0).round() as u8;
                 }
+            }
+        }
+    }
+
+    fn paint_glyph(&mut self, frame: &GlyphFrame, glyph: Glyph, color: Rgba) {
+        match glyph {
+            Glyph::Close => self.paint_strokes(frame, TRAFFIC_GLYPHS.close, Cap::Round, color),
+            Glyph::Minimize => self.paint_strokes(frame, TRAFFIC_GLYPHS.minimize, Cap::Butt, color),
+            Glyph::Plus => self.paint_strokes(frame, TRAFFIC_GLYPHS.plus, Cap::Butt, color),
+            Glyph::ZoomEnter => self.paint_triangles(frame, TRAFFIC_GLYPHS.zoom, color),
+            Glyph::ZoomExit => self.paint_triangles(frame, TRAFFIC_GLYPHS.zoom_exit, color),
+        }
+    }
+
+    fn paint_strokes(&mut self, frame: &GlyphFrame, segments: &[Segment], cap: Cap, color: Rgba) {
+        let width = TRAFFIC_GLYPHS.stroke * frame.unit;
+        for pixel in self.around(frame.center(), frame.reach()) {
+            let coverage = segments
+                .iter()
+                .map(|segment| stroke_coverage(segment, frame, width, cap, pixel))
+                .fold(0.0, f32::max);
+            if coverage > 0.0 {
+                self.blend(pixel.0, pixel.1, color, coverage);
+            }
+        }
+    }
+
+    fn paint_triangles(&mut self, frame: &GlyphFrame, triangles: &[Triangle], color: Rgba) {
+        let outlines: Vec<Vec<(f32, f32)>> = triangles
+            .iter()
+            .map(|triangle| rounded_outline(triangle, frame))
+            .collect();
+        for pixel in self.around(frame.center(), frame.reach()) {
+            let coverage = outline_coverage(&outlines, pixel);
+            if coverage > 0.0 {
+                self.blend(pixel.0, pixel.1, color, coverage);
             }
         }
     }
@@ -804,47 +866,6 @@ impl Canvas {
         for row in y.max(0)..(y + h).min(self.height) {
             for col in x.max(0)..(x + w).min(self.width) {
                 self.blend(col, row, color, 1.0);
-            }
-        }
-    }
-
-    fn fill_rounded_square(&mut self, center: (i32, i32), size: i32, radius: f32, color: Rgba) {
-        self.rounded_square(center, size, radius, color, |distance| 0.5 - distance);
-    }
-
-    fn stroke_rounded_square(
-        &mut self,
-        center: (i32, i32),
-        size: i32,
-        radius: f32,
-        stroke: f32,
-        color: Rgba,
-    ) {
-        self.rounded_square(center, size, radius, color, |distance| {
-            stroke / 2.0 + 0.5 - distance.abs()
-        });
-    }
-
-    fn rounded_square(
-        &mut self,
-        (cx, cy): (i32, i32),
-        size: i32,
-        radius: f32,
-        color: Rgba,
-        coverage_at: impl Fn(f32) -> f32,
-    ) {
-        let half = size as f32 / 2.0;
-        let radius = radius.min(half);
-        let inner = half - radius;
-        for row in (cy - size).max(0)..(cy + size).min(self.height) {
-            for col in (cx - size).max(0)..(cx + size).min(self.width) {
-                let dx = ((col as f32 + 0.5) - cx as f32).abs() - inner;
-                let dy = ((row as f32 + 0.5) - cy as f32).abs() - inner;
-                let distance = (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() - radius;
-                let coverage = coverage_at(distance).clamp(0.0, 1.0);
-                if coverage > 0.0 {
-                    self.blend(col, row, color, coverage);
-                }
             }
         }
     }
@@ -893,77 +914,171 @@ impl Canvas {
     }
 }
 
-fn segment_coverage(
-    segments: &[ctdesign::Segment],
-    col: i32,
-    row: i32,
-    origin_x: f32,
-    origin_y: f32,
+struct Light<'a> {
+    center: (f32, f32),
     unit: f32,
-    stroke: f32,
-) -> f32 {
-    let px = col as f32 + 0.5;
-    let py = row as f32 + 0.5;
-    let mut best = 0.0f32;
-    for segment in segments {
-        let ax = origin_x + segment.a.0 * unit;
-        let ay = origin_y + segment.a.1 * unit;
-        let bx = origin_x + segment.b.0 * unit;
-        let by = origin_y + segment.b.1 * unit;
-        let abx = bx - ax;
-        let aby = by - ay;
-        let length_sq = abx * abx + aby * aby;
-        let t = if length_sq == 0.0 {
-            0.0
-        } else {
-            (((px - ax) * abx + (py - ay) * aby) / length_sq).clamp(0.0, 1.0)
-        };
-        let dx = px - (ax + abx * t);
-        let dy = py - (ay + aby * t);
-        let distance = (dx * dx + dy * dy).sqrt() - stroke / 2.0;
-        let coverage = (0.5 - distance).clamp(0.0, 1.0);
-        best = best.max(coverage);
-    }
-    best
+    looks: &'a TrafficLooks,
+    visual: &'a ButtonVisual,
+    glyph: Glyph,
 }
 
-fn triangle_coverage(
-    triangles: &[ctdesign::Triangle],
-    col: i32,
-    row: i32,
-    origin_x: f32,
-    origin_y: f32,
-    unit: f32,
-) -> f32 {
-    let mut covered = 0;
-    let samples = 4;
-    for sy in 0..samples {
-        for sx in 0..samples {
-            let px = col as f32 + (sx as f32 + 0.5) / samples as f32;
-            let py = row as f32 + (sy as f32 + 0.5) / samples as f32;
-            if triangles.iter().any(|triangle| {
-                let points = triangle
-                    .0
-                    .map(|point| (origin_x + point.0 * unit, origin_y + point.1 * unit));
-                point_in_triangle((px, py), points)
-            }) {
-                covered += 1;
-            }
+impl Light<'_> {
+    fn disc(&self) -> Disc {
+        Disc {
+            center: self.center,
+            radius: TITLEBAR.buttons.diameter as f32 / 2.0 * self.unit,
         }
     }
-    covered as f32 / (samples * samples) as f32
+
+    fn frame(&self) -> GlyphFrame {
+        let half = TITLEBAR.buttons.diameter as f32 / 2.0 * self.unit;
+        GlyphFrame {
+            origin: (self.center.0 - half, self.center.1 - half),
+            unit: self.unit,
+        }
+    }
 }
 
-fn point_in_triangle(point: (f32, f32), triangle: [(f32, f32); 3]) -> bool {
-    let sign = |a: (f32, f32), b: (f32, f32), c: (f32, f32)| {
-        (a.0 - c.0) * (b.1 - c.1) - (b.0 - c.0) * (a.1 - c.1)
+struct Disc {
+    center: (f32, f32),
+    radius: f32,
+}
+
+impl Disc {
+    fn distance(&self, (col, row): (i32, i32)) -> f32 {
+        (col as f32 + 0.5 - self.center.0).hypot(row as f32 + 0.5 - self.center.1)
+    }
+
+    fn coverage(&self, pixel: (i32, i32)) -> f32 {
+        (0.5 - (self.distance(pixel) - self.radius)).clamp(0.0, 1.0)
+    }
+
+    fn height_fraction(&self, row: i32) -> f32 {
+        ((row as f32 + 0.5 - (self.center.1 - self.radius)) / (2.0 * self.radius)).clamp(0.0, 1.0)
+    }
+}
+
+struct GlyphFrame {
+    origin: (f32, f32),
+    unit: f32,
+}
+
+impl GlyphFrame {
+    fn at(&self, point: (f32, f32)) -> (f32, f32) {
+        (
+            self.origin.0 + point.0 * self.unit,
+            self.origin.1 + point.1 * self.unit,
+        )
+    }
+
+    fn center(&self) -> (f32, f32) {
+        let half = TITLEBAR.buttons.diameter as f32 / 2.0;
+        self.at((half, half))
+    }
+
+    fn reach(&self) -> f32 {
+        TITLEBAR.buttons.diameter as f32 / 2.0 * self.unit + 1.0
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Cap {
+    Round,
+    Butt,
+}
+
+fn gradient(colors: &[Rgba], position: f32) -> Rgba {
+    let last = colors.len() - 1;
+    let at = position.clamp(0.0, 1.0) * last as f32;
+    let from = (at.floor() as usize).min(last);
+    let to = (from + 1).min(last);
+    let mix = at - from as f32;
+    let lerp = |a: f32, b: f32| a + (b - a) * mix;
+    Rgba {
+        r: lerp(colors[from].r, colors[to].r),
+        g: lerp(colors[from].g, colors[to].g),
+        b: lerp(colors[from].b, colors[to].b),
+        a: lerp(colors[from].a, colors[to].a),
+    }
+}
+
+fn erf(x: f64) -> f64 {
+    let t = 1.0 / (1.0 + 0.327_591_1 * x.abs());
+    let polynomial = t
+        * (0.254_829_592
+            + t * (-0.284_496_736
+                + t * (1.421_413_741 + t * (-1.453_152_027 + t * 1.061_405_429))));
+    (1.0 - polynomial * (-x * x).exp()).copysign(x)
+}
+
+fn stroke_coverage(
+    segment: &Segment,
+    frame: &GlyphFrame,
+    width: f32,
+    cap: Cap,
+    (col, row): (i32, i32),
+) -> f32 {
+    let (a, b) = (frame.at(segment.a), frame.at(segment.b));
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let length = dx.hypot(dy);
+    let (ux, uy) = (dx / length, dy / length);
+    let (px, py) = (col as f32 + 0.5 - a.0, row as f32 + 0.5 - a.1);
+    let along = px * ux + py * uy;
+    let across = (px * uy - py * ux).abs();
+    let beyond = (-along).max(along - length).max(0.0);
+    let outside = match cap {
+        Cap::Round => beyond.hypot(across) - width / 2.0,
+        Cap::Butt => (across - width / 2.0).max(0.0).hypot(beyond),
     };
-    let d1 = sign(point, triangle[0], triangle[1]);
-    let d2 = sign(point, triangle[1], triangle[2]);
-    let d3 = sign(point, triangle[2], triangle[0]);
-    let has_negative = d1 < 0.0 || d2 < 0.0 || d3 < 0.0;
-    let has_positive = d1 > 0.0 || d2 > 0.0 || d3 > 0.0;
-    !(has_negative && has_positive)
+    (0.5 - outside).clamp(0.0, 1.0)
+}
+
+fn rounded_outline(triangle: &Triangle, frame: &GlyphFrame) -> Vec<(f32, f32)> {
+    const STEPS: usize = 6;
+    let [first, second, third] = traffic::rounded(triangle);
+    let mut outline = vec![frame.at(first.exit)];
+    for corner in [second, third, first] {
+        outline.push(frame.at(corner.enter));
+        for step in 1..=STEPS {
+            let t = step as f32 / STEPS as f32;
+            let weight = |a: f32, b: f32, c: f32| {
+                (1.0 - t) * (1.0 - t) * a + 2.0 * (1.0 - t) * t * b + t * t * c
+            };
+            outline.push(frame.at((
+                weight(corner.enter.0, corner.vertex.0, corner.exit.0),
+                weight(corner.enter.1, corner.vertex.1, corner.exit.1),
+            )));
+        }
+    }
+    outline
+}
+
+fn outline_coverage(outlines: &[Vec<(f32, f32)>], (col, row): (i32, i32)) -> f32 {
+    const SAMPLES: i32 = 4;
+    let inside = (0..SAMPLES * SAMPLES)
+        .filter(|sample| {
+            let point = (
+                col as f32 + ((sample % SAMPLES) as f32 + 0.5) / SAMPLES as f32,
+                row as f32 + ((sample / SAMPLES) as f32 + 0.5) / SAMPLES as f32,
+            );
+            outlines.iter().any(|outline| contains(outline, point))
+        })
+        .count();
+    inside as f32 / (SAMPLES * SAMPLES) as f32
+}
+
+fn contains(outline: &[(f32, f32)], (x, y): (f32, f32)) -> bool {
+    let mut inside = false;
+    let mut previous = outline[outline.len() - 1];
+    for &point in outline {
+        if (point.1 > y) != (previous.1 > y)
+            && x < (previous.0 - point.0) * (y - point.1) / (previous.1 - point.1) + point.0
+        {
+            inside = !inside;
+        }
+        previous = point;
+    }
+    inside
 }
 
 fn blend(dst: &mut [u8], src: ctdesign::Rgba, coverage: f32) {
@@ -983,9 +1098,10 @@ fn blend(dst: &mut [u8], src: ctdesign::Rgba, coverage: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ctappearance::TrafficLightStyle;
     use ctdesign::{
         BG_WINDOW_LIGHT, ButtonKind, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN,
-        TRAFFIC_GLYPH_STANDARD, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT,
+        TRAFFIC_LIGHTS_LIGHT, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT,
     };
     use malaysia_scene::geometry::Rect;
 
@@ -1081,15 +1197,9 @@ mod tests {
         );
         let mut expected = LIGHT;
         expected.hairline = theme.resolved.surfaces.line;
+        expected.accent = theme.resolved.accent;
         assert_eq!(theme.palette, expected);
-        assert_eq!(
-            theme.lights,
-            [
-                Rgba::rgb8(0xff, 0x5f, 0x57),
-                Rgba::rgb8(0xfe, 0xbc, 0x2e),
-                Rgba::rgb8(0x28, 0xc8, 0x40),
-            ]
-        );
+        assert_eq!(theme.traffic, TRAFFIC_LIGHTS_LIGHT);
     }
 
     #[test]
@@ -1108,7 +1218,7 @@ mod tests {
         };
         let factor = WINDOW_TINT_ACCENT[0] * ctdesign::ACCENT_CHROMA_GAIN;
         let tint = ctappearance::backdrop::take_chroma;
-        assert_eq!(theme.palette.accent, accent);
+        assert_eq!(theme.palette.accent, theme.resolved.accent);
         assert_eq!(
             theme.palette.titlebar_bg.focused,
             tint(BG_WINDOW_LIGHT, accent, factor)
@@ -1126,10 +1236,13 @@ mod tests {
             )
         );
         assert_eq!(
-            theme.lights[0],
+            theme.traffic.close.base,
             accent.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN)
         );
-        assert_eq!(theme.lights[2], accent.lighten(TRAFFIC_ZOOM_LIGHTEN));
+        assert_eq!(
+            theme.traffic.zoom.base,
+            accent.lighten(TRAFFIC_ZOOM_LIGHTEN)
+        );
     }
 
     #[test]
@@ -1139,7 +1252,9 @@ mod tests {
             ..AppearanceConfig::default()
         };
         let theme = ChromeTheme::from_parts(&appearance, None);
-        assert_eq!(theme.palette, DARK_TINT);
+        let mut expected = DARK_TINT;
+        expected.accent = theme.resolved.accent;
+        assert_eq!(theme.palette, expected);
         assert_eq!(theme.palette.title.focused, Rgba::rgb8(0xf4, 0xf5, 0xf6));
         assert_eq!(theme.palette.title.unfocused, Rgba::rgb8(0x99, 0x9c, 0xa3));
         assert_eq!(LIGHT.title.unfocused, Rgba::rgb8(0x6e, 0x6e, 0x6e));
@@ -1153,7 +1268,7 @@ mod tests {
             ..AppearanceConfig::default()
         };
         let theme = ChromeTheme::from_parts(&appearance, None);
-        assert_eq!(theme.lights[1], TITLEBAR.buttons.order[1].color);
+        assert_eq!(theme.traffic, TRAFFIC_LIGHTS_LIGHT);
     }
 
     #[test]
@@ -1197,7 +1312,7 @@ mod tests {
     }
 
     #[test]
-    fn the_buttons_are_rounded_squares() {
+    fn the_buttons_are_discs() {
         let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
         let x = 100.0 + traffic::button_rect(0).0;
         assert_eq!(
@@ -1276,114 +1391,97 @@ mod tests {
         text.rasterize("", 400, scale, theme, input)
     }
 
-    fn close_centre() -> (i32, i32) {
-        let (x, y, size) = traffic::button_rect(0);
-        ((x + size / 2.0) as i32, (y + size / 2.0) as i32)
-    }
-
     fn pixel(pixels: &[u8], width: i32, x: i32, y: i32) -> [u8; 4] {
         let index = ((y * width + x) * 4) as usize;
         pixels[index..index + 4].try_into().unwrap()
     }
 
+    fn lit_close_center(group_hovered: bool, pressed: Option<ButtonKind>, scale: f64) -> [u8; 4] {
+        let input = TrafficInput {
+            focused: true,
+            group_hovered,
+            pressed,
+            zoom_supported: true,
+            ..TrafficInput::default()
+        };
+        let (pixels, width, _) = render_with(input, scale);
+        let (x, y, size) = traffic::button_rect(0);
+        let x = ((x + size / 2.0) * scale).round() as i32;
+        let y = ((y + size / 2.0) * scale).round() as i32;
+        pixel(&pixels, width, x, y)
+    }
+
     #[test]
     fn hover_draws_the_close_glyph_over_the_light() {
-        let input = TrafficInput {
-            focused: true,
-            group_hovered: true,
-            zoom_supported: true,
-            ..TrafficInput::default()
-        };
-        let (pixels, width, _) = render_with(input, 1.0);
-        let (x, y) = close_centre();
-        let center = pixel(&pixels, width, x, y);
-        let fill = TITLEBAR.buttons.order[0].color.to_rgba8();
-        assert_ne!(center, fill, "the glyph must cover the light's centre");
-        let mut expected = fill;
-        blend(&mut expected, TRAFFIC_GLYPH_STANDARD, 1.0);
-        assert_eq!(center, expected);
+        assert_ne!(
+            lit_close_center(true, None, 1.0),
+            lit_close_center(false, None, 1.0)
+        );
     }
 
     #[test]
-    fn without_hover_there_is_no_glyph_pixel() {
-        let input = TrafficInput {
-            focused: true,
-            zoom_supported: true,
-            ..TrafficInput::default()
-        };
-        let (pixels, width, _) = render_with(input, 1.0);
-        let (x, y) = close_centre();
-        let center = pixel(&pixels, width, x, y);
-        assert_eq!(center, TITLEBAR.buttons.order[0].color.to_rgba8());
-    }
-
-    #[test]
-    fn pressed_darkens_the_light_fill() {
-        let input = TrafficInput {
-            focused: true,
-            pressed: Some(ButtonKind::Close),
-            zoom_supported: true,
-            ..TrafficInput::default()
-        };
-        let (pixels, width, _) = render_with(input, 1.0);
-        let (x, y) = close_centre();
-        let center = pixel(&pixels, width, x, y);
-        let expected = TITLEBAR.buttons.order[0]
-            .color
-            .darken(ctdesign::TRAFFIC_PRESSED_DARKEN)
-            .to_rgba8();
-        for (actual, expected) in center.iter().zip(expected) {
-            assert!(actual.abs_diff(expected) <= 1, "{center:?} != {expected:?}");
+    fn the_glyph_canvas_scales_with_the_bar() {
+        for scale in [1.0, 1.5, 2.0] {
+            assert_ne!(
+                lit_close_center(true, None, scale),
+                lit_close_center(false, None, scale),
+                "scale {scale}: no glyph at the centre"
+            );
         }
+    }
+
+    #[test]
+    fn pressed_brightens_the_light() {
+        let brightness = |pixel: [u8; 4]| pixel[..3].iter().map(|&c| u32::from(c)).sum::<u32>();
+        let lit = lit_close_center(false, None, 2.0);
+        let pressed = lit_close_center(false, Some(ButtonKind::Close), 2.0);
+        assert!(
+            brightness(pressed) > brightness(lit),
+            "{pressed:?} <= {lit:?}"
+        );
+    }
+
+    fn zoom_center(input: TrafficInput) -> [u8; 4] {
+        let (pixels, width, _) = render_with(input, 1.0);
+        let (x, y, size) = traffic::button_rect(2);
+        pixel(
+            &pixels,
+            width,
+            (x + size / 2.0) as i32,
+            (y + size / 2.0) as i32,
+        )
     }
 
     #[test]
     fn an_inactive_window_lights_up_on_hover() {
         let input = TrafficInput {
             focused: false,
-            group_hovered: true,
             zoom_supported: true,
             ..TrafficInput::default()
         };
-        let (pixels, width, _) = render_with(input, 1.0);
-        let (x, y) = close_centre();
-        let sample = pixel(&pixels, width, x + 4, y);
-        assert_eq!(sample, TITLEBAR.buttons.order[0].color.to_rgba8());
-        assert_ne!(sample, LIGHT.traffic_lights_inactive.to_rgba8());
+        let hovered = TrafficInput {
+            group_hovered: true,
+            ..input
+        };
+        assert_ne!(zoom_center(hovered), zoom_center(input));
     }
 
     #[test]
     fn fixed_size_windows_show_an_inactive_zoom_without_a_glyph() {
         let input = TrafficInput {
             focused: true,
-            group_hovered: true,
             zoom_supported: false,
             ..TrafficInput::default()
         };
-        let (pixels, width, _) = render_with(input, 1.0);
-        let center = pixel(&pixels, width, 62, 16);
-        assert_eq!(center, LIGHT.traffic_lights_inactive.to_rgba8());
-    }
-
-    #[test]
-    fn the_glyph_canvas_scales_with_the_bar() {
-        for scale in [1.0, 1.5, 2.0] {
-            let input = TrafficInput {
-                focused: true,
-                group_hovered: true,
-                zoom_supported: true,
-                ..TrafficInput::default()
-            };
-            let (pixels, width, _) = render_with(input, scale);
-            let (x, y, size) = traffic::button_rect(0);
-            let x = ((x + size / 2.0) * scale).round() as i32;
-            let y = ((y + size / 2.0) * scale).round() as i32;
-            let center = pixel(&pixels, width, x, y);
-            assert_ne!(
-                center,
-                TITLEBAR.buttons.order[0].color.to_rgba8(),
-                "scale {scale}: no glyph at the centre"
-            );
-        }
+        let hovered = TrafficInput {
+            group_hovered: true,
+            ..input
+        };
+        assert_eq!(zoom_center(hovered), zoom_center(input));
+        let admitted = TrafficInput {
+            zoom_supported: true,
+            ..hovered
+        };
+        assert_ne!(zoom_center(admitted), zoom_center(hovered));
     }
 }

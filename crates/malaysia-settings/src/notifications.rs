@@ -89,7 +89,7 @@ fn notifications_pane(
                 .iter()
                 .fold(
                     PopUpButton::new(tr!("notifications-show-previews")),
-                    |popup, name| popup.item(name),
+                    |popup, name| popup.item(*name),
                 )
                 .selected(position(&PREVIEWS, config.show_previews))
                 .on_change(edit(error, |config, index: usize| {
@@ -220,7 +220,7 @@ fn app_form(id: &'static str, app: &AppNotifications, error: State<Option<String
                             .iter()
                             .fold(
                                 PopUpButton::new(tr!("notifications-grouping")),
-                                |popup, name| popup.item(name),
+                                |popup, name| popup.item(*name),
                             )
                             .selected(position(&GROUPINGS, app.grouping))
                             .on_change(edit(error, move |config, index: usize| {

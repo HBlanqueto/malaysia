@@ -225,7 +225,7 @@ fn source_row(
     Row::new(intern(name)).detail(detail).icon(thumb).control(
         IconButton::new(Symbol::XMark, tr!("collection-remove"))
             .style(move |style| IconButtonStyle {
-                size: metrics.source_height as f32,
+                size: (metrics.source_height as f32, metrics.source_height as f32),
                 ..style
             })
             .on_press(move |()| {

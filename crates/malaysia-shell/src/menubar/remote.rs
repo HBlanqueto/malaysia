@@ -51,8 +51,10 @@ impl MenuSources {
                     items,
                     enabled,
                     ..
-                } => (label.clone(), submenu_id(id), items.clone(), *enabled),
-                MenuItem::Action { label, .. } => (label.clone(), None, vec![item.clone()], true),
+                } => (label.to_string(), submenu_id(id), items.clone(), *enabled),
+                MenuItem::Action { label, .. } => {
+                    (label.to_string(), None, vec![item.clone()], true)
+                }
                 _ => continue,
             };
             if has_about_slot && about.is_none() && matches!(item, MenuItem::Submenu { .. }) {
@@ -289,13 +291,13 @@ mod tests {
     use std::rc::Rc;
 
     fn action(label: &str) -> MenuItem {
-        MenuItem::action(format!("static:{label}"), label)
+        MenuItem::action(format!("static:{label}"), label.to_string())
     }
 
     fn submenu(label: &str, id: &str, items: Vec<MenuItem>) -> MenuItem {
         MenuItem::Submenu {
             id: Some(id.to_string()),
-            label: label.to_string(),
+            label: label.to_string().into(),
             enabled: true,
             items,
             icon: None,
@@ -310,7 +312,7 @@ mod tests {
             help_items: Rc::new(|| {
                 vec![
                     MenuItem::SearchField {
-                        placeholder: "Buscar".to_string(),
+                        placeholder: "Buscar".into(),
                     },
                     action("Documentación de Malaysia"),
                 ]

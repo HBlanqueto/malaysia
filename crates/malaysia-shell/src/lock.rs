@@ -319,8 +319,8 @@ impl App for LockApp {
             .child(
                 Text::new(
                     error
-                        .or_else(|| hint.filter(|_| *hint_shown.read()))
-                        .unwrap_or_else(|| " ".to_string()),
+                        .or_else(|| hint.filter(|_| *hint_shown.read()).map(Into::into))
+                        .unwrap_or(" ".into()),
                 )
                 .font(BODY)
                 .color(theme::color(LOCK_INK)),
@@ -683,7 +683,7 @@ mod tests {
         assert_eq!(field.masked(), "");
         assert_eq!(
             field.state(),
-            &FieldState::Error("Authentication failure".to_string())
+            &FieldState::Error("Authentication failure".into())
         );
 
         typed(&mut field, "b");

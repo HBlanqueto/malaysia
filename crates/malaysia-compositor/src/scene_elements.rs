@@ -472,6 +472,7 @@ fn append_revealed_titlebar<R: MalaysiaRenderer>(
             || (focused && state.config.appearance.differentiate_without_color),
         pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
         zoom_supported: state.green_button_admitted(id),
+        fullscreen: false,
     };
     let theme = state.chrome_theme_of(id);
     if let Some(element) = state.chrome.element(
@@ -782,6 +783,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
                 || (is_focused && state.config.appearance.differentiate_without_color),
             pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
             zoom_supported: state.green_button_admitted(id),
+            fullscreen: false,
         };
         let chrome_theme = state.chrome_theme_of(id);
         if let Some(program) = state.rounded_clip.clone()

@@ -206,7 +206,7 @@ fn title(
 }
 
 fn settings_item(pane: &str, label: &str) -> MenuItem {
-    MenuItem::action(format!("settings.{pane}"), label)
+    MenuItem::action(format!("settings.{pane}"), label.to_string())
 }
 
 fn open_settings_for(id: &str) -> bool {

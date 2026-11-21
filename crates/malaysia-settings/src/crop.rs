@@ -431,7 +431,7 @@ impl Component for CropEditor {
         let zoom_button = move |symbol: Symbol, label: &'static str, delta: isize| {
             IconButton::new(symbol, label)
                 .style(move |style| IconButtonStyle {
-                    size: button_size,
+                    size: (button_size, button_size),
                     ..style
                 })
                 .on_press(move |()| set_view(step_by(delta)))
@@ -472,7 +472,7 @@ impl Component for CropEditor {
         let review = (draft.stills.len() > 1).then(|| {
             let picker = draft.stills.iter().fold(
                 SegmentedControl::new(tr!("crop-review")),
-                |picker, (label, _)| picker.segment(label),
+                |picker, (label, _)| picker.segment(*label),
             );
             HStack::new()
                 .width(Size::fill())
