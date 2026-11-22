@@ -52,7 +52,7 @@ impl Arrow {
         }
     }
 
-    fn is_some(self) -> bool {
+    pub(crate) fn is_some(self) -> bool {
         self.height > 0.0
     }
 

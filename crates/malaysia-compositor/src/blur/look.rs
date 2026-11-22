@@ -26,13 +26,13 @@ pub(super) enum Post {
 pub(super) struct GlassShape {
     pub(super) rect: [f32; 4],
     pub(super) radius: f32,
+    pub(super) exponent: f32,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct GlassPost {
     pub(super) look: GlassLook,
     pub(super) rim: &'static GlassRim,
-    pub(super) active: bool,
     pub(super) shape: Option<GlassShape>,
 }
 
@@ -74,9 +74,7 @@ impl Look {
     }
 
     pub(super) fn shaped(mut self, shape: GlassShape) -> Self {
-        if let Post::Glass(glass) = &mut self.post
-            && glass.active
-        {
+        if let Post::Glass(glass) = &mut self.post {
             glass.shape = Some(shape);
         }
         self
@@ -176,8 +174,7 @@ fn glass_look(state: &State, glass: liquid_glass::Glass, active: bool, shorter_s
             shorter_side,
         )
     } else {
-        let look = liquid_glass::look(&set, glass_state);
-        Tinted::untinted(liquid_glass::adapted(&look, &set.scale, shorter_side))
+        Tinted::untinted(liquid_glass::look(&set, glass_state))
     };
     Look {
         sigma: liquid_glass::blur_sigma(&shown.look, f32::MIN),
@@ -185,7 +182,6 @@ fn glass_look(state: &State, glass: liquid_glass::Glass, active: bool, shorter_s
         post: Post::Glass(GlassPost {
             look: shown.look,
             rim: rim_of(glass, scheme),
-            active: glass_state == GlassState::Active,
             shape: None,
         }),
     }

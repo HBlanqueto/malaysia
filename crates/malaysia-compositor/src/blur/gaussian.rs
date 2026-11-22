@@ -24,7 +24,7 @@ const RIM_NAMES: [&str; 24] = [
     "dist1_c", "dist1_d", "dist1_e", "dist1_f", "dist1_g", "dist1_h", "dist1_i", "dist2_a",
     "dist2_b", "dist2_c", "dist2_d", "dist2_e", "dist2_f", "dist2_g", "dist2_h", "dist2_i",
 ];
-const BASE_POST_UNIFORMS: usize = 24;
+const BASE_POST_UNIFORMS: usize = 25;
 const POST_UNIFORMS: usize = BASE_POST_UNIFORMS + RIM_NAMES.len();
 const ANGLE_CHUNKS: usize = 3;
 const DISTANCE_CHUNKS: usize = 9;
@@ -79,6 +79,7 @@ pub(super) fn compile(renderer: &mut GlesRenderer) -> Option<Programs> {
                 UniformName::new("glass_size", UniformType::_2f),
                 UniformName::new("glass_rect", UniformType::_4f),
                 UniformName::new("glass_corner", UniformType::_1f),
+                UniformName::new("glass_exponent", UniformType::_1f),
                 UniformName::new("glass_unit", UniformType::_1f),
                 UniformName::new("lens", UniformType::_4f),
                 UniformName::new("profile", UniformType::_4f),
@@ -115,6 +116,7 @@ fn post_uniforms() -> Vec<UniformName<'static>> {
         UniformName::new("glass_size", UniformType::_2f),
         UniformName::new("glass_rect", UniformType::_4f),
         UniformName::new("glass_corner", UniformType::_1f),
+        UniformName::new("glass_exponent", UniformType::_1f),
         UniformName::new("glass_unit", UniformType::_1f),
         UniformName::new("rim_on", UniformType::_1f),
     ];
@@ -597,6 +599,7 @@ fn glass_pass(
             Uniform::new("glass_size", pair(to_size)),
             Uniform::new("glass_rect", at.shape.rect),
             Uniform::new("glass_corner", at.shape.radius),
+            Uniform::new("glass_exponent", at.shape.exponent),
             Uniform::new("glass_unit", at.scale),
             Uniform::new(
                 "lens",
@@ -704,11 +707,11 @@ fn post_pass(
         ),
         _ => ([0.0; 12], [0.0; 12], [0.0; 5], [0.0; 5]),
     };
-    let (rim_on, rect, corner) = match post {
+    let (rim_on, rect, corner, exponent) = match post {
         Post::Glass(GlassPost {
             shape: Some(shape), ..
-        }) => (1.0, shape.rect, shape.radius),
-        _ => (0.0, [0.0; 4], 0.0),
+        }) => (1.0, shape.rect, shape.radius, shape.exponent),
+        _ => (0.0, [0.0; 4], 0.0, ctdesign::CIRCLE_EXPONENT),
     };
     let size = pair(to.size());
     let (angles, distances) = match post {
@@ -741,8 +744,9 @@ fn post_pass(
         19 => Uniform::new("glass_size", size),
         20 => Uniform::new("glass_rect", rect),
         21 => Uniform::new("glass_corner", corner),
-        22 => Uniform::new("glass_unit", scale),
-        23 => Uniform::new("rim_on", rim_on),
+        22 => Uniform::new("glass_exponent", exponent),
+        23 => Uniform::new("glass_unit", scale),
+        24 => Uniform::new("rim_on", rim_on),
         _ => rim_uniform(at - BASE_POST_UNIFORMS, &angles, &distances),
     });
     draw_pass(

@@ -401,8 +401,15 @@ fn paint(
     }
 }
 
+fn fills_rounded_frame(job: &Job, scene: &Scene) -> bool {
+    scene.deep
+        && scene.frame.radius > 0
+        && !scene.arrow.is_some()
+        && job.full.contains_rect(scene.frame.rect)
+}
+
 fn glass_shape(job: &Job, area: Rectangle<i32, Physical>, scene: &Scene) -> Option<GlassShape> {
-    (job.radius > 0).then(|| {
+    (job.radius > 0 || fills_rounded_frame(job, scene)).then(|| {
         let panel = crate::glass::panel_shape(
             job.radius,
             job.full,
@@ -412,12 +419,13 @@ fn glass_shape(job: &Job, area: Rectangle<i32, Physical>, scene: &Scene) -> Opti
         );
         GlassShape {
             rect: [
-                (job.full.loc.x - area.loc.x) as f32,
-                (job.full.loc.y - area.loc.y) as f32,
-                job.full.size.w as f32,
-                job.full.size.h as f32,
+                (panel.rect.loc.x - area.loc.x) as f32,
+                (panel.rect.loc.y - area.loc.y) as f32,
+                panel.rect.size.w as f32,
+                panel.rect.size.h as f32,
             ],
             radius: panel.radius as f32,
+            exponent: panel.exponent,
         }
     })
 }

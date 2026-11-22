@@ -741,7 +741,6 @@ fn the_glass_face_of_the_pipeline_agrees_with_the_kit_model_at_every_slider_posi
                 post: Post::Glass(GlassPost {
                     look: tinted.look,
                     rim: &ctdesign::LIQUID_GLASS_REGULAR_DARK.rim,
-                    active: true,
                     shape: None,
                 }),
             };
@@ -880,6 +879,7 @@ fn the_glass_pass_agrees_with_the_kit_model_inside_the_shape_at_each_slider_posi
                 .shaped(super::look::GlassShape {
                     rect: [x as f32, y as f32, width as f32, height as f32],
                     radius: radius as f32,
+                    exponent: ctdesign::CIRCLE_EXPONENT,
                 });
             let shown = bench.blur(
                 (PASS_WIDTH, PASS_HEIGHT),
@@ -950,5 +950,483 @@ fn the_glass_pass_agrees_with_the_kit_model_inside_the_shape_at_each_slider_posi
                 assert!(without.worst > 3.0 * edge.worst.max(inside.worst));
             }
         }
+    }
+}
+
+const STATE_WIDTH: i32 = 520;
+const STATE_HEIGHT: i32 = 440;
+const STATE_SHAPE: (i32, i32, i32, i32, i32) = (160, 140, 200, 160, 24);
+const STATE_TOLERANCE: f32 = 4.5;
+const LENS_TOLERANCE: f32 = 2.0;
+const LENS_SAW_PERIOD: f32 = 116.0;
+const LEFT_SIDE_ANGLE: f32 = 180.0;
+
+fn smooth_backdrop(x: f32, y: f32) -> f32 {
+    (40.0 + 0.25 * x + 0.2 * y + 25.0 * (x / 11.0).sin() * (y / 15.0).cos()).round()
+}
+
+fn backdrop_pixels(
+    (width, height): (i32, i32),
+    factor: i32,
+    level: impl Fn(f32, f32) -> f32,
+) -> Vec<u8> {
+    let at = |index: i32| (index as f32 + 0.5) / factor as f32 - 0.5;
+    tint_backdrop_with(width * factor, height * factor, |x, y| level(at(x), at(y)))
+}
+
+fn kit_shape(
+    (x, y, width, height, radius): (i32, i32, i32, i32, i32),
+) -> ctappearance::liquid_glass::Shape {
+    ctappearance::liquid_glass::Shape {
+        x: x as f32,
+        y: y as f32,
+        width: width as f32,
+        height: height as f32,
+        radius: radius as f32,
+    }
+}
+
+fn shaped_at(
+    (x, y, width, height, radius): (i32, i32, i32, i32, i32),
+    factor: i32,
+) -> super::look::GlassShape {
+    let physical = |value: i32| (value * factor) as f32;
+    super::look::GlassShape {
+        rect: [physical(x), physical(y), physical(width), physical(height)],
+        radius: physical(radius),
+        exponent: ctdesign::CIRCLE_EXPONENT,
+    }
+}
+
+struct Zones {
+    interior: Errors,
+    rim: Errors,
+}
+
+fn compare_zones(
+    shown: &[u8],
+    reference: &ctappearance::liquid_glass::Image,
+    shape: &ctappearance::liquid_glass::Shape,
+    factor: i32,
+) -> Zones {
+    let mut zones = Zones {
+        interior: Errors::new(),
+        rim: Errors::new(),
+    };
+    for py in 0..STATE_HEIGHT {
+        for px in 0..STATE_WIDTH {
+            let (depth, _) = ctappearance::liquid_glass::rounded_rect_distance(
+                shape,
+                px as f32 + 0.5,
+                py as f32 + 0.5,
+            );
+            if depth > -(factor as f32) {
+                continue;
+            }
+            let block = (0..factor * factor)
+                .map(|at| {
+                    let (x, y) = (px * factor + at % factor, py * factor + at / factor);
+                    f32::from(column_at(shown, STATE_WIDTH * factor, (x, y))[1])
+                })
+                .sum::<f32>()
+                / (factor * factor) as f32;
+            let error = block - reference.rgb[(py * STATE_WIDTH + px) as usize][1];
+            if depth > -8.0 {
+                zones.rim.add(error);
+            } else {
+                zones.interior.add(error);
+            }
+        }
+    }
+    zones
+}
+
+const GLASS_STATES: [(&str, ctappearance::liquid_glass::GlassState, [bool; 3]); 5] = [
+    (
+        "active",
+        ctappearance::liquid_glass::GlassState::Active,
+        [true, false, false],
+    ),
+    (
+        "inactive",
+        ctappearance::liquid_glass::GlassState::Inactive,
+        [false, false, false],
+    ),
+    (
+        "reduced",
+        ctappearance::liquid_glass::GlassState::Reduced,
+        [true, true, false],
+    ),
+    (
+        "increased contrast",
+        ctappearance::liquid_glass::GlassState::IncreasedContrast,
+        [true, false, true],
+    ),
+    (
+        "reduced contrast",
+        ctappearance::liquid_glass::GlassState::ReducedContrast,
+        [true, true, true],
+    ),
+];
+
+#[test]
+fn the_shaped_pass_follows_the_kit_model_in_every_glass_state_at_every_scale() {
+    use crate::window_style::Material as Requested;
+    use ctappearance::liquid_glass::{self, Glass, Image};
+    let Some(mut bench) = Bench::new() else {
+        eprintln!("skipping: no EGL device");
+        return;
+    };
+    let (_loop, _display, mut state) = crate::test_support::test_state((1280, 720));
+    let image = Image::new(STATE_WIDTH as usize, STATE_HEIGHT as usize, |px, py| {
+        [smooth_backdrop(px as f32, py as f32); 3]
+    });
+    let size = (STATE_WIDTH, STATE_HEIGHT);
+    for factor in [1, 2] {
+        let pixels = backdrop_pixels(size, factor, smooth_backdrop);
+        for (name, glass, requested, scheme) in [
+            (
+                "regular dark",
+                Glass::Regular,
+                Requested::GlassRegular,
+                ColorScheme::Dark,
+            ),
+            (
+                "regular light",
+                Glass::Regular,
+                Requested::GlassRegular,
+                ColorScheme::Light,
+            ),
+            (
+                "clear dark",
+                Glass::Clear,
+                Requested::GlassClear,
+                ColorScheme::Dark,
+            ),
+            (
+                "clear light",
+                Glass::Clear,
+                Requested::GlassClear,
+                ColorScheme::Light,
+            ),
+        ] {
+            state.chrome_theme.resolved.scheme = scheme;
+            for (look_name, expected, [active, reduced, contrast]) in GLASS_STATES {
+                if factor == 2 && look_name != "active" {
+                    continue;
+                }
+                state.config.appearance.reduce_transparency = reduced;
+                state.config.appearance.contrast = contrast;
+                let look = super::look::requested(&state, requested, active, STATE_SHAPE.3 as f32)
+                    .unwrap()
+                    .shaped(shaped_at(STATE_SHAPE, factor));
+                let shown = bench.blur(
+                    (size.0 * factor, size.1 * factor),
+                    &pixels,
+                    whole(size.0 * factor, size.1 * factor),
+                    look,
+                    f64::from(factor),
+                );
+                let reference = liquid_glass::render(
+                    &liquid_glass::looks(glass, scheme),
+                    &liquid_glass::tint(glass, scheme),
+                    0.0,
+                    expected,
+                    &image,
+                    &kit_shape(STATE_SHAPE),
+                );
+                let zones = compare_zones(&shown, &reference, &kit_shape(STATE_SHAPE), factor);
+                eprintln!(
+                    "{factor}x {name} {look_name}: deeper than 8 px worst {:.1} rms {:.2}; rim zone worst {:.1} rms {:.2}",
+                    zones.interior.worst,
+                    zones.interior.rms(),
+                    zones.rim.worst,
+                    zones.rim.rms()
+                );
+                assert!(
+                    zones.interior.worst <= STATE_TOLERANCE && zones.rim.worst <= STATE_TOLERANCE,
+                    "{factor}x {name} {look_name}"
+                );
+            }
+        }
+    }
+}
+
+fn glass_of(look: &Look) -> GlassPost {
+    match look.post {
+        Post::Glass(glass) => glass,
+        _ => panic!("a requested glass has the face of the model"),
+    }
+}
+
+fn without_shape(look: Look) -> Look {
+    Look {
+        post: Post::Glass(GlassPost {
+            shape: None,
+            ..glass_of(&look)
+        }),
+        ..look
+    }
+}
+
+fn saw(x: f32, y: f32) -> f32 {
+    let _ = y;
+    (2.0 * (x % LENS_SAW_PERIOD)).round()
+}
+
+fn position_of_level(row: &[u8], level: f32, from: usize, until: usize) -> Option<f32> {
+    (from..until).find_map(|at| {
+        let (low, high) = (f32::from(row[at]), f32::from(row[at + 1]));
+        (low <= level && level <= high && high > low)
+            .then(|| at as f32 + (level - low) / (high - low))
+    })
+}
+
+#[test]
+fn the_lens_of_the_pass_reads_inward_by_the_kit_curve_at_every_scale() {
+    use crate::window_style::Material as Requested;
+    use ctappearance::liquid_glass;
+    let Some(mut bench) = Bench::new() else {
+        eprintln!("skipping: no EGL device");
+        return;
+    };
+    let (_loop, _display, mut state) = crate::test_support::test_state((1280, 720));
+    state.chrome_theme.resolved.scheme = ColorScheme::Dark;
+    let size = (STATE_WIDTH, STATE_HEIGHT);
+    let edge = STATE_SHAPE.0;
+    let row = STATE_SHAPE.1 + STATE_SHAPE.3 / 2;
+    for factor in [1, 2] {
+        let pixels = backdrop_pixels(size, factor, saw);
+        let physical = (size.0 * factor, size.1 * factor);
+        let look =
+            super::look::requested(&state, Requested::GlassClear, true, STATE_SHAPE.3 as f32)
+                .unwrap()
+                .shaped(shaped_at(STATE_SHAPE, factor));
+        let bent = bench.blur(
+            physical,
+            &pixels,
+            whole(physical.0, physical.1),
+            look,
+            f64::from(factor),
+        );
+        let straight = bench.blur(
+            physical,
+            &pixels,
+            whole(physical.0, physical.1),
+            without_shape(look),
+            f64::from(factor),
+        );
+        let glass = glass_of(&look);
+        let green = |shown: &[u8], x: i32| column_at(shown, physical.0, (x, row * factor))[1];
+        let straight_row: Vec<u8> = (0..physical.0).map(|x| green(&straight, x)).collect();
+        let wrap = (LENS_SAW_PERIOD * 2.0 * factor as f32) as usize - 3;
+        let mut errors = Errors::new();
+        for x in edge * factor..(edge + 20) * factor {
+            let depth = ((x - edge * factor) as f32 + 0.5) / factor as f32;
+            let rim = liquid_glass::rim_levels(glass.rim, -depth, LEFT_SIDE_ANGLE);
+            let seen = f32::from(green(&bent, x)) - rim;
+            let Some(found) = position_of_level(&straight_row, seen, x as usize, wrap) else {
+                continue;
+            };
+            let shift = (found - x as f32) / factor as f32;
+            let expected =
+                liquid_glass::lens_offset(&glass.look, &ctdesign::LIQUID_GLASS_LENS, depth);
+            errors.add(shift - expected);
+        }
+        eprintln!(
+            "{factor}x lens: {} depths, worst {:.2} px rms {:.2} px",
+            errors.count,
+            errors.worst,
+            errors.rms()
+        );
+        assert!(errors.count >= 15 * factor as usize);
+        assert!(
+            errors.worst <= LENS_TOLERANCE,
+            "{factor}x: {}",
+            errors.worst
+        );
+    }
+}
+
+const CAPTURE_BANDS: [(f32, f32); 5] = [
+    (-1000.0, -40.0),
+    (-40.0, -20.0),
+    (-20.0, -8.0),
+    (-8.0, -2.0),
+    (-2.0, 0.0),
+];
+const SMALL_GLASS: (i32, i32, i32, i32, i32) = (220, 160, 200, 160, 24);
+const LARGE_GLASS: (i32, i32, i32, i32, i32) = (40, 40, 560, 400, 24);
+
+fn read_capture(name: &str) -> Option<Vec<[u8; 3]>> {
+    let directory = std::env::var("MALAYSIA_GLASS_CAPTURES").ok()?;
+    let file = std::fs::File::open(format!("{directory}/{name}-screen.png")).ok()?;
+    let mut reader = png::Decoder::new(std::io::BufReader::new(file))
+        .read_info()
+        .ok()?;
+    let mut bytes = vec![0; reader.output_buffer_size()];
+    reader.next_frame(&mut bytes).ok()?;
+    Some(
+        bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]])
+            .collect(),
+    )
+}
+
+#[test]
+#[ignore = "a measurement: needs MALAYSIA_GLASS_CAPTURES (a copy of ~/src/captures/liquidglass) and prints the macOS comparison per distance band"]
+fn the_shaped_pass_against_the_macos_captures_of_the_glass_over_structured_backdrops() {
+    use crate::window_style::Material as Requested;
+    use ctappearance::liquid_glass::{self, Glass, GlassState, Image};
+    let Some(mut bench) = Bench::new() else {
+        eprintln!("skipping: no EGL device");
+        return;
+    };
+    let (_loop, _display, mut state) = crate::test_support::test_state((1280, 720));
+    state.chrome_theme.resolved.scheme = ColorScheme::Dark;
+    let size = (TINT_WIDTH, TINT_HEIGHT);
+    for (pattern, glass, requested, name, rect) in [
+        (
+            "m-grid16",
+            Glass::Clear,
+            Requested::GlassClear,
+            "clr-dark",
+            SMALL_GLASS,
+        ),
+        (
+            "m-checker8",
+            Glass::Clear,
+            Requested::GlassClear,
+            "clr-dark",
+            SMALL_GLASS,
+        ),
+        (
+            "m-stripes16",
+            Glass::Clear,
+            Requested::GlassClear,
+            "clr-dark",
+            SMALL_GLASS,
+        ),
+        (
+            "m-edgev",
+            Glass::Clear,
+            Requested::GlassClear,
+            "clr-dark",
+            SMALL_GLASS,
+        ),
+        (
+            "checker8",
+            Glass::Clear,
+            Requested::GlassClear,
+            "clr-dark",
+            LARGE_GLASS,
+        ),
+        (
+            "edgev",
+            Glass::Clear,
+            Requested::GlassClear,
+            "clr-dark",
+            LARGE_GLASS,
+        ),
+        (
+            "dots",
+            Glass::Clear,
+            Requested::GlassClear,
+            "clr-dark",
+            LARGE_GLASS,
+        ),
+        (
+            "gray",
+            Glass::Clear,
+            Requested::GlassClear,
+            "clr-dark",
+            SMALL_GLASS,
+        ),
+        (
+            "m-edgev",
+            Glass::Regular,
+            Requested::GlassRegular,
+            "reg-dark",
+            SMALL_GLASS,
+        ),
+        (
+            "m-box",
+            Glass::Regular,
+            Requested::GlassRegular,
+            "reg-dark",
+            SMALL_GLASS,
+        ),
+        (
+            "m-quad",
+            Glass::Regular,
+            Requested::GlassRegular,
+            "reg-dark",
+            SMALL_GLASS,
+        ),
+        (
+            "edgev",
+            Glass::Regular,
+            Requested::GlassRegular,
+            "reg-dark",
+            LARGE_GLASS,
+        ),
+        (
+            "gray",
+            Glass::Regular,
+            Requested::GlassRegular,
+            "reg-dark",
+            SMALL_GLASS,
+        ),
+    ] {
+        let (Some(backdrop), Some(captured)) = (
+            read_capture(&format!("b1-{pattern}-none")),
+            read_capture(&format!("b1-{pattern}-{name}")),
+        ) else {
+            eprintln!("skipping {pattern} {name}: no capture");
+            continue;
+        };
+        let pixels: Vec<u8> = backdrop
+            .iter()
+            .flat_map(|pixel| [pixel[0], pixel[1], pixel[2], 255])
+            .collect();
+        let image = Image::new(size.0 as usize, size.1 as usize, |x, y| {
+            backdrop[y * size.0 as usize + x].map(f32::from)
+        });
+        let kit = kit_shape(rect);
+        let look = super::look::requested(&state, requested, true, rect.3.min(rect.2) as f32)
+            .unwrap()
+            .shaped(shaped_at(rect, 1));
+        let shown = bench.blur(size, &pixels, whole(size.0, size.1), look, 1.0);
+        let reference = liquid_glass::render(
+            &liquid_glass::looks(glass, ColorScheme::Dark),
+            &liquid_glass::tint(glass, ColorScheme::Dark),
+            0.0,
+            GlassState::Active,
+            &image,
+            &kit,
+        );
+        let mut cells = String::new();
+        for (from, to) in CAPTURE_BANDS {
+            let (mut pipeline, mut model) = (Errors::new(), Errors::new());
+            for y in 0..size.1 {
+                for x in 0..size.0 {
+                    let (depth, _) =
+                        liquid_glass::rounded_rect_distance(&kit, x as f32 + 0.5, y as f32 + 0.5);
+                    if depth < from || depth >= to {
+                        continue;
+                    }
+                    let truth = f32::from(captured[(y * size.0 + x) as usize][1]);
+                    pipeline.add(f32::from(column_at(&shown, size.0, (x, y))[1]) - truth);
+                    model.add(reference.rgb[(y * size.0 + x) as usize][1] - truth);
+                }
+            }
+            cells += &format!(" | {:.1} / {:.1}", pipeline.rms(), model.rms());
+        }
+        eprintln!(
+            "MACOS {pattern} {name} rms pipeline / kit model by depth (<-40, -40..-20, -20..-8, -8..-2, -2..0){cells}"
+        );
     }
 }

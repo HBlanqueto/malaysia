@@ -1643,3 +1643,52 @@ fn a_popup_or_layer_material_behind_the_window_samples_the_scene_behind_it() {
         eprintln!("skipping: no EGL device");
     }
 }
+
+fn job_over(full: Rectangle<i32, Physical>, radius: u32) -> Job {
+    Job {
+        slot: 0,
+        blending: BlendingMode::WithinWindow,
+        full,
+        radius,
+        short_side: full.size.w.min(full.size.h),
+        look: Look {
+            sigma: 0.0,
+            halo: None,
+            post: look::Post::Plain,
+        },
+        fade: None,
+    }
+}
+
+fn scene_over(frame: Shape, deep: bool) -> Scene {
+    Scene {
+        origin: Point::default(),
+        frame,
+        arrow: Arrow::default(),
+        scale: 1.0,
+        active: true,
+        deep,
+    }
+}
+
+#[test]
+fn a_popup_that_fills_its_rounded_frame_takes_the_frame_shape_and_a_docked_bar_does_not() {
+    let frame = Shape {
+        rect: Rectangle::new((10, 20).into(), (200, 120).into()),
+        radius: 14,
+        exponent: 3.0,
+    };
+    let whole = job_over(frame.rect, 0);
+    let shaped = glass_shape(&whole, frame.rect, &scene_over(frame, true)).unwrap();
+    assert_eq!(
+        (shaped.rect, shaped.radius, shaped.exponent),
+        ([0.0, 0.0, 200.0, 120.0], 14.0, 3.0)
+    );
+    assert!(glass_shape(&whole, frame.rect, &scene_over(frame, false)).is_none());
+    let part = job_over(Rectangle::new((10, 20).into(), (200, 40).into()), 0);
+    assert!(glass_shape(&part, frame.rect, &scene_over(frame, true)).is_none());
+    let square = Shape { radius: 0, ..frame };
+    assert!(glass_shape(&whole, frame.rect, &scene_over(square, true)).is_none());
+    let island = job_over(Rectangle::new((30, 40).into(), (80, 40).into()), 12);
+    assert!(glass_shape(&island, frame.rect, &scene_over(frame, false)).is_some());
+}

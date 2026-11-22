@@ -94,6 +94,17 @@ a `behind_window` material, which blurs the wallpaper under the window, is left
 out of it. The popups and layer surfaces of BarrierKit clients ask the same way;
 for them `behind_window` blurs the windows and the wallpaper behind the surface.
 
+The glass materials (`glass_regular`, `glass_clear`) are drawn as macOS draws
+them. A rectangle with a corner radius, or a popup that is the glass and fills
+its rounded frame, gets the model of `ctappearance::liquid_glass` in the state of
+the window (active, inactive, Reduce Transparency, Increase Contrast): the
+backdrop is read at half resolution, refracted inward along the normal of the
+panel's silhouette over the lens zone, blurred with a sigma that depends on the
+depth, then toned and given the rim table (`grade-graphics`: `blur_glass.frag`,
+`blur_post.frag`; `blur/gaussian.rs`). Bars and sidebars keep one sigma and the
+tone. The hovered and pressed look, the union of a container and the tint are
+not carried by version 10 (ADR 0096).
+
 ## How they talk
 
 | Channel | Between | Carries |

@@ -6,7 +6,7 @@ use smithay::backend::renderer::{ImportMem, Texture};
 use smithay::utils::{Buffer as BufferCoords, Physical, Rectangle, Size};
 
 use super::gaussian::{Backdrop, compile, reach_in_pixels};
-use super::look::{Look, Post};
+use super::look::{GlassPost, GlassShape, Look, Post};
 use crate::test_support::try_test_renderer;
 
 const FRAMES: usize = 40;
@@ -60,6 +60,40 @@ struct Case {
     region: (f64, f64, f64, f64),
 }
 
+fn glass_island(
+    glass: ctappearance::liquid_glass::Glass,
+    state: ctappearance::liquid_glass::GlassState,
+    (width, height): (f32, f32),
+    shaped: bool,
+) -> Look {
+    use ctappearance::{ColorScheme, liquid_glass};
+    let set = liquid_glass::looks(glass, ColorScheme::Dark);
+    let tint = liquid_glass::tint(glass, ColorScheme::Dark);
+    let shown = if state == liquid_glass::GlassState::Active {
+        liquid_glass::tinted(&set, &tint, 0.0, width.min(height)).look
+    } else {
+        liquid_glass::look(&set, state)
+    };
+    let look = Look {
+        sigma: liquid_glass::blur_sigma(&shown, f32::MIN),
+        halo: None,
+        post: Post::Glass(GlassPost {
+            look: shown,
+            rim: &ctdesign::LIQUID_GLASS_REGULAR_DARK.rim,
+            shape: None,
+        }),
+    };
+    if shaped {
+        look.shaped(GlassShape {
+            rect: [0.0, 0.0, width, height],
+            radius: 24.0,
+            exponent: ctdesign::CIRCLE_EXPONENT,
+        })
+    } else {
+        look
+    }
+}
+
 #[test]
 #[ignore = "measures the frame time of the blur passes: run with --ignored --nocapture --test-threads=1"]
 fn the_blur_passes_cost_this_much_per_frame() {
@@ -85,6 +119,7 @@ fn the_blur_passes_cost_this_much_per_frame() {
         post: Post::Shell(glass),
     };
     let menu = shell(ctdesign::SHELL_GLASS_MENU_DARK);
+    use ctappearance::liquid_glass::{Glass, GlassState};
     let halo_reach = f64::from(reach_in_pixels(menu.halo.unwrap().0, 1.0));
     let cases = [
         Case {
@@ -107,6 +142,42 @@ fn the_blur_passes_cost_this_much_per_frame() {
                 (420.0 + 2.0 * halo_reach).min(OUTPUT.1),
             ),
             region: (halo_reach, halo_reach, 280.0, 420.0),
+        },
+        Case {
+            name: "glass: a regular 200x160 island, one sigma (before the model's pass)",
+            look: glass_island(Glass::Regular, GlassState::Active, (200.0, 160.0), false),
+            area: (200.0, 160.0),
+            region: (0.0, 0.0, 200.0, 160.0),
+        },
+        Case {
+            name: "glass: a regular 200x160 island, lens, rim and depth blur",
+            look: glass_island(Glass::Regular, GlassState::Active, (200.0, 160.0), true),
+            area: (200.0, 160.0),
+            region: (0.0, 0.0, 200.0, 160.0),
+        },
+        Case {
+            name: "glass: a clear 200x160 island, lens and rim, no blur",
+            look: glass_island(Glass::Clear, GlassState::Active, (200.0, 160.0), true),
+            area: (200.0, 160.0),
+            region: (0.0, 0.0, 200.0, 160.0),
+        },
+        Case {
+            name: "glass: a regular 560x400 island, lens, rim and depth blur",
+            look: glass_island(Glass::Regular, GlassState::Active, (560.0, 400.0), true),
+            area: (560.0, 400.0),
+            region: (0.0, 0.0, 560.0, 400.0),
+        },
+        Case {
+            name: "glass: a clear 560x400 island inactive, 20 px blur (11 levels)",
+            look: glass_island(Glass::Clear, GlassState::Inactive, (560.0, 400.0), true),
+            area: (560.0, 400.0),
+            region: (0.0, 0.0, 560.0, 400.0),
+        },
+        Case {
+            name: "glass: a regular 560x400 island under Reduce Transparency, 28 px blur (13 levels)",
+            look: glass_island(Glass::Regular, GlassState::Reduced, (560.0, 400.0), true),
+            area: (560.0, 400.0),
+            region: (0.0, 0.0, 560.0, 400.0),
         },
     ];
     for scale in [1.0, 2.0] {
