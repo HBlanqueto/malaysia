@@ -12,6 +12,8 @@ use super::Glass;
 use crate::state::State;
 use crate::window_style::{Material as Requested, ScrollEdgeEffectStyle};
 
+pub(super) const LARGEST_MEASURED_SIDE: f32 = 560.0;
+
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum Post {
     Plain,
@@ -231,10 +233,23 @@ pub(super) fn glass(sigmas: &Sigmas, state: &State) -> Look {
     Look::plain(sigmas.glass[usize::from(dark)])
 }
 
+fn follows_the_slider(state: &State, glass: Glass) -> bool {
+    let appearance = &state.config.appearance;
+    glass == Glass::Popups && appearance.liquid_glass_tint > 0.0 && !appearance.reduce_transparency
+}
+
 pub(super) fn shell(state: &State, glass: Glass) -> Option<Look> {
     let resolved = &state.chrome_theme.resolved;
     if !resolved.scheme.is_dark() {
         return None;
+    }
+    if follows_the_slider(state, glass) {
+        return Some(glass_look(
+            state,
+            liquid_glass::Glass::Regular,
+            true,
+            LARGEST_MEASURED_SIDE,
+        ));
     }
     let (token, widen) = match glass {
         Glass::Dock => (SHELL_GLASS_DOCK_DARK, resolved.dock.soften),

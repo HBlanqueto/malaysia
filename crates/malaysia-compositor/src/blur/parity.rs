@@ -774,6 +774,51 @@ fn the_glass_face_of_the_pipeline_agrees_with_the_kit_model_at_every_slider_posi
     assert!(errors.worst <= MOST_ERROR, "worst {}", errors.worst);
 }
 
+#[test]
+fn the_menu_glass_of_the_pipeline_agrees_with_the_regular_glass_at_every_slider_position_above_zero()
+ {
+    use ctappearance::liquid_glass;
+    let Some(mut bench) = Bench::new() else {
+        eprintln!("skipping: no EGL device");
+        return;
+    };
+    let (_loop, _display, mut state) = crate::test_support::test_state((1280, 720));
+    state.chrome_theme.resolved.scheme = ColorScheme::Dark;
+    let set = liquid_glass::looks(liquid_glass::Glass::Regular, ColorScheme::Dark);
+    let tint = liquid_glass::tint(liquid_glass::Glass::Regular, ColorScheme::Dark);
+    let mut errors = Errors::new();
+    for amount in TINT_STEPS.into_iter().filter(|amount| *amount > 0.0) {
+        state.config.appearance.liquid_glass_tint = amount;
+        let look = super::look::shell(&state, super::Glass::Popups).unwrap();
+        let tinted = liquid_glass::tinted(&set, &tint, amount, super::look::LARGEST_MEASURED_SIDE);
+        for rgb in [
+            [0.0, 0.0, 0.0],
+            [0.125, 0.5, 0.875],
+            [0.5, 0.5, 0.5],
+            [0.8, 0.2, 0.3],
+            [1.0, 1.0, 1.0],
+        ] {
+            let bytes = rgb.map(|channel: f32| (channel * 255.0).round() as u8);
+            let tile: Vec<u8> = (0..64)
+                .flat_map(|_| [bytes[0], bytes[1], bytes[2], 255])
+                .collect();
+            let shown = bench.blur((8, 8), &tile, whole(8, 8), look, 1.0);
+            let expected =
+                liquid_glass::face(&tinted.look, bytes.map(|byte| f32::from(byte) / 255.0));
+            let got = column_at(&shown, 8, (4, 4));
+            for channel in 0..3 {
+                errors.add(f32::from(got[channel]) - expected[channel] * 255.0);
+            }
+        }
+    }
+    eprintln!(
+        "menu glass face: worst {:.2} rms {:.2}",
+        errors.worst,
+        errors.rms()
+    );
+    assert!(errors.worst <= MOST_ERROR, "worst {}", errors.worst);
+}
+
 const PASS_MOST_ERROR: f32 = 4.5;
 const PASS_MOST_RMS: f32 = 1.3;
 const PASS_WIDTH: i32 = 360;

@@ -663,11 +663,12 @@ fn show(
         .as_ref()
         .is_none_or(|shown| !shown.backdrop.fits(size, &look, scale))
     {
+        let commit = slot.as_ref().map(|shown| shown.commit).unwrap_or_default();
         *slot = Some(Shown {
             backdrop: Backdrop::new(renderer, size, &look, scale)?,
             look,
             from: None,
-            commit: CommitCounter::default(),
+            commit,
         });
     }
     let shown = slot.as_mut()?;
@@ -804,7 +805,13 @@ fn render_behind(
         behind.scale != scale || behind.area.size != area.size || !behind.fits(&method)
     });
     if stale {
-        *cache = Some(Behind::new(renderer, area, scale, &method)?);
+        let commit = cache
+            .as_ref()
+            .map(|behind| behind.commit)
+            .unwrap_or_default();
+        let mut rebuilt = Behind::new(renderer, area, scale, &method)?;
+        rebuilt.commit = commit;
+        *cache = Some(rebuilt);
     }
     let behind = cache.as_mut()?;
     behind.area = area;
@@ -1326,6 +1333,143 @@ mod tests {
             GLASSES
                 .iter()
                 .all(|glass| look::shell(&state, *glass).is_none())
+        );
+    }
+
+    #[test]
+    fn the_menu_glass_is_the_measured_one_at_zero_and_the_regular_glass_of_the_slider_above_it() {
+        use ctappearance::ColorScheme::Dark;
+        use ctappearance::liquid_glass::{self, Glass::Regular};
+        let (_loop, _display, mut state) = dark_state();
+        let measured = look::shell(&state, Glass::Popups).unwrap();
+        assert!(matches!(measured.post, look::Post::Shell(_)));
+        let set = liquid_glass::looks(Regular, Dark);
+        for tint in [0.25, 0.5, 1.0] {
+            state.config.appearance.liquid_glass_tint = tint;
+            let moved = look::shell(&state, Glass::Popups).unwrap();
+            let look::Post::Glass(face) = moved.post else {
+                panic!("the slider at {tint} moves the menu glass");
+            };
+            let expected = liquid_glass::tinted(
+                &set,
+                &liquid_glass::tint(Regular, Dark),
+                tint,
+                look::LARGEST_MEASURED_SIDE,
+            );
+            assert!(face.look == expected.look, "{tint}");
+            assert_eq!(
+                moved.halo,
+                Some((expected.blur_fill_sigma, expected.blur_fill))
+            );
+        }
+        state.config.appearance.liquid_glass_tint = 1.0;
+        for glass in [Glass::Dock, Glass::Notifications] {
+            let kept = look::shell(&state, glass).unwrap();
+            assert!(
+                matches!(kept.post, look::Post::Shell(_)),
+                "the Dock and the notifications keep their measured looks: not measured under the slider"
+            );
+        }
+        state.config.appearance.reduce_transparency = true;
+        let reduced = look::shell(&state, Glass::Popups).unwrap();
+        assert!(
+            matches!(reduced.post, look::Post::Shell(_)),
+            "the slider does not touch Reduce Transparency"
+        );
+    }
+
+    #[test]
+    fn the_menu_glass_changes_by_less_than_three_levels_at_the_step_from_zero_to_the_model() {
+        use ctappearance::ColorScheme::Dark;
+        use ctappearance::liquid_glass::{self, Glass::Regular};
+        let set = liquid_glass::looks(Regular, Dark);
+        let at_zero = liquid_glass::tinted(
+            &set,
+            &liquid_glass::tint(Regular, Dark),
+            0.0,
+            look::LARGEST_MEASURED_SIDE,
+        )
+        .look;
+        let mut worst = 0.0_f32;
+        for step in 0..=16 {
+            let luma = step as f32 / 16.0;
+            let measured = ctappearance::shell_glass::tone(&ctdesign::SHELL_GLASS_MENU_DARK, luma);
+            let model = liquid_glass::face(&at_zero, [luma; 3])[0];
+            worst = worst.max((measured - model).abs() * 255.0);
+        }
+        eprintln!("menu glass: measured tone against the regular glass at 0, worst {worst:.2}");
+        assert!(worst <= 3.0, "{worst}");
+    }
+
+    #[test]
+    fn the_menu_glass_at_the_top_of_the_slider_is_within_six_levels_of_the_ramp_macos_draws() {
+        use ctappearance::ColorScheme::Dark;
+        use ctappearance::liquid_glass::{self, Glass::Regular};
+        const MENU_AT_ONE: [(u8, u8); 12] = [
+            (0, 32),
+            (16, 39),
+            (32, 46),
+            (48, 52),
+            (64, 58),
+            (96, 68),
+            (128, 76),
+            (160, 82),
+            (192, 85),
+            (224, 86),
+            (240, 86),
+            (255, 86),
+        ];
+        let set = liquid_glass::looks(Regular, Dark);
+        let top = liquid_glass::tinted(
+            &set,
+            &liquid_glass::tint(Regular, Dark),
+            1.0,
+            look::LARGEST_MEASURED_SIDE,
+        )
+        .look;
+        let mut worst = 0.0_f32;
+        for (level, measured) in MENU_AT_ONE {
+            let backdrop = f32::from(level) / 255.0;
+            let model = liquid_glass::face(&top, [backdrop; 3])[0] * 255.0;
+            worst = worst.max((model - f32::from(measured)).abs());
+        }
+        eprintln!("menu glass at the top of the slider: worst {worst:.2} levels");
+        assert!(worst <= 6.0, "{worst}");
+    }
+
+    #[test]
+    fn a_rebuilt_blur_cache_goes_on_counting_so_that_the_damage_tracker_sees_the_change() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        let blur = compile(&mut renderer).expect("the blur shaders compile");
+        let cache = Wallpaper::new(&mut renderer, output(), 1.0).unwrap();
+        let plain = look::Look {
+            sigma: 4.0,
+            halo: None,
+            post: look::Post::Plain,
+        };
+        let frosted = look::Look {
+            halo: Some((16.0, 0.5)),
+            ..plain
+        };
+        let mut slot = None;
+        let mut commits = Vec::new();
+        for look in [plain, frosted, plain] {
+            show(
+                &mut slot,
+                &mut renderer,
+                &blur.programs,
+                (&cache.source, cache.commit),
+                (look, 1.0),
+            )
+            .unwrap();
+            commits.push(slot.as_ref().unwrap().commit);
+        }
+        assert!(
+            commits[0] != commits[1] && commits[1] != commits[2] && commits[0] != commits[2],
+            "a layout change rebuilds the buffers and must not repeat a commit: {commits:?}"
         );
     }
 

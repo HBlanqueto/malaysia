@@ -270,7 +270,10 @@ mod tests {
         dark.color_scheme = ColorScheme::Dark;
         let mut red = old.clone();
         red.accent_color = Some([1.0, 0.0, 0.0]);
+        let mut tinted = old.clone();
+        tinted.liquid_glass_tint = 1.0;
         assert!(!changes_the_theme(&old, &reduced));
+        assert!(!changes_the_theme(&old, &tinted));
         assert!(changes_the_theme(&old, &dark));
         assert!(changes_the_theme(&old, &red));
     }

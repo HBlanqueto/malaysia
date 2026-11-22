@@ -777,6 +777,110 @@ fn a_within_window_material_blurs_what_lies_below_the_requester_in_both_layouts_
     }
 }
 
+const GLASS_TOLERANCE: u8 = 6;
+
+fn the_glass_row(spec: &Spec, shown: &Look) -> Vec<[u8; 4]> {
+    let look::Post::Glass(glass) = shown.post else {
+        panic!("requested glass draws the face of the model");
+    };
+    let sharp = blurred_row(spec, shown.sigma);
+    let (wide_sigma, weight) = shown.halo.unwrap_or((shown.sigma, 0.0));
+    let wide = blurred_row(spec, wide_sigma);
+    sharp
+        .iter()
+        .zip(&wide)
+        .map(|(sharp, wide)| {
+            let seen = std::array::from_fn(|channel| {
+                sharp[channel] + (wide[channel] - sharp[channel]) * weight
+            });
+            encoded(ctappearance::liquid_glass::face(&glass.look, seen))
+        })
+        .collect()
+}
+
+fn the_glass_row_at(world: &mut World, tint: f32) -> (Vec<[u8; 4]>, Vec<CommitCounter>) {
+    world.state.config.appearance.liquid_glass_tint = tint;
+    let pixels = world.capture(true);
+    let row = (4..WIDTH - 4)
+        .step_by(4)
+        .map(|x| world.pixel(&pixels, x, 70))
+        .collect();
+    (row, world.slot_commits())
+}
+
+static GLASS_ISLAND: [[i32; 4]; 1] = [[0, 0, WIDTH, BAND]];
+
+fn glass_ask(asked: wire::Material, rounded: bool) -> Ask {
+    if rounded {
+        Ask::Rects(wire::BlendingMode::WithinWindow, asked, 24, &GLASS_ISLAND)
+    } else {
+        Ask::Band(wire::BlendingMode::WithinWindow, asked)
+    }
+}
+
+#[test]
+fn moving_the_liquid_glass_slider_redraws_the_requested_glass_at_once_and_returning_restores_it() {
+    for (asked, requested) in [
+        (wire::Material::GlassRegular, Requested::GlassRegular),
+        (wire::Material::GlassClear, Requested::GlassClear),
+    ] {
+        for scheme in [ColorScheme::Dark, ColorScheme::Light] {
+            for rounded in [false, true] {
+                let spec = Spec::new(Layout::Above, glass_ask(asked, rounded));
+                let ran = once(spec, scheme, |world| {
+                    let label = format!("{requested:?} {scheme:?} rounded {rounded}");
+                    let (rest, rest_commits) = the_glass_row_at(world, 0.0);
+                    let (again, again_commits) = the_glass_row_at(world, 0.0);
+                    assert!(
+                        rest == again && rest_commits == again_commits,
+                        "{label}: an unmoved slider draws the glass once"
+                    );
+                    for tint in [0.5, 1.0] {
+                        let (moved, moved_commits) = the_glass_row_at(world, tint);
+                        assert_ne!(
+                            moved_commits, again_commits,
+                            "{label} {tint}: the glass is drawn again"
+                        );
+                        let shows = tint == 1.0 || matches!(requested, Requested::GlassRegular);
+                        assert!(
+                            !shows
+                                || moved.iter().zip(&rest).any(|(moved, rest)| !close(
+                                    *moved,
+                                    *rest,
+                                    GLASS_TOLERANCE
+                                )),
+                            "{label} {tint}: the slider changes the pixels"
+                        );
+                        if rounded {
+                            continue;
+                        }
+                        let shown =
+                            look::requested(&world.state, requested, true, BAND as f32).unwrap();
+                        let expected = the_glass_row(&spec, &shown);
+                        for (index, pixel) in moved.iter().enumerate() {
+                            let x = 4 + index * 4;
+                            assert!(
+                                close(*pixel, expected[x], GLASS_TOLERANCE),
+                                "{label} {tint} x={x}: {pixel:?} against {:?}",
+                                expected[x]
+                            );
+                        }
+                    }
+                    let (back, _) = the_glass_row_at(world, 0.0);
+                    assert!(
+                        back == rest,
+                        "{label}: the slider back at 0 restores the glass"
+                    );
+                });
+                if ran.is_none() {
+                    eprintln!("skipping: no EGL device");
+                    return;
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn the_requester_and_what_is_above_it_stay_in_front_of_the_material() {
     let mut spec = Spec::new(
