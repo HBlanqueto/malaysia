@@ -36,6 +36,7 @@ infinity-protocol = { workspace = true, features = ["server"] }
 
 [dev-dependencies]
 sctk.workspace = true
+infinity-protocol = { workspace = true, features = ["client"] }
 
 [package.metadata.cargo-shear]
 ignored = ["wayland-backend"]

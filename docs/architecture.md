@@ -51,7 +51,7 @@ session bus, so it never starts `notifications`.
 | Protocols and composition order | compositor |
 | Geometry: position, size, anchors, exclusive zones | compositor |
 | Window frame: corners, shadow, border, hairline | compositor, for every window, CSD or SSD |
-| Blur and glass behind a surface | compositor: one measured Gaussian pipeline, values from `ctdesign` ([ADR 0020](decisions.md)) |
+| Blur and glass behind a surface, and under a BarrierKit window's chrome | compositor: one measured Gaussian pipeline, values from `ctdesign` ([ADR 0020](decisions.md)); the app declares the material |
 | Server-side titlebar and traffic lights | compositor |
 | Content of the shell surfaces | shell |
 | Content of a window | its app |
@@ -83,13 +83,22 @@ The exclusive zones of the menubar and the dock trim the work area. While the
 session is locked, only the wallpaper, the lock surfaces, the menubar and the
 cursor are drawn.
 
+A BarrierKit window can put a material over its own content. The app draws its
+chrome on a surface above (or at the root of) the content and sends
+`set_backdrop` or `set_scroll_edge` for it; the compositor walks the window's
+surface elements from the top, keeps the requester and what is above it in
+front and draws the material right behind the requester, blurred from the
+elements below it (`blur/within.rs`). A window capture includes that material;
+a `behind_window` material, which blurs the wallpaper under the window, is left
+out of it.
+
 ## How they talk
 
 | Channel | Between | Carries |
 |---|---|---|
 | Wayland: layer-shell, foreign-toplevel, session-lock, xdg-activation, image-copy-capture | compositor ↔ shell | placement, window list, lock, activation, capture |
 | `infinity_window_manager_v1` | shell → compositor | arrange, restore, force quit, send a shortcut; app menu addresses, spaces and desktops back |
-| `infinity_window_style_v1` | BarrierKit apps and the wallpaper → compositor | bar, panel, popover, glass, cards, plates, knobs and the desktop of a surface |
+| `infinity_window_style_v1` | BarrierKit apps and the wallpaper → compositor | bar, panel, popover, glass, cards, plates, knobs, the desktop of a surface and, from version 10, a material over what lies below it (`set_backdrop`) and a scroll edge effect (`set_scroll_edge`) |
 | `infinity_session_v1` | compositor → shell | `locking` and `unlocked` |
 | `infinity_focus_manager_v1` | compositor ↔ patched libadwaita | focus mode bar, the wallpaper color behind a window and how light the glass under a popup is |
 | `.domain` files | Settings and the shell write; every process reads | preferences, watched with inotify |

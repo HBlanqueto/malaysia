@@ -4,6 +4,7 @@ mod look;
 mod parity;
 #[cfg(test)]
 mod timing;
+pub(crate) mod within;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -49,6 +50,8 @@ pub(crate) struct Blur {
     probe: Option<GlesTexture>,
     probed: CommitCounter,
     popups_panel: Option<ctdesign::Rgba>,
+    edge_fade: Option<GlesTexProgram>,
+    within: within::Within,
 }
 
 const PROBE_SIDE: i32 = 4;
@@ -153,6 +156,8 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<Blur> {
         probe: None,
         probed: CommitCounter::default(),
         popups_panel: None,
+        edge_fade: crate::effects::compile_edge_fade(renderer),
+        within: within::Within::default(),
     })
 }
 
@@ -184,6 +189,7 @@ pub(crate) fn update(
     let Some(mut blur) = state.blur.take() else {
         return;
     };
+    blur.within.sweep();
     let wanted = families_requested(state);
     if !wanted.contains(&true) {
         blur.wallpaper = None;
@@ -445,6 +451,9 @@ fn sampled_cache(
 }
 
 pub(crate) fn blur_region(surface: &WlSurface) -> Vec<Rectangle<i32, Logical>> {
+    if crate::window_style::backdrop(surface).is_some() {
+        return Vec::new();
+    }
     with_states(surface, |states| {
         if !states
             .cached_state
@@ -802,7 +811,7 @@ fn render_behind(
     method: Method<'_>,
     renderer: &mut GlesRenderer,
     (area, scale): (Rectangle<i32, Physical>, f64),
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[impl RenderElement<GlesRenderer>],
 ) -> Option<()> {
     let stale = cache.as_ref().is_none_or(|behind| {
         behind.scale != scale || behind.area.size != area.size || !behind.fits(&method)

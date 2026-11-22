@@ -541,9 +541,12 @@ Blur is not an `effects` key: an app asks for it with `ext-background-effect-v1`
 and the compositor draws the `under_window_background` material of `ctdesign`
 behind its region. `appearance.reduce_transparency = true` makes that backdrop a
 solid and turns the other blurs off, except the menus' glass; `contrast` alone
-keeps the window blur. A BarrierKit app will ask for a material with
-`set_backdrop` (`infinity_window_style_v1` version 10), which the compositor
-does not serve yet.
+keeps the window blur. A BarrierKit app asks for a material with `set_backdrop`
+(`infinity_window_style_v1` version 10, served since 2026-11-22) over what its
+own surfaces draw below it or over the wallpaper, and for a scroll edge effect
+with `set_scroll_edge`; the compositor takes the radius, saturation and tint
+from `ctdesign`, draws the material's solid with `reduce_transparency`, and
+adds no option.
 
 ## `debug` — development
 

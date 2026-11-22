@@ -714,33 +714,48 @@ fn map_rect(
 }
 
 pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
-    compile_shaped_texture(renderer, grade_graphics::shaders::ROUNDED_CLIP)
+    compile_shaped_texture(renderer, grade_graphics::shaders::ROUNDED_CLIP, &[])
         .inspect_err(|error| tracing::warn!(?error, "failed to compile rounded-clip shader"))
         .ok()
 }
 
 pub(crate) fn compile_veil(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
-    compile_shaped_texture(renderer, grade_graphics::shaders::VEIL)
+    compile_shaped_texture(renderer, grade_graphics::shaders::VEIL, &[])
         .inspect_err(|error| tracing::warn!(?error, "failed to compile veil shader"))
         .ok()
+}
+
+pub(crate) fn compile_edge_fade(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
+    compile_shaped_texture(
+        renderer,
+        grade_graphics::shaders::EDGE_FADE,
+        &[
+            UniformName::new("strip", UniformType::_4f),
+            UniformName::new("along", UniformType::_3f),
+            UniformName::new("stops_at", UniformType::_4f),
+            UniformName::new("stops_alpha", UniformType::_4f),
+        ],
+    )
+    .inspect_err(|error| tracing::warn!(?error, "failed to compile edge-fade shader"))
+    .ok()
 }
 
 fn compile_shaped_texture(
     renderer: &mut GlesRenderer,
     shader: &str,
+    extra: &[UniformName<'_>],
 ) -> Result<GlesTexProgram, GlesError> {
-    renderer.compile_custom_texture_shader(
-        shader,
-        &[
-            UniformName::new("texture_size", UniformType::_2f),
-            UniformName::new("geometry", UniformType::_4f),
-            UniformName::new("radius", UniformType::_1f),
-            UniformName::new("exponent", UniformType::_1f),
-            UniformName::new("arrow", UniformType::_4f),
-            UniformName::new("arrow_slope", UniformType::_1f),
-            UniformName::new("arrow_edge", UniformType::_1f),
-        ],
-    )
+    let mut uniforms = vec![
+        UniformName::new("texture_size", UniformType::_2f),
+        UniformName::new("geometry", UniformType::_4f),
+        UniformName::new("radius", UniformType::_1f),
+        UniformName::new("exponent", UniformType::_1f),
+        UniformName::new("arrow", UniformType::_4f),
+        UniformName::new("arrow_slope", UniformType::_1f),
+        UniformName::new("arrow_edge", UniformType::_1f),
+    ];
+    uniforms.extend(extra.iter().cloned());
+    renderer.compile_custom_texture_shader(shader, &uniforms)
 }
 
 fn glass_fill_uniforms() -> Vec<UniformName<'static>> {

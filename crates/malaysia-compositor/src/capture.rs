@@ -276,10 +276,14 @@ pub(crate) fn serve_pending(
                     pending.frame.fail(CaptureFailureReason::Unknown);
                     continue;
                 };
+                let active = state.focused_window() == Some(*id);
                 (
                     *size,
                     Some(crate::scene_elements::build_window_elements(
-                        renderer, &surface, scale,
+                        state,
+                        renderer,
+                        (&surface, active),
+                        scale,
                     )),
                 )
             }
@@ -573,7 +577,7 @@ fn screenshot_elements(
 }
 
 fn capture_window_png(
-    state: &State,
+    state: &mut State,
     renderer: &mut GlesRenderer,
     id: malaysia_scene::scene::WindowId,
     transform: Transform,
@@ -589,7 +593,8 @@ fn capture_window_png(
         .usable_rect(id)
         .ok_or_else(|| std::io::Error::other("screenshot: the window has no rect"))?;
     let size = rect.size.to_f64().to_physical(scale).to_i32_round();
-    let elements = build_window_elements(renderer, &surface, scale);
+    let active = state.focused_window() == Some(id);
+    let elements = build_window_elements(state, renderer, (&surface, active), scale);
     let (width, height, mut rgba) = render_and_read(
         renderer,
         &elements,

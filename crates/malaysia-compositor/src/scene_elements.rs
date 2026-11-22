@@ -1,14 +1,14 @@
 use std::time::Instant;
 
-use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
 use smithay::backend::renderer::element::solid::{SolidColorBuffer, SolidColorRenderElement};
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
+use smithay::backend::renderer::element::{Element, Kind};
 use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Scale, Size};
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::wlr_layer::Layer;
 
@@ -874,23 +874,36 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         );
     }
     content.extend(rim);
-    append_frame(
-        state,
-        content,
-        surface_elements,
-        backdrop,
-        Frame {
-            owner: crate::chrome::FrameOwner::Window(id),
-            shape,
-            plate: false,
-            focused: is_focused,
-            panel: data.role == crate::decoration::Role::Dialog,
-            bordered: frame_has_border(data.state),
-            arrow: crate::effects::Arrow::default(),
-        },
+    let frame = Frame {
+        owner: crate::chrome::FrameOwner::Window(id),
+        shape,
+        plate: false,
+        focused: is_focused,
+        panel: data.role == crate::decoration::Role::Dialog,
+        bordered: frame_has_border(data.state),
+        arrow: crate::effects::Arrow::default(),
+    };
+    let requesters = crate::blur::within::requesters(&data.surface);
+    let scene = crate::blur::within::Scene {
+        origin: surface_location,
+        frame: shape,
         scale,
-        elements,
-    );
+        active: is_focused,
+    };
+    for element in surface_elements {
+        let element_id = element.id().clone();
+        clip_to_frame(state, std::iter::once(element), &frame, scale, &mut content);
+        if let Some(requester) = requesters.of(&element_id) {
+            crate::blur::within::append(
+                state,
+                renderer,
+                (&data.surface, requester),
+                &scene,
+                (&mut content, Some(&mut backdrop)),
+            );
+        }
+    }
+    append_frame(state, content, Vec::new(), backdrop, frame, scale, elements);
 }
 
 pub(crate) struct Frame {
@@ -1068,7 +1081,7 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
 
 fn clip_to_frame<R: MalaysiaRenderer>(
     state: &State,
-    surface_elements: Vec<WaylandSurfaceRenderElement<R>>,
+    surface_elements: impl IntoIterator<Item = WaylandSurfaceRenderElement<R>>,
     frame: &Frame,
     scale: f64,
     content: &mut Vec<OutputRenderElement<R>>,
@@ -1244,22 +1257,51 @@ pub(crate) fn border_shader(
 }
 
 pub(crate) fn build_window_elements<R: MalaysiaRenderer>(
+    state: &mut State,
     renderer: &mut R,
-    surface: &WlSurface,
+    (surface, active): (&WlSurface, bool),
     scale: f64,
 ) -> Vec<OutputRenderElement<R>> {
     let geometry = crate::window::window_geometry(surface).unwrap_or_default();
-    render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
+    let origin = physical_point(Point::from((0, 0)) - geometry.loc, scale);
+    let tree = render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
         renderer,
         surface,
-        physical_point(Point::from((0, 0)) - geometry.loc, scale),
+        origin,
         scale,
         1.0,
         Kind::Unspecified,
-    )
-    .into_iter()
-    .map(|e| e.into())
-    .collect()
+    );
+    let requesters = crate::blur::within::requesters(surface);
+    let scene = crate::blur::within::Scene {
+        origin,
+        frame: Shape {
+            rect: tree
+                .iter()
+                .map(|element| element.geometry(Scale::from(scale)))
+                .reduce(Rectangle::merge)
+                .unwrap_or_default(),
+            radius: 0,
+            exponent: ctdesign::CIRCLE_EXPONENT,
+        },
+        scale,
+        active,
+    };
+    let mut elements = Vec::with_capacity(tree.len());
+    for element in tree {
+        let element_id = element.id().clone();
+        elements.push(element.into());
+        if let Some(requester) = requesters.of(&element_id) {
+            crate::blur::within::append(
+                state,
+                renderer,
+                (surface, requester),
+                &scene,
+                (&mut elements, None),
+            );
+        }
+    }
+    elements
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

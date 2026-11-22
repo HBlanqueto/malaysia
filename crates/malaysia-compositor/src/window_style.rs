@@ -14,7 +14,7 @@ use infinity_protocol::server::style::infinity_window_style_v1::infinity_window_
     self, InfinityWindowStyleV1,
 };
 pub(crate) use infinity_protocol::server::style::infinity_window_style_v1::infinity_window_style_v1::{
-    Bar, Knob, Panel, PopoverShape,
+    Bar, BlendingMode, Edge, Knob, Material, Panel, PopoverShape, ScrollEdgeEffectStyle,
 };
 use malaysia_scene::scene::WindowId;
 
@@ -85,6 +85,88 @@ impl Cacheable for Knobs {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct WindowBackdrop {
+    pub(crate) blending: BlendingMode,
+    pub(crate) material: Material,
+    pub(crate) radius: u32,
+    rects: [Rectangle<i32, Logical>; MAX_BACKDROP_RECTS],
+    count: usize,
+}
+
+impl Default for WindowBackdrop {
+    fn default() -> Self {
+        Self {
+            blending: BlendingMode::BehindWindow,
+            material: Material::Titlebar,
+            radius: 0,
+            rects: [Rectangle::default(); MAX_BACKDROP_RECTS],
+            count: 0,
+        }
+    }
+}
+
+impl WindowBackdrop {
+    fn new(
+        blending: BlendingMode,
+        material: Material,
+        radius: u32,
+        wanted: &[Rectangle<i32, Logical>],
+    ) -> Self {
+        let mut backdrop = Self {
+            blending,
+            material,
+            radius,
+            ..Self::default()
+        };
+        let kept = wanted.len().min(MAX_BACKDROP_RECTS);
+        backdrop.rects[..kept].copy_from_slice(&wanted[..kept]);
+        backdrop.count = kept;
+        backdrop
+    }
+
+    pub(crate) fn rects(&self) -> &[Rectangle<i32, Logical>] {
+        &self.rects[..self.count]
+    }
+}
+
+impl Cacheable for WindowBackdrop {
+    fn commit(&mut self, _dh: &DisplayHandle) -> Self {
+        *self
+    }
+
+    fn merge_into(self, into: &mut Self, _dh: &DisplayHandle) {
+        *into = self;
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ScrollEdge {
+    pub(crate) edge: Edge,
+    pub(crate) style: ScrollEdgeEffectStyle,
+    pub(crate) depth: u32,
+}
+
+impl Default for ScrollEdge {
+    fn default() -> Self {
+        Self {
+            edge: Edge::Top,
+            style: ScrollEdgeEffectStyle::Automatic,
+            depth: 0,
+        }
+    }
+}
+
+impl Cacheable for ScrollEdge {
+    fn commit(&mut self, _dh: &DisplayHandle) -> Self {
+        *self
+    }
+
+    fn merge_into(self, into: &mut Self, _dh: &DisplayHandle) {
+        *into = self;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Cards {
     pub(crate) id: u64,
@@ -96,11 +178,13 @@ pub(crate) struct Cards {
 
 static NEXT_ALERT: AtomicU64 = AtomicU64::new(0);
 
-const VERSION: u32 = 9;
+const VERSION: u32 = 10;
 
 const MAX_GLASS_PANELS: usize = 16;
 
 const MAX_KNOBS: usize = 4;
+
+pub(crate) const MAX_BACKDROP_RECTS: usize = 16;
 
 impl WindowStyleGlobalData {
     pub(crate) fn create_global(display_handle: &DisplayHandle) -> GlobalId {
@@ -234,6 +318,31 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 });
                 state.request_redraw();
             }
+            infinity_window_style_v1::Request::SetBackdrop {
+                surface,
+                blending: WEnum::Value(blending),
+                material: WEnum::Value(material),
+                radius,
+                rects,
+            } if is_kit_client(&surface) => {
+                let backdrop = WindowBackdrop::new(blending, material, radius, &card_rects(&rects));
+                with_states(&surface, |states| {
+                    *states.cached_state.get::<WindowBackdrop>().pending() = backdrop;
+                });
+                state.request_redraw();
+            }
+            infinity_window_style_v1::Request::SetScrollEdge {
+                surface,
+                edge: WEnum::Value(edge),
+                style: WEnum::Value(style),
+                depth,
+            } if is_kit_client(&surface) => {
+                with_states(&surface, |states| {
+                    *states.cached_state.get::<ScrollEdge>().pending() =
+                        ScrollEdge { edge, style, depth };
+                });
+                state.request_redraw();
+            }
             infinity_window_style_v1::Request::SetDesktop { surface, desktop } => {
                 with_states(&surface, |states| {
                     states
@@ -347,6 +456,28 @@ pub(crate) fn glass(surface: &WlSurface) -> Option<GlassPanels> {
         let mut cached = states.cached_state.get::<GlassPanels>();
         let current = cached.current();
         (!current.rects.is_empty()).then(|| current.clone())
+    })
+}
+
+pub(crate) fn backdrop(surface: &WlSurface) -> Option<WindowBackdrop> {
+    with_states(surface, |states| {
+        if !states.cached_state.has::<WindowBackdrop>() {
+            return None;
+        }
+        let mut cached = states.cached_state.get::<WindowBackdrop>();
+        let current = *cached.current();
+        (current.count > 0).then_some(current)
+    })
+}
+
+pub(crate) fn scroll_edge(surface: &WlSurface) -> Option<ScrollEdge> {
+    with_states(surface, |states| {
+        if !states.cached_state.has::<ScrollEdge>() {
+            return None;
+        }
+        let mut cached = states.cached_state.get::<ScrollEdge>();
+        let current = *cached.current();
+        (current.depth > 0).then_some(current)
     })
 }
 

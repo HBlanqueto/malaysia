@@ -58,7 +58,7 @@ impl Tracked {
 #[derive(Default)]
 struct GlassIds(Mutex<Vec<[Tracked; 3]>>);
 
-fn panel_shape(
+pub(crate) fn panel_shape(
     glass_radius: u32,
     panel: Rectangle<i32, Physical>,
     short_side: i32,

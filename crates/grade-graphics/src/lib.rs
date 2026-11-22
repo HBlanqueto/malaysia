@@ -19,6 +19,7 @@ pub mod shaders {
 
     pub const ROUNDED_CLIP: &str = texture_shader!("window_shape.glsl", "rounded_clip.frag");
     pub const VEIL: &str = texture_shader!("veil.frag");
+    pub const EDGE_FADE: &str = texture_shader!("window_shape.glsl", "edge_fade.frag");
     pub const GLASS: &str = texture_shader!(
         "window_shape.glsl",
         "oklab.glsl",
