@@ -182,6 +182,40 @@ mod tests {
     }
 
     #[test]
+    fn reduce_transparency_is_a_switch_of_its_own_with_increase_contrast_on() {
+        with_temp_config(|dir| {
+            let path = dir.join("appearance.domain");
+            let initial = AppearanceConfig {
+                contrast: true,
+                ..AppearanceConfig::default()
+            };
+            write_appearance(&path, &initial).unwrap();
+
+            let mut test = run_app(initial);
+            let accessibility =
+                find_label(&test, tr!("accessibility")).expect("the Accessibility pane is listed");
+            click_node(&mut test, accessibility);
+            let display = find_label(&test, tr!("display")).expect("Vision lists Display");
+            click_node(&mut test, display);
+            let switch = test
+                .find_many(|node, el| {
+                    (el.accessibility().builder.label() == Some(tr!("reduce-transparency")))
+                        .then_some(node)
+                })
+                .into_iter()
+                .last()
+                .expect("the Display page shows Reduce transparency");
+            click_node(&mut test, switch);
+
+            let text = fs::read_to_string(&path).unwrap();
+            assert!(
+                text.contains("reduce_transparency = true") && text.contains("contrast = true"),
+                "the switch must write reduce_transparency and keep contrast: {text}"
+            );
+        });
+    }
+
+    #[test]
     fn choosing_dark_writes_color_scheme_dark() {
         with_temp_config(|dir| {
             let path = dir.join("appearance.domain");

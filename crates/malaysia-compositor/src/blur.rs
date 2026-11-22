@@ -1280,14 +1280,14 @@ mod tests {
     }
 
     #[test]
-    fn a_dialog_blurs_as_wide_as_the_glass_blur_option_reaches() {
+    fn a_dialog_blurs_as_wide_as_its_reach_factor_says() {
         let (_loop, _display, state) = dark_state();
         let windows = look::windows(&state);
         assert_eq!(look::dialogs(&state, 2.0).sigma, 2.0 * windows.sigma);
     }
 
     #[test]
-    fn only_a_dark_scheme_has_measured_shell_glass_and_the_glass_blur_option_widens_it() {
+    fn only_a_dark_scheme_has_measured_shell_glass_and_the_soften_factor_widens_it() {
         let (_loop, _display, mut state) = dark_state();
         for glass in GLASSES {
             let look = look::shell(&state, glass).expect("dark glass is measured");

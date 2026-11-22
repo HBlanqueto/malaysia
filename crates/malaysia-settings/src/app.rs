@@ -9,12 +9,11 @@ use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
     AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick, ScrollBars,
-    TintParts, TintStrength, Toolkit, TrafficLightStyle, WindowColorMode, load_appearance, palette,
-    resolve,
+    TintParts, TintStrength, Toolkit, TrafficLightStyle, WindowColorMode, load_appearance, resolve,
 };
 use ctdesign::{
-    ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, GLASS_BLUR_FULL, MENU_POPOVER,
-    POINTER_SIZES, Rgba, SETTINGS, SPACE_3, TEXT_SIZES,
+    ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, MENU_POPOVER, POINTER_SIZES, Rgba,
+    SETTINGS, SPACE_3, TEXT_SIZES,
 };
 use torin::prelude::Gaps;
 
@@ -64,7 +63,6 @@ const COLOR_FILTERS: [ColorFilter; 4] = [
 const ACCESSIBILITY_TINT: Rgba = SETTINGS.tile_blue;
 const COLOR_FILTER_PENCILS: &[u8] = include_bytes!("../assets/color-filters.svg");
 const COLOR_FILTER_PENCILS_SIZE: (f32, f32) = (349.0, 130.0);
-const LIQUID_GLASS_MARKS: usize = 3;
 type Text = fn() -> &'static str;
 
 const TRAFFIC: [(TrafficLightStyle, Text); 3] = [
@@ -239,25 +237,6 @@ pub(crate) fn edit<T: 'static>(
     })
 }
 
-fn liquid_glass_row(config: &AppearanceConfig, error: State<Option<String>>) -> Row {
-    Row::new(tr!("liquid-glass"))
-        .keywords(tr_list!("liquid-glass-keywords"))
-        .control(
-            HStack::new()
-                .cross_align(Alignment::Start)
-                .spacing(SPACE_3)
-                .child(shape_end(Symbol::CapsuleOnRectangle))
-                .child(
-                    Slider::new(tr!("liquid-glass"))
-                        .range(0.0..=GLASS_BLUR_FULL)
-                        .number_of_tick_marks(LIQUID_GLASS_MARKS)
-                        .value(config.glass_blur)
-                        .on_change(edit(error, |config, blur: f32| config.glass_blur = blur)),
-                )
-                .child(shape_end(Symbol::CapsuleOnRectangleFill)),
-        )
-}
-
 fn appearance(
     config: &AppearanceConfig,
     dominant: Option<Rgba>,
@@ -291,16 +270,25 @@ fn appearance(
                     }
                 })),
         );
+    let tint_window_background = Row::new(tr!("tint-window-background"))
+        .keywords(tr_list!("tint-windows-keywords"))
+        .control(
+            Switch::new(tr!("tint-window-background"))
+                .on(config.wallpaper_tinting && config.window_color == WindowColorMode::Neutral)
+                .on_toggle(edit(error, |config, on: bool| {
+                    config.wallpaper_tinting = on;
+                    if on {
+                        config.window_color = WindowColorMode::Neutral;
+                    }
+                })),
+        );
     Form::new()
         .section(
-            Section::new()
-                .row(
-                    Row::new(tr!("appearance-scheme"))
-                        .keywords(tr_list!("appearance-keywords"))
-                        .control(scheme_cards(config, dominant, error)),
-                )
-                .row(liquid_glass_row(config, error))
-                .row(system_language_row()),
+            Section::new().row(
+                Row::new(tr!("appearance-scheme"))
+                    .keywords(tr_list!("appearance-keywords"))
+                    .control(scheme_cards(config, dominant, error)),
+            ),
         )
         .section(
             Section::titled(tr!("theme"))
@@ -314,11 +302,15 @@ fn appearance(
         )
         .section(
             Section::titled(tr!("windows"))
+                .row(tint_window_background)
                 .row(
                     Row::new(tr!("traffic-lights"))
                         .keywords(tr_list!("traffic-lights-keywords"))
                         .control(traffic_popup(config, dominant, error)),
-                )
+                ),
+        )
+        .section(
+            Section::new()
                 .row(
                     Row::new(tr!("scroll-bars"))
                         .keywords(tr_list!("scroll-bars-keywords"))
@@ -349,6 +341,7 @@ fn appearance(
                         ),
                 ),
         )
+        .section(Section::new().row(system_language_row()))
 }
 
 fn tint_windows(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
@@ -435,10 +428,6 @@ fn set_tint_level(config: &mut AppearanceConfig, level: usize) {
     }
 }
 
-fn shape_end(glyph: Symbol) -> Image {
-    Image::system(glyph).color(palette(bk::theme::resolved().scheme).ink_muted)
-}
-
 fn accessibility() -> Form {
     Form::new()
         .section(
@@ -468,14 +457,6 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
             edit(error, move |config, on: bool| apply(config, on)),
         )
     };
-    let reduce_transparency = Row::new(tr!("reduce-transparency")).control(
-        Switch::new(tr!("reduce-transparency"))
-            .on(config.transparency_reduced())
-            .disabled(config.contrast)
-            .on_toggle(edit(error, |config, on: bool| {
-                config.reduce_transparency = on;
-            })),
-    );
     let filters_off = !config.color_filters;
     Form::new()
         .section(
@@ -497,11 +478,13 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                         config.contrast = on;
                     },
                 ))
-                .row(if config.contrast {
-                    reduce_transparency.detail(tr!("reduce-transparency-contrast-help"))
-                } else {
-                    reduce_transparency
-                })
+                .row(switch(
+                    tr!("reduce-transparency"),
+                    config.reduce_transparency,
+                    |config, on| {
+                        config.reduce_transparency = on;
+                    },
+                ))
                 .row(switch(
                     tr!("show-borders"),
                     config.show_borders,
@@ -581,7 +564,7 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                 ),
         )
         .section(
-            Section::titled(tr!("color-filters"))
+            Section::titled(tr!("color-filters-title"))
                 .illustration(color_filter_pencils())
                 .row(switch(
                     tr!("color-filters"),
@@ -608,13 +591,12 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                                 }
                             })),
                     ),
-                )
-                .row(
-                    Row::new(tr!("color-filter-intensity")).control(option_column(
-                        Slider::stepped(
-                            tr!("color-filter-intensity"),
-                            COLOR_FILTER_INTENSITY.len(),
-                        )
+                ),
+        )
+        .section(
+            Section::new().row(
+                Row::new(tr!("color-filter-intensity")).control(option_column(
+                    Slider::stepped(tr!("color-filter-intensity"), COLOR_FILTER_INTENSITY.len())
                         .value(
                             nearest(&COLOR_FILTER_INTENSITY, config.color_filter_intensity) as f32,
                         )
@@ -631,8 +613,8 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                         .on_change(edit(error, |config, index: f32| {
                             config.color_filter_intensity = COLOR_FILTER_INTENSITY[index as usize];
                         })),
-                    )),
-                ),
+                )),
+            ),
         )
 }
 

@@ -111,19 +111,17 @@ They are not domain options; they are fixed and documented here:
 | `appearance.automatic_dark_from`, `appearance.automatic_dark_until` | hour 0–23 | `19`, `7` | **active** | the night of `automatic_scheme` |
 | `appearance.accent_color` | `[r,g,b]` in `[0,1]` or `null` | `null` | **active** | `null` is «Automatic» (the rainbow swatch): the theme's blue, and apps with their own accent keep it; the portal then reports no accent preference. A color forces that accent on every app. Portal, shell, effects, **System Settings** |
 | `appearance.wallpaper_accent` | bool | `false` | **active** | with no explicit `accent_color`, the accent is the wallpaper's dominant colour (from `wallpaper.state`), forced on every app. **System Settings › Appearance › Color** («Accent from wallpaper») |
-| `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`), kit (`ctappearance::resolve`; also reduces transparency), **System Settings › Accessibility › Display** |
+| `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`), kit (`ctappearance::resolve`: the contrast palettes, and solid shell surfaces because how macOS changes them with it alone was not measured; it does not make a window's blur solid), **System Settings › Accessibility › Display › Increase contrast** |
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
 | `appearance.scroll_bars` | `"automatic"` \| `"when_scrolling"` \| `"always"` | `"automatic"` | **active** | the kit's `ScrollView`: always after a mouse wheel and only while scrolling after a touchpad, only while scrolling, or always, **System Settings** |
 | `appearance.scroll_bar_click` | `"next_page"` \| `"clicked_spot"` | `"next_page"` | **active** | a click on the scroll bar track pages toward it or jumps there, **System Settings** |
-| `appearance.reduce_transparency` | bool | `false` | **active** | shell and kit: solid backgrounds and no compositor blur, except the menus, which keep their glass until `contrast`; the backdrop of a window becomes the solid of its material, one for `reduce_transparency` and another with `contrast`, and `contrast` alone keeps the blur; `false` enables the blur |
-| `appearance.glass_blur` | float `0.0`–`1.0` | `0.0` | **active** | compositor: the glass of the Dock, the menus and the notifications (`blur::Glass`, `blur::material`), the sidebars' glass and the dialogs; `0.0` is each glass as measured; toward `1.0` its Gaussian widens by `DockSurface::soften` over its value at `0.0`, up to `GLASS_BLUR_SPREAD` times the clear Dock's, and the Dock's tint moves a little toward `DOCK_GLASS_FROSTED`, both with the square of the slider; the menus and the notifications keep their tone. It does not reach the menu bar. **System Settings › Appearance › Liquid Glass**, a free slider with marks at `0.0`, `0.5` and `1.0` |
+| `appearance.reduce_transparency` | bool | `false` | **active** | shell and kit: solid backgrounds and no compositor blur, except the menus, which keep their glass until `contrast`; the backdrop of a window becomes the solid of its material, one for `reduce_transparency` and another with `contrast`, and `contrast` alone keeps the blur; `false` enables the blur. **System Settings › Accessibility › Display › Reduce transparency**, independent of Increase contrast |
 | `appearance.window_color` | `"neutral"` \| `"accent"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings**; an old `"wallpaper"` reads as `"neutral"` |
 | `appearance.traffic_lights` | `"standard"` \| `"accent"` \| `"wallpaper"` | `"wallpaper"` | **active** | titlebar traffic lights; `"wallpaper"` takes them from the wallpaper's dominant color, **System Settings** |
-| `appearance.traffic_light_shape` | integer 0–7 | `7` | **active** | corner radius of the 14 traffic lights, from square (0) to round (7); the old `"square"` reads as 4 and `"round"` as 7. Removed from System Settings: the shape is now always round unless the key is set by hand |
 | `appearance.tint_strength` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of the accent tint and of `wallpaper_tinting` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings**; the retired key `tint_strength_accent` is no longer read and System Settings removes it |
 | `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"`, `"bars"` | all but `"bars"` | **active** | which surfaces the tint reaches, with either tint color; `bars` is the Dock and the menu bar with the Solid style, tinted with the accent or with the wallpaper's dominant color, written by **System Settings › Desktop & Dock › Menu bar and Dock** (not by the Tint windows page). Replaces the retired `window_tint_scope` |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
-| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window, each libadwaita window with Malaysia's patch and the compositor's server-side titlebar mix the wallpaper behind it into its `tint_parts`, at `tint_strength`, in dark mode and with a neutral window color, **System Settings › Accessibility › Tint windows** |
+| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window, each libadwaita window with Malaysia's patch and the compositor's server-side titlebar mix the wallpaper behind it into its `tint_parts`, at `tint_strength`, in dark mode and with a neutral window color, **System Settings › Accessibility › Tint windows**; **System Settings › Appearance › Windows › Tint window background with wallpaper color** |
 | `appearance.wallpaper_tinting_in_light` | bool | `false` | **active** | `wallpaper_tinting` also in light mode, **System Settings › Accessibility › Tint windows** |
 | `appearance.invert_colors` | bool | `false` | **active** | compositor: inverts the screen, **System Settings › Accessibility › Display** |
 | `appearance.show_borders` | bool | `false` | **active** | kit: a border on icon buttons, tool groups and search fields, **System Settings › Accessibility › Display** |
@@ -146,6 +144,13 @@ They are not domain options; they are fixed and documented here:
 macOS: "Appearance: **Light / Dark / Auto**" and "**Accent color**"; "Increase
 contrast" and "Reduce motion" live in Accessibility and are published in the same
 portal namespace.
+
+`appearance.glass_blur`, a multiplier of the blur of the Dock, the menus and the
+notifications that macOS does not have, is retired like `traffic_light_shape`:
+a file that has the key still loads and the next write drops it. Every blur is
+the measured one of its surface (ADR 0092). macOS 27 has a «Liquid Glass» tint
+slider (`NSGlassTintAmount`); Malaysia does not expose it until its effect is
+measured.
 
 `color_scheme` reaches every app: bk reads it from the domain; GTK 4,
 libadwaita, Qt with the portal theme, Firefox, Chromium and Electron read it from
@@ -602,14 +607,12 @@ wallpaper_accent = false        # use the wallpaper's dominant colour as the acc
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
 reduce_transparency = false     # Reduce transparency (solid backgrounds; false = compositor blur)
-glass_blur = 0.0                # Liquid Glass blur of the Dock, menus and notifications: 0.0 to 1.0
 scroll_bars = "automatic"       # automatic | when_scrolling | always
 scroll_bar_click = "next_page"  # next_page | clicked_spot
 window_color = "neutral"        # neutral | accent
 tint_strength = "normal"        # subtle | normal | strong | intense
 tint_parts = ["sidebars", "window", "groups", "controls", "menus"]   # add "bars" for the menu bar and the Dock
 traffic_lights = "wallpaper"    # standard | accent | wallpaper
-traffic_light_shape = 7         # corner radius, 0 (square) to 7 (round); round by default
 wallpaper_tinting = true        # tint windows with the wallpaper behind them
 wallpaper_tinting_in_light = false
 invert_colors = false

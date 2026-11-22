@@ -264,13 +264,13 @@ mod tests {
     #[test]
     fn only_a_new_scheme_or_accent_changes_the_theme() {
         let old = AppearanceConfig::default();
-        let mut blurred = old.clone();
-        blurred.glass_blur = 0.9;
+        let mut reduced = old.clone();
+        reduced.reduce_transparency = true;
         let mut dark = old.clone();
         dark.color_scheme = ColorScheme::Dark;
         let mut red = old.clone();
         red.accent_color = Some([1.0, 0.0, 0.0]);
-        assert!(!changes_the_theme(&old, &blurred));
+        assert!(!changes_the_theme(&old, &reduced));
         assert!(changes_the_theme(&old, &dark));
         assert!(changes_the_theme(&old, &red));
     }
