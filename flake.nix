@@ -74,8 +74,8 @@
               "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
             "git+https://github.com/HBlanqueto/barrierkit?rev=70926f18cd960782f370cd971db38cd7add8f7fa#70926f18cd960782f370cd971db38cd7add8f7fa" =
               "sha256-q4T4ock5XTUATFZd0ukW4LClybodB7a9v6fmCkYJg1g=";
-            "git+https://github.com/HBlanqueto/ferricast?rev=eb29421bb27aed41a7c2bd76fcb1044b5453d30c#eb29421bb27aed41a7c2bd76fcb1044b5453d30c" =
-              "sha256-iH4ZhFUm228dgC0jlB3SNzMNMoUZvI5iDMpYwQDd1VY=";
+            "git+https://github.com/SergioRibera/ferricast?rev=f1c10b45dec4248491b294e20cb29e7941d94984#f1c10b45dec4248491b294e20cb29e7941d94984" =
+              "sha256-7O9SZHufu0u+HPKaaXcXdIf3x8isYECTt49Pu9qLZlk=";
             "git+https://github.com/SergioRibera/cros-libva?branch=fix/vp9-encpicparam-fields#627695c5a145e5d3d9d0ba78f37bfb3db0178cba" =
               "sha256-5qnXi+n3CFJzabfpzJtwZb/PT/8v5zZvQH7W8tRwuE8=";
           };

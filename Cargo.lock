@@ -1104,7 +1104,7 @@ dependencies = [
 [[package]]
 name = "ferricast-core"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/ferricast?rev=eb29421bb27aed41a7c2bd76fcb1044b5453d30c#eb29421bb27aed41a7c2bd76fcb1044b5453d30c"
+source = "git+https://github.com/SergioRibera/ferricast?rev=f1c10b45dec4248491b294e20cb29e7941d94984#f1c10b45dec4248491b294e20cb29e7941d94984"
 dependencies = [
  "async-trait",
  "bitflags 2.13.2",
@@ -1117,7 +1117,7 @@ dependencies = [
 [[package]]
 name = "ferricast-decoder"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/ferricast?rev=eb29421bb27aed41a7c2bd76fcb1044b5453d30c#eb29421bb27aed41a7c2bd76fcb1044b5453d30c"
+source = "git+https://github.com/SergioRibera/ferricast?rev=f1c10b45dec4248491b294e20cb29e7941d94984#f1c10b45dec4248491b294e20cb29e7941d94984"
 dependencies = [
  "bytes",
  "cros-libva",
@@ -1135,7 +1135,7 @@ dependencies = [
 [[package]]
 name = "ferricast-demuxer"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/ferricast?rev=eb29421bb27aed41a7c2bd76fcb1044b5453d30c#eb29421bb27aed41a7c2bd76fcb1044b5453d30c"
+source = "git+https://github.com/SergioRibera/ferricast?rev=f1c10b45dec4248491b294e20cb29e7941d94984#f1c10b45dec4248491b294e20cb29e7941d94984"
 dependencies = [
  "bytes",
  "ferricast-core",
@@ -1145,7 +1145,7 @@ dependencies = [
 [[package]]
 name = "ferricast-player"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/ferricast?rev=eb29421bb27aed41a7c2bd76fcb1044b5453d30c#eb29421bb27aed41a7c2bd76fcb1044b5453d30c"
+source = "git+https://github.com/SergioRibera/ferricast?rev=f1c10b45dec4248491b294e20cb29e7941d94984#f1c10b45dec4248491b294e20cb29e7941d94984"
 dependencies = [
  "ferricast-core",
  "ferricast-decoder",

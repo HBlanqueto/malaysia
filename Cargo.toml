@@ -91,7 +91,7 @@ unicode-segmentation = "1"
 png = "0.17"
 plist = "1"
 base64 = "0.23"
-ferricast-player = { git = "https://github.com/HBlanqueto/ferricast", rev = "eb29421bb27aed41a7c2bd76fcb1044b5453d30c" }
+ferricast-player = { git = "https://github.com/SergioRibera/ferricast", rev = "f1c10b45dec4248491b294e20cb29e7941d94984" }
 libheif-rs = { version = "3", default-features = false, features = ["v1_17"] }
 zune-jpeg = "0.5"
 half = { version = "2", features = ["bytemuck"] }
