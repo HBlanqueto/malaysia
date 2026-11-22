@@ -76,17 +76,11 @@ pub(crate) fn material(resolved: &ctappearance::Resolved, glass: Glass) -> ctdes
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Family {
     Windows,
-    Dialogs,
     Layers,
     Glass,
 }
 
-const FAMILIES: [Family; 4] = [
-    Family::Windows,
-    Family::Dialogs,
-    Family::Layers,
-    Family::Glass,
-];
+const FAMILIES: [Family; 3] = [Family::Windows, Family::Layers, Family::Glass];
 
 struct Wallpaper {
     tracker: OutputDamageTracker,
@@ -324,7 +318,6 @@ fn circle(rect: Rectangle<i32, Physical>, radius: i32) -> Shape {
 #[derive(Clone, Copy)]
 pub(crate) enum Detail {
     Windows,
-    Dialogs,
     Layers,
     Behind(Glass),
     Veil,
@@ -381,7 +374,7 @@ pub(crate) fn sampled<R: MalaysiaRenderer>(
             .and_then(|blur| sampled_cache(blur, sampling.detail))
             .filter(|_| match sampling.detail {
                 Detail::Behind(Glass::Popups) => popups_drawn(state),
-                Detail::Windows | Detail::Dialogs => true,
+                Detail::Windows => true,
                 _ => drawn(state),
             }),
         sampling.program,
@@ -438,7 +431,6 @@ fn sampled_cache(
     };
     match detail {
         Detail::Windows => family(Family::Windows),
-        Detail::Dialogs => family(Family::Dialogs).or_else(|| family(Family::Windows)),
         Detail::Layers => family(Family::Layers),
         Detail::Behind(glass) => blur.behind[glass as usize]
             .as_ref()
@@ -546,11 +538,8 @@ fn layers_requested(state: &State) -> bool {
 }
 
 fn families_requested(state: &State) -> [bool; FAMILIES.len()] {
-    let widened = state.chrome_theme.resolved.dock.soften > 1.0;
-    let dialogs = dialogs_requested(state);
     [
-        windows_requested(state) || (dialogs && !widened),
-        dialogs && widened,
+        windows_requested(state) || dialogs_requested(state),
         drawn(state) && layers_requested(state),
         drawn(state) && glass_requested(state),
     ]
@@ -640,12 +629,10 @@ impl Blur {
         )? {
             wallpaper.commit.increment();
         }
-        let reach = state.chrome_theme.resolved.dock.soften;
         let looks = [
             look::windows(state),
-            look::dialogs(state, reach),
             look::layers(&self.sigmas),
-            look::glass(&self.sigmas, state, reach),
+            look::glass(&self.sigmas, state),
         ];
         for ((slot, look), wanted) in wallpaper.families.iter_mut().zip(looks).zip(wanted) {
             if !wanted {
@@ -1289,10 +1276,35 @@ mod tests {
     }
 
     #[test]
-    fn a_dialog_blurs_as_wide_as_its_reach_factor_says() {
-        let (_loop, _display, state) = dark_state();
-        let windows = look::windows(&state);
-        assert_eq!(look::dialogs(&state, 2.0).sigma, 2.0 * windows.sigma);
+    fn the_liquid_glass_slider_mixes_the_blur_fill_into_the_glass_a_window_requests() {
+        use crate::window_style::Material as Requested;
+        let (_loop, _display, mut state) = dark_state();
+        let glass =
+            |state: &State, material| look::requested(state, material, true, 400.0).unwrap();
+        let regular = glass(&state, Requested::GlassRegular);
+        let clear = glass(&state, Requested::GlassClear);
+        assert!(regular.halo.is_none() && clear.halo.is_none());
+        state.config.appearance.liquid_glass_tint = 1.0;
+        let frosted = glass(&state, Requested::GlassRegular);
+        let frosted_clear = glass(&state, Requested::GlassClear);
+        let (halo_sigma, halo_weight) = frosted.halo.expect("the blur fill is the halo");
+        assert!(halo_sigma > frosted.sigma);
+        assert_eq!(
+            halo_weight,
+            ctdesign::LIQUID_GLASS_TINT_REGULAR_DARK.blur_fill_opacity[2]
+        );
+        assert_eq!(frosted.sigma, regular.sigma);
+        assert_eq!(frosted_clear.halo, frosted.halo);
+        assert!(frosted_clear.sigma > clear.sigma);
+        let look::Post::Glass(face) = frosted.post else {
+            panic!("requested glass draws the face of the model");
+        };
+        assert_eq!(
+            face.fill.a,
+            ctdesign::LIQUID_GLASS_TINT_REGULAR_DARK.fill_alpha[2]
+        );
+        state.config.appearance.liquid_glass_tint = 0.0;
+        assert!(glass(&state, Requested::GlassRegular) == regular);
     }
 
     #[test]

@@ -548,3 +548,219 @@ fn the_reference_function_and_the_pipeline_agree_on_a_flat_backdrop() {
         assert!((f32::from(got[channel]) - expected[channel] * 255.0).abs() <= 1.0);
     }
 }
+
+const TINT_SAMPLES: &str = include_str!("../../tests/data/liquid-glass-tint-samples.csv");
+const TINT_WIDTH: i32 = 640;
+const TINT_HEIGHT: i32 = 480;
+const TINT_GLASS: (i32, i32, i32, i32) = (40, 40, 560, 400);
+const TINT_BARS: [(i32, i32, i32); 5] = [
+    (100, 140, 80),
+    (160, 200, 100),
+    (220, 260, 140),
+    (280, 320, 200),
+    (340, 380, 320),
+];
+const TINT_RAMP_ROW: i32 = 100;
+const TINT_BAR_AT_DEPTH_100: usize = 2;
+const TINT_STEPS: [f32; 5] = [0.0, 0.25, 0.5, 0.75, 1.0];
+
+fn tint_backdrop(level: impl Fn(i32, i32) -> f32) -> Vec<u8> {
+    let mut pixels = Vec::with_capacity((TINT_WIDTH * TINT_HEIGHT * 4) as usize);
+    for y in 0..TINT_HEIGHT {
+        for x in 0..TINT_WIDTH {
+            let byte = level(x, y).round() as u8;
+            pixels.extend([byte, byte, byte, 255]);
+        }
+    }
+    pixels
+}
+
+fn tint_ramp(x: i32, y: i32) -> f32 {
+    let band = !(160..240).contains(&y) && y < 320;
+    if band {
+        x as f32 * 255.0 / (TINT_WIDTH - 1) as f32
+    } else {
+        0.0
+    }
+}
+
+fn tint_bars(x: i32, y: i32) -> f32 {
+    let on = TINT_BARS
+        .iter()
+        .any(|(top, bottom, end)| (*top..*bottom).contains(&y) && x < *end);
+    if on { 255.0 } else { 0.0 }
+}
+
+fn tint_step(shown: &[u8]) -> (f32, f32) {
+    let (top, bottom, end) = TINT_BARS[TINT_BAR_AT_DEPTH_100];
+    let row = |x: i32| {
+        (top + 10..bottom - 10)
+            .map(|y| f32::from(column_at(shown, TINT_WIDTH, (x, y))[1]))
+            .sum::<f32>()
+            / (bottom - top - 20) as f32
+    };
+    let plateau = |from: i32| (from..from + 30).map(row).sum::<f32>() / 30.0;
+    let (left, right) = (plateau(end - 60), plateau(end + 30));
+    let crossing = |level: f32| {
+        let at = (end - 40..end + 40)
+            .find(|x| (row(*x) - right) / (left - right) < level)
+            .unwrap();
+        let before = (row(at - 1) - right) / (left - right);
+        let after = (row(at) - right) / (left - right);
+        at as f32 - 1.0 + (before - level) / (before - after)
+    };
+    (crossing(0.25) - crossing(0.75), left - right)
+}
+
+#[test]
+#[ignore = "a measurement: prints the cells of the macOS comparison"]
+fn the_glass_a_window_requests_against_the_macos_captures_at_each_slider_position() {
+    use crate::window_style::Material as Requested;
+    let Some(mut bench) = Bench::new() else {
+        eprintln!("skipping: no EGL device");
+        return;
+    };
+    let (_loop, _display, mut state) = crate::test_support::test_state((1280, 720));
+    let (x, y, width, height) = TINT_GLASS;
+    let region = Rectangle::<i32, Physical>::new((x, y).into(), (width, height).into());
+    let backdrops = [
+        ("gray", tint_backdrop(|_, _| 128.0)),
+        ("ramp", tint_backdrop(tint_ramp)),
+        ("bars", tint_backdrop(tint_bars)),
+    ];
+    for (name, scheme, requested) in [
+        (
+            "regular-dark",
+            ctappearance::ColorScheme::Dark,
+            Requested::GlassRegular,
+        ),
+        (
+            "regular-light",
+            ctappearance::ColorScheme::Light,
+            Requested::GlassRegular,
+        ),
+        (
+            "clear-dark",
+            ctappearance::ColorScheme::Dark,
+            Requested::GlassClear,
+        ),
+        (
+            "clear-light",
+            ctappearance::ColorScheme::Light,
+            Requested::GlassClear,
+        ),
+    ] {
+        state.chrome_theme.resolved.scheme = scheme;
+        let mut zero = None;
+        for amount in TINT_STEPS {
+            state.config.appearance.liquid_glass_tint = amount;
+            let look =
+                super::look::requested(&state, requested, true, height.min(width) as f32).unwrap();
+            let shown: Vec<Vec<u8>> = backdrops
+                .iter()
+                .map(|(_, pixels)| bench.blur((TINT_WIDTH, TINT_HEIGHT), pixels, region, look, 1.0))
+                .collect();
+            let mut tone = Errors::new();
+            for row in TINT_SAMPLES.lines() {
+                let fields: Vec<&str> = row.split(',').collect();
+                if fields[1] != name || fields[2].parse::<f32>().unwrap() != amount {
+                    continue;
+                }
+                match fields[0] {
+                    "gray" => tone.add(
+                        f32::from(column_at(&shown[0], TINT_WIDTH, (320, 240))[1])
+                            - fields[3].parse::<f32>().unwrap(),
+                    ),
+                    "ramp" => {
+                        let level: f32 = fields[3].parse().unwrap();
+                        let at = (level * (TINT_WIDTH - 1) as f32 / 255.0).round() as i32;
+                        tone.add(
+                            f32::from(column_at(&shown[1], TINT_WIDTH, (at, TINT_RAMP_ROW))[1])
+                                - fields[4].parse::<f32>().unwrap(),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            let (step_width, contrast) = tint_step(&shown[2]);
+            let zero = *zero.get_or_insert(contrast);
+            let measured = TINT_SAMPLES
+                .lines()
+                .map(|row| row.split(',').collect::<Vec<_>>())
+                .filter(|fields| fields[0] == "width" && fields[1] == name)
+                .map(|fields| {
+                    (
+                        fields[2].parse::<f32>().unwrap(),
+                        fields[3].parse::<f32>().unwrap(),
+                        fields[4].parse::<f32>().unwrap(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let capture = measured
+                .iter()
+                .find(|(at, _, _)| *at == amount)
+                .copied()
+                .unwrap();
+            let capture_zero = measured[0].2;
+            eprintln!(
+                "{name} {amount}: tone worst {:.1} rms {:.1} | width {step_width:.1} against {:.1} | contrast share {:.2} against {:.2}",
+                tone.worst,
+                tone.rms(),
+                capture.1,
+                contrast / zero,
+                capture.2 / capture_zero,
+            );
+        }
+    }
+}
+
+#[test]
+fn the_glass_face_of_the_pipeline_agrees_with_the_kit_model_at_every_slider_position() {
+    use ctappearance::liquid_glass::{self, Glass};
+    let Some(mut bench) = Bench::new() else {
+        eprintln!("skipping: no EGL device");
+        return;
+    };
+    let mut errors = Errors::new();
+    for (glass, scheme) in [
+        (Glass::Regular, ColorScheme::Dark),
+        (Glass::Regular, ColorScheme::Light),
+        (Glass::Clear, ColorScheme::Dark),
+    ] {
+        let set = liquid_glass::looks(glass, scheme);
+        for amount in TINT_STEPS {
+            let tinted =
+                liquid_glass::tinted(&set, &liquid_glass::tint(glass, scheme), amount, 400.0);
+            let look = Look {
+                sigma: 4.0,
+                halo: None,
+                post: Post::Glass(tinted.look),
+            };
+            for rgb in [
+                [0.0, 0.0, 0.0],
+                [0.125, 0.5, 0.875],
+                [0.5, 0.5, 0.5],
+                [0.8, 0.2, 0.3],
+                [1.0, 1.0, 1.0],
+            ] {
+                let bytes = rgb.map(|channel: f32| (channel * 255.0).round() as u8);
+                let tile: Vec<u8> = (0..64)
+                    .flat_map(|_| [bytes[0], bytes[1], bytes[2], 255])
+                    .collect();
+                let shown = bench.blur((8, 8), &tile, whole(8, 8), look, 1.0);
+                let expected =
+                    liquid_glass::face(&tinted.look, bytes.map(|byte| f32::from(byte) / 255.0));
+                let got = column_at(&shown, 8, (4, 4));
+                for channel in 0..3 {
+                    errors.add(f32::from(got[channel]) - expected[channel] * 255.0);
+                }
+            }
+        }
+    }
+    eprintln!(
+        "glass face: worst {:.2} rms {:.2}",
+        errors.worst,
+        errors.rms()
+    );
+    assert!(errors.worst <= MOST_ERROR, "worst {}", errors.worst);
+}

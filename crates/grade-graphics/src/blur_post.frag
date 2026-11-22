@@ -21,6 +21,11 @@ uniform vec4 knots_a;
 uniform float knots_b;
 uniform vec4 chroma_a;
 uniform float chroma_b;
+uniform vec4 face;
+uniform vec4 fill;
+uniform vec4 delta_a;
+uniform vec4 delta_b;
+uniform float delta_c;
 
 float component(vec4 values, int index) {
     if (index == 0) {
@@ -80,6 +85,35 @@ float chroma_at(float luma) {
     return five(chroma_a, chroma_b, 4);
 }
 
+float delta_value(int index) {
+    if (index < 4) {
+        return component(delta_a, index);
+    }
+    if (index < 8) {
+        return component(delta_b, index - 4);
+    }
+    return delta_c;
+}
+
+float delta_at(float luma) {
+    float at = clamp(luma * 8.0, 0.0, 7.999);
+    float below = 0.0;
+    float above = 0.0;
+    for (int i = 0; i < 8; i++) {
+        if (float(i) <= at && at < float(i + 1)) {
+            below = delta_value(i);
+            above = delta_value(i + 1);
+        }
+    }
+    return mix(below, above, fract(at)) / 255.0;
+}
+
+vec3 glass_face(vec3 backdrop, float luma) {
+    vec3 saturated = clamp(vec3(luma) + face.z * (backdrop - luma), 0.0, 1.0);
+    vec3 tone = vec3(face.y) + (face.x - face.y) * saturated * (1.0 - (1.0 - face.w) * luma);
+    return mix(tone, fill.rgb, fill.a) + delta_at(luma);
+}
+
 vec3 material(vec3 backdrop, float luma) {
     vec3 saturated = clamp(vec3(luma) + saturation * (backdrop - luma), 0.0, 1.0);
     vec3 veiled = saturated + (veil.rgb - saturated) * veil.a;
@@ -93,6 +127,6 @@ vec3 shell_glass(vec3 backdrop, float luma) {
 void main() {
     vec3 backdrop = texture2D(tex, v_coords).rgb;
     float luma = dot(backdrop, vec3(0.2126, 0.7152, 0.0722));
-    vec3 shown = shell > 0.5 ? shell_glass(backdrop, luma) : material(backdrop, luma);
+    vec3 shown = shell > 1.5 ? glass_face(backdrop, luma) : shell > 0.5 ? shell_glass(backdrop, luma) : material(backdrop, luma);
     gl_FragColor = vec4(clamp(shown, 0.0, 1.0), 1.0) * alpha;
 }

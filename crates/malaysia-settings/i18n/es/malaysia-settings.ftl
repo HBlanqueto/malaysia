@@ -12,6 +12,11 @@ appearance-scheme = Aspecto
 scheme-light = Claro
 scheme-dark = Obscuro
 scheme-automatic = Automático
+liquid-glass = Liquid Glass
+liquid-glass-keywords = liquid glass, vidrio, cristal, tinte, tintado, transparente, esmerilado, transparencia
+liquid-glass-tint-amount = Cantidad de tinte de Liquid Glass
+liquid-glass-clear-icon = Forma de cápsula sobre un rectángulo con efecto Liquid Glass
+liquid-glass-tinted-icon = Forma de cápsula sobre un rectángulo
 
 desktop-dock = Escritorio y Dock
 dock = Dock

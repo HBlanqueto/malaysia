@@ -12,6 +12,11 @@ appearance-scheme = Appearance
 scheme-light = Light
 scheme-dark = Dark
 scheme-automatic = Auto
+liquid-glass = Liquid Glass
+liquid-glass-keywords = liquid glass, glass, tint, tinted, clear, transparency, frosted
+liquid-glass-tint-amount = Liquid Glass Tint Amount
+liquid-glass-clear-icon = Capsule Shape On A Rectangle With A Liquid Glass Effect
+liquid-glass-tinted-icon = Capsule Shape On A Rectangle
 
 desktop-dock = Desktop & Dock
 dock = Dock

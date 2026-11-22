@@ -138,6 +138,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
 | `appearance.color_filter` | `"grayscale"` \| `"red_green"` \| `"green_red"` \| `"blue_yellow"` | `"grayscale"` | **active** | compositor: grayscale or a color-blindness filter |
 | `appearance.color_filter_intensity` | a value of `COLOR_FILTER_INTENSITY` | `1.0` | **active** | compositor: blends the filter with the original colors |
+| `appearance.liquid_glass_tint` | `0.0` to `1.0` | `0.0` | **active** | the Liquid Glass slider of macOS (`NSGlassTintAmount`); outside the range it reads as the nearest end and `nan` as `0.0`. compositor: the glass a window requests (`regular` and `clear`, in the active look) takes the kit's model at that position (blur fill, face; ADR 0093). Settings: Appearance › Liquid Glass |
 | `appearance.qt_bridge` | bool | `true` | **active** | portal: writes `qt6ct.conf` and `qt5ct.conf` in `~/.config/qt6ct` and `~/.config/qt5ct` (Fusion, the Malaysia palette in `malaysia-colors.conf`, Breeze or Breeze Dark icons unless another theme is set or GTK and Qt share one through Accessibility › freedesktop Options, the Qt text size); other keys stay. Off, the portal removes its palette. Settings sets it with `gtk_bridge` (Accessibility › freedesktop Options) |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`) and live through `org.malaysia.appearance`. Off, the portal still writes the traffic lights of GTK 3/4 and Firefox. Settings sets it with `qt_bridge` (Accessibility › freedesktop Options) |
 
@@ -148,11 +149,16 @@ portal namespace.
 `appearance.glass_blur`, a multiplier of the blur of the Dock, the menus and the
 notifications that macOS does not have, is retired like `traffic_light_shape`:
 a file that has the key still loads and the next write drops it. Every blur is
-the measured one of its surface (ADR 0092). macOS 27 has a «Liquid Glass» tint
-slider (`NSGlassTintAmount`, 0 to 1) that moves the blur and the tint of every
-glass; its effect is measured in the kit (`docs/research/macos-liquid-glass.md`,
-section 13) and Malaysia does not expose it yet: it needs a key and a model that
-interpolates the glass inputs.
+the measured one of its surface (ADR 0092).
+
+macOS 27 has a «Liquid Glass» slider (`NSGlassTintAmount`, 0 to 1) that
+frosts and tints every glass: it is `appearance.liquid_glass_tint`
+(Appearance › Liquid Glass in Settings). It is not a blur strength: at `1.0`
+a regular glass mixes in a blur of 16 px at full opacity and a fill of alpha
+0.5, and a clear glass goes from no blur to that same blur (kit ADR 0099,
+`docs/research/macos-liquid-glass.md` section 13). The Dock, the menu bar,
+Control Center and the notifications were not measured under the slider and keep
+their measured looks (ADR 0093).
 
 `color_scheme` reaches every app: bk reads it from the domain; GTK 4,
 libadwaita, Qt with the portal theme, Firefox, Chromium and Electron read it from
@@ -633,6 +639,7 @@ pointer_size = 1.0
 color_filters = false
 color_filter = "grayscale"
 color_filter_intensity = 1.0
+liquid_glass_tint = 0.0
 
 [text_sizes]                    # optional; a missing key uses text_size
 qt = 1.3                        # barrierkit | gtk | qt

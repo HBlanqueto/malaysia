@@ -9,7 +9,8 @@ use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
     AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick, ScrollBars,
-    TintParts, TintStrength, Toolkit, TrafficLightStyle, WindowColorMode, load_appearance, resolve,
+    TintParts, TintStrength, Toolkit, TrafficLightStyle, WindowColorMode, load_appearance, palette,
+    resolve,
 };
 use ctdesign::{
     ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, MENU_POPOVER, POINTER_SIZES, Rgba,
@@ -61,6 +62,7 @@ const COLOR_FILTERS: [ColorFilter; 4] = [
     ColorFilter::BlueYellow,
 ];
 const ACCESSIBILITY_TINT: Rgba = SETTINGS.tile_blue;
+const LIQUID_GLASS_MARKS: usize = 3;
 const COLOR_FILTER_PENCILS: &[u8] = include_bytes!("../assets/color-filters.svg");
 const COLOR_FILTER_PENCILS_SIZE: (f32, f32) = (349.0, 130.0);
 type Text = fn() -> &'static str;
@@ -284,11 +286,13 @@ fn appearance(
         );
     Form::new()
         .section(
-            Section::new().row(
-                Row::new(tr!("appearance-scheme"))
-                    .keywords(tr_list!("appearance-keywords"))
-                    .control(scheme_cards(config, dominant, error)),
-            ),
+            Section::new()
+                .row(
+                    Row::new(tr!("appearance-scheme"))
+                        .keywords(tr_list!("appearance-keywords"))
+                        .control(scheme_cards(config, dominant, error)),
+                )
+                .row(liquid_glass_row(config, error)),
         )
         .section(
             Section::titled(tr!("theme"))
@@ -342,6 +346,40 @@ fn appearance(
                 ),
         )
         .section(Section::new().row(system_language_row()))
+}
+
+fn liquid_glass_row(config: &AppearanceConfig, error: State<Option<String>>) -> Row {
+    Row::new(tr!("liquid-glass"))
+        .keywords(tr_list!("liquid-glass-keywords"))
+        .control(
+            HStack::new()
+                .cross_align(Alignment::Start)
+                .spacing(SPACE_3)
+                .child(shape_end(
+                    Symbol::CapsuleOnRectangle,
+                    tr!("liquid-glass-clear-icon"),
+                ))
+                .child(option_column(
+                    Slider::new(tr!("liquid-glass-tint-amount"))
+                        .range(0.0..=1.0)
+                        .number_of_tick_marks(LIQUID_GLASS_MARKS)
+                        .value(config.liquid_glass_tint)
+                        .on_change(edit(error, |config, tint: f32| {
+                            config.liquid_glass_tint = tint;
+                        })),
+                ))
+                .child(shape_end(
+                    Symbol::CapsuleOnRectangleFill,
+                    tr!("liquid-glass-tinted-icon"),
+                )),
+        )
+}
+
+fn shape_end(glyph: Symbol, name: &'static str) -> impl IntoElement {
+    rect()
+        .a11y_role(AccessibilityRole::Image)
+        .a11y_alt(name)
+        .child(Image::system(glyph).color(palette(bk::theme::resolved().scheme).ink_muted))
 }
 
 fn tint_windows(config: &AppearanceConfig, error: State<Option<String>>) -> Form {

@@ -826,17 +826,12 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         scale,
         elements,
     );
-    let detail = if matches!(data.role, crate::decoration::Role::Dialog) {
-        crate::blur::Detail::Dialogs
-    } else {
-        crate::blur::Detail::Windows
-    };
     let mut backdrop = crate::blur::backdrop(
         state,
         &data.surface,
         data.location + data.surface_location,
         shape,
-        detail,
+        crate::blur::Detail::Windows,
         scale,
     );
     let settle = state.chrome.fading_settle(
@@ -1376,7 +1371,7 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
                     radius,
                     exponent: ctdesign::DIALOG.superellipse_exponent,
                 },
-                crate::blur::Detail::Dialogs,
+                crate::blur::Detail::Windows,
                 scale,
             );
             append_frame(

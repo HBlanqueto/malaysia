@@ -1,7 +1,7 @@
-use ctappearance::liquid_glass::{self, GlassState};
+use ctappearance::liquid_glass::{self, GlassState, Tinted};
 use ctappearance::material::{self, Material};
 use ctdesign::{
-    FULLSCREEN_BAND, FULLSCREEN_GLASS, MENU_GLASS_SPREAD, MaterialLook, MaterialSet,
+    FULLSCREEN_BAND, FULLSCREEN_GLASS, GlassLook, MENU_GLASS_SPREAD, MaterialLook, MaterialSet,
     SHELL_GLASS_DOCK_DARK, SHELL_GLASS_MENU_DARK, SHELL_GLASS_NOTIFICATION_CARD_DARK, ShellGlass,
 };
 
@@ -14,6 +14,7 @@ pub(super) enum Post {
     Plain,
     Material(MaterialLook),
     Shell(ShellGlass),
+    Glass(GlassLook),
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -126,23 +127,25 @@ fn glass_state(state: &State, active: bool) -> GlassState {
     }
 }
 
-fn glass_material(
-    state: &State,
-    glass: liquid_glass::Glass,
-    active: bool,
-    shorter_side: f32,
-) -> MaterialLook {
-    let set = liquid_glass::looks(glass, state.chrome_theme.resolved.scheme);
-    let look = liquid_glass::look(&set, glass_state(state, active));
-    let adapted = liquid_glass::adapted(&look, &set.scale, shorter_side);
-    MaterialLook {
-        sigma: liquid_glass::blur_sigma(&adapted, f32::MIN),
-        saturation: adapted.saturation,
-        veil: adapted.fill,
-        cap: 1.0,
-        floor: 0.0,
-        gain: 1.0,
-        bias: 0.0,
+fn glass_look(state: &State, glass: liquid_glass::Glass, active: bool, shorter_side: f32) -> Look {
+    let scheme = state.chrome_theme.resolved.scheme;
+    let set = liquid_glass::looks(glass, scheme);
+    let glass_state = glass_state(state, active);
+    let shown = if glass_state == GlassState::Active {
+        liquid_glass::tinted(
+            &set,
+            &liquid_glass::tint(glass, scheme),
+            state.config.appearance.liquid_glass_tint,
+            shorter_side,
+        )
+    } else {
+        let look = liquid_glass::look(&set, glass_state);
+        Tinted::untinted(liquid_glass::adapted(&look, &set.scale, shorter_side))
+    };
+    Look {
+        sigma: liquid_glass::blur_sigma(&shown.look, f32::MIN),
+        halo: (shown.blur_fill > 0.0).then_some((shown.blur_fill_sigma, shown.blur_fill)),
+        post: Post::Glass(shown.look),
     }
 }
 
@@ -153,10 +156,12 @@ pub(super) fn requested(
     shorter_side: f32,
 ) -> Option<Look> {
     let scheme = state.chrome_theme.resolved.scheme;
-    Some(material_look(match origin_of(requested)? {
-        Origin::Visual(material) => gated(&material::looks(material, scheme), state, active),
-        Origin::Glass(glass) => glass_material(state, glass, active, shorter_side),
-    }))
+    Some(match origin_of(requested)? {
+        Origin::Visual(material) => {
+            material_look(gated(&material::looks(material, scheme), state, active))
+        }
+        Origin::Glass(glass) => glass_look(state, glass, active, shorter_side),
+    })
 }
 
 pub(super) fn scroll_edge(state: &State, style: ScrollEdgeEffectStyle) -> Look {
@@ -177,21 +182,13 @@ pub(super) fn scroll_edge_fade(style: ScrollEdgeEffectStyle) -> Option<&'static 
     (style != ScrollEdgeEffectStyle::Hard).then_some(FULLSCREEN_GLASS.mask)
 }
 
-pub(super) fn dialogs(state: &State, reach: f32) -> Look {
-    let look = windows(state);
-    Look {
-        sigma: look.sigma * reach,
-        ..look
-    }
-}
-
 pub(super) fn layers(sigmas: &Sigmas) -> Look {
     Look::plain(sigmas.layers)
 }
 
-pub(super) fn glass(sigmas: &Sigmas, state: &State, reach: f32) -> Look {
+pub(super) fn glass(sigmas: &Sigmas, state: &State) -> Look {
     let dark = state.chrome_theme.resolved.scheme.is_dark();
-    Look::plain(sigmas.glass[usize::from(dark)] * reach)
+    Look::plain(sigmas.glass[usize::from(dark)])
 }
 
 pub(super) fn shell(state: &State, glass: Glass) -> Option<Look> {

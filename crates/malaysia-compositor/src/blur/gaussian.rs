@@ -71,6 +71,11 @@ pub(super) fn compile(renderer: &mut GlesRenderer) -> Option<Programs> {
                 UniformName::new("knots_b", UniformType::_1f),
                 UniformName::new("chroma_a", UniformType::_4f),
                 UniformName::new("chroma_b", UniformType::_1f),
+                UniformName::new("face", UniformType::_4f),
+                UniformName::new("fill", UniformType::_4f),
+                UniformName::new("delta_a", UniformType::_4f),
+                UniformName::new("delta_b", UniformType::_4f),
+                UniformName::new("delta_c", UniformType::_1f),
             ],
         )?,
     })
@@ -420,7 +425,16 @@ fn post_pass(
             [look.cap, look.floor, look.gain, look.bias],
         ),
         Post::Shell(_) => (1.0, 1.0, [0.0; 4], [1.0, 0.0, 1.0, 0.0]),
+        Post::Glass(_) => (2.0, 1.0, [0.0; 4], [1.0, 0.0, 1.0, 0.0]),
         Post::Plain => return None,
+    };
+    let (face, fill, delta) = match post {
+        Post::Glass(look) => (
+            [look.white, look.black, look.saturation, look.max_luma],
+            [look.fill.r, look.fill.g, look.fill.b, look.fill.a],
+            look.tone_delta,
+        ),
+        _ => ([0.0; 4], [0.0; 4], [0.0; 9]),
     };
     let (levels, tone, chroma_knots, chroma) = match post {
         Post::Shell(glass) => (
@@ -446,6 +460,11 @@ fn post_pass(
         Uniform::new("knots_b", chroma_knots[4]),
         Uniform::new("chroma_a", knots(&chroma, 0)),
         Uniform::new("chroma_b", chroma[4]),
+        Uniform::new("face", face),
+        Uniform::new("fill", fill),
+        Uniform::new("delta_a", knots(&delta, 0)),
+        Uniform::new("delta_b", knots(&delta, 4)),
+        Uniform::new("delta_c", delta[8]),
     ];
     draw_pass(
         renderer,
