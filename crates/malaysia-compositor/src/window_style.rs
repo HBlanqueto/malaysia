@@ -6,7 +6,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
 use smithay::utils::{Logical, Rectangle, Size};
-use smithay::wayland::compositor::{Cacheable, with_states};
+use smithay::wayland::compositor::{Cacheable, SurfaceData, with_states};
 use smithay::wayland::shell::xdg::PopupSurface;
 use smithay::wayland::{Dispatch2, GlobalDispatch2};
 
@@ -457,6 +457,19 @@ pub(crate) fn glass(surface: &WlSurface) -> Option<GlassPanels> {
         let current = cached.current();
         (!current.rects.is_empty()).then(|| current.clone())
     })
+}
+
+pub(crate) fn asks_for_backdrop(states: &SurfaceData) -> bool {
+    let backdrop = states.cached_state.has::<WindowBackdrop>()
+        && !states
+            .cached_state
+            .get::<WindowBackdrop>()
+            .current()
+            .rects()
+            .is_empty();
+    backdrop
+        || (states.cached_state.has::<ScrollEdge>()
+            && states.cached_state.get::<ScrollEdge>().current().depth > 0)
 }
 
 pub(crate) fn backdrop(surface: &WlSurface) -> Option<WindowBackdrop> {

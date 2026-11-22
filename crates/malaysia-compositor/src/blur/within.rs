@@ -13,7 +13,7 @@ use smithay::wayland::compositor::{TraversalAction, with_surface_tree_downward};
 use super::look::{self, Look};
 use super::{Behind, Blur, Method, render_behind};
 use crate::cursor::OutputRenderElement;
-use crate::effects::{RoundedTextureElement, Shape};
+use crate::effects::{Arrow, RoundedTextureElement, Shape};
 use crate::renderer::MalaysiaRenderer;
 use crate::scene_elements::physical_rect;
 use crate::state::State;
@@ -71,9 +71,7 @@ pub(crate) fn requesters(root: &WlSurface) -> Requesters {
         (),
         |_, _, _| TraversalAction::DoChildren(()),
         |surface, states, _| {
-            let asks = states.cached_state.has::<window_style::WindowBackdrop>()
-                || states.cached_state.has::<ScrollEdge>();
-            if asks && found.count < MOST_REQUESTERS {
+            if window_style::asks_for_backdrop(states) && found.count < MOST_REQUESTERS {
                 found.surfaces[found.count] =
                     Some((surface.clone(), Id::from_wayland_resource(surface)));
                 found.count += 1;
@@ -84,11 +82,19 @@ pub(crate) fn requesters(root: &WlSurface) -> Requesters {
     found
 }
 
+impl Requesters {
+    pub(crate) fn any(&self) -> bool {
+        self.count > 0
+    }
+}
+
 pub(crate) struct Scene {
     pub(crate) origin: Point<i32, Physical>,
     pub(crate) frame: Shape,
+    pub(crate) arrow: Arrow,
     pub(crate) scale: f64,
     pub(crate) active: bool,
+    pub(crate) deep: bool,
 }
 
 struct Fade {
@@ -107,27 +113,43 @@ struct Job {
     fade: Option<Fade>,
 }
 
+smithay::render_elements! {
+    Layered<='a, GlesRenderer>;
+    Surface = &'a WaylandSurfaceRenderElement<GlesRenderer>,
+    Material = OutputRenderElement<GlesRenderer>,
+}
+
+struct Context<'a> {
+    state: &'a State,
+    tree: &'a [WaylandSurfaceRenderElement<GlesRenderer>],
+    requesters: &'a Requesters,
+    scene: &'a Scene,
+    behind: &'a [OutputRenderElement<GlesRenderer>],
+}
+
 pub(crate) fn append<R: MalaysiaRenderer>(
     state: &mut State,
     renderer: &mut R,
     (root, requester): (&WlSurface, &WlSurface),
     scene: &Scene,
-    (within, mut behind): (
+    layers: (
         &mut Vec<OutputRenderElement<R>>,
         Option<&mut Vec<OutputRenderElement<R>>>,
     ),
 ) {
     let backdrop = window_style::backdrop(requester);
-    let edge = window_style::scroll_edge(requester);
-    if backdrop.is_none() && edge.is_none() {
+    if backdrop.is_none() && window_style::scroll_edge(requester).is_none() {
         return;
     }
-    let wants_behind = behind.is_some()
+    let wants_behind = layers.1.is_some()
         && backdrop.is_some_and(|backdrop| backdrop.blending == BlendingMode::BehindWindow);
-    let wallpaper = if wants_behind {
-        super::wallpaper_elements(state, renderer.gles(), scene.scale)
-    } else {
+    let behind = if !wants_behind {
         Vec::new()
+    } else if scene.deep {
+        let area = scene.frame.rect.to_f64().to_logical(scene.scale);
+        super::behind_elements(state, renderer.gles(), scene.scale, Some(area))
+    } else {
+        super::wallpaper_elements(state, renderer.gles(), scene.scale)
     };
     let tree = render_elements_from_surface_tree::<
         GlesRenderer,
@@ -147,8 +169,31 @@ pub(crate) fn append<R: MalaysiaRenderer>(
     let Some(mut blur) = state.blur.take() else {
         return;
     };
-    let surface = tree[at].geometry(Scale::from(scene.scale));
-    let shared: &State = state;
+    let requesters = requesters(root);
+    let context = Context {
+        state,
+        tree: &tree,
+        requesters: &requesters,
+        scene,
+        behind: &behind,
+    };
+    materials(&context, &mut blur, renderer, (at, requester), layers);
+    state.blur = Some(blur);
+}
+
+fn materials<R: MalaysiaRenderer>(
+    context: &Context<'_>,
+    blur: &mut Blur,
+    renderer: &mut R,
+    (at, requester): (usize, &WlSurface),
+    (within, mut behind): (
+        &mut Vec<OutputRenderElement<R>>,
+        Option<&mut Vec<OutputRenderElement<R>>>,
+    ),
+) {
+    let Context { state, scene, .. } = *context;
+    let backdrop = window_style::backdrop(requester);
+    let surface = context.tree[at].geometry(Scale::from(scene.scale));
     let jobs = backdrop
         .iter()
         .flat_map(|backdrop| {
@@ -157,23 +202,30 @@ pub(crate) fn append<R: MalaysiaRenderer>(
                 .iter()
                 .enumerate()
                 .filter_map(move |(slot, rect)| {
-                    rect_job(shared, backdrop, slot, *rect, (surface, scene))
+                    rect_job(state, backdrop, slot, *rect, (surface, scene))
                 })
         })
-        .chain(edge.and_then(|edge| edge_job(shared, edge, surface, scene)));
-    let program = shared.rounded_clip.clone();
+        .chain(
+            window_style::scroll_edge(requester)
+                .and_then(|edge| edge_job(state, edge, surface, scene)),
+        );
+    let layered = context
+        .nested_below(at)
+        .then(|| layered(context, blur, renderer.gles(), at + 1));
+    let own = Id::from_wayland_resource(requester);
     for job in jobs {
         let source = Source {
-            tree: &tree[at + 1..],
-            wallpaper: &wallpaper,
+            tree: &context.tree[at + 1..],
+            layered: layered.as_deref(),
+            wallpaper: context.behind,
         };
         let key = (own.clone(), job.slot);
-        let Some(painted) = paint(&mut blur, renderer.gles(), key, &job, scene, &source) else {
+        let Some(painted) = paint(blur, renderer.gles(), key, &job, scene, &source) else {
             continue;
         };
         let Some(element) = element::<R>(
             blur.edge_fade.as_ref(),
-            program.as_ref(),
+            state.rounded_clip.as_ref(),
             &job,
             scene,
             painted,
@@ -186,11 +238,43 @@ pub(crate) fn append<R: MalaysiaRenderer>(
             _ => {}
         }
     }
-    state.blur = Some(blur);
+}
+
+impl<'a> Context<'a> {
+    fn nested_below(&self, at: usize) -> bool {
+        self.tree[at + 1..]
+            .iter()
+            .any(|element| self.requesters.of(element.id()).is_some())
+    }
+}
+
+fn layered<'a>(
+    context: &Context<'a>,
+    blur: &mut Blur,
+    renderer: &mut GlesRenderer,
+    from: usize,
+) -> Vec<Layered<'a>> {
+    let mut stack = Vec::with_capacity(context.tree.len() - from);
+    for (index, element) in context.tree.iter().enumerate().skip(from) {
+        stack.push(Layered::Surface(element));
+        if let Some(nested) = context.requesters.of(element.id()) {
+            let mut materials_of_nested = Vec::new();
+            materials(
+                context,
+                blur,
+                renderer,
+                (index, nested),
+                (&mut materials_of_nested, None),
+            );
+            stack.extend(materials_of_nested.into_iter().map(Layered::Material));
+        }
+    }
+    stack
 }
 
 struct Source<'a> {
     tree: &'a [WaylandSurfaceRenderElement<GlesRenderer>],
+    layered: Option<&'a [Layered<'a>]>,
     wallpaper: &'a [OutputRenderElement<GlesRenderer>],
 }
 
@@ -298,9 +382,10 @@ fn paint(
         return None;
     }
     match job.blending {
-        BlendingMode::WithinWindow => {
-            run(blur, renderer, key, (area, job), scene.scale, source.tree)
-        }
+        BlendingMode::WithinWindow => match source.layered {
+            Some(layered) => run(blur, renderer, key, (area, job), scene.scale, layered),
+            None => run(blur, renderer, key, (area, job), scene.scale, source.tree),
+        },
         _ => run(
             blur,
             renderer,
@@ -369,12 +454,18 @@ fn element<R: MalaysiaRenderer>(
         (0.0, 0.0).into(),
         (f64::from(area.size.w), f64::from(area.size.h)).into(),
     );
+    let arrow = if job.radius == 0 {
+        scene.arrow
+    } else {
+        Arrow::default()
+    };
     let (program, uniforms) = match &job.fade {
         Some(fade) => (edge_fade?, fade_uniforms(fade, area)),
         None => (clip?, Vec::new()),
     };
     Some(
         RoundedTextureElement::from_texture(texture, id, commit, src, area, shape, program.clone())
+            .with_arrow(arrow)
             .with_uniforms(uniforms)
             .into(),
     )

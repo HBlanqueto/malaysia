@@ -250,13 +250,14 @@ impl State {
                 .popup_root_surface(id)
                 .is_some_and(|root| crate::window_style::is_kit_client(&root))
             && self.popups.popup_of(id).is_some_and(|popup| {
-                crate::window_style::popover_shape(popup.wl_surface()).is_none_or(|shape| {
-                    matches!(
-                        shape,
-                        crate::window_style::PopoverShape::Menu
-                            | crate::window_style::PopoverShape::Label
-                    )
-                })
+                !crate::blur::within::requesters(popup.wl_surface()).any()
+                    && crate::window_style::popover_shape(popup.wl_surface()).is_none_or(|shape| {
+                        matches!(
+                            shape,
+                            crate::window_style::PopoverShape::Menu
+                                | crate::window_style::PopoverShape::Label
+                        )
+                    })
             })
     }
 

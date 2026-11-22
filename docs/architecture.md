@@ -90,7 +90,8 @@ surface elements from the top, keeps the requester and what is above it in
 front and draws the material right behind the requester, blurred from the
 elements below it (`blur/within.rs`). A window capture includes that material;
 a `behind_window` material, which blurs the wallpaper under the window, is left
-out of it.
+out of it. The popups and layer surfaces of BarrierKit clients ask the same way;
+for them `behind_window` blurs the windows and the wallpaper behind the surface.
 
 ## How they talk
 

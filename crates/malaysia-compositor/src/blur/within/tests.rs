@@ -81,6 +81,7 @@ struct Spec {
     moving: bool,
     frames: u32,
     both_regions: bool,
+    nested: bool,
 }
 
 impl Spec {
@@ -98,6 +99,7 @@ impl Spec {
             moving: false,
             frames: 1,
             both_regions: false,
+            nested: false,
         }
     }
 
@@ -367,6 +369,18 @@ fn client(spec: Spec, socket: UnixStream, to_main: Sender<Msg>, from_main: Recei
         Layout::Above => (&content, &chrome),
         Layout::Below => (&chrome, &content),
     };
+    let middle = spec.nested.then(|| {
+        Layer::new(
+            (&compositor, &shm),
+            &qh,
+            "middle",
+            (spec.width * spec.scale, BAND * spec.scale),
+            spec.scale,
+        )
+    });
+    let _middle_sub = middle
+        .as_ref()
+        .map(|middle| subcompositor.get_subsurface(&middle.surface, &root.surface, &qh, ()));
     let subsurface = subcompositor.get_subsurface(&sub.surface, &root.surface, &qh, ());
     if spec.layout == Layout::Below {
         subsurface.place_below(&root.surface);
@@ -386,6 +400,21 @@ fn client(spec: Spec, socket: UnixStream, to_main: Sender<Msg>, from_main: Recei
         }
         if let Some(style) = &style {
             send_ask(&spec, frame, (&connection, style, &chrome.surface));
+        }
+        if let (Some(middle), Some(style)) = (&middle, &style) {
+            middle.attach(
+                frame,
+                &vec![0; (spec.width * BAND * spec.scale * spec.scale * 4) as usize],
+                &qh,
+            );
+            style.set_backdrop(
+                &middle.surface,
+                wire::BlendingMode::WithinWindow,
+                wire::Material::Sidebar,
+                0,
+                rect_bytes(&[[0, 0, spec.width, BAND]]),
+            );
+            middle.surface.commit();
         }
         if spec.both_regions {
             let region = compositor.create_region(&qh, ());
@@ -543,17 +572,23 @@ impl World {
             },
             scale,
             active: true,
+            arrow: Arrow::default(),
+            deep: false,
         }
     }
 
     fn on_screen(&mut self) -> Vec<OutputRenderElement<GlesRenderer>> {
         let scene = self.scene();
+        self.on_screen_in(&scene)
+    }
+
+    fn on_screen_in(&mut self, scene: &Scene) -> Vec<OutputRenderElement<GlesRenderer>> {
         let (mut within, mut behind) = (Vec::new(), Vec::new());
         append(
             &mut self.state,
             &mut self.renderer,
             (&self.root, &self.requester),
-            &scene,
+            scene,
             (&mut within, Some(&mut behind)),
         );
         behind.extend(within);
@@ -598,7 +633,7 @@ fn drive(spec: Spec, scheme: ColorScheme, mut observe: impl FnMut(&mut World, &M
         Msg::Ready
     ));
     let surfaces = surfaces_of(&handle, &wl_client);
-    assert_eq!(surfaces.len(), 2);
+    assert_eq!(surfaces.len(), if spec.nested { 3 } else { 2 });
     let root = surfaces
         .iter()
         .find(|surface| get_parent(surface).is_none())
@@ -1115,6 +1150,8 @@ fn a_scroll_edge_strip_follows_its_edge_at_the_depth_asked_for_at_each_scale() {
             },
             scale,
             active: true,
+            arrow: Arrow::default(),
+            deep: false,
         };
         let strip = |edge| {
             edge_job(
@@ -1413,5 +1450,92 @@ fn the_band_blur_pass_costs_this_much_per_frame() {
             median / (1000.0 / 60.0) * 100.0,
             median / (1000.0 / 120.0) * 100.0,
         );
+    }
+}
+
+#[test]
+fn a_requester_over_another_blurs_the_material_of_the_one_below_it() {
+    static OVER: [[i32; 4]; 1] = [[0, 20, WIDTH, 60]];
+    let mut spec = Spec::new(
+        Layout::Above,
+        Ask::Rects(
+            wire::BlendingMode::WithinWindow,
+            wire::Material::Titlebar,
+            0,
+            &OVER,
+        ),
+    );
+    spec.nested = true;
+    let scheme = ColorScheme::Light;
+    let below = the_model_of(ctappearance::material::Material::Sidebar, scheme);
+    let above = the_model_of(ctappearance::material::Material::Titlebar, scheme);
+    let shaded = |line: Vec<[u8; 4]>| -> Vec<[f32; 3]> {
+        line.into_iter()
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]].map(|channel| f32::from(channel) / 255.0))
+            .collect()
+    };
+    let through = |backdrop: Vec<[f32; 3]>| -> Vec<[u8; 4]> {
+        let channels: [Vec<f32>; 3] = std::array::from_fn(|channel| {
+            let line: Vec<f32> = backdrop.iter().map(|pixel| pixel[channel]).collect();
+            ctappearance::material::blur_region(&line, above.sigma)
+        });
+        (0..backdrop.len())
+            .map(|at| {
+                encoded(ctappearance::material::over(
+                    &above,
+                    [channels[0][at], channels[1][at], channels[2][at]],
+                ))
+            })
+            .collect()
+    };
+    let nested = through(shaded(model_row(&spec, &below)));
+    let raw = through(blurred_row(&spec, 0.0));
+    assert!(
+        (0..WIDTH as usize).any(|x| !close(nested[x], raw[x], 10)),
+        "the test tells the two apart"
+    );
+    let ran = once(spec, scheme, |world| {
+        let pixels = world.capture(true);
+        for x in (4..WIDTH - 4).step_by(12) {
+            let seen = world.pixel(&pixels, x, 50);
+            assert!(
+                close(seen, nested[x as usize], TOLERANCE + 2),
+                "x={x}: {seen:?} against {:?}",
+                nested[x as usize]
+            );
+        }
+    });
+    if ran.is_none() {
+        eprintln!("skipping: no EGL device");
+    }
+}
+
+#[test]
+fn a_popup_or_layer_material_behind_the_window_samples_the_scene_behind_it() {
+    let spec = Spec::new(
+        Layout::Above,
+        Ask::Band(wire::BlendingMode::BehindWindow, wire::Material::Menu),
+    );
+    let scheme = ColorScheme::Dark;
+    let ran = once(spec, scheme, |world| {
+        let scene = Scene {
+            deep: true,
+            ..world.scene()
+        };
+        let elements = world.on_screen_in(&scene);
+        assert_eq!(elements.len(), 1);
+        let scale = f64::from(spec.scale);
+        let drawn = read(&mut world.renderer, spec.physical(), scale, &elements);
+        let look = the_model_of(ctappearance::material::Material::Menu, scheme);
+        let clear = ctdesign::DESKTOP_CLEAR;
+        let want = encoded(ctappearance::material::over(
+            &look,
+            [clear.r, clear.g, clear.b],
+        ));
+        let seen = world.pixel(&drawn, 200, 70);
+        assert!(close(seen, want, TOLERANCE), "{seen:?} against {want:?}");
+    });
+    if ran.is_none() {
+        eprintln!("skipping: no EGL device");
     }
 }

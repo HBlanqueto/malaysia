@@ -882,8 +882,10 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
     let scene = crate::blur::within::Scene {
         origin: surface_location,
         frame: shape,
+        arrow: crate::effects::Arrow::default(),
         scale,
         active: is_focused,
+        deep: false,
     };
     for element in surface_elements {
         let element_id = element.id().clone();
@@ -1030,10 +1032,39 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             bordered: true,
             arrow: popover.map(|(_, arrow)| arrow).unwrap_or_default(),
         };
+        let mut content = Vec::new();
+        let mut behind = Vec::new();
+        let requesters = crate::blur::within::requesters(&surface);
+        let scene = crate::blur::within::Scene {
+            origin: physical_point(frame.loc - geometry.loc, scale),
+            frame: styled.shape,
+            arrow: styled.arrow,
+            scale,
+            active: true,
+            deep: true,
+        };
+        for element in surface_elements {
+            let element_id = element.id().clone();
+            clip_to_frame(
+                state,
+                std::iter::once(element),
+                &styled,
+                scale,
+                &mut content,
+            );
+            if let Some(requester) = requesters.of(&element_id) {
+                crate::blur::within::append(
+                    state,
+                    renderer,
+                    (&surface, requester),
+                    &scene,
+                    (&mut content, Some(&mut behind)),
+                );
+            }
+        }
         if state.popup_has_glass(id) {
-            let mut content = Vec::new();
-            clip_to_frame(state, surface_elements, &styled, scale, &mut content);
             elements.extend(content);
+            elements.extend(behind);
             let region = vec![Rectangle::from_size(frame.size)];
             elements.extend(dock_glass(
                 state,
@@ -1046,15 +1077,7 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             ));
             continue;
         }
-        append_frame(
-            state,
-            Vec::new(),
-            surface_elements,
-            Vec::new(),
-            styled,
-            scale,
-            elements,
-        );
+        append_frame(state, content, Vec::new(), behind, styled, scale, elements);
     }
 }
 
@@ -1279,8 +1302,10 @@ pub(crate) fn build_window_elements<R: MalaysiaRenderer>(
             radius: 0,
             exponent: ctdesign::CIRCLE_EXPONENT,
         },
+        arrow: crate::effects::Arrow::default(),
         scale,
         active,
+        deep: false,
     };
     let mut elements = Vec::with_capacity(tree.len());
     for element in tree {
@@ -1303,6 +1328,48 @@ pub(crate) fn build_window_elements<R: MalaysiaRenderer>(
 pub(crate) enum LayerSide {
     Back,
     Front,
+}
+
+struct OverlayScene {
+    origin: Point<i32, Physical>,
+    frame: Shape,
+    arrow: crate::effects::Arrow,
+    scale: f64,
+}
+
+fn append_with_materials<R: MalaysiaRenderer>(
+    state: &mut State,
+    renderer: &mut R,
+    root: &WlSurface,
+    on: OverlayScene,
+    surface_elements: Vec<WaylandSurfaceRenderElement<R>>,
+    (content, behind): (
+        &mut Vec<OutputRenderElement<R>>,
+        &mut Vec<OutputRenderElement<R>>,
+    ),
+) {
+    let requesters = crate::blur::within::requesters(root);
+    let scene = crate::blur::within::Scene {
+        origin: on.origin,
+        frame: on.frame,
+        arrow: on.arrow,
+        scale: on.scale,
+        active: true,
+        deep: true,
+    };
+    for element in surface_elements {
+        let element_id = element.id().clone();
+        content.push(element.into());
+        if let Some(requester) = requesters.of(&element_id) {
+            crate::blur::within::append(
+                state,
+                renderer,
+                (root, requester),
+                &scene,
+                (&mut *content, Some(&mut *behind)),
+            );
+        }
+    }
 }
 
 pub(crate) fn append_layers<R: MalaysiaRenderer>(
@@ -1349,7 +1416,25 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
                 continue;
             }
             let Some(alert) = crate::window_style::alert_layer(&surface) else {
-                elements.extend(surface_elements.into_iter().map(|e| e.into()));
+                let mut behind = Vec::new();
+                append_with_materials(
+                    state,
+                    renderer,
+                    &surface,
+                    OverlayScene {
+                        origin: physical_point(rect.loc, scale),
+                        frame: Shape {
+                            rect: physical_rect(rect, scale),
+                            radius: 0,
+                            exponent: ctdesign::CIRCLE_EXPONENT,
+                        },
+                        arrow: crate::effects::Arrow::default(),
+                        scale,
+                    },
+                    surface_elements,
+                    (elements, &mut behind),
+                );
+                elements.extend(behind);
                 elements.extend(crate::blur::layer(
                     state,
                     &surface,
