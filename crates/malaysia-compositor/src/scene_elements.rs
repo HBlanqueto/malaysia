@@ -761,8 +761,9 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         data.is_client_decorated,
         state.window_bar(&data.surface),
     );
-    let radius_physical =
-        (crate::window_style::corner_extent(radius_logical) * scale).round() as i32;
+    let extent_logical =
+        crate::window_style::window_extent(state.config.window.corner_radius, radius_logical);
+    let radius_physical = (extent_logical * scale).round() as i32;
     let exponent = ctdesign::WINDOW_CORNER.exponent;
     let shape = Shape {
         rect: frame_rect_physical,
@@ -862,7 +863,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
         let window = state.chrome_theme_of(id).resolved.surfaces.window;
         crate::backing::append(
             frame_rect_logical,
-            crate::window_style::corner_extent(radius_logical).ceil() as i32,
+            extent_logical.ceil() as i32,
             [window.r, window.g, window.b, 1.0],
             scale,
             &mut backdrop,
@@ -1014,7 +1015,7 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
         });
         let (extent, exponent) = popover.map_or(
             (
-                crate::window_style::corner_extent(ctdesign::POPUP.corner_radius),
+                crate::window_style::menu_extent(),
                 ctdesign::POPUP.superellipse_exponent,
             ),
             |(corner, _)| corner,

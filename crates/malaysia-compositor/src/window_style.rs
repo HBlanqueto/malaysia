@@ -590,8 +590,9 @@ pub(crate) fn popover_metrics(shape: PopoverShape) -> ctdesign::PopoverMetrics {
 pub(crate) fn popover_corner(shape: PopoverShape, metrics: ctdesign::PopoverMetrics) -> (f64, f32) {
     match shape {
         PopoverShape::Label => (f64::from(metrics.radius), ctdesign::CIRCLE_EXPONENT),
+        PopoverShape::Menu => (menu_extent(), ctdesign::POPUP.superellipse_exponent),
         _ => (
-            corner_extent(metrics.radius.round() as u32),
+            fitted_extent(ctdesign::CORNER_POPOVER.fitted),
             ctdesign::POPUP.superellipse_exponent,
         ),
     }
@@ -667,6 +668,23 @@ pub(crate) fn corner_extent(radius: u32) -> f64 {
     f64::from(radius) * f64::from(ctdesign::WINDOW_CORNER.expansion)
 }
 
+fn fitted_extent(fitted: f32) -> f64 {
+    f64::from(fitted) * f64::from(ctdesign::WINDOW_CORNER.expansion)
+}
+
+pub(crate) fn window_extent(forced: Option<u32>, radius: u32) -> f64 {
+    let window = ctdesign::CORNER_WINDOW;
+    if forced.is_some() {
+        corner_extent(radius)
+    } else {
+        corner_extent(radius) * f64::from(window.fitted / window.radius)
+    }
+}
+
+pub(crate) fn menu_extent() -> f64 {
+    fitted_extent(ctdesign::CORNER_MENU.fitted)
+}
+
 pub(crate) fn plate_radius(corner: u32, short_side: i32) -> u32 {
     (f64::from(short_side) * f64::from(corner) / f64::from(infinity_protocol::THOUSANDTHS)).round()
         as u32
@@ -698,12 +716,15 @@ impl State {
             .iter()
             .find(|candidate| candidate.id() == window)
             .map_or(0.0, |window| {
-                corner_extent(corner_radius(
+                window_extent(
                     self.config.window.corner_radius,
-                    self.window_bar(window.surface()),
-                    window.role(),
-                    window.is_client_decorated(),
-                ))
+                    corner_radius(
+                        self.config.window.corner_radius,
+                        self.window_bar(window.surface()),
+                        window.role(),
+                        window.is_client_decorated(),
+                    ),
+                )
             })
     }
 }
@@ -762,6 +783,29 @@ mod tests {
         assert_eq!(corner_radius(None, None, Role::Toplevel, false), 16);
         assert_eq!(corner_radius(None, None, Role::Toplevel, true), 16);
         assert_eq!(corner_radius(None, None, Role::Dialog, false), 16);
+    }
+
+    #[test]
+    fn a_window_is_drawn_with_the_measured_silhouette_and_a_forced_radius_is_taken_as_given() {
+        let window = ctdesign::CORNER_WINDOW;
+        let measured = f64::from(window.fitted) * f64::from(ctdesign::WINDOW_CORNER.expansion);
+        assert!((window_extent(None, 16) - measured).abs() < 1e-3);
+        assert!(window_extent(None, 16) > corner_extent(16));
+        assert_eq!(window_extent(Some(8), 8), corner_extent(8));
+        assert_eq!(window_extent(None, 0), 0.0);
+    }
+
+    #[test]
+    fn a_menu_and_a_popover_are_drawn_with_the_radius_fitted_to_the_captures() {
+        let expansion = f64::from(ctdesign::WINDOW_CORNER.expansion);
+        let (menu, _) = popover_corner(PopoverShape::Menu, popover_metrics(PopoverShape::Menu));
+        let (popover, _) = popover_corner(
+            PopoverShape::Popover,
+            popover_metrics(PopoverShape::Popover),
+        );
+        assert!((menu - f64::from(ctdesign::CORNER_MENU.fitted) * expansion).abs() < 1e-3);
+        assert!((popover - f64::from(ctdesign::CORNER_POPOVER.fitted) * expansion).abs() < 1e-3);
+        assert_eq!(menu_extent(), menu);
     }
 
     #[test]

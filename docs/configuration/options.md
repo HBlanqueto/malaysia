@@ -266,7 +266,7 @@ becomes per output.
 | `window.focus` | `"click"` \| `"sloppy"` | `"click"` | pending | input |
 | `window.resize_border` | integer (logical px) | `10` | **active** | width of the outer resize band on the sides |
 | `window.resize_corner` | integer (logical px) | `20` | **active** | length of the outer resize «L» at the corners |
-| `window.corner_radius` | integer (logical pt), optional | unset | **active** | radius of every window; unset, its bar's |
+| `window.corner_radius` | integer (logical pt), optional | unset | **active** | radius of every window; unset, the measured 16 |
 | `window.qt_server_decorations` | bool | `true` | **active** | `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` in clients and session |
 | `window.focus_titlebar_apps` | list of `app_id` | `["firefox", "brave-browser", "chromium-browser"]` | **active** | focus mode of CSD apps with tabs |
 
@@ -276,7 +276,7 @@ offered on normal SSD windows (not maximized or fullscreen).
 
 `window.corner_radius` sets one radius for every window, whatever the app's
 `set_bar` or its decoration. It matches macOS `NSConvolutionOverride1`.
-Without the key, each window gets its bar's radius: 16, 20, 26 or 15.
+Without the key, every window gets the radius macOS 27.2.1 measures, 16, and is drawn with the silhouette fitted to it, 16.8; a forced radius is drawn as given.
 Fullscreen still has no corners.
 
 `"default"` respects the negotiation (GTK/Libadwaita keep their headerbar; Qt and the
@@ -664,7 +664,7 @@ green_button = "focus"          # focus | zoom | none
 focus = "click"                 # click | sloppy
 resize_border = 10
 resize_corner = 20
-# corner_radius = 16            # without the key: radius by bar
+# corner_radius = 16            # without the key: the measured radius, 16
 qt_server_decorations = true    # false for Qt's native bar
 focus_titlebar_apps = ["firefox", "brave-browser", "chromium-browser"]
 ```

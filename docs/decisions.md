@@ -184,15 +184,16 @@ Why: satellite is the X11 window manager, so the compositor keeps a single kind 
 Rejected: smithay's XWM (`xwayland` feature); a separate systemd unit (it cannot pick the free display).
 Code: `crates/malaysia-compositor/src/xwayland.rs`, `crates/malaysia-compositor/src/spawn.rs`
 
-## 0059 · 0075 — Window corners and menu bar styles
+## 0059 · 0075 · 0097 — Window corners and menu bar styles
 Decision:
-- A window's radius follows the bar it sends with `infinity_window_style_v1.set_bar`: `titlebar` 16, `unified_compact` 20, `unified` 26, `utility` 15. Without it, CSD windows and dialogs get 26, SSD windows 16, fullscreen 0. `window.corner_radius` overrides them.
+- A window's radius is read from `WINDOW_CORNER` by the bar it sends with `infinity_window_style_v1.set_bar`, and macOS 27.2.1 gives every window kind 16 (the kit's `cae20f79`, ADR 0097 there): `titlebar`, `unified_compact`, `unified` and `utility`, CSD windows and dialogs alike; fullscreen is 0. `window.corner_radius` overrides it.
+- The silhouette drawn for a window and a sheet is `CORNER_WINDOW.fitted`, 16.8, which is 0.8 larger than the API radius the content has: its extent is `fitted x expansion` = 25.7, exponent 3.34 (`window_extent`); a forced `window.corner_radius` is taken as given. A menu is `CORNER_MENU.fitted` 12.5 and a popover `CORNER_POPOVER.fitted` 19.7, unrounded (`popover_corner`, `menu_extent`); the alert frame keeps `DIALOG.corner_radius`, 26. The notification radius (20) and the launcher's (24.5) come from their tokens in the shell. Not applied, because the shell draws them with bk's `continuous_corner` or needs a real session to compare: the Dock, the tooltip (5.2, circular), Notification Center widgets, Control Center modules and the concentric rule of `ctappearance::corner` for inner shapes; the 112 x 60 popover whose radius shrinks with its body is not measured as a rule.
 - Frames, shadows, borders and blur use a continuous corner: a superellipse that starts 1.52866 × R from the vertex, exponent 3.34 (`WINDOW_CORNER`).
 - `menubar.style` is `floating` (default: a clear bar, ink picked from the wallpaper under it, and only the open title pill blurs), `translucent` (glass and ink picked from the wallpaper) or `solid` (the theme bar at `MENUBAR_CLASSIC_ALPHA`).
 - `menubar.bar_height` is `slim` (30 px, default) or `wide` (38 px). `MenubarConfig::height()` is the only mapping.
 - `appearance.reduce_transparency` defaults to `false`. With it, or with Increase contrast, every style draws an opaque solid bar.
 - The bar's blur shows only the wallpaper, never windows.
-Why: the radius tells the window kind, as in macOS Tahoe, and the continuous curve has no curvature jump at the edge. The shell already reads the wallpaper grid, so it picks the ink itself.
+Why: macOS 27.2.1 measures one radius for every window kind and a silhouette larger than it, and the continuous curve has no curvature jump at the edge. The shell already reads the wallpaper grid, so it picks the ink itself.
 Rejected: Apple's exact three-cubic curve (no closed-form SDF); blurring the windows behind the bar (energy for a band windows rarely reach).
 Code: `crates/malaysia-compositor/src/window_style.rs`, `crates/grade-graphics/src/window_shape.glsl`, `barrierkit:crates/ctappearance/src/menubar.rs`
 
