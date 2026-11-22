@@ -13,15 +13,17 @@ use bk::shell::{
 };
 use bk::style::Palette;
 use bk::theme;
+use ctappearance::corner::concentric;
 use ctappearance::menubar::MenubarConfig;
 use ctappearance::notifications::{AlertStyle, NotificationsConfig, ShowPreviews};
 use ctdesign::{
-    BODY, CAPTION, HEADLINE, LOCK_INK, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES,
-    NOTIFICATION_CLOSE_SIZE, NOTIFICATION_EMPTY_GAP, NOTIFICATION_EMPTY_TOP, NOTIFICATION_GAP,
-    NOTIFICATION_ICON_SIZE, NOTIFICATION_MARGIN, NOTIFICATION_PADDING, NOTIFICATION_RADIUS,
-    NOTIFICATION_SHADOW, NOTIFICATION_SHADOW_BLUR, NOTIFICATION_SLIDE_BOUNCE,
-    NOTIFICATION_SLIDE_IN_MS, NOTIFICATION_SLIDE_OUT_MS, NOTIFICATION_STACK_INSET,
-    NOTIFICATION_STACK_PEEK, NOTIFICATION_TEXT_GAP, NOTIFICATION_TITLE_FONT, NOTIFICATION_WIDTH,
+    BODY, CAPTION, CORNER_NOTIFICATION, CORNER_NOTIFICATION_CENTER, CornerShape, HEADLINE,
+    LOCK_INK, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES, NOTIFICATION_CLOSE_SIZE,
+    NOTIFICATION_EMPTY_GAP, NOTIFICATION_EMPTY_TOP, NOTIFICATION_GAP, NOTIFICATION_ICON_SIZE,
+    NOTIFICATION_MARGIN, NOTIFICATION_PADDING, NOTIFICATION_RADIUS, NOTIFICATION_SHADOW,
+    NOTIFICATION_SHADOW_BLUR, NOTIFICATION_SLIDE_BOUNCE, NOTIFICATION_SLIDE_IN_MS,
+    NOTIFICATION_SLIDE_OUT_MS, NOTIFICATION_STACK_INSET, NOTIFICATION_STACK_PEEK,
+    NOTIFICATION_TEXT_GAP, NOTIFICATION_TITLE_FONT, NOTIFICATION_WIDTH,
 };
 use freya_animation::prelude::{OnCreation, use_animation};
 use freya_components::image_viewer::ImageViewer;
@@ -263,6 +265,11 @@ impl App for NotificationsApp {
             draft,
             previews: config.show_previews != ShowPreviews::Never,
             now,
+            shape: if panel_shown {
+                CORNER_NOTIFICATION_CENTER
+            } else {
+                CORNER_NOTIFICATION
+            },
             glasses: glasses.clone(),
         };
         let content = if panel_shown {
@@ -326,6 +333,7 @@ struct Context {
     draft: State<String>,
     previews: bool,
     now: i64,
+    shape: CornerShape,
     glasses: Rc<RefCell<Glasses>>,
 }
 
@@ -708,12 +716,12 @@ fn stack(context: &Context, group: Vec<Notification>, expanded: State<HashSet<St
                 framed(context, Glass::Card(group[layer].id), rect())
                     .position(
                         Position::new_absolute()
-                            .top(-2.0 * NOTIFICATION_RADIUS)
+                            .top(-2.0 * context.shape.fitted)
                             .left(inset),
                     )
                     .width(Size::px(NOTIFICATION_WIDTH as f32 - 2.0 * inset))
                     .height(Size::px(
-                        2.0 * NOTIFICATION_RADIUS + NOTIFICATION_STACK_PEEK,
+                        2.0 * context.shape.fitted + NOTIFICATION_STACK_PEEK,
                     )),
             )
             .into_element()
@@ -761,7 +769,17 @@ fn card(
         .then(|| photo(notification))
         .flatten()
         .filter(|_| !notification.communication)
-        .map(|path| picture(path, NOTIFICATION_ICON_SIZE / 4.0));
+        .map(|path| {
+            picture(
+                path,
+                bk::style::continuous_corner(concentric(
+                    context.shape.radius,
+                    NOTIFICATION_PADDING,
+                    NOTIFICATION_PADDING,
+                    0.0,
+                )),
+            )
+        });
     let title_row = HStack::new()
         .width(Size::fill())
         .content(Content::flex())
@@ -855,7 +873,6 @@ fn card(
     let body = rect()
         .width(Size::fill())
         .padding(NOTIFICATION_PADDING)
-        .corner_radius(NOTIFICATION_RADIUS)
         .on_press(press)
         .child(
             HStack::new()
@@ -895,7 +912,7 @@ fn identity(notification: &Notification, previews: bool) -> Element {
         Some(path) => rect()
             .width(Size::px(size))
             .height(Size::px(size))
-            .child(picture(path, size / 2.0))
+            .child(picture(path, (size / 2.0).into()))
             .child(
                 rect()
                     .position(Position::new_absolute().left(size / 2.0).top(size / 2.0))
@@ -923,7 +940,7 @@ fn photo(notification: &Notification) -> Option<std::path::PathBuf> {
         .filter(|path| path.is_file())
 }
 
-fn picture(path: std::path::PathBuf, radius: f32) -> Element {
+fn picture(path: std::path::PathBuf, radius: CornerRadius) -> Element {
     let size = NOTIFICATION_ICON_SIZE;
     rect()
         .width(Size::px(size))
@@ -1024,7 +1041,7 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
                         ),
                 ),
         );
-    bk::style::panel_edges(card, NOTIFICATION_RADIUS, palette.raised_background)
+    bk::style::panel_edges(card, CORNER_NOTIFICATION.fitted, palette.raised_background)
         .width(Size::px(NOTIFICATION_WIDTH as f32))
         .into_element()
 }
@@ -1044,7 +1061,7 @@ enum Glass {
 fn framed(context: &Context, glass: Glass, body: Rect) -> Rect {
     context.glasses.borrow_mut().rendered.push(glass);
     let glasses = context.glasses.clone();
-    body.corner_radius(bk::style::continuous_corner(NOTIFICATION_RADIUS))
+    body.corner_radius(bk::style::continuous_corner(context.shape.fitted))
         .on_sized(move |event: Event<SizedEventData>| {
             let mut glasses = glasses.borrow_mut();
             if glasses.areas.insert(glass, event.area) != Some(event.area) {

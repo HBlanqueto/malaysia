@@ -17,7 +17,7 @@ use bk::shell::{
 };
 use bk::views::feedback::ContentUnavailableView;
 use ctdesign::{
-    ICON_PLATE, LAUNCHER_CLOSE_MS, LAUNCHER_CORNER_RADIUS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
+    CORNER_SPOTLIGHT, ICON_PLATE, LAUNCHER_CLOSE_MS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
     LAUNCHER_ICON_SIZE, LAUNCHER_MAX_RESULTS, LAUNCHER_OPEN_MS, LAUNCHER_PADDING,
     LAUNCHER_RESULT_GAP, LAUNCHER_RESULT_HEIGHT, LAUNCHER_SCALE_FROM, LAUNCHER_SEARCH_HEIGHT,
     LAUNCHER_SUBTITLE_FONT_SIZE, LAUNCHER_WIDTH,
@@ -154,7 +154,7 @@ impl App for LauncherApp {
                     .width(Size::px(LAUNCHER_WIDTH as f32))
                     .height(Size::px(LAUNCHER_HEIGHT as f32))
                     .background(background)
-                    .corner_radius(LAUNCHER_CORNER_RADIUS)
+                    .corner_radius(bk::style::continuous_corner(CORNER_SPOTLIGHT.fitted))
                     .opacity(progress)
                     .scale(scale)
                     .padding(LAUNCHER_PADDING as f32)

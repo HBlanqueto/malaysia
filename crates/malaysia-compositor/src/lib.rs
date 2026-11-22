@@ -8,6 +8,8 @@ mod blur;
 mod capture;
 mod chrome;
 mod config;
+#[cfg(test)]
+mod corner_parity;
 mod cursor;
 mod decoration;
 mod display_filter;

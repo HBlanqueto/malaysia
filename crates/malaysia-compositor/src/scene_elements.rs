@@ -1445,9 +1445,7 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
                 ));
                 continue;
             };
-            let radius = (crate::window_style::corner_extent(ctdesign::DIALOG.corner_radius)
-                * scale)
-                .round() as i32;
+            let radius = (crate::window_style::alert_extent() * scale).round() as i32;
             let backdrop = crate::blur::backdrop(
                 state,
                 &surface,
@@ -1496,6 +1494,10 @@ fn append_cards<R: MalaysiaRenderer>(
 ) {
     let mut backdrops = Vec::new();
     let glass = crate::blur::glass_of(surface);
+    let panel_open = state
+        .layers
+        .entry_of(surface)
+        .is_some_and(|entry| crate::notification_panel::is_open_panel(entry.anchors, surface));
     let plates = cards
         .plates
         .iter()
@@ -1507,7 +1509,13 @@ fn append_cards<R: MalaysiaRenderer>(
             );
             (plate, radius, true)
         });
-    let rects = cards.rects.iter().map(|card| (card, cards.radius, false));
+    let rects = cards.rects.iter().map(|card| {
+        let short_side = card.size.w.min(card.size.h);
+        let radius = glass.map_or(0.0, |glass| {
+            crate::window_style::card_radius(glass, panel_open, short_side)
+        });
+        (card, radius, false)
+    });
     for (index, (card, radius, plate)) in plates.chain(rects).enumerate() {
         let card = Rectangle::new(surface_rect.loc + card.loc, card.size);
         let (extent, exponent) =

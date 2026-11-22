@@ -59,10 +59,10 @@ grade-graphics = { path = "crates/grade-graphics" }
 malaysia-scene = { path = "crates/malaysia-scene" }
 malaysia-services = { path = "crates/malaysia-services" }
 
-bk = { git = "https://github.com/HBlanqueto/barrierkit", rev = "dc9656b25cefaba672db66fa768e5c2b93d476a0" }
-ctdesign = { git = "https://github.com/HBlanqueto/barrierkit", rev = "dc9656b25cefaba672db66fa768e5c2b93d476a0" }
-ctappearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "dc9656b25cefaba672db66fa768e5c2b93d476a0" }
-infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "dc9656b25cefaba672db66fa768e5c2b93d476a0" }
+bk = { git = "https://github.com/HBlanqueto/barrierkit", rev = "ccf65557052d39062ae314904394e6e706794a2b" }
+ctdesign = { git = "https://github.com/HBlanqueto/barrierkit", rev = "ccf65557052d39062ae314904394e6e706794a2b" }
+ctappearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "ccf65557052d39062ae314904394e6e706794a2b" }
+infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "ccf65557052d39062ae314904394e6e706794a2b" }
 
 freya-animation = "=0.5.3"
 freya-core = "=0.5.3"

@@ -118,7 +118,7 @@ impl Component for DockWindow {
                 None => rect()
                     .width(Size::px(self.size * DOCK_WINDOW_FRAME))
                     .height(Size::px(self.size * DOCK_WINDOW_FRAME))
-                    .corner_radius(self.size * DOCK_RADIUS / 2.0)
+                    .corner_radius(bk::style::continuous_corner(self.size * DOCK_RADIUS / 2.0))
                     .background(theme::color(resolved.shell.tile))
                     .center()
                     .child(scaled_icon(DOCK_WINDOW_ICON))

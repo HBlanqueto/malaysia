@@ -9,7 +9,7 @@ use bk::progress::ProgressView;
 use bk::style::Palette;
 use bk::theme;
 use ctdesign::{
-    BODY, CAPTION, HEADLINE, LIVE_ACTIVITY_GAP, LIVE_ACTIVITY_HEIGHT, LIVE_ACTIVITY_RADIUS,
+    BODY, CAPTION, CORNER_NOTIFICATION_CENTER, HEADLINE, LIVE_ACTIVITY_GAP, LIVE_ACTIVITY_HEIGHT,
     LIVE_ACTIVITY_WIDTH, MENUBAR_FONT_SIZE, MENUBAR_MARGIN, NOTIFICATION_GAP, NOTIFICATION_PADDING,
     Rgba,
 };
@@ -177,7 +177,9 @@ impl App for Expanded {
             .width(Size::fill())
             .height(Size::fill())
             .padding(NOTIFICATION_PADDING)
-            .corner_radius(LIVE_ACTIVITY_RADIUS)
+            .corner_radius(bk::style::continuous_corner(
+                CORNER_NOTIFICATION_CENTER.fitted,
+            ))
             .background(theme::color(palette.raised_background))
             .child(
                 VStack::new()

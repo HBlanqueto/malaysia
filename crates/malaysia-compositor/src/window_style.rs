@@ -170,7 +170,6 @@ impl Cacheable for ScrollEdge {
 #[derive(Debug, Clone)]
 pub(crate) struct Cards {
     pub(crate) id: u64,
-    pub(crate) radius: u32,
     pub(crate) rects: Vec<Rectangle<i32, Logical>>,
     pub(crate) plate_corner: u32,
     pub(crate) plates: Vec<Rectangle<i32, Logical>>,
@@ -249,13 +248,8 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 });
                 state.sync_panels();
             }
-            infinity_window_style_v1::Request::SetCards {
-                surface,
-                radius,
-                cards,
-            } => {
+            infinity_window_style_v1::Request::SetCards { surface, cards, .. } => {
                 let id = update_cards(&surface, |known| {
-                    known.radius = radius;
                     known.rects = card_rects(&cards);
                 });
                 if let Some(id) = id {
@@ -397,7 +391,6 @@ fn update_cards(surface: &WlSurface, update: impl FnOnce(&mut Cards)) -> Option<
         states.data_map.insert_if_missing_threadsafe(|| {
             CardStyle(Mutex::new(Cards {
                 id: NEXT_ALERT.fetch_add(1, Ordering::Relaxed),
-                radius: 0,
                 rects: Vec::new(),
                 plate_corner: 0,
                 plates: Vec::new(),
@@ -685,18 +678,37 @@ pub(crate) fn menu_extent() -> f64 {
     fitted_extent(ctdesign::CORNER_MENU.fitted)
 }
 
-pub(crate) fn plate_radius(corner: u32, short_side: i32) -> u32 {
-    (f64::from(short_side) * f64::from(corner) / f64::from(infinity_protocol::THOUSANDTHS)).round()
-        as u32
+pub(crate) fn alert_extent() -> f64 {
+    fitted_extent(ctdesign::CORNER_ALERT.fitted)
 }
 
-pub(crate) fn card_corner(radius: u32, short_side: i32) -> (f64, f32) {
+pub(crate) fn plate_radius(corner: u32, short_side: i32) -> f64 {
+    f64::from(short_side) * f64::from(corner) / f64::from(infinity_protocol::THOUSANDTHS)
+}
+
+pub(crate) fn card_radius(glass: crate::blur::Glass, panel_open: bool, short_side: i32) -> f64 {
+    match glass {
+        crate::blur::Glass::Dock => f64::from(ctdesign::DOCK_RADIUS) * f64::from(short_side),
+        crate::blur::Glass::Notifications if panel_open => {
+            f64::from(ctdesign::CORNER_NOTIFICATION_CENTER.fitted)
+        }
+        crate::blur::Glass::Notifications => f64::from(ctdesign::CORNER_NOTIFICATION.fitted),
+        crate::blur::Glass::Popups => f64::from(ctdesign::CORNER_MENU.fitted),
+    }
+}
+
+pub(crate) fn card_corner(radius: f64, short_side: i32) -> (f64, f32) {
     let half = f64::from(short_side) / 2.0;
-    let round = f64::from(radius).min(half);
-    let fade = ((round - half / 2.0) / (half / 2.0)).clamp(0.0, 1.0);
+    let round = radius.min(half);
     let extent = (corner_extent(1) * round).min(half);
-    let exponent = 2.0 + (ctdesign::DIALOG.superellipse_exponent - 2.0) * (1.0 - fade) as f32;
-    (extent, exponent)
+    let corner = ctdesign::WINDOW_CORNER;
+    if extent <= 0.0 {
+        return (0.0, corner.exponent);
+    }
+    let diagonal =
+        f64::from(corner.expansion) * (1.0 - 0.5_f64.powf(1.0 / f64::from(corner.exponent)));
+    let exponent = -1.0 / (1.0 - diagonal * round / extent).log2();
+    (extent, exponent as f32)
 }
 
 impl State {
@@ -744,17 +756,49 @@ mod tests {
 
     #[test]
     fn a_plates_corner_is_a_share_of_its_short_side_so_a_magnified_plate_keeps_its_shape() {
-        assert_eq!(super::plate_radius(159, 52), 8);
-        assert_eq!(super::plate_radius(159, 104), 17);
-        assert_eq!(super::plate_radius(0, 104), 0);
+        assert!((super::plate_radius(159, 52) - 8.268).abs() < 1e-9);
+        assert!((super::plate_radius(159, 104) - 16.536).abs() < 1e-9);
+        assert_eq!(super::plate_radius(0, 104), 0.0);
+    }
+
+    #[test]
+    fn the_dock_corner_follows_its_thickness_and_a_notification_card_takes_the_fitted_radius_of_its_kind()
+     {
+        use crate::blur::Glass;
+        let thickness = |side| super::card_radius(Glass::Dock, false, side);
+        assert!((thickness(100) - 27.2).abs() < 1e-4);
+        assert!((thickness(50) * 2.0 - thickness(100)).abs() < 1e-9);
+        assert_eq!(
+            super::card_radius(Glass::Notifications, false, 58),
+            f64::from(ctdesign::CORNER_NOTIFICATION.fitted)
+        );
+        assert_eq!(
+            super::card_radius(Glass::Notifications, true, 58),
+            f64::from(ctdesign::CORNER_NOTIFICATION_CENTER.fitted)
+        );
     }
 
     #[test]
     fn a_card_shorter_than_its_corners_becomes_a_capsule_and_a_tall_one_keeps_the_squircle() {
-        assert_eq!(super::card_corner(20, 30), (15.0, 2.0));
-        let (extent, exponent) = super::card_corner(20, 200);
-        assert_eq!(exponent, ctdesign::DIALOG.superellipse_exponent);
+        let (extent, exponent) = super::card_corner(20.0, 30);
+        assert_eq!(extent, 15.0);
+        assert!((exponent - 2.0).abs() < 0.1, "{exponent}");
+        let (extent, exponent) = super::card_corner(20.0, 200);
+        assert!((exponent - ctdesign::WINDOW_CORNER.exponent).abs() < 1e-4);
         assert!((extent - super::corner_extent(20)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_card_keeps_the_diagonal_of_its_corner_whatever_the_ratio_of_its_radius_to_its_height() {
+        let diagonal_of = |radius: f64, height: i32| {
+            let (extent, exponent) = super::card_corner(radius, height);
+            extent * (1.0 - 0.5_f64.powf(1.0 / f64::from(exponent)))
+                / radius.min(f64::from(height) / 2.0)
+        };
+        let tall = diagonal_of(20.3, 400);
+        for height in [30, 58, 84, 120] {
+            assert!((diagonal_of(20.3, height) - tall).abs() < 1e-5, "{height}");
+        }
     }
 
     use super::*;

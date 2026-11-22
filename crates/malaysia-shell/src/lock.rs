@@ -397,7 +397,7 @@ fn power_options(mut open: State<bool>, bar_height: f32) -> Element {
             .child(item(tr!("power-shut-down-button").to_string(), || {
                 power::run(power::PowerAction::ShutDown)
             })),
-        palette.bar_title_open_radius.max(palette.item_radius * 2.0),
+        ctdesign::CORNER_MENU.fitted,
         palette.bg,
     )
     .position(

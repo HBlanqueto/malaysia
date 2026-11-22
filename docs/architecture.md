@@ -51,6 +51,7 @@ session bus, so it never starts `notifications`.
 | Protocols and composition order | compositor |
 | Geometry: position, size, anchors, exclusive zones | compositor |
 | Window frame: corners, shadow, border, hairline | compositor, for every window, CSD or SSD |
+| Rounded shapes | the compositor draws the frame of windows, sheets, popups and Dock and notification cards from `window_style.rs`; the shell draws its own with the kit's `continuous_corner`; both read the measured `CORNER_*` tokens |
 | Blur and glass behind a surface, and under a BarrierKit window's chrome | compositor: one measured Gaussian pipeline, values from `ctdesign` ([ADR 0020](decisions.md)); the app declares the material |
 | Server-side titlebar and traffic lights | compositor |
 | Content of the shell surfaces | shell |

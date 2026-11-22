@@ -68,7 +68,7 @@ pub(crate) fn panel_shape(
     if glass_radius == 0 {
         return *window;
     }
-    let (extent, exponent) = crate::window_style::card_corner(glass_radius, short_side);
+    let (extent, exponent) = crate::window_style::card_corner(f64::from(glass_radius), short_side);
     Shape {
         rect: panel,
         radius: (extent * scale).round() as i32,

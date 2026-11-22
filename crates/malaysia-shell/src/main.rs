@@ -1,4 +1,6 @@
 mod app_scope;
+#[cfg(test)]
+mod corner_parity;
 mod desktop;
 mod dialogs;
 mod dock;
