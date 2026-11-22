@@ -149,8 +149,10 @@ portal namespace.
 notifications that macOS does not have, is retired like `traffic_light_shape`:
 a file that has the key still loads and the next write drops it. Every blur is
 the measured one of its surface (ADR 0092). macOS 27 has a «Liquid Glass» tint
-slider (`NSGlassTintAmount`); Malaysia does not expose it until its effect is
-measured.
+slider (`NSGlassTintAmount`, 0 to 1) that moves the blur and the tint of every
+glass; its effect is measured in the kit (`docs/research/macos-liquid-glass.md`,
+section 13) and Malaysia does not expose it yet: it needs a key and a model that
+interpolates the glass inputs.
 
 `color_scheme` reaches every app: bk reads it from the domain; GTK 4,
 libadwaita, Qt with the portal theme, Firefox, Chromium and Electron read it from
