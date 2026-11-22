@@ -732,19 +732,23 @@ mod tests {
     }
 
     #[test]
-    fn each_bar_gets_the_tahoe_radius() {
+    fn every_bar_gets_the_measured_corner_radius() {
         let radius = |bar| corner_radius(None, Some(bar), Role::Toplevel, true);
-        assert_eq!(radius(Bar::Titlebar), 16);
-        assert_eq!(radius(Bar::UnifiedCompact), 20);
-        assert_eq!(radius(Bar::Unified), 26);
-        assert_eq!(radius(Bar::Utility), 15);
+        for bar in [
+            Bar::Titlebar,
+            Bar::UnifiedCompact,
+            Bar::Unified,
+            Bar::Utility,
+        ] {
+            assert_eq!(radius(bar), 16);
+        }
     }
 
     #[test]
-    fn without_a_bar_ssd_gets_the_titlebar_and_csd_and_dialogs_the_toolbar() {
+    fn without_a_bar_every_window_kind_gets_the_measured_corner_radius() {
         assert_eq!(corner_radius(None, None, Role::Toplevel, false), 16);
-        assert_eq!(corner_radius(None, None, Role::Toplevel, true), 26);
-        assert_eq!(corner_radius(None, None, Role::Dialog, false), 26);
+        assert_eq!(corner_radius(None, None, Role::Toplevel, true), 16);
+        assert_eq!(corner_radius(None, None, Role::Dialog, false), 16);
     }
 
     #[test]
