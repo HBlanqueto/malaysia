@@ -19,6 +19,7 @@ use ctdesign::{
     SIDEBAR, TITLEBAR,
 };
 use freya_core::integration::AppComponent;
+use freya_core::prelude::FontWeight;
 use torin::prelude::{Content, Gaps};
 
 use crate::desktop::{self, DesktopEntry};

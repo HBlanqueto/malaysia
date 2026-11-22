@@ -7,6 +7,7 @@ uniform vec3 glow_near;
 uniform vec3 glow_far;
 uniform vec4 tone;
 uniform vec2 tone_outline;
+uniform float measured;
 uniform vec4 plate;
 uniform vec4 plate_edge;
 uniform vec4 plate_ramp;
@@ -116,7 +117,7 @@ vec4 dock_frame(float dist, vec2 normal, vec3 behind, float along) {
     vec3 body = seen;
     vec3 inside;
     if (toned) {
-        body = toned_glass(seen, behind);
+        body = measured > 0.5 ? seen : toned_glass(seen, behind);
         vec3 lit = light_toward(body, rim.x + rim.y * luminance(body));
         inside = mix(body, lit, clamp(edge, 0.0, 1.0));
     } else {

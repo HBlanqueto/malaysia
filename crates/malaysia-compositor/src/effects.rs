@@ -798,7 +798,7 @@ pub(crate) fn compile_glass_rim(renderer: &mut GlesRenderer) -> Option<GlesTexPr
         .ok()
 }
 
-fn dock_frame_uniforms() -> [UniformName<'static>; 12] {
+fn dock_frame_uniforms() -> [UniformName<'static>; 13] {
     [
         UniformName::new("glass", UniformType::_4f),
         UniformName::new("rim", UniformType::_2f),
@@ -809,6 +809,7 @@ fn dock_frame_uniforms() -> [UniformName<'static>; 12] {
         UniformName::new("glow_far", UniformType::_3f),
         UniformName::new("tone", UniformType::_4f),
         UniformName::new("tone_outline", UniformType::_2f),
+        UniformName::new("measured", UniformType::_1f),
         UniformName::new("plate", UniformType::_4f),
         UniformName::new("plate_edge", UniformType::_4f),
         UniformName::new("plate_ramp", UniformType::_4f),

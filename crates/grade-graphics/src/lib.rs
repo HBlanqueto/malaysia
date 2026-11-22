@@ -35,8 +35,10 @@ pub mod shaders {
         texture_shader!("window_shape.glsl", "oklab.glsl", "glass_shadow.frag");
     pub const DISPLAY_FILTER: &str = texture_shader!("display_filter.frag");
     pub const MINIMIZE: &str = texture_shader!("minimize.frag");
-    pub const BLUR_DOWN: &str = texture_shader!("blur_down.frag");
-    pub const BLUR_UP: &str = texture_shader!("blur_up.frag");
+    pub const BLUR_REDUCE: &str = texture_shader!("blur_reduce.frag");
+    pub const BLUR_GAUSS: &str = texture_shader!("blur_gauss.frag");
+    pub const BLUR_NORMALIZE: &str = texture_shader!("blur_normalize.frag");
+    pub const BLUR_POST: &str = texture_shader!("blur_post.frag");
     pub const DOCK_SOFTEN: &str = texture_shader!("dock_soften.frag");
     pub const DOCK_GLASS: &str = texture_shader!(
         "window_shape.glsl",

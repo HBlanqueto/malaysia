@@ -1,3 +1,10 @@
+mod gaussian;
+mod look;
+#[cfg(test)]
+mod parity;
+#[cfg(test)]
+mod timing;
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -11,7 +18,7 @@ use smithay::backend::renderer::gles::{
     GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
 };
 use smithay::backend::renderer::utils::CommitCounter;
-use smithay::backend::renderer::{Bind, ExportMem, Frame, Offscreen, Renderer, Texture};
+use smithay::backend::renderer::{Bind, ExportMem, Offscreen, Texture};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{
     Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
@@ -29,19 +36,19 @@ use crate::scene_elements::{
     physical_rect,
 };
 use crate::state::State;
+use gaussian::{Backdrop, Blend, Programs, draw_pass};
+use look::{Look, Sigmas};
 
 pub(crate) struct Blur {
-    down: GlesTexProgram,
-    up: GlesTexProgram,
+    programs: Programs,
     soften: GlesTexProgram,
-    wallpaper: Option<Blurred>,
-    glass: Option<Blurred>,
-    dialogs: Option<Blurred>,
+    sigmas: Sigmas,
+    wallpaper: Option<Wallpaper>,
     behind: [Option<Behind>; GLASSES.len()],
     veil: Option<Behind>,
     probe: Option<GlesTexture>,
     probed: CommitCounter,
-    popups_backdrop: Option<ctdesign::Rgba>,
+    popups_panel: Option<ctdesign::Rgba>,
 }
 
 const PROBE_SIDE: i32 = 4;
@@ -63,29 +70,33 @@ pub(crate) fn material(resolved: &ctappearance::Resolved, glass: Glass) -> ctdes
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-struct Kawase {
-    passes: u32,
-    offset: f32,
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Family {
+    Windows,
+    Dialogs,
+    Layers,
+    Glass,
 }
 
-impl Kawase {
-    fn reaching(passes: u32, reach: f32) -> Self {
-        let deeper = reach.log2().round().max(0.0) as u32;
-        Self {
-            passes: passes + deeper,
-            offset: ctdesign::BACKGROUND_BLUR_OFFSET * reach / (1u32 << deeper) as f32,
-        }
-    }
-}
+const FAMILIES: [Family; 4] = [
+    Family::Windows,
+    Family::Dialogs,
+    Family::Layers,
+    Family::Glass,
+];
 
-struct Blurred {
+struct Wallpaper {
     tracker: OutputDamageTracker,
     scale: f64,
-    kawase: Kawase,
     source: GlesTexture,
-    levels: Vec<GlesTexture>,
-    blurred: GlesTexture,
+    commit: CommitCounter,
+    families: [Option<Shown>; FAMILIES.len()],
+}
+
+struct Shown {
+    backdrop: Backdrop,
+    look: Look,
+    from: Option<CommitCounter>,
     commit: CommitCounter,
 }
 
@@ -94,48 +105,67 @@ struct Behind {
     scale: f64,
     area: Rectangle<i32, Physical>,
     source: GlesTexture,
-    across: GlesTexture,
-    softened: GlesTexture,
-    spread: f32,
+    finish: Finish,
     commit: CommitCounter,
+}
+
+enum Finish {
+    Soften {
+        across: GlesTexture,
+        softened: GlesTexture,
+        spread: f32,
+    },
+    Measured {
+        backdrop: Box<Backdrop>,
+        look: Look,
+        region: Rectangle<i32, Physical>,
+    },
+}
+
+type Placed = (Rectangle<i32, Physical>, Rectangle<i32, Physical>);
+
+#[derive(Clone, Copy)]
+enum Method<'a> {
+    Soften(&'a GlesTexProgram, f32),
+    Measured(&'a Programs, Look, Rectangle<i32, Physical>),
 }
 
 #[derive(Default)]
 struct BackdropIds(Mutex<HashMap<(usize, usize), Id>>);
 
 pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<Blur> {
-    let kawase = [
-        UniformName::new("half_pixel", UniformType::_2f),
-        UniformName::new("offset", UniformType::_1f),
-    ];
     let along = [
         UniformName::new("texel", UniformType::_2f),
         UniformName::new("direction", UniformType::_2f),
         UniformName::new("spread", UniformType::_1f),
     ];
-    let mut program = |shader, uniforms: &[UniformName]| {
-        renderer
-            .compile_custom_texture_shader(shader, uniforms)
-            .inspect_err(|error| tracing::warn!(?error, "failed to compile blur shader"))
-            .ok()
-    };
+    let soften = renderer
+        .compile_custom_texture_shader(grade_graphics::shaders::DOCK_SOFTEN, &along)
+        .inspect_err(|error| tracing::warn!(?error, "failed to compile blur shader"))
+        .ok()?;
     Some(Blur {
-        down: program(grade_graphics::shaders::BLUR_DOWN, &kawase)?,
-        up: program(grade_graphics::shaders::BLUR_UP, &kawase)?,
-        soften: program(grade_graphics::shaders::DOCK_SOFTEN, &along)?,
+        programs: gaussian::compile(renderer)?,
+        soften,
+        sigmas: Sigmas::measure(),
         wallpaper: None,
-        glass: None,
-        dialogs: None,
         behind: std::array::from_fn(|_| None),
         veil: None,
         probe: None,
         probed: CommitCounter::default(),
-        popups_backdrop: None,
+        popups_panel: None,
     })
 }
 
-pub(crate) fn popups_backdrop(state: &State) -> Option<ctdesign::Rgba> {
-    state.blur.as_ref()?.popups_backdrop
+pub(crate) fn popups_panel(state: &State) -> Option<ctdesign::Rgba> {
+    state.blur.as_ref()?.popups_panel
+}
+
+pub(crate) fn measured(state: &State, glass: Glass) -> bool {
+    state
+        .blur
+        .as_ref()
+        .and_then(|blur| blur.behind[glass as usize].as_ref())
+        .is_some_and(|behind| matches!(behind.finish, Finish::Measured { .. }))
 }
 
 pub(crate) fn drawn(state: &State) -> bool {
@@ -154,22 +184,17 @@ pub(crate) fn update(
     let Some(mut blur) = state.blur.take() else {
         return;
     };
-    if !drawn(state) {
+    let wanted = families_requested(state);
+    if !wanted.contains(&true) {
         blur.wallpaper = None;
-        blur.glass = None;
-        blur.dialogs = None;
-    } else if (requested(state) || glass_requested(state))
-        && blur.refresh(state, renderer, output_size).is_none()
-    {
+    } else if blur.refresh(state, renderer, output_size, wanted).is_none() {
         tracing::warn!("failed to blur the wallpaper");
         blur.wallpaper = None;
-        blur.glass = None;
-        blur.dialogs = None;
     }
     if !popups_drawn(state) {
         blur.behind = Default::default();
         blur.veil = None;
-        blur.popups_backdrop = None;
+        blur.popups_panel = None;
     }
     state.blur = Some(blur);
     if popups_drawn(state) {
@@ -191,10 +216,7 @@ pub(crate) fn backdrop<R: MalaysiaRenderer>(
         blur_region(surface),
         origin,
         scale,
-        Sampling {
-            detail,
-            ..Sampling::blurred(state)
-        },
+        Sampling::over(state, detail),
         |dst| Some((dst.intersection(frame.rect)?, frame)),
     )
 }
@@ -256,7 +278,7 @@ pub(crate) fn layer<R: MalaysiaRenderer>(
         blur_region(surface),
         origin,
         scale,
-        Sampling::blurred(state),
+        Sampling::over(state, Detail::Layers),
         |dst| {
             let dst = dst.intersection(frame)?;
             let radius = if dst.size.h < frame.size.h {
@@ -280,7 +302,7 @@ pub(crate) fn capsules<R: MalaysiaRenderer>(
         blur_region(surface),
         Point::default(),
         scale,
-        Sampling::blurred(state),
+        Sampling::over(state, Detail::Layers),
         |dst| Some((dst, circle(dst, dst.size.w.min(dst.size.h) / 2))),
     )
 }
@@ -295,8 +317,9 @@ fn circle(rect: Rectangle<i32, Physical>, radius: i32) -> Shape {
 
 #[derive(Clone, Copy)]
 pub(crate) enum Detail {
-    Blurred,
+    Windows,
     Dialogs,
+    Layers,
     Behind(Glass),
     Veil,
 }
@@ -310,12 +333,12 @@ pub(crate) struct Sampling {
 }
 
 impl Sampling {
-    fn blurred(state: &State) -> Self {
+    fn over(state: &State, detail: Detail) -> Self {
         Self {
             program: state.rounded_clip.clone(),
             uniforms: Vec::new(),
             part: 0,
-            detail: Detail::Blurred,
+            detail,
             arrow: crate::effects::Arrow::default(),
         }
     }
@@ -352,6 +375,7 @@ pub(crate) fn sampled<R: MalaysiaRenderer>(
             .and_then(|blur| sampled_cache(blur, sampling.detail))
             .filter(|_| match sampling.detail {
                 Detail::Behind(Glass::Popups) => popups_drawn(state),
+                Detail::Windows | Detail::Dialogs => true,
                 _ => drawn(state),
             }),
         sampling.program,
@@ -400,23 +424,23 @@ fn sampled_cache(
     blur: &Blur,
     detail: Detail,
 ) -> Option<(&GlesTexture, CommitCounter, Point<i32, Physical>)> {
+    let family = |family: Family| {
+        blur.wallpaper
+            .as_ref()
+            .and_then(|wallpaper| wallpaper.families[family as usize].as_ref())
+            .map(|shown| (shown.backdrop.result(), shown.commit, Point::default()))
+    };
     match detail {
-        Detail::Blurred => blur
-            .wallpaper
-            .as_ref()
-            .map(|wallpaper| (&wallpaper.blurred, wallpaper.commit, Point::default())),
-        Detail::Dialogs => blur
-            .dialogs
-            .as_ref()
-            .or(blur.wallpaper.as_ref())
-            .map(|blurred| (&blurred.blurred, blurred.commit, Point::default())),
+        Detail::Windows => family(Family::Windows),
+        Detail::Dialogs => family(Family::Dialogs).or_else(|| family(Family::Windows)),
+        Detail::Layers => family(Family::Layers),
         Detail::Behind(glass) => blur.behind[glass as usize]
             .as_ref()
-            .map(|behind| (&behind.softened, behind.commit, behind.area.loc)),
+            .map(|behind| (behind.shown(), behind.commit, behind.area.loc)),
         Detail::Veil => blur
             .veil
             .as_ref()
-            .map(|veil| (&veil.softened, veil.commit, veil.area.loc)),
+            .map(|veil| (veil.shown(), veil.commit, veil.area.loc)),
     }
 }
 
@@ -448,8 +472,9 @@ pub(crate) fn blur_region(surface: &WlSurface) -> Vec<Rectangle<i32, Logical>> {
 }
 
 pub(crate) fn glass_texture(state: &State) -> Option<(GlesTexture, CommitCounter)> {
-    let glass = state.blur.as_ref()?.glass.as_ref()?;
-    drawn(state).then(|| (glass.blurred.clone(), glass.commit))
+    let glass =
+        state.blur.as_ref()?.wallpaper.as_ref()?.families[Family::Glass as usize].as_ref()?;
+    drawn(state).then(|| (glass.backdrop.result().clone(), glass.commit))
 }
 
 fn wants_glass(state: &State, window: WindowId) -> bool {
@@ -484,24 +509,42 @@ fn dialogs_requested(state: &State) -> bool {
         })
 }
 
-fn requested(state: &State) -> bool {
-    let windows = state
+fn windows_requested(state: &State) -> bool {
+    state
         .windows
         .iter_visible(&state.minimized)
-        .any(|window| !blur_region(window.surface()).is_empty());
-    windows
+        .any(|window| !blur_region(window.surface()).is_empty())
         || state
             .leaving_focus_window()
             .and_then(|window| state.windows.surface_of(window))
             .is_some_and(|surface| !blur_region(surface).is_empty())
-        || [Layer::Background, Layer::Bottom, Layer::Top, Layer::Overlay]
-            .into_iter()
-            .flat_map(|layer| state.layers.on_layer(layer))
-            .any(|entry| !blur_region(entry.surface.wl_surface()).is_empty())
+}
+
+fn layers_requested(state: &State) -> bool {
+    [Layer::Background, Layer::Bottom, Layer::Top, Layer::Overlay]
+        .into_iter()
+        .flat_map(|layer| state.layers.on_layer(layer))
+        .map(|entry| entry.surface.wl_surface())
+        .any(|surface| {
+            glass_of(surface).is_none()
+                && crate::window_style::alert_layer(surface).is_none()
+                && !blur_region(surface).is_empty()
+        })
         || state
             .lock_surfaces
             .iter()
             .any(|surface| !blur_region(surface.wl_surface()).is_empty())
+}
+
+fn families_requested(state: &State) -> [bool; FAMILIES.len()] {
+    let widened = state.chrome_theme.resolved.dock.soften > 1.0;
+    let dialogs = dialogs_requested(state);
+    [
+        windows_requested(state) || (dialogs && !widened),
+        dialogs && widened,
+        drawn(state) && layers_requested(state),
+        drawn(state) && glass_requested(state),
+    ]
 }
 
 pub(crate) fn glass_of(surface: &WlSurface) -> Option<Glass> {
@@ -544,16 +587,23 @@ fn behind_requested(state: &State, glass: Glass) -> bool {
 }
 
 impl Blur {
-    fn probe_popups(&mut self, renderer: &mut GlesRenderer) {
+    fn probe_popups(&mut self, renderer: &mut GlesRenderer, menu_glass: &ctdesign::DockSurface) {
         let Some(behind) = self.behind[Glass::Popups as usize].as_ref() else {
-            self.popups_backdrop = None;
+            self.popups_panel = None;
             return;
         };
-        if self.popups_backdrop.is_some() && behind.commit == self.probed {
+        if self.popups_panel.is_some() && behind.commit == self.probed {
             return;
         }
         self.probed = behind.commit;
-        self.popups_backdrop = average_color(renderer, &behind.softened, &mut self.probe);
+        self.popups_panel =
+            average_color(renderer, behind.shown(), &mut self.probe).map(|average| {
+                if behind.measured() {
+                    average
+                } else {
+                    ctappearance::menu::panel_over(menu_glass, average)
+                }
+            });
     }
 
     fn refresh(
@@ -561,57 +611,80 @@ impl Blur {
         state: &mut State,
         renderer: &mut GlesRenderer,
         output_size: Size<i32, Physical>,
+        wanted: [bool; FAMILIES.len()],
     ) -> Option<()> {
         let scale = state.scale.fractional_scale();
         let elements = wallpaper_elements(state, renderer, scale);
-        let programs = (&self.down, &self.up);
-        let reach = state.chrome_theme.resolved.dock.soften;
-        render_blurred(
-            &mut self.wallpaper,
-            programs,
+        let stale = self.wallpaper.as_ref().is_none_or(|wallpaper| {
+            wallpaper.scale != scale
+                || wallpaper.source.size() != Size::from((output_size.w, output_size.h))
+        });
+        if stale {
+            self.wallpaper = Some(Wallpaper::new(renderer, output_size, scale)?);
+        }
+        let wallpaper = self.wallpaper.as_mut()?;
+        if redraw(
+            &mut wallpaper.tracker,
+            &mut wallpaper.source,
             renderer,
-            (
-                output_size,
-                scale,
-                Kawase::reaching(ctdesign::BACKGROUND_BLUR_PASSES, 1.0),
-            ),
             &elements,
-        )?;
-        if glass_requested(state) {
-            render_blurred(
-                &mut self.glass,
-                programs,
+        )? {
+            wallpaper.commit.increment();
+        }
+        let reach = state.chrome_theme.resolved.dock.soften;
+        let looks = [
+            look::windows(state),
+            look::dialogs(state, reach),
+            look::layers(&self.sigmas),
+            look::glass(&self.sigmas, state, reach),
+        ];
+        for ((slot, look), wanted) in wallpaper.families.iter_mut().zip(looks).zip(wanted) {
+            if !wanted {
+                *slot = None;
+                continue;
+            }
+            show(
+                slot,
                 renderer,
-                (
-                    output_size,
-                    scale,
-                    Kawase::reaching(
-                        ctappearance::glass_blur_passes(state.config.appearance.color_scheme),
-                        reach,
-                    ),
-                ),
-                &elements,
+                &self.programs,
+                (&wallpaper.source, wallpaper.commit),
+                (look, scale),
             )?;
-        } else {
-            self.glass = None;
         }
-        if reach > 1.0 && dialogs_requested(state) {
-            render_blurred(
-                &mut self.dialogs,
-                programs,
-                renderer,
-                (
-                    output_size,
-                    scale,
-                    Kawase::reaching(ctdesign::BACKGROUND_BLUR_PASSES, reach),
-                ),
-                &elements,
-            )
-        } else {
-            self.dialogs = None;
-            Some(())
-        }
+        Some(())
     }
+}
+
+fn show(
+    slot: &mut Option<Shown>,
+    renderer: &mut GlesRenderer,
+    programs: &Programs,
+    (source, from): (&GlesTexture, CommitCounter),
+    (look, scale): (Look, f64),
+) -> Option<()> {
+    let size = source.size();
+    if slot
+        .as_ref()
+        .is_none_or(|shown| !shown.backdrop.fits(size, &look, scale))
+    {
+        *slot = Some(Shown {
+            backdrop: Backdrop::new(renderer, size, &look, scale)?,
+            look,
+            from: None,
+            commit: CommitCounter::default(),
+        });
+    }
+    let shown = slot.as_mut()?;
+    if shown.look != look || shown.from != Some(from) {
+        let whole = Rectangle::from_size(Size::<i32, Physical>::from((size.w, size.h)));
+        shown
+            .backdrop
+            .run(renderer, programs, source, whole, &look, scale)?;
+        shown.look = look;
+        shown.from = Some(from);
+        shown.commit.increment();
+    }
+    Some(())
 }
 
 fn refresh_behind(
@@ -620,19 +693,20 @@ fn refresh_behind(
     output_size: Size<i32, Physical>,
 ) {
     let scale = state.scale.fractional_scale();
-    let areas = GLASSES.map(|glass| {
-        if behind_requested(state, glass) {
-            behind_area(state, glass, scale, output_size)
-        } else {
-            None
-        }
+    let looks = GLASSES.map(|glass| look::shell(state, glass));
+    let areas: [Option<Placed>; GLASSES.len()] = std::array::from_fn(|index| {
+        let glass = GLASSES[index];
+        behind_requested(state, glass)
+            .then(|| behind_area(state, glass, scale, output_size, looks[index]))
+            .flatten()
     });
     let veil_area = areas[Glass::Notifications as usize]
+        .map(|(area, _)| area)
         .filter(|_| crate::notification_panel::open_panel(&state.layers).is_some());
     let glass = areas
         .iter()
         .flatten()
-        .copied()
+        .map(|(area, _)| *area)
         .reduce(Rectangle::merge)
         .map(|area| area.to_f64().to_logical(scale));
     let elements = if areas.iter().any(Option::is_some) {
@@ -643,31 +717,29 @@ fn refresh_behind(
     let Some(mut blur) = state.blur.take() else {
         return;
     };
-    for ((cache, area), glass) in blur.behind.iter_mut().zip(areas).zip(GLASSES) {
-        let Some(area) = area else {
+    for (((cache, area), glass), look) in blur.behind.iter_mut().zip(areas).zip(GLASSES).zip(looks)
+    {
+        let Some((area, region)) = area else {
             *cache = None;
             continue;
         };
-        if render_behind(
-            cache,
-            &blur.soften,
-            material(&state.chrome_theme.resolved, glass).soften,
-            renderer,
-            (area, scale),
-            &elements,
-        )
-        .is_none()
-        {
+        let method = match look {
+            Some(look) => Method::Measured(&blur.programs, look, region),
+            None => Method::Soften(
+                &blur.soften,
+                material(&state.chrome_theme.resolved, glass).soften,
+            ),
+        };
+        if render_behind(cache, method, renderer, (area, scale), &elements).is_none() {
             tracing::warn!("failed to draw what is behind the glass");
             *cache = None;
         }
     }
-    blur.probe_popups(renderer);
+    blur.probe_popups(renderer, &state.chrome_theme.resolved.menu_glass);
     let veiled = veil_area.and_then(|area| {
         render_behind(
             &mut blur.veil,
-            &blur.soften,
-            ctdesign::NOTIFICATION_VEIL_SPREAD,
+            Method::Soften(&blur.soften, ctdesign::NOTIFICATION_VEIL_SPREAD),
             renderer,
             (area, scale),
             &elements,
@@ -684,67 +756,59 @@ fn behind_area(
     glass: Glass,
     scale: f64,
     output_size: Size<i32, Physical>,
-) -> Option<Rectangle<i32, Physical>> {
-    let area = match glass {
+    look: Option<Look>,
+) -> Option<Placed> {
+    let output = Rectangle::from_size(output_size);
+    let (shown, region) = match glass {
         Glass::Popups => {
             let menus = glass_popups(state).into_iter().reduce(Rectangle::merge)?;
-            outlined(physical_rect(menus, scale))
+            let area = outlined(physical_rect(menus, scale));
+            (area, area)
         }
-        _ => physical_rect(
-            state
+        _ => {
+            let entry = state
                 .layers
                 .mapped()
                 .iter()
-                .find(|entry| glass_of(entry.surface.wl_surface()) == Some(glass))?
-                .geometry,
-            scale,
-        ),
+                .find(|entry| glass_of(entry.surface.wl_surface()) == Some(glass))?;
+            let area = physical_rect(entry.geometry, scale);
+            let region = blur_region(entry.surface.wl_surface())
+                .into_iter()
+                .reduce(Rectangle::merge)
+                .map_or(area, |rect| {
+                    physical_rect(
+                        Rectangle::new(entry.geometry.loc + rect.loc, rect.size),
+                        scale,
+                    )
+                });
+            (area, region)
+        }
     };
-    area.intersection(Rectangle::from_size(output_size))
-        .filter(|area| !area.is_empty())
-}
-
-fn render_blurred(
-    cache: &mut Option<Blurred>,
-    (down, up): (&GlesTexProgram, &GlesTexProgram),
-    renderer: &mut GlesRenderer,
-    (output_size, scale, kawase): (Size<i32, Physical>, f64, Kawase),
-    elements: &[OutputRenderElement<GlesRenderer>],
-) -> Option<()> {
-    let stale = cache.as_ref().is_none_or(|blurred| {
-        blurred.scale != scale
-            || blurred.kawase != kawase
-            || blurred.source.size() != Size::from((output_size.w, output_size.h))
-    });
-    if stale {
-        *cache = Some(Blurred::new(renderer, output_size, scale, kawase)?);
-    }
-    let blurred = cache.as_mut()?;
-    if redraw(
-        &mut blurred.tracker,
-        &mut blurred.source,
-        renderer,
-        elements,
-    )? {
-        blurred.blur(renderer, down, up)?;
-        blurred.commit.increment();
-    }
-    Some(())
+    let reach = look
+        .and_then(|look| look.halo)
+        .map_or(0, |(sigma, _)| gaussian::reach_in_pixels(sigma, scale));
+    let area = Rectangle::new(
+        shown.loc - Point::from((reach, reach)),
+        (shown.size.w + 2 * reach, shown.size.h + 2 * reach).into(),
+    )
+    .intersection(output)
+    .filter(|area| !area.is_empty())?;
+    let region = region.intersection(area)?;
+    Some((area, Rectangle::new(region.loc - area.loc, region.size)))
 }
 
 fn render_behind(
     cache: &mut Option<Behind>,
-    soften: &GlesTexProgram,
-    spread: f32,
+    method: Method<'_>,
     renderer: &mut GlesRenderer,
     (area, scale): (Rectangle<i32, Physical>, f64),
     elements: &[OutputRenderElement<GlesRenderer>],
 ) -> Option<()> {
     let stale = cache.as_ref().is_none_or(|behind| {
-        behind.scale != scale || behind.area.size != area.size || behind.spread != spread
+        behind.scale != scale || behind.area.size != area.size || !behind.fits(&method)
     });
     if stale {
-        *cache = Some(Behind::new(renderer, area, scale, spread)?);
+        *cache = Some(Behind::new(renderer, area, scale, &method)?);
     }
     let behind = cache.as_mut()?;
     behind.area = area;
@@ -753,13 +817,15 @@ fn render_behind(
         .iter()
         .map(|element| RelocateRenderElement::from_element(element, corner, Relocate::Relative))
         .collect();
+    let retargeted = behind.retarget(&method);
     if redraw(
         &mut behind.tracker,
         &mut behind.source,
         renderer,
         &relocated,
-    )? {
-        behind.soften(renderer, soften)?;
+    )? || retargeted
+    {
+        behind.finish(renderer, &method)?;
         behind.commit.increment();
     }
     Some(())
@@ -873,127 +939,139 @@ impl Behind {
         renderer: &mut GlesRenderer,
         area: Rectangle<i32, Physical>,
         scale: f64,
-        spread: f32,
+        method: &Method<'_>,
     ) -> Option<Self> {
         let size = Size::<i32, BufferCoords>::from((area.size.w, area.size.h));
         let mut texture =
             || Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, size).ok();
+        let source = texture()?;
+        let finish = match method {
+            Method::Soften(_, spread) => Finish::Soften {
+                across: texture()?,
+                softened: texture()?,
+                spread: *spread,
+            },
+            Method::Measured(_, look, region) => Finish::Measured {
+                backdrop: Box::new(Backdrop::new(renderer, size, look, scale)?),
+                look: *look,
+                region: *region,
+            },
+        };
         Some(Self {
             tracker: OutputDamageTracker::new(area.size, Scale::from(scale), Transform::Normal),
             scale,
             area,
-            source: texture()?,
-            across: texture()?,
-            softened: texture()?,
-            spread,
+            source,
+            finish,
             commit: CommitCounter::default(),
         })
     }
 
-    fn soften(&mut self, renderer: &mut GlesRenderer, program: &GlesTexProgram) -> Option<()> {
-        let size = self.source.size();
-        let texel = [1.0 / size.w as f32, 1.0 / size.h as f32];
-        let spread = self.spread;
-        let along = |direction: [f32; 2]| {
-            [
-                Uniform::new("texel", texel),
-                Uniform::new("direction", direction),
-                Uniform::new("spread", spread),
-            ]
-        };
-        let (source, across) = (&self.source, &mut self.across);
-        draw_pass(renderer, Some(program), source, across, &along([1.0, 0.0]))?;
-        draw_pass(
-            renderer,
-            Some(program),
-            &self.across,
-            &mut self.softened,
-            &along([0.0, 1.0]),
-        )
+    fn measured(&self) -> bool {
+        matches!(self.finish, Finish::Measured { .. })
+    }
+
+    fn shown(&self) -> &GlesTexture {
+        match &self.finish {
+            Finish::Soften { softened, .. } => softened,
+            Finish::Measured { backdrop, .. } => backdrop.result(),
+        }
+    }
+
+    fn fits(&self, method: &Method<'_>) -> bool {
+        match (&self.finish, method) {
+            (Finish::Soften { .. }, Method::Soften(..)) => true,
+            (Finish::Measured { backdrop, .. }, Method::Measured(_, look, _)) => {
+                let size = self.source.size();
+                backdrop.fits(size, look, self.scale)
+            }
+            _ => false,
+        }
+    }
+
+    fn retarget(&mut self, method: &Method<'_>) -> bool {
+        match (&mut self.finish, method) {
+            (Finish::Soften { spread, .. }, Method::Soften(_, wanted)) => {
+                std::mem::replace(spread, *wanted) != *wanted
+            }
+            (
+                Finish::Measured { look, region, .. },
+                Method::Measured(_, wanted_look, wanted_region),
+            ) => {
+                let changed = look != wanted_look || region != wanted_region;
+                *look = *wanted_look;
+                *region = *wanted_region;
+                changed
+            }
+            _ => false,
+        }
+    }
+
+    fn finish(&mut self, renderer: &mut GlesRenderer, method: &Method<'_>) -> Option<()> {
+        let Self {
+            source,
+            finish,
+            scale,
+            ..
+        } = self;
+        match (finish, method) {
+            (
+                Finish::Soften {
+                    across, softened, ..
+                },
+                Method::Soften(program, spread),
+            ) => {
+                let size = source.size();
+                let texel = [1.0 / size.w as f32, 1.0 / size.h as f32];
+                let along = |direction: [f32; 2]| {
+                    [
+                        Uniform::new("texel", texel),
+                        Uniform::new("direction", direction),
+                        Uniform::new("spread", *spread),
+                    ]
+                };
+                draw_pass(
+                    renderer,
+                    Some(program),
+                    source,
+                    across,
+                    &along([1.0, 0.0]),
+                    Blend::Replace,
+                )?;
+                draw_pass(
+                    renderer,
+                    Some(program),
+                    across,
+                    softened,
+                    &along([0.0, 1.0]),
+                    Blend::Replace,
+                )
+            }
+            (
+                Finish::Measured {
+                    backdrop,
+                    look,
+                    region,
+                },
+                Method::Measured(programs, ..),
+            ) => backdrop.run(renderer, programs, source, *region, look, *scale),
+            _ => None,
+        }
     }
 }
 
-impl Blurred {
-    fn new(
-        renderer: &mut GlesRenderer,
-        size: Size<i32, Physical>,
-        scale: f64,
-        kawase: Kawase,
-    ) -> Option<Self> {
+impl Wallpaper {
+    fn new(renderer: &mut GlesRenderer, size: Size<i32, Physical>, scale: f64) -> Option<Self> {
         let full = Size::<i32, BufferCoords>::from((size.w, size.h));
-        let mut texture =
-            |size| Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, size).ok();
-        let levels = (1..=kawase.passes)
-            .map(|pass| {
-                texture(Size::from((
-                    (full.w >> pass).max(1),
-                    (full.h >> pass).max(1),
-                )))
-            })
-            .collect::<Option<Vec<_>>>()?;
         Some(Self {
             tracker: OutputDamageTracker::new(size, Scale::from(scale), Transform::Normal),
             scale,
-            kawase,
-            source: texture(full)?,
-            levels,
-            blurred: texture(full)?,
+            source: Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, full)
+                .ok()?,
             commit: CommitCounter::default(),
+            families: std::array::from_fn(|_| None),
         })
     }
-
-    fn blur(
-        &mut self,
-        renderer: &mut GlesRenderer,
-        down: &GlesTexProgram,
-        up: &GlesTexProgram,
-    ) -> Option<()> {
-        for level in 0..self.levels.len() {
-            let (done, rest) = self.levels.split_at_mut(level);
-            pass(
-                renderer,
-                down,
-                done.last().unwrap_or(&self.source),
-                &mut rest[0],
-                self.kawase.offset,
-            )?;
-        }
-        for level in (1..self.levels.len()).rev() {
-            let (lower, upper) = self.levels.split_at_mut(level);
-            pass(
-                renderer,
-                up,
-                &upper[0],
-                &mut lower[level - 1],
-                self.kawase.offset,
-            )?;
-        }
-        pass(
-            renderer,
-            up,
-            self.levels.first()?,
-            &mut self.blurred,
-            self.kawase.offset,
-        )
-    }
-}
-
-fn pass(
-    renderer: &mut GlesRenderer,
-    program: &GlesTexProgram,
-    from: &GlesTexture,
-    to: &mut GlesTexture,
-    offset: f32,
-) -> Option<()> {
-    let from_size = from.size();
-    let uniforms = [
-        Uniform::new(
-            "half_pixel",
-            [0.5 / from_size.w as f32, 0.5 / from_size.h as f32],
-        ),
-        Uniform::new("offset", offset),
-    ];
-    draw_pass(renderer, Some(program), from, to, &uniforms)
 }
 
 fn average_color(
@@ -1006,7 +1084,7 @@ fn average_color(
         *probe = Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, side).ok();
     }
     let probe = probe.as_mut()?;
-    draw_pass(renderer, None, from, probe, &[])?;
+    draw_pass(renderer, None, from, probe, &[], Blend::Replace)?;
     let target = renderer.bind(probe).ok()?;
     let mapping = renderer
         .copy_framebuffer(&target, Rectangle::from_size(side), Fourcc::Abgr8888)
@@ -1027,37 +1105,6 @@ fn average_color(
         b: blue / count,
         a: 1.0,
     })
-}
-
-fn draw_pass(
-    renderer: &mut GlesRenderer,
-    program: Option<&GlesTexProgram>,
-    from: &GlesTexture,
-    to: &mut GlesTexture,
-    uniforms: &[Uniform<'_>],
-) -> Option<()> {
-    let from_size = from.size();
-    let to_size = to.size();
-    let dst = Rectangle::from_size(Size::<i32, Physical>::from((to_size.w, to_size.h)));
-    let mut target = renderer.bind(to).ok()?;
-    let mut frame = renderer
-        .render(&mut target, dst.size, Transform::Normal)
-        .ok()?;
-    frame.clear([0.0; 4].into(), &[dst]).ok()?;
-    frame
-        .render_texture_from_to(
-            from,
-            Rectangle::from_size(from_size.to_f64()),
-            dst,
-            &[dst],
-            &[],
-            Transform::Normal,
-            1.0,
-            program,
-            uniforms,
-        )
-        .ok()?;
-    frame.finish().ok().map(|_| ())
 }
 
 #[cfg(test)]
@@ -1091,23 +1138,16 @@ mod tests {
         placed(&SolidColorBuffer::new(Size::from((size, size)), color), x)
     }
 
-    fn pixel_at(
-        renderer: &mut GlesRenderer,
-        texture: &mut GlesTexture,
-        (x, y): (i32, i32),
-    ) -> [u8; 4] {
+    fn pixel_at(renderer: &mut GlesRenderer, texture: &GlesTexture, (x, y): (i32, i32)) -> [u8; 4] {
         let size = Size::<i32, BufferCoords>::from((SIDE, SIDE));
-        let target = renderer.bind(texture).unwrap();
+        let mut texture = texture.clone();
+        let target = renderer.bind(&mut texture).unwrap();
         let mapping = renderer
             .copy_framebuffer(&target, Rectangle::from_size(size), Fourcc::Abgr8888)
             .unwrap();
         let bytes = renderer.map_texture(&mapping).unwrap();
         let at = ((y * SIDE + x) * 4) as usize;
         [bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]
-    }
-
-    fn center_pixel(renderer: &mut GlesRenderer, blurred: &mut Blurred) -> [u8; 4] {
-        pixel_at(renderer, &mut blurred.blurred, (SIDE / 2, SIDE / 2))
     }
 
     #[test]
@@ -1160,82 +1200,158 @@ mod tests {
     }
 
     #[test]
-    fn the_kawase_radius_grows_with_the_reach_whether_it_deepens_a_pass_or_widens_the_taps() {
-        let passes = ctdesign::BACKGROUND_BLUR_PASSES;
-        let radius = |kawase: Kawase| kawase.offset * (1u32 << kawase.passes) as f32;
-        let clear = radius(Kawase::reaching(passes, 1.0));
-        assert_eq!(Kawase::reaching(passes, 1.0).passes, passes);
-        assert_eq!(Kawase::reaching(passes, 1.4).passes, passes);
-        assert_eq!(Kawase::reaching(passes, 1.5).passes, passes + 1);
-        for reach in [1.0, 1.2, 1.4, 1.5, 2.0, 2.08] {
-            let kawase = Kawase::reaching(passes, reach);
-            assert!(
-                (radius(kawase) - clear * reach).abs() < 1e-3,
-                "reach {reach}"
-            );
-            assert!((0.7..=1.45).contains(&(kawase.offset / ctdesign::BACKGROUND_BLUR_OFFSET)));
-        }
-    }
-
-    #[test]
-    fn the_blur_chain_shows_a_window_and_runs_again_only_when_it_changes() {
+    fn the_wallpaper_blur_shows_a_window_and_runs_again_only_when_it_changes() {
         let Some(mut renderer) = try_test_renderer() else {
             eprintln!("skipping: no EGL device");
             return;
         };
         let blur = compile(&mut renderer).expect("the blur shaders compile");
         let wallpaper = || solid(0, 128, [0.0, 0.0, 1.0, 1.0]);
-        let programs = (&blur.down, &blur.up);
-        let mut cache = None;
+        let mut cache = Wallpaper::new(&mut renderer, output(), 1.0).unwrap();
+        let look = look::Look {
+            sigma: 4.0,
+            halo: None,
+            post: look::Post::Plain,
+        };
+        let run = |renderer: &mut GlesRenderer, cache: &mut Wallpaper, scene: &[_]| {
+            if redraw(&mut cache.tracker, &mut cache.source, renderer, scene).unwrap() {
+                cache.commit.increment();
+            }
+            show(
+                &mut cache.families[Family::Layers as usize],
+                renderer,
+                &blur.programs,
+                (&cache.source, cache.commit),
+                (look, 1.0),
+            )
+            .unwrap();
+        };
 
         let with_window = [solid(32, 64, [1.0, 0.0, 0.0, 1.0]), wallpaper()];
-        render_blurred(
-            &mut cache,
-            programs,
-            &mut renderer,
-            (
-                output(),
-                1.0,
-                Kawase::reaching(ctdesign::BACKGROUND_BLUR_PASSES, 1.0),
-            ),
-            &with_window,
-        )
-        .unwrap();
-        let blurred = cache.as_mut().unwrap();
-        let commit = blurred.commit;
-        let [red, _, blue, _] = center_pixel(&mut renderer, blurred);
+        run(&mut renderer, &mut cache, &with_window);
+        let shown = cache.families[Family::Layers as usize].as_ref().unwrap();
+        let commit = shown.commit;
+        let [red, _, blue, _] =
+            pixel_at(&mut renderer, shown.backdrop.result(), (SIDE / 2, SIDE / 2));
         assert!(red > blue, "the window is under the glass: {red} {blue}");
 
-        render_blurred(
-            &mut cache,
-            programs,
-            &mut renderer,
-            (
-                output(),
-                1.0,
-                Kawase::reaching(ctdesign::BACKGROUND_BLUR_PASSES, 1.0),
-            ),
-            &with_window,
-        )
-        .unwrap();
-        assert_eq!(cache.as_ref().unwrap().commit, commit, "nothing changed");
+        run(&mut renderer, &mut cache, &with_window);
+        let shown = cache.families[Family::Layers as usize].as_ref().unwrap();
+        assert_eq!(shown.commit, commit, "nothing changed");
 
-        render_blurred(
+        run(&mut renderer, &mut cache, &[wallpaper()]);
+        let shown = cache.families[Family::Layers as usize].as_ref().unwrap();
+        assert_ne!(shown.commit, commit, "the window left");
+        let [red, _, blue, _] =
+            pixel_at(&mut renderer, shown.backdrop.result(), (SIDE / 2, SIDE / 2));
+        assert!(blue > red, "only the wallpaper is left: {red} {blue}");
+    }
+
+    fn dark_state() -> (
+        smithay::reexports::calloop::EventLoop<'static, crate::session::Session>,
+        smithay::reexports::wayland_server::Display<State>,
+        State,
+    ) {
+        let (event_loop, display, mut state) = crate::test_support::test_state((1280, 720));
+        state.chrome_theme.resolved.scheme = ctappearance::ColorScheme::Dark;
+        (event_loop, display, state)
+    }
+
+    #[test]
+    fn reduce_transparency_makes_the_window_blur_a_solid_and_increase_contrast_alone_keeps_it() {
+        let (_loop, _display, mut state) = dark_state();
+        let set = ctappearance::material::looks(
+            ctappearance::material::Material::UnderWindowBackground,
+            state.chrome_theme.resolved.scheme,
+        );
+        for (reduce_transparency, contrast, expected) in [
+            (false, false, set.active),
+            (false, true, set.active),
+            (true, false, set.reduced),
+            (true, true, set.reduced_contrast),
+        ] {
+            state.config.appearance.reduce_transparency = reduce_transparency;
+            state.config.appearance.contrast = contrast;
+            let look = look::windows(&state);
+            assert!(look.post == look::Post::Material(expected));
+            assert_eq!(look.solid(), reduce_transparency);
+            assert_eq!(look.sigma > 0.0, !reduce_transparency);
+        }
+    }
+
+    #[test]
+    fn a_dialog_blurs_as_wide_as_the_glass_blur_option_reaches() {
+        let (_loop, _display, state) = dark_state();
+        let windows = look::windows(&state);
+        assert_eq!(look::dialogs(&state, 2.0).sigma, 2.0 * windows.sigma);
+    }
+
+    #[test]
+    fn only_a_dark_scheme_has_measured_shell_glass_and_the_glass_blur_option_widens_it() {
+        let (_loop, _display, mut state) = dark_state();
+        for glass in GLASSES {
+            let look = look::shell(&state, glass).expect("dark glass is measured");
+            assert!(matches!(look.post, look::Post::Shell(_)));
+            assert!(look.sigma > 0.0);
+        }
+        let rest = look::shell(&state, Glass::Dock).unwrap().sigma;
+        state.chrome_theme.resolved.dock.soften *= 2.0;
+        assert_eq!(look::shell(&state, Glass::Dock).unwrap().sigma, 2.0 * rest);
+        let menu = look::shell(&state, Glass::Popups).unwrap();
+        assert!(menu.halo.is_some());
+        assert!(look::shell(&state, Glass::Dock).unwrap().halo.is_none());
+        state.chrome_theme.resolved.scheme = ctappearance::ColorScheme::Light;
+        assert!(
+            GLASSES
+                .iter()
+                .all(|glass| look::shell(&state, *glass).is_none())
+        );
+    }
+
+    #[test]
+    fn the_measured_dock_glass_sees_only_its_region_and_shows_the_measured_tone() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        let (_loop, _display, state) = dark_state();
+        let blur = compile(&mut renderer).expect("the blur shaders compile");
+        let look = look::shell(&state, Glass::Dock).unwrap();
+        let white = SolidColorBuffer::new(Size::from((SIDE, SIDE)), [1.0, 1.0, 1.0, 1.0]);
+        let black = SolidColorBuffer::new(Size::from((SIDE / 2, SIDE)), [0.0, 0.0, 0.0, 1.0]);
+        let right_half: OutputRenderElement<GlesRenderer> = SolidColorRenderElement::from_buffer(
+            &black,
+            Point::from((SIDE / 2, 0)),
+            1.0,
+            1.0,
+            Kind::Unspecified,
+        )
+        .into();
+        let scene = [right_half, placed(&white, 0)];
+        let left = Rectangle::new(Point::from((0, 0)), Size::from((SIDE / 2, SIDE)));
+        let mut cache = None;
+        render_behind(
             &mut cache,
-            programs,
+            Method::Measured(&blur.programs, look, left),
             &mut renderer,
-            (
-                output(),
-                1.0,
-                Kawase::reaching(ctdesign::BACKGROUND_BLUR_PASSES, 1.0),
-            ),
-            &[wallpaper()],
+            (whole(), 1.0),
+            &scene,
         )
         .unwrap();
-        let blurred = cache.as_mut().unwrap();
-        assert_ne!(blurred.commit, commit, "the window left");
-        let [red, _, blue, _] = center_pixel(&mut renderer, blurred);
-        assert!(blue > red, "only the wallpaper is left: {red} {blue}");
+        let shown = cache.as_ref().unwrap().shown().clone();
+        let mut ink = |x: i32| pixel_at(&mut renderer, &shown, (x, SIDE / 2))[0];
+        let ink_at_the_border = ink(SIDE / 2 - 1);
+        let ink_far_inside = ink(8);
+        assert_eq!(
+            ink_at_the_border, ink_far_inside,
+            "the border sees no black"
+        );
+        let ctdesign::ShellGlass { tone, .. } = ctdesign::SHELL_GLASS_DOCK_DARK;
+        let white_tone = (tone[11] * 255.0).round() as u8;
+        assert!(
+            ink_far_inside.abs_diff(white_tone) <= 1,
+            "{ink_far_inside} {white_tone}"
+        );
     }
 
     #[test]
@@ -1251,8 +1367,7 @@ mod tests {
         let with_window = [solid(32, 64, [1.0, 0.0, 0.0, 1.0]), wallpaper()];
         render_behind(
             &mut cache,
-            &blur.soften,
-            1.0,
+            Method::Soften(&blur.soften, 1.0),
             &mut renderer,
             (whole(), 1.0),
             &with_window,
@@ -1260,12 +1375,12 @@ mod tests {
         .unwrap();
         let behind = cache.as_mut().unwrap();
         let commit = behind.commit;
-        let [red, _, blue, _] = pixel_at(&mut renderer, &mut behind.source, (32, 64));
+        let [red, _, blue, _] = pixel_at(&mut renderer, &behind.source, (32, 64));
         assert!(
             red > 250 && blue < 5,
             "the window edge is sharp: {red} {blue}"
         );
-        let [red, _, blue, _] = pixel_at(&mut renderer, &mut behind.source, (31, 64));
+        let [red, _, blue, _] = pixel_at(&mut renderer, &behind.source, (31, 64));
         assert!(
             blue > 250 && red < 5,
             "the wallpaper is right next to it: {red} {blue}"
@@ -1273,8 +1388,7 @@ mod tests {
 
         render_behind(
             &mut cache,
-            &blur.soften,
-            1.0,
+            Method::Soften(&blur.soften, 1.0),
             &mut renderer,
             (whole(), 1.0),
             &with_window,
@@ -1284,8 +1398,7 @@ mod tests {
 
         render_behind(
             &mut cache,
-            &blur.soften,
-            1.0,
+            Method::Soften(&blur.soften, 1.0),
             &mut renderer,
             (whole(), 1.0),
             &[wallpaper()],
@@ -1309,8 +1422,7 @@ mod tests {
 
         render_behind(
             &mut cache,
-            &blur.soften,
-            1.0,
+            Method::Soften(&blur.soften, 1.0),
             &mut renderer,
             (strip, 1.0),
             &scene(32),
@@ -1318,12 +1430,12 @@ mod tests {
         .unwrap();
         let behind = cache.as_mut().unwrap();
         assert_eq!(behind.source.size(), Size::from((64, 64)));
-        let [red, _, blue, _] = pixel_at(&mut renderer, &mut behind.source, (10, 10));
+        let [red, _, blue, _] = pixel_at(&mut renderer, &behind.source, (10, 10));
         assert!(
             red > 250 && blue < 5,
             "the window covers the corner: {red} {blue}"
         );
-        let [red, _, blue, _] = pixel_at(&mut renderer, &mut behind.source, (50, 50));
+        let [red, _, blue, _] = pixel_at(&mut renderer, &behind.source, (50, 50));
         assert!(
             blue > 250 && red < 5,
             "the wallpaper covers the rest: {red} {blue}"
@@ -1332,8 +1444,7 @@ mod tests {
         let commit = behind.commit;
         render_behind(
             &mut cache,
-            &blur.soften,
-            1.0,
+            Method::Soften(&blur.soften, 1.0),
             &mut renderer,
             (strip, 1.0),
             &scene(0),
@@ -1347,8 +1458,7 @@ mod tests {
 
         render_behind(
             &mut cache,
-            &blur.soften,
-            1.0,
+            Method::Soften(&blur.soften, 1.0),
             &mut renderer,
             (strip, 1.0),
             &scene(-8),
@@ -1374,14 +1484,13 @@ mod tests {
         let mut cache = None;
         render_behind(
             &mut cache,
-            &blur.soften,
-            1.0,
+            Method::Soften(&blur.soften, 1.0),
             &mut renderer,
             (whole(), 1.0),
             &scene,
         )
         .unwrap();
-        let softened = &mut cache.as_mut().unwrap().softened;
+        let softened = &cache.as_ref().unwrap().shown().clone();
 
         let [red, _, blue, _] = pixel_at(&mut renderer, softened, (64, 64));
         assert!(

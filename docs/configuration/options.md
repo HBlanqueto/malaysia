@@ -115,8 +115,8 @@ They are not domain options; they are fixed and documented here:
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
 | `appearance.scroll_bars` | `"automatic"` \| `"when_scrolling"` \| `"always"` | `"automatic"` | **active** | the kit's `ScrollView`: always after a mouse wheel and only while scrolling after a touchpad, only while scrolling, or always, **System Settings** |
 | `appearance.scroll_bar_click` | `"next_page"` \| `"clicked_spot"` | `"next_page"` | **active** | a click on the scroll bar track pages toward it or jumps there, **System Settings** |
-| `appearance.reduce_transparency` | bool | `false` | **active** | shell and kit: solid backgrounds and no compositor blur, except the menus, which keep their glass until `contrast`; `false` enables the blur |
-| `appearance.glass_blur` | float `0.0`–`1.0` | `0.0` | **active** | compositor: the glass of the Dock, the menus and the notifications (`blur::Glass`, `blur::material`); `0.0` is each glass as designed; toward `1.0` the Gaussian that softens the backdrop widens up to `GLASS_BLUR_SPREAD` times the clear Dock's (`DockSurface::soften`) and the tint moves a little toward `DOCK_GLASS_FROSTED`, both with the square of the slider; the menus and the notifications keep their veil and tone. It does not reach the sidebars or the menu bar. **System Settings › Appearance › Liquid Glass**, a free slider with marks at `0.0`, `0.5` and `1.0` |
+| `appearance.reduce_transparency` | bool | `false` | **active** | shell and kit: solid backgrounds and no compositor blur, except the menus, which keep their glass until `contrast`; the backdrop of a window becomes the solid of its material, one for `reduce_transparency` and another with `contrast`, and `contrast` alone keeps the blur; `false` enables the blur |
+| `appearance.glass_blur` | float `0.0`–`1.0` | `0.0` | **active** | compositor: the glass of the Dock, the menus and the notifications (`blur::Glass`, `blur::material`), the sidebars' glass and the dialogs; `0.0` is each glass as measured; toward `1.0` its Gaussian widens by `DockSurface::soften` over its value at `0.0`, up to `GLASS_BLUR_SPREAD` times the clear Dock's, and the Dock's tint moves a little toward `DOCK_GLASS_FROSTED`, both with the square of the slider; the menus and the notifications keep their tone. It does not reach the menu bar. **System Settings › Appearance › Liquid Glass**, a free slider with marks at `0.0`, `0.5` and `1.0` |
 | `appearance.window_color` | `"neutral"` \| `"accent"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings**; an old `"wallpaper"` reads as `"neutral"` |
 | `appearance.traffic_lights` | `"standard"` \| `"accent"` \| `"wallpaper"` | `"wallpaper"` | **active** | titlebar traffic lights; `"wallpaper"` takes them from the wallpaper's dominant color, **System Settings** |
 | `appearance.traffic_light_shape` | integer 0–7 | `7` | **active** | corner radius of the 14 traffic lights, from square (0) to round (7); the old `"square"` reads as 4 and `"round"` as 7. Removed from System Settings: the shape is now always round unless the key is set by hand |
@@ -530,8 +530,13 @@ They apply to **every** window, client- or server-decorated.
 | `effects.shadow.offset` | `[x,y]` (px) | `[0,6]` | pending | same |
 | `effects.shadow.opacity` | float `[0,1]` | `0.35` | pending | same |
 
-Blur is not an `effects` key: an app asks for it with `ext-background-effect-v1`,
-and `appearance.reduce_transparency = true` turns it off, except the menus' glass.
+Blur is not an `effects` key: an app asks for it with `ext-background-effect-v1`
+and the compositor draws the `under_window_background` material of `ctdesign`
+behind its region. `appearance.reduce_transparency = true` makes that backdrop a
+solid and turns the other blurs off, except the menus' glass; `contrast` alone
+keeps the window blur. A BarrierKit app will ask for a material with
+`set_backdrop` (`infinity_window_style_v1` version 10), which the compositor
+does not serve yet.
 
 ## `debug` — development
 

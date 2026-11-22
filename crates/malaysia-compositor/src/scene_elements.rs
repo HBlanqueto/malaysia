@@ -829,7 +829,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
     let detail = if matches!(data.role, crate::decoration::Role::Dialog) {
         crate::blur::Detail::Dialogs
     } else {
-        crate::blur::Detail::Blurred
+        crate::blur::Detail::Windows
     };
     let mut backdrop = crate::blur::backdrop(
         state,
@@ -1452,7 +1452,8 @@ fn dock_glass<R: MalaysiaRenderer>(
     };
     let resolved = &state.chrome_theme.resolved;
     let material = crate::blur::material(resolved, kind);
-    let uniforms = dock_frame_uniforms(resolved, material, plate_side);
+    let measured = crate::blur::measured(state, kind);
+    let uniforms = dock_frame_uniforms(resolved, material, plate_side, measured);
     let mut glass_uniforms = uniforms.clone();
     glass_uniforms.push(Uniform::new("lens", material.lens));
     let ring = crate::blur::outlined(shape.rect);
@@ -1503,6 +1504,7 @@ fn dock_frame_uniforms(
     resolved: &ctappearance::Resolved,
     dock: ctdesign::DockSurface,
     plate_side: Option<f32>,
+    measured: bool,
 ) -> Vec<smithay::backend::renderer::gles::Uniform<'static>> {
     use ctdesign::{
         ICON_PLATE, ICON_PLATE_CLEAR, ICON_PLATE_CLEAR_DARK, ICON_PLATE_GLASS,
@@ -1514,9 +1516,13 @@ fn dock_frame_uniforms(
         (true, false) => (&ICON_PLATE_CLEAR_DARK, ICON_PLATE_GLASS_DARK),
         (false, _) => (&ICON_PLATE_CLEAR, ICON_PLATE_GLASS),
     };
-    let glass = resolved
-        .bar_tint
-        .map_or(dock.glass, |(tint, factor)| dock.glass.mix(tint, factor));
+    let glass = if measured {
+        ctdesign::Rgba::TRANSPARENT
+    } else {
+        resolved
+            .bar_tint
+            .map_or(dock.glass, |(tint, factor)| dock.glass.mix(tint, factor))
+    };
     let outline = dock.outline;
     let glow = dock.glow;
     let (tone, tone_outline) = dock.tone.map_or(([0.0; 4], [0.0; 2]), |tone| {
@@ -1532,6 +1538,7 @@ fn dock_frame_uniforms(
         Uniform::new("glow_far", [glow[3], glow[4], glow[5]]),
         Uniform::new("tone", tone),
         Uniform::new("tone_outline", tone_outline),
+        Uniform::new("measured", f32::from(u8::from(measured))),
         Uniform::new(
             "plate",
             [

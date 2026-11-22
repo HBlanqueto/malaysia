@@ -17,7 +17,7 @@ native shell, System Settings and an xdg-desktop-portal backend.
 | **BarrierKit** | `bk` | AppKit | Toolkit of the shell and of Malaysia's own apps, built on Freya's core crates `=0.5.3` and the `ctdesign` tokens. It lives in [barrierkit](https://github.com/HBlanqueto/barrierkit). The compositor does not use it. |
 | **Grade Graphics** | `grade-graphics` | Core Graphics + Core Text | The compositor's GLSL shaders (window shape, border, shadow, blur, glass) and their parameters. |
 | **Grade Animation** | `bk::animation` | Core Animation | BarrierKit's animation module on `freya-animation`, with its own spring. The compositor does not use it. |
-| **Infinity** | `infinity` | SkyLight | Private app↔compositor protocol: corners, shadows, blur and animations. barrierkit owns the protocol crate; the compositor implements it. |
+| **Infinity** | `infinity` | SkyLight | Private app↔compositor protocol: bar, panel, popover and card styles, glass, plates, knobs and the desktop of a surface. barrierkit owns the protocol crate; the compositor implements it. |
 
 [`docs/architecture.md`](docs/architecture.md) explains how the processes fit
 together.

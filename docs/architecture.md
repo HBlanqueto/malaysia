@@ -50,7 +50,8 @@ session bus, so it never starts `notifications`.
 |---|---|
 | Protocols and composition order | compositor |
 | Geometry: position, size, anchors, exclusive zones | compositor |
-| Window frame: corners, shadow, border, hairline, blur behind | compositor, for every window, CSD or SSD |
+| Window frame: corners, shadow, border, hairline | compositor, for every window, CSD or SSD |
+| Blur and glass behind a surface | compositor: one measured Gaussian pipeline, values from `ctdesign` ([ADR 0020](decisions.md)) |
 | Server-side titlebar and traffic lights | compositor |
 | Content of the shell surfaces | shell |
 | Content of a window | its app |
@@ -88,7 +89,7 @@ cursor are drawn.
 |---|---|---|
 | Wayland: layer-shell, foreign-toplevel, session-lock, xdg-activation, image-copy-capture | compositor ↔ shell | placement, window list, lock, activation, capture |
 | `infinity_window_manager_v1` | shell → compositor | arrange, restore, force quit, send a shortcut; app menu addresses, spaces and desktops back |
-| `infinity_window_style_v1` | BarrierKit apps and the wallpaper → compositor | bar, panel, popover, glass, cards and the desktop of a surface |
+| `infinity_window_style_v1` | BarrierKit apps and the wallpaper → compositor | bar, panel, popover, glass, cards, plates, knobs and the desktop of a surface |
 | `infinity_session_v1` | compositor → shell | `locking` and `unlocked` |
 | `infinity_focus_manager_v1` | compositor ↔ patched libadwaita | focus mode bar, the wallpaper color behind a window and how light the glass under a popup is |
 | `.domain` files | Settings and the shell write; every process reads | preferences, watched with inotify |

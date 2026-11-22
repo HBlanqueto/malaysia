@@ -158,11 +158,9 @@ impl State {
     }
 
     pub(crate) fn send_glass_luma(&self) {
-        let Some(backdrop) = crate::blur::popups_backdrop(self) else {
+        let Some(panel) = crate::blur::popups_panel(self) else {
             return;
         };
-        let panel =
-            ctappearance::menu::panel_over(&self.chrome_theme.resolved.menu_glass, backdrop);
         let luma = ctappearance::menu::panel_luma(panel);
         let thousandths = (luma * infinity_protocol::THOUSANDTHS).round() as u32;
         for notice in &self.focus_notices {
