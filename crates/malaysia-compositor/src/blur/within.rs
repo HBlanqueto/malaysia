@@ -10,7 +10,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale};
 use smithay::wayland::compositor::{TraversalAction, with_surface_tree_downward};
 
-use super::look::{self, Look};
+use super::look::{self, GlassShape, Look};
 use super::{Behind, Blur, Method, render_behind};
 use crate::cursor::OutputRenderElement;
 use crate::effects::{Arrow, RoundedTextureElement, Shape};
@@ -381,27 +381,52 @@ fn paint(
     if area.is_empty() {
         return None;
     }
+    let look = match glass_shape(job, area, scene) {
+        Some(shape) => job.look.shaped(shape),
+        None => job.look,
+    };
     match job.blending {
         BlendingMode::WithinWindow => match source.layered {
-            Some(layered) => run(blur, renderer, key, (area, job), scene.scale, layered),
-            None => run(blur, renderer, key, (area, job), scene.scale, source.tree),
+            Some(layered) => run(blur, renderer, key, (area, look), scene.scale, layered),
+            None => run(blur, renderer, key, (area, look), scene.scale, source.tree),
         },
         _ => run(
             blur,
             renderer,
             key,
-            (area, job),
+            (area, look),
             scene.scale,
             source.wallpaper,
         ),
     }
 }
 
+fn glass_shape(job: &Job, area: Rectangle<i32, Physical>, scene: &Scene) -> Option<GlassShape> {
+    (job.radius > 0).then(|| {
+        let panel = crate::glass::panel_shape(
+            job.radius,
+            job.full,
+            job.short_side,
+            &scene.frame,
+            scene.scale,
+        );
+        GlassShape {
+            rect: [
+                (job.full.loc.x - area.loc.x) as f32,
+                (job.full.loc.y - area.loc.y) as f32,
+                job.full.size.w as f32,
+                job.full.size.h as f32,
+            ],
+            radius: panel.radius as f32,
+        }
+    })
+}
+
 fn run<E: RenderElement<GlesRenderer>>(
     blur: &mut Blur,
     renderer: &mut GlesRenderer,
     key: (Id, usize),
-    (area, job): (Rectangle<i32, Physical>, &Job),
+    (area, look): (Rectangle<i32, Physical>, Look),
     scale: f64,
     elements: &[E],
 ) -> Option<Painted> {
@@ -414,12 +439,8 @@ fn run<E: RenderElement<GlesRenderer>>(
         used: 0,
     });
     slot.used = within.epoch;
-    let method = Method::Measured(programs, job.look, Rectangle::from_size(area.size));
-    let elements = if job.look.sees_backdrop() {
-        elements
-    } else {
-        &[]
-    };
+    let method = Method::Measured(programs, look, Rectangle::from_size(area.size));
+    let elements = if look.sees_backdrop() { elements } else { &[] };
     render_behind(&mut slot.behind, method, renderer, (area, scale), elements)?;
     let behind = slot.behind.as_ref()?;
     Some(Painted {

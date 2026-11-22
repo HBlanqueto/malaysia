@@ -7,7 +7,7 @@ use smithay::backend::renderer::{Bind, ExportMem, ImportMem, Texture};
 use smithay::utils::{Buffer as BufferCoords, Physical, Rectangle, Size};
 
 use super::gaussian::{Backdrop, Programs, compile, low_sigma, reduction_for};
-use super::look::{Look, Post};
+use super::look::{GlassPost, Look, Post};
 use crate::test_support::try_test_renderer;
 
 const MATERIALS: [Material; 14] = [
@@ -565,9 +565,13 @@ const TINT_BAR_AT_DEPTH_100: usize = 2;
 const TINT_STEPS: [f32; 5] = [0.0, 0.25, 0.5, 0.75, 1.0];
 
 fn tint_backdrop(level: impl Fn(i32, i32) -> f32) -> Vec<u8> {
-    let mut pixels = Vec::with_capacity((TINT_WIDTH * TINT_HEIGHT * 4) as usize);
-    for y in 0..TINT_HEIGHT {
-        for x in 0..TINT_WIDTH {
+    tint_backdrop_with(TINT_WIDTH, TINT_HEIGHT, level)
+}
+
+fn tint_backdrop_with(width: i32, height: i32, level: impl Fn(i32, i32) -> f32) -> Vec<u8> {
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height {
+        for x in 0..width {
             let byte = level(x, y).round() as u8;
             pixels.extend([byte, byte, byte, 255]);
         }
@@ -734,7 +738,12 @@ fn the_glass_face_of_the_pipeline_agrees_with_the_kit_model_at_every_slider_posi
             let look = Look {
                 sigma: 4.0,
                 halo: None,
-                post: Post::Glass(tinted.look),
+                post: Post::Glass(GlassPost {
+                    look: tinted.look,
+                    rim: &ctdesign::LIQUID_GLASS_REGULAR_DARK.rim,
+                    active: true,
+                    shape: None,
+                }),
             };
             for rgb in [
                 [0.0, 0.0, 0.0],
@@ -763,4 +772,138 @@ fn the_glass_face_of_the_pipeline_agrees_with_the_kit_model_at_every_slider_posi
         errors.rms()
     );
     assert!(errors.worst <= MOST_ERROR, "worst {}", errors.worst);
+}
+
+const PASS_MOST_ERROR: f32 = 4.5;
+const PASS_MOST_RMS: f32 = 1.3;
+const PASS_WIDTH: i32 = 360;
+const PASS_HEIGHT: i32 = 280;
+const PASS_SHAPE: (i32, i32, i32, i32, i32) = (80, 60, 200, 160, 24);
+
+fn pass_backdrop(x: i32, y: i32) -> f32 {
+    let stripe = ((x / 12) + (y / 36)) % 2 == 0;
+    if stripe { 215.0 } else { 45.0 }
+}
+
+#[test]
+fn the_glass_pass_agrees_with_the_kit_model_inside_the_shape_at_each_slider_position() {
+    use crate::window_style::Material as Requested;
+    use ctappearance::liquid_glass::{self, Glass, GlassState, Image, Shape};
+    let Some(mut bench) = Bench::new() else {
+        eprintln!("skipping: no EGL device");
+        return;
+    };
+    let (_loop, _display, mut state) = crate::test_support::test_state((1280, 720));
+    let (x, y, width, height, radius) = PASS_SHAPE;
+    let shape = Shape {
+        x: x as f32,
+        y: y as f32,
+        width: width as f32,
+        height: height as f32,
+        radius: radius as f32,
+    };
+    let pixels = tint_backdrop_with(PASS_WIDTH, PASS_HEIGHT, pass_backdrop);
+    let image = Image::new(PASS_WIDTH as usize, PASS_HEIGHT as usize, |px, py| {
+        [pass_backdrop(px as i32, py as i32); 3]
+    });
+    for (name, glass, requested, scheme) in [
+        (
+            "regular dark",
+            Glass::Regular,
+            Requested::GlassRegular,
+            ColorScheme::Dark,
+        ),
+        (
+            "regular light",
+            Glass::Regular,
+            Requested::GlassRegular,
+            ColorScheme::Light,
+        ),
+        (
+            "clear dark",
+            Glass::Clear,
+            Requested::GlassClear,
+            ColorScheme::Dark,
+        ),
+    ] {
+        state.chrome_theme.resolved.scheme = scheme;
+        let set = liquid_glass::looks(glass, scheme);
+        for amount in [0.0, 0.5, 1.0] {
+            state.config.appearance.liquid_glass_tint = amount;
+            let look = super::look::requested(&state, requested, true, height as f32)
+                .unwrap()
+                .shaped(super::look::GlassShape {
+                    rect: [x as f32, y as f32, width as f32, height as f32],
+                    radius: radius as f32,
+                });
+            let shown = bench.blur(
+                (PASS_WIDTH, PASS_HEIGHT),
+                &pixels,
+                whole(PASS_WIDTH, PASS_HEIGHT),
+                look,
+                1.0,
+            );
+            let reference = liquid_glass::render(
+                &set,
+                &liquid_glass::tint(glass, scheme),
+                amount,
+                GlassState::Active,
+                &image,
+                &shape,
+            );
+            let unshaped = bench.blur(
+                (PASS_WIDTH, PASS_HEIGHT),
+                &pixels,
+                whole(PASS_WIDTH, PASS_HEIGHT),
+                super::look::requested(&state, requested, true, height as f32).unwrap(),
+                1.0,
+            );
+            let mut without = Errors::new();
+            let (mut inside, mut edge) = (Errors::new(), Errors::new());
+            for py in 0..PASS_HEIGHT {
+                for px in 0..PASS_WIDTH {
+                    let (depth, _) = liquid_glass::rounded_rect_distance(
+                        &shape,
+                        px as f32 + 0.5,
+                        py as f32 + 0.5,
+                    );
+                    if depth > -1.0 {
+                        continue;
+                    }
+                    let got = f32::from(column_at(&shown, PASS_WIDTH, (px, py))[1]);
+                    let expected = reference.rgb[(py * PASS_WIDTH + px) as usize][1];
+                    without
+                        .add(f32::from(column_at(&unshaped, PASS_WIDTH, (px, py))[1]) - expected);
+                    if depth > -8.0 {
+                        edge.add(got - expected);
+                    } else {
+                        inside.add(got - expected);
+                    }
+                }
+            }
+            eprintln!(
+                "{name} {amount}: deeper than 8 px worst {:.1} rms {:.2}; rim zone worst {:.1} rms {:.2}; without the pass worst {:.1} rms {:.2}",
+                inside.worst,
+                inside.rms(),
+                edge.worst,
+                edge.rms(),
+                without.worst,
+                without.rms()
+            );
+            if glass == Glass::Regular {
+                assert!(
+                    inside.worst <= PASS_MOST_ERROR,
+                    "{name} {amount}: {}",
+                    inside.worst
+                );
+                assert!(
+                    edge.worst <= PASS_MOST_ERROR,
+                    "{name} {amount}: {}",
+                    edge.worst
+                );
+                assert!(inside.rms() <= PASS_MOST_RMS && edge.rms() <= PASS_MOST_RMS);
+                assert!(without.worst > 3.0 * edge.worst.max(inside.worst));
+            }
+        }
+    }
 }

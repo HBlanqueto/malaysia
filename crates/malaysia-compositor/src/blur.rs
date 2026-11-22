@@ -1300,7 +1300,7 @@ mod tests {
             panic!("requested glass draws the face of the model");
         };
         assert_eq!(
-            face.fill.a,
+            face.look.fill.a,
             ctdesign::LIQUID_GLASS_TINT_REGULAR_DARK.fill_alpha[2]
         );
         state.config.appearance.liquid_glass_tint = 0.0;

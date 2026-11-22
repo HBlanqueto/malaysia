@@ -1,8 +1,11 @@
+use ctappearance::ColorScheme;
 use ctappearance::liquid_glass::{self, GlassState, Tinted};
 use ctappearance::material::{self, Material};
 use ctdesign::{
-    FULLSCREEN_BAND, FULLSCREEN_GLASS, GlassLook, MENU_GLASS_SPREAD, MaterialLook, MaterialSet,
-    SHELL_GLASS_DOCK_DARK, SHELL_GLASS_MENU_DARK, SHELL_GLASS_NOTIFICATION_CARD_DARK, ShellGlass,
+    FULLSCREEN_BAND, FULLSCREEN_GLASS, GlassLook, GlassRim, LIQUID_GLASS_CLEAR_DARK,
+    LIQUID_GLASS_CLEAR_LIGHT, LIQUID_GLASS_REGULAR_DARK, LIQUID_GLASS_REGULAR_LIGHT,
+    MENU_GLASS_SPREAD, MaterialLook, MaterialSet, SHELL_GLASS_DOCK_DARK, SHELL_GLASS_MENU_DARK,
+    SHELL_GLASS_NOTIFICATION_CARD_DARK, ShellGlass,
 };
 
 use super::Glass;
@@ -14,7 +17,21 @@ pub(super) enum Post {
     Plain,
     Material(MaterialLook),
     Shell(ShellGlass),
-    Glass(GlassLook),
+    Glass(GlassPost),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct GlassShape {
+    pub(super) rect: [f32; 4],
+    pub(super) radius: f32,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct GlassPost {
+    pub(super) look: GlassLook,
+    pub(super) rim: &'static GlassRim,
+    pub(super) active: bool,
+    pub(super) shape: Option<GlassShape>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -52,6 +69,15 @@ impl Look {
             halo: None,
             post: Post::Plain,
         }
+    }
+
+    pub(super) fn shaped(mut self, shape: GlassShape) -> Self {
+        if let Post::Glass(glass) = &mut self.post
+            && glass.active
+        {
+            glass.shape = Some(shape);
+        }
+        self
     }
 
     pub(super) fn solid(&self) -> bool {
@@ -127,6 +153,15 @@ fn glass_state(state: &State, active: bool) -> GlassState {
     }
 }
 
+fn rim_of(glass: liquid_glass::Glass, scheme: ColorScheme) -> &'static GlassRim {
+    match (glass, scheme) {
+        (liquid_glass::Glass::Regular, ColorScheme::Light) => &LIQUID_GLASS_REGULAR_LIGHT.rim,
+        (liquid_glass::Glass::Regular, _) => &LIQUID_GLASS_REGULAR_DARK.rim,
+        (liquid_glass::Glass::Clear, ColorScheme::Light) => &LIQUID_GLASS_CLEAR_LIGHT.rim,
+        (liquid_glass::Glass::Clear, _) => &LIQUID_GLASS_CLEAR_DARK.rim,
+    }
+}
+
 fn glass_look(state: &State, glass: liquid_glass::Glass, active: bool, shorter_side: f32) -> Look {
     let scheme = state.chrome_theme.resolved.scheme;
     let set = liquid_glass::looks(glass, scheme);
@@ -145,7 +180,12 @@ fn glass_look(state: &State, glass: liquid_glass::Glass, active: bool, shorter_s
     Look {
         sigma: liquid_glass::blur_sigma(&shown.look, f32::MIN),
         halo: (shown.blur_fill > 0.0).then_some((shown.blur_fill_sigma, shown.blur_fill)),
-        post: Post::Glass(shown.look),
+        post: Post::Glass(GlassPost {
+            look: shown.look,
+            rim: rim_of(glass, scheme),
+            active: glass_state == GlassState::Active,
+            shape: None,
+        }),
     }
 }
 
