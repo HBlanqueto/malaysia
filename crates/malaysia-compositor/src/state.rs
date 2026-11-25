@@ -14,6 +14,7 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
 use crate::drm::Drm;
+use crate::winit::Winit;
 
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.1, 0.1, 0.12, 1.0);
 
@@ -29,11 +30,16 @@ pub fn elements(
         .unwrap_or_default()
 }
 
+pub enum Backend {
+    Drm(Box<Drm>),
+    Winit(Box<Winit>),
+}
+
 pub struct State {
     pub display_handle: DisplayHandle,
     pub loop_handle: LoopHandle<'static, State>,
     pub start_time: Instant,
-    pub backend: Drm,
+    pub backend: Backend,
     pub output: Output,
     pub space: Space<Window>,
     pub compositor_state: CompositorState,
@@ -55,21 +61,36 @@ impl State {
         if !self.needs_redraw || self.frame_pending {
             return;
         }
-        self.render();
+        match &self.backend {
+            Backend::Drm(_) => self.render(),
+            Backend::Winit(winit) => {
+                self.frame_pending = true;
+                winit.request_redraw();
+            }
+        }
     }
 
-    fn render(&mut self) {
+    pub fn render(&mut self) {
         self.needs_redraw = false;
         self.frame_pending = true;
-        let queued = self
-            .backend
-            .render(&self.space, &self.output)
-            .unwrap_or_else(|error| {
-                tracing::warn!(%error, "render failed");
-                false
-            });
-        if !queued {
-            self.finish_frame_after_one_refresh();
+        match &mut self.backend {
+            Backend::Drm(drm) => {
+                let queued = drm
+                    .render(&self.space, &self.output)
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(%error, "render failed");
+                        false
+                    });
+                if !queued {
+                    self.finish_frame_after_one_refresh();
+                }
+            }
+            Backend::Winit(winit) => {
+                if let Err(error) = winit.render(&self.space, &self.output) {
+                    tracing::warn!(%error, "render failed");
+                }
+                self.frame_done();
+            }
         }
     }
 

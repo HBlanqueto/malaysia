@@ -16,7 +16,7 @@ use smithay::reexports::drm::control::{Device, ModeTypeFlags, connector};
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::DeviceFd;
 
-use crate::state::{CLEAR_COLOR, State, elements};
+use crate::state::{Backend, CLEAR_COLOR, State, elements};
 
 type Compositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
@@ -113,7 +113,9 @@ impl Drm {
 
         loop_handle.insert_source(notifier, move |event, _, state| match event {
             DrmEvent::VBlank(_) => {
-                if let Err(error) = state.backend.compositor.frame_submitted() {
+                if let Backend::Drm(drm) = &mut state.backend
+                    && let Err(error) = drm.compositor.frame_submitted()
+                {
                     tracing::error!(%error, "frame submit failed");
                 }
                 state.frame_done();

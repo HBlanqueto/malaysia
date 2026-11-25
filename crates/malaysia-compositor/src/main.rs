@@ -1,6 +1,7 @@
 mod drm;
 mod handlers;
 mod state;
+mod winit;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -15,7 +16,8 @@ use smithay::wayland::socket::ListeningSocketSource;
 use tracing_subscriber::{filter::Targets, fmt, prelude::*};
 
 use crate::drm::Drm;
-use crate::state::{ClientState, State};
+use crate::state::{Backend, ClientState, State};
+use crate::winit::Winit;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let filter = std::env::var("RUST_LOG")
@@ -26,15 +28,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(fmt::layer())
         .with(filter)
         .init();
-    let path = std::env::args()
-        .nth(1)
-        .ok_or("usage: malaysia-compositor /dev/dri/cardN")?;
+    let device = std::env::args().nth(1);
+    let nested = ["WAYLAND_DISPLAY", "DISPLAY"]
+        .iter()
+        .any(|name| std::env::var_os(name).is_some());
 
     let mut event_loop = EventLoop::<State>::try_new()?;
     let display = Display::<State>::new()?;
     let display_handle = display.handle();
     let loop_handle = event_loop.handle();
-    let (backend, output) = Drm::init(&path, &display_handle, &loop_handle)?;
+    let (backend, output) = match device {
+        Some(path) => {
+            tracing::info!(%path, "drm backend");
+            let (drm, output) = Drm::init(&path, &display_handle, &loop_handle)?;
+            (Backend::Drm(Box::new(drm)), output)
+        }
+        None if nested => {
+            tracing::info!("winit backend");
+            let (winit, output) =
+                Winit::init(&display_handle, &loop_handle, event_loop.get_signal())?;
+            (Backend::Winit(Box::new(winit)), output)
+        }
+        None => return Err("usage: malaysia-compositor [/dev/dri/cardN]".into()),
+    };
     let mut space = Space::default();
     space.map_output(&output, (0, 0));
 

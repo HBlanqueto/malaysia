@@ -149,15 +149,18 @@ Applies to decorations, chrome, shadows, blur, borders, themes and shell.
 
 The Mac does not build the compositor. Everything runs in the podman box of
 `vm.sh`: aarch64 Linux with Nix and a virtual KMS display (`vkms`) at
-`/dev/dri/card0`. The compositor runs directly on it, so its screen is seen
-with `./vm.sh shot`, not over VNC.
+`/dev/dri/card0`, and a headless sway with VNC on `vnc://127.0.0.1:5901`. With
+the device argument the compositor runs directly on vkms and its screen is
+seen with `./vm.sh shot`; with no argument it runs nested in sway and is seen
+with `grim` in the box or over VNC.
 
 ```sh
 ./vm.sh up                                     # machine, vkms, container
 ./vm.sh run nix develop -c cargo fmt --check
 ./vm.sh run nix develop -c cargo clippy -- -D warnings
 ./vm.sh run nix develop -c cargo test
-./vm.sh run nix develop -c cargo run -- /dev/dri/card0
+./vm.sh run nix develop -c cargo run -- /dev/dri/card0   # direct
+./vm.sh run nix develop -c cargo run                     # nested
 ./vm.sh shot /tmp/malaysia.png                 # PNG of the vkms scanout
 ./vm.sh sh                                     # shell in the box
 ./vm.sh down
