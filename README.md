@@ -4,8 +4,9 @@ Malaysia is a Wayland compositor written in Rust on
 [Smithay](https://github.com/Smithay/smithay).
 
 It is being rebuilt from its foundation, one dependency at a time. Today it
-opens a display directly through DRM/KMS and fills it with one color. It does
-not show windows or take input yet. [ROADMAP.md](ROADMAP.md) says which step
+opens a display directly through DRM/KMS and draws the windows of Wayland
+clients that use `xdg_shell` and shared-memory buffers. It does not take input
+yet. [ROADMAP.md](ROADMAP.md) says which step
 is in progress and what comes next.
 
 ## Build and run

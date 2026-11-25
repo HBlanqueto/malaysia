@@ -9,15 +9,20 @@ Last update: 2026-11-25.
 
 ## Where we are
 
-**Now:** step 4, windows.
+**Now:** step 5, the nested session.
+
+The display after the last finished step (step 4: a test client drawn by the
+compositor on the virtual display):
+
+![The display after the last finished step](screen.png)
 
 | Step | What it adds | What can be seen | State |
 |---|---|---|---|
 | 1 | Smithay, event loop, Wayland socket | a window with one color, nested | done `8bbad9a` |
 | 2 | DRM/KMS output through GBM and GLES | the same color, directly on a display | done `da8a2c9` |
-| 3 | Logging with `tracing` | Smithay's warnings and the compositor's own messages | done |
-| 4 | Windows: `wl_compositor`, `wl_shm`, `xdg_shell`, `wl_output` | an app drawn on the screen | next |
-| 5 | Nested session: the winit backend returns and shares the frame code with DRM | the compositor inside another desktop | to do |
+| 3 | Logging with `tracing` | Smithay's warnings and the compositor's own messages | done `017f0a4` |
+| 4 | Windows: `wl_compositor`, `wl_shm`, `xdg_shell`, `wl_output` | an app drawn on the screen | done |
+| 5 | Nested session: the winit backend returns and shares the frame code with DRM | the compositor inside another desktop | next |
 | 6 | Seat: keyboard and pointer | typing in a window, a cursor | to do |
 | 7 | Session with libseat | start from a TTY as a normal user, switch VT | to do |
 | 8 | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument | to do |
@@ -40,6 +45,11 @@ nested one. `./vm.sh shot file.png` captures the virtual display.
 The box has no seat, no udev and no real GPU. Steps 7 and 8 are checked in a
 virtual machine with a full Linux session, and what only real hardware can
 prove is marked here as **not verified on hardware** until someone runs it.
+
+## Known gaps
+
+- Popups (menus) are not configured or drawn yet.
+- Every window opens at the top left corner, over the others.
 
 ## Not verified on hardware
 

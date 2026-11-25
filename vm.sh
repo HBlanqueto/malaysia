@@ -10,7 +10,7 @@ in_box() { podman exec -w /work "$NAME" "$@"; }
 up() {
 	podman machine list --format '{{.Running}}' | grep -q true || podman machine start
 	podman machine ssh 'sudo modprobe vkms enable_writeback=1 enable_cursor=1 enable_overlay=1; until [ -e /dev/dri/card0 ]; do sleep 0.2; done; sudo chmod 666 /dev/dri/card0'
-	podman container exists "$NAME" || podman run -d --name "$NAME" -p 127.0.0.1:5901:5900 --device /dev/dri/card0 \
+	podman container exists "$NAME" || podman run -d --init --name "$NAME" -p 127.0.0.1:5901:5900 --device /dev/dri/card0 \
 		-v "$REPO":/work -v malaysia-nix:/nix -v malaysia-cache:/cache -w /work \
 		-e CARGO_TARGET_DIR=/cache/target -e LIBGL_ALWAYS_SOFTWARE=1 \
 		-e NIX_CONFIG="experimental-features = nix-command flakes" \
@@ -22,6 +22,8 @@ up() {
 	in_box sh -c "command -v sway >/dev/null" || in_box nix profile install \
 		nixpkgs#sway nixpkgs#wayvnc nixpkgs#mesa nixpkgs#dbus nixpkgs#procps \
 		nixpkgs#foot nixpkgs#wayland-utils nixpkgs#mesa-demos
+	in_box sh -c "command -v weston-simple-shm >/dev/null" || in_box nix profile add --impure --expr \
+		'with import (builtins.getFlake "nixpkgs") {}; weston.overrideAttrs (old: { mesonFlags = lib.remove "-Dsimple-clients=" old.mesonFlags ++ ["-Dsimple-clients=shm"]; })'
 	in_box pgrep -x sway >/dev/null || podman exec -d -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus \
 		-e WLR_BACKENDS=headless -e WLR_RENDERER=pixman -e WLR_LIBINPUT_NO_DEVICES=1 "$NAME" \
 		sh -c 'mkdir -p -m700 /run/user/0; exec sway >/tmp/sway.log 2>&1'
