@@ -1,16 +1,20 @@
 use std::time::{Duration, Instant};
 
+use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::{Color32F, gles::GlesRenderer};
 use smithay::desktop::space::SpaceRenderElements;
+use smithay::desktop::utils::send_frames_surface_tree;
 use smithay::desktop::{Space, Window};
 use smithay::input::keyboard::Keycode;
+use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
 use smithay::output::Output;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{LoopHandle, LoopSignal};
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
+use smithay::render_elements;
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
@@ -21,16 +25,22 @@ use crate::winit::Winit;
 
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.1, 0.1, 0.12, 1.0);
 
-pub type Element = SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>;
+render_elements! {
+    pub Element<=GlesRenderer>;
+    Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
+    Surface=WaylandSurfaceRenderElement<GlesRenderer>,
+    Solid=SolidColorRenderElement,
+}
 
 pub fn elements(
     renderer: &mut GlesRenderer,
     space: &Space<Window>,
     output: &Output,
-) -> Vec<Element> {
-    space
-        .render_elements_for_output(renderer, output, 1.0)
-        .unwrap_or_default()
+    frame: &mut Vec<Element>,
+) {
+    if let Ok(space_elements) = space.render_elements_for_output(renderer, output, 1.0) {
+        frame.extend(space_elements.into_iter().map(Element::from));
+    }
 }
 
 pub enum Backend {
@@ -55,6 +65,8 @@ pub struct State {
     pub needs_redraw: bool,
     pub frame_pending: bool,
     pub suppressed_keys: Vec<Keycode>,
+    pub cursor_status: CursorImageStatus,
+    pub frame_elements: Vec<Element>,
 }
 
 #[derive(Default)]
@@ -82,14 +94,24 @@ impl State {
     pub fn render(&mut self) {
         self.needs_redraw = false;
         self.frame_pending = true;
+        let pointer = self.seat.get_pointer().unwrap().current_location();
         let rendered = match &mut self.backend {
-            Backend::Drm(drm) => drm.render(&self.space, &self.output),
-            Backend::Winit(winit) => winit.render(&self.space, &self.output),
+            Backend::Drm(drm) => drm.render(
+                &self.space,
+                &self.output,
+                &self.cursor_status,
+                pointer,
+                &mut self.frame_elements,
+            ),
+            Backend::Winit(winit) => {
+                winit.render(&self.space, &self.output, &mut self.frame_elements)
+            }
         }
         .unwrap_or_else(|error| {
             tracing::warn!(%error, "render failed");
             false
         });
+        self.frame_elements.clear();
         if !rendered {
             self.finish_frame_after_one_refresh();
         } else if let Backend::Winit(_) = self.backend {
@@ -119,6 +141,13 @@ impl State {
         let time = self.start_time.elapsed();
         for window in self.space.elements() {
             window.send_frame(&self.output, time, Some(Duration::ZERO), |_, _| {
+                Some(self.output.clone())
+            });
+        }
+        if let (Backend::Drm(_), CursorImageStatus::Surface(surface)) =
+            (&self.backend, &self.cursor_status)
+        {
+            send_frames_surface_tree(surface, &self.output, time, Some(Duration::ZERO), |_, _| {
                 Some(self.output.clone())
             });
         }

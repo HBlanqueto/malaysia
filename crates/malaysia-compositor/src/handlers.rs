@@ -1,5 +1,6 @@
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::desktop::Window;
+use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_server::protocol::{
     wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface,
@@ -121,6 +122,11 @@ impl SeatHandler for State {
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&WlSurface>) {
         let client = focused.and_then(|surface| self.display_handle.get_client(surface.id()).ok());
         set_data_device_focus(&self.display_handle, seat, client);
+    }
+
+    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
+        self.cursor_status = image;
+        self.needs_redraw = true;
     }
 }
 

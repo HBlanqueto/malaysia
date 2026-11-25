@@ -42,8 +42,8 @@ to another VT.
 
 `nix build` builds the compositor as a package. `nix build .#checks.<system>.vm`
 boots a NixOS machine, logs a normal user in on a TTY, runs the compositor
-directly on the virtual GPU, types into a terminal, switches to another VT and
-back, types again and quits.
+directly on the virtual GPU, types into a terminal, moves the mouse and checks
+the cursor, switches to another VT and back, types again and quits.
 
 On a Mac, `vm.sh` runs the same commands in a Linux box that has a virtual
 display and a headless desktop:

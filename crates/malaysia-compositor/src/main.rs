@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use smithay::desktop::Space;
+use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{SeatState, keyboard::XkbConfig};
 use smithay::reexports::calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic};
 use smithay::reexports::wayland_server::Display;
@@ -93,6 +94,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         needs_redraw: true,
         frame_pending: false,
         suppressed_keys: Vec::new(),
+        cursor_status: CursorImageStatus::default_named(),
+        frame_elements: Vec::new(),
     };
     event_loop.run(None, &mut state, |state| {
         state.space.refresh();

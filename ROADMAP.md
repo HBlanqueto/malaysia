@@ -9,11 +9,12 @@ Last update: 2026-11-25.
 
 ## Where we are
 
-**Now:** step 8b, the cursor.
+**Now:** this stage is done. The compositor runs directly on a display and
+nested in another session. Next: a review of the whole code, then the first
+item of «After this stage». Nothing has run on real hardware yet.
 
-The display after the last finished step (step 8a: on a NixOS machine, text
-typed on the keyboard reached the terminal before and after Ctrl+Alt+F2 and
-back):
+The display after the last finished step (step 8b: on a NixOS machine, the
+terminal's own text cursor drawn where the mouse is):
 
 ![The display after the last finished step](screen.png)
 
@@ -27,8 +28,8 @@ back):
 | 6 | Seat: keyboard and pointer | typing in a window | done `9427c17` |
 | 7a | A Nix package and a NixOS test machine | the compositor on a virtual GPU in a full Linux session | done `8c058c3` |
 | 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | done `447a64a` |
-| 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | done |
-| 8b | Cursor | a pointer that can be seen on a real display | next |
+| 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | done `983e166` |
+| 8b | Cursor | a pointer that can be seen on a real display | done |
 
 When step 8b is done the compositor runs directly on hardware and nested in
 another session. That is the goal of this stage.
@@ -58,7 +59,10 @@ prove is marked here as **not verified on hardware** until someone runs it.
 - Popups (menus) are not configured or drawn yet.
 - Every window opens at the top left corner, over the others.
 - Scroll, drag and drop and the clipboard are not tested.
-- Directly on a display the pointer works but nothing draws it until step 8b.
+- The fallback cursor is a white square: it shows where no client sets its
+  own cursor. Cursor themes come later.
+- The pointer starts at the top left corner.
+- Nested, the host draws its own cursor; the client's cursor is not shown.
 - Under logind, switching VT with Ctrl+Alt+Fn needs polkit; without it the
   switch is refused and logged.
 - Displays and GPUs are read once at start: no hotplug.

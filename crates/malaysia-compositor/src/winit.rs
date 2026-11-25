@@ -9,7 +9,7 @@ use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size, Transform};
 
-use crate::state::{CLEAR_COLOR, State, elements};
+use crate::state::{CLEAR_COLOR, Element, State, elements};
 
 pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
@@ -80,14 +80,15 @@ impl Winit {
         &mut self,
         space: &Space<Window>,
         output: &Output,
+        frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
         let (renderer, mut framebuffer) = self.backend.bind()?;
-        let elements = elements(renderer, space, output);
+        elements(renderer, space, output, frame);
         let result = self.damage_tracker.render_output(
             renderer,
             &mut framebuffer,
             self.age,
-            &elements,
+            frame,
             CLEAR_COLOR,
         )?;
         drop(framebuffer);

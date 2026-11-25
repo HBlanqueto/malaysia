@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
@@ -8,20 +9,29 @@ use smithay::backend::drm::exporter::gbm::{GbmFramebufferExporter, NodeFilter};
 use smithay::backend::drm::{DrmDevice, DrmDeviceFd, DrmEvent};
 use smithay::backend::egl::{EGLContext, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
+use smithay::backend::renderer::Color32F;
+use smithay::backend::renderer::element::Kind;
+use smithay::backend::renderer::element::solid::{SolidColorBuffer, SolidColorRenderElement};
+use smithay::backend::renderer::element::surface::render_elements_from_surface_tree;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::primary_gpu;
 use smithay::desktop::{Space, Window};
+use smithay::input::pointer::{CursorImageAttributes, CursorImageStatus};
 use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::drm::control::{Device, ModeTypeFlags, connector};
 use smithay::reexports::input::Libinput;
 use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::DeviceFd;
+use smithay::utils::{DeviceFd, IsAlive, Logical, Point};
+use smithay::wayland::compositor::with_states;
 
-use crate::state::{Backend, CLEAR_COLOR, State, elements};
+use crate::state::{Backend, CLEAR_COLOR, Element, State, elements};
+
+const CURSOR_SIZE: i32 = 16;
+const CURSOR_COLOR: Color32F = Color32F::new(1.0, 1.0, 1.0, 1.0);
 
 type Compositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
@@ -32,6 +42,7 @@ pub struct Drm {
     compositor: Compositor,
     session: LibSeatSession,
     libinput: Libinput,
+    cursor_fallback: SolidColorBuffer,
 }
 
 impl Drm {
@@ -175,6 +186,7 @@ impl Drm {
                 compositor,
                 session,
                 libinput,
+                cursor_fallback: SolidColorBuffer::new((CURSOR_SIZE, CURSOR_SIZE), CURSOR_COLOR),
             },
             output,
         ))
@@ -210,18 +222,58 @@ impl Drm {
         &mut self,
         space: &Space<Window>,
         output: &Output,
+        cursor: &CursorImageStatus,
+        pointer: Point<f64, Logical>,
+        frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
-        let elements = elements(&mut self.renderer, space, output);
-        let frame = self.compositor.render_frame(
-            &mut self.renderer,
-            &elements,
-            CLEAR_COLOR,
-            FrameFlags::DEFAULT,
-        )?;
-        if frame.is_empty {
+        self.push_cursor(cursor, pointer, frame);
+        elements(&mut self.renderer, space, output, frame);
+        let is_empty = self
+            .compositor
+            .render_frame(&mut self.renderer, frame, CLEAR_COLOR, FrameFlags::DEFAULT)?
+            .is_empty;
+        if is_empty {
             return Ok(false);
         }
         self.compositor.queue_frame(())?;
         Ok(true)
+    }
+
+    fn push_cursor(
+        &mut self,
+        cursor: &CursorImageStatus,
+        pointer: Point<f64, Logical>,
+        frame: &mut Vec<Element>,
+    ) {
+        match cursor {
+            CursorImageStatus::Hidden => {}
+            CursorImageStatus::Surface(surface) if surface.alive() => {
+                let hotspot = with_states(surface, |states| {
+                    states
+                        .data_map
+                        .get::<Mutex<CursorImageAttributes>>()
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .hotspot
+                });
+                let location = (pointer - hotspot.to_f64()).to_physical(1.0).to_i32_round();
+                frame.extend(render_elements_from_surface_tree::<_, Element>(
+                    &mut self.renderer,
+                    surface,
+                    location,
+                    1.0,
+                    1.0,
+                    Kind::Cursor,
+                ));
+            }
+            _ => frame.push(Element::Solid(SolidColorRenderElement::from_buffer(
+                &self.cursor_fallback,
+                pointer.to_physical(1.0).to_i32_round(),
+                1.0,
+                1.0,
+                Kind::Cursor,
+            ))),
+        }
     }
 }

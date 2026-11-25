@@ -103,8 +103,35 @@
                 '';
               in
               ''
+                import subprocess
+                import time
+
+                def screen(name):
+                    machine.screenshot(name)
+                    ppm = subprocess.run(f"pngtopnm {machine.out_dir}/{name}.png | ppmtoppm", shell=True, capture_output=True, check=True).stdout
+                    _, size, _, data = ppm.split(b"\n", 3)
+                    return int(size.split()[0]), data
+
+                def bounds(points):
+                    xs = [x for x, _ in points]
+                    ys = [y for _, y in points]
+                    return min(xs), min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
+
+                def white(name):
+                    width, data = screen(name)
+                    return [(i // 3 % width, i // 3 // width) for i in range(0, len(data), 3) if data[i:i + 3] == b"\xff\xff\xff"]
+
                 try:
                     machine.wait_for_file("/run/user/1000/wayland-1", timeout=600)
+                    machine.wait_until_succeeds("[ $(grep -c 'New device' /tmp/malaysia.log) -ge $(ls /dev/input/event* | wc -l) ]", timeout=120)
+                    machine.send_monitor_command("mouse_move 300 300")
+                    for _ in range(60):
+                        fallback = white("cursor-fallback")
+                        if fallback and bounds(fallback)[:2] != (0, 0):
+                            break
+                        time.sleep(1)
+                    print("fallback", bounds(fallback), len(fallback))
+                    assert bounds(fallback)[2:] == (16, 16) and len(fallback) == 256 and bounds(fallback)[:2] != (0, 0)
                     machine.succeed("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 WAYLAND_DEBUG=1 foot -o font=monospace:size=24 ${typist}' >/tmp/foot.log 2>&1 &")
                     machine.wait_for_file("/tmp/ready", timeout=300)
                     machine.wait_for_text("ready", timeout=300)
@@ -120,8 +147,21 @@
                     machine.send_chars("again\n")
                     machine.wait_until_succeeds("[ \"$(cat /tmp/typed2)\" = again ]", timeout=120)
                     machine.screenshot("resumed")
+                    machine.send_monitor_command("mouse_move -5000 -5000")
                     machine.send_monitor_command("mouse_move 200 200")
                     machine.wait_until_succeeds("grep -q 'wl_pointer#[0-9]*\\.enter' /tmp/foot.log", timeout=60)
+                    machine.wait_until_succeeds("grep -q 'wl_pointer#[0-9]*\\.set_cursor' /tmp/foot.log", timeout=60)
+                    time.sleep(3)
+                    width, client = screen("cursor-client")
+                    machine.send_monitor_command("mouse_move 5000 5000")
+                    machine.wait_until_succeeds("grep -q 'wl_pointer#[0-9]*\\.leave' /tmp/foot.log", timeout=60)
+                    time.sleep(3)
+                    _, away = screen("cursor-away")
+                    corner = len(client) - 3
+                    changed = [(i // 3 % width, i // 3 // width) for i in range(0, corner, 3) if client[i:i + 3] != away[i:i + 3]]
+                    print("client cursor", bounds(changed) if changed else None, len(changed))
+                    assert changed and max(bounds(changed)[2:]) <= 64
+                    assert any(client[3 * (y * width + x):3 * (y * width + x) + 3] != b"\xff\xff\xff" for x, y in changed)
                     machine.send_key("ctrl-alt-backspace")
                     machine.wait_until_fails("pgrep -x malaysia-compos", timeout=60)
                     machine.wait_for_file("/tmp/exit", timeout=60)
