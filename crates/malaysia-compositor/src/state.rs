@@ -4,12 +4,14 @@ use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::{Color32F, gles::GlesRenderer};
 use smithay::desktop::space::SpaceRenderElements;
 use smithay::desktop::{Space, Window};
+use smithay::input::{Seat, SeatState};
 use smithay::output::Output;
 use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
+use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
@@ -45,6 +47,9 @@ pub struct State {
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub shm_state: ShmState,
+    pub seat_state: SeatState<State>,
+    pub data_device_state: DataDeviceState,
+    pub seat: Seat<State>,
     pub needs_redraw: bool,
     pub frame_pending: bool,
 }
@@ -73,24 +78,18 @@ impl State {
     pub fn render(&mut self) {
         self.needs_redraw = false;
         self.frame_pending = true;
-        match &mut self.backend {
-            Backend::Drm(drm) => {
-                let queued = drm
-                    .render(&self.space, &self.output)
-                    .unwrap_or_else(|error| {
-                        tracing::warn!(%error, "render failed");
-                        false
-                    });
-                if !queued {
-                    self.finish_frame_after_one_refresh();
-                }
-            }
-            Backend::Winit(winit) => {
-                if let Err(error) = winit.render(&self.space, &self.output) {
-                    tracing::warn!(%error, "render failed");
-                }
-                self.frame_done();
-            }
+        let rendered = match &mut self.backend {
+            Backend::Drm(drm) => drm.render(&self.space, &self.output),
+            Backend::Winit(winit) => winit.render(&self.space, &self.output),
+        }
+        .unwrap_or_else(|error| {
+            tracing::warn!(%error, "render failed");
+            false
+        });
+        if !rendered {
+            self.finish_frame_after_one_refresh();
+        } else if let Backend::Winit(_) = self.backend {
+            self.frame_done();
         }
     }
 

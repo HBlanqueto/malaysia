@@ -1,5 +1,6 @@
 mod drm;
 mod handlers;
+mod input;
 mod state;
 mod winit;
 
@@ -7,15 +8,18 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use smithay::desktop::Space;
+use smithay::input::{SeatState, keyboard::XkbConfig};
 use smithay::reexports::calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic};
 use smithay::reexports::wayland_server::Display;
 use smithay::wayland::compositor::CompositorState;
+use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 use smithay::wayland::socket::ListeningSocketSource;
 use tracing_subscriber::{filter::Targets, fmt, prelude::*};
 
 use crate::drm::Drm;
+use crate::input::{REPEAT_DELAY, REPEAT_RATE};
 use crate::state::{Backend, ClientState, State};
 use crate::winit::Winit;
 
@@ -72,10 +76,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     unsafe { std::env::set_var("WAYLAND_DISPLAY", &socket_name) };
     tracing::info!(socket = %socket_name.to_string_lossy(), "listening");
 
+    let mut seat_state = SeatState::new();
+    let mut seat = seat_state.new_wl_seat(&display_handle, "seat0");
+    seat.add_keyboard(XkbConfig::default(), REPEAT_DELAY, REPEAT_RATE)?;
+    seat.add_pointer();
+
     let mut state = State {
         compositor_state: CompositorState::new::<State>(&display_handle),
         xdg_shell_state: XdgShellState::new::<State>(&display_handle),
         shm_state: ShmState::new::<State>(&display_handle, []),
+        data_device_state: DataDeviceState::new::<State>(&display_handle),
+        seat_state,
+        seat,
         display_handle,
         loop_handle,
         start_time: Instant::now(),

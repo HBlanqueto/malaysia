@@ -1,15 +1,21 @@
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::desktop::Window;
-use smithay::reexports::wayland_server::Client;
+use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_server::protocol::{
     wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface,
 };
-use smithay::utils::Serial;
+use smithay::reexports::wayland_server::{Client, Resource};
+use smithay::utils::{SERIAL_COUNTER, Serial};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
     CompositorClientState, CompositorHandler, CompositorState, get_parent, is_sync_subsurface,
 };
 use smithay::wayland::output::OutputHandler;
+use smithay::wayland::pointer_constraints::PointerConstraintsHandler;
+use smithay::wayland::selection::SelectionHandler;
+use smithay::wayland::selection::data_device::{
+    DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler, set_data_device_focus,
+};
 use smithay::wayland::shell::xdg::{
     PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
 };
@@ -66,12 +72,28 @@ impl XdgShellHandler for State {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        self.space
-            .map_element(Window::new_wayland_window(surface), (0, 0), false);
+        let window = Window::new_wayland_window(surface);
+        self.space.map_element(window.clone(), (0, 0), false);
+        self.focus_window(&window, SERIAL_COUNTER.next_serial());
     }
 
-    fn toplevel_destroyed(&mut self, _surface: ToplevelSurface) {
+    fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.needs_redraw = true;
+        let keyboard = self.seat.get_keyboard().unwrap();
+        if keyboard.current_focus().as_ref() != Some(surface.wl_surface()) {
+            return;
+        }
+        let serial = SERIAL_COUNTER.next_serial();
+        let next = self
+            .space
+            .elements()
+            .rev()
+            .find(|window| window.toplevel().unwrap() != &surface)
+            .cloned();
+        match next {
+            Some(window) => self.focus_window(&window, serial),
+            None => keyboard.set_focus(self, None, serial),
+        }
     }
 
     fn new_popup(&mut self, _surface: PopupSurface, _positioner: PositionerState) {}
@@ -86,6 +108,35 @@ impl XdgShellHandler for State {
     ) {
     }
 }
+
+impl SeatHandler for State {
+    type KeyboardFocus = WlSurface;
+    type PointerFocus = WlSurface;
+    type TouchFocus = WlSurface;
+
+    fn seat_state(&mut self) -> &mut SeatState<State> {
+        &mut self.seat_state
+    }
+
+    fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&WlSurface>) {
+        let client = focused.and_then(|surface| self.display_handle.get_client(surface.id()).ok());
+        set_data_device_focus(&self.display_handle, seat, client);
+    }
+}
+
+impl PointerConstraintsHandler for State {}
+
+impl SelectionHandler for State {
+    type SelectionUserData = ();
+}
+
+impl DataDeviceHandler for State {
+    fn data_device_state(&mut self) -> &mut DataDeviceState {
+        &mut self.data_device_state
+    }
+}
+
+impl WaylandDndGrabHandler for State {}
 
 impl OutputHandler for State {}
 

@@ -9,10 +9,10 @@ Last update: 2026-11-25.
 
 ## Where we are
 
-**Now:** step 6, keyboard and pointer.
+**Now:** step 7, the session, starting with the test machine.
 
-The display after the last finished step (step 5: the compositor nested in
-another desktop, in the window titled Smithay, drawing a test client):
+The display after the last finished step (step 6: the compositor nested in
+another desktop, with the `foot` terminal taking typed text):
 
 ![The display after the last finished step](screen.png)
 
@@ -22,12 +22,14 @@ another desktop, in the window titled Smithay, drawing a test client):
 | 2 | DRM/KMS output through GBM and GLES | the same color, directly on a display | done `da8a2c9` |
 | 3 | Logging with `tracing` | Smithay's warnings and the compositor's own messages | done `017f0a4` |
 | 4 | Windows: `wl_compositor`, `wl_shm`, `xdg_shell`, `wl_output` | an app drawn on the screen | done `80a5b31` |
-| 5 | Nested session: the winit backend returns and shares the frame code with DRM | the compositor inside another desktop | done |
-| 6 | Seat: keyboard and pointer | typing in a window | next |
-| 7 | Session with libseat | start from a TTY as a normal user, switch VT | to do |
-| 8 | Devices with udev and libinput | real keyboard and mouse, a cursor, the GPU found without an argument | to do |
+| 5 | Nested session: the winit backend returns and shares the frame code with DRM | the compositor inside another desktop | done `7f75682` |
+| 6 | Seat: keyboard and pointer | typing in a window | done |
+| 7a | A Nix package and a NixOS test machine | the compositor on a virtual GPU in a full Linux session | next |
+| 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | to do |
+| 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | to do |
+| 8b | Cursor | a pointer that can be seen on a real display | to do |
 
-When step 8 is done the compositor runs directly on hardware and nested in
+When step 8b is done the compositor runs directly on hardware and nested in
 another session. That is the goal of this stage.
 
 ## After this stage
@@ -46,13 +48,18 @@ With a device argument the compositor runs directly on that device. With no
 argument it runs nested when `WAYLAND_DISPLAY` or `DISPLAY` is set.
 
 The box has no seat, no udev and no real GPU. Steps 7 and 8 are checked in a
-virtual machine with a full Linux session, and what only real hardware can
+NixOS virtual machine with a full Linux session, and what only real hardware can
 prove is marked here as **not verified on hardware** until someone runs it.
 
 ## Known gaps
 
 - Popups (menus) are not configured or drawn yet.
 - Every window opens at the top left corner, over the others.
+- Input only reaches the nested compositor. Directly on a display there is no
+  keyboard or mouse until step 8a.
+- Scroll, drag and drop and the clipboard are not tested.
+- Until step 8a there is no way to leave the compositor on a real machine, so
+  step 7b is only run in the test machine.
 
 ## Not verified on hardware
 

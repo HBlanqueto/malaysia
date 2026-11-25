@@ -14,6 +14,7 @@ use crate::state::{CLEAR_COLOR, State, elements};
 pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
     damage_tracker: OutputDamageTracker,
+    age: usize,
 }
 
 fn mode(size: Size<i32, Physical>) -> Mode {
@@ -59,11 +60,13 @@ impl Winit {
             }
             WinitEvent::Redraw => state.render(),
             WinitEvent::CloseRequested => loop_signal.stop(),
+            WinitEvent::Input(event) => state.process_input_event(event),
             _ => {}
         })?;
         Ok((
             Winit {
                 damage_tracker: OutputDamageTracker::from_output(&output),
+                age: 0,
                 backend,
             },
             output,
@@ -74,19 +77,26 @@ impl Winit {
         self.backend.window().request_redraw();
     }
 
-    pub fn render(&mut self, space: &Space<Window>, output: &Output) -> Result<(), Box<dyn Error>> {
-        let age = self.backend.buffer_age().unwrap_or(0);
+    pub fn render(
+        &mut self,
+        space: &Space<Window>,
+        output: &Output,
+    ) -> Result<bool, Box<dyn Error>> {
         let (renderer, mut framebuffer) = self.backend.bind()?;
         let elements = elements(renderer, space, output);
         let result = self.damage_tracker.render_output(
             renderer,
             &mut framebuffer,
-            age,
+            self.age,
             &elements,
             CLEAR_COLOR,
         )?;
         drop(framebuffer);
-        self.backend.submit(result.damage.map(Vec::as_slice))?;
-        Ok(())
+        let Some(damage) = result.damage else {
+            return Ok(false);
+        };
+        self.backend.submit(Some(damage))?;
+        self.age = self.backend.buffer_age().unwrap_or(0);
+        Ok(true)
     }
 }

@@ -6,7 +6,8 @@ Malaysia is a Wayland compositor written in Rust on
 It is being rebuilt from its foundation, one dependency at a time. Today it
 draws the windows of Wayland clients that use `xdg_shell` and shared-memory
 buffers, either directly on a display through DRM/KMS or nested as a window in
-another desktop. It does not take input yet. [ROADMAP.md](ROADMAP.md) says
+another desktop. Nested, it takes keyboard and pointer input: a terminal such
+as `foot` works. Directly on a display it has no input yet. [ROADMAP.md](ROADMAP.md) says
 which step is in progress and what comes next.
 
 ## Build and run
@@ -23,7 +24,7 @@ The compositor logs the backend it chose and the name of its Wayland socket.
 Clients reach it through that name:
 
 ```sh
-WAYLAND_DISPLAY=wayland-2 weston-simple-shm
+WAYLAND_DISPLAY=wayland-2 foot
 ```
 
 `RUST_LOG` sets the log level per module, for example
