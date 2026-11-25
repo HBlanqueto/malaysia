@@ -18,8 +18,8 @@ learn what was solved; never copy a file whole.
   result. The flake grows in the same step, with only what that step needs.
 - A step is done when it passes the checks of «Build and test», is shown
   working in the box and is pushed.
-- The compositor runs directly on DRM as soon as the base allows it; the
-  nested winit backend is temporary.
+- The compositor runs directly on DRM. The box has no seat, udev or real
+  GPU: what needs them is verified on another Linux host before it is pushed.
 - The rules below that name code not yet rebuilt (shell, `bk`, `ctdesign`,
   `config.rs`, i18n) apply when that part returns.
 
@@ -148,15 +148,17 @@ Applies to decorations, chrome, shadows, blur, borders, themes and shell.
 ## Build and test
 
 The Mac does not build the compositor. Everything runs in the podman box of
-`vm.sh`: aarch64 Linux with Nix, a headless sway as host and VNC on
-`vnc://127.0.0.1:5901`.
+`vm.sh`: aarch64 Linux with Nix and a virtual KMS display (`vkms`) at
+`/dev/dri/card0`. The compositor runs directly on it, so its screen is seen
+with `./vm.sh shot`, not over VNC.
 
 ```sh
-./vm.sh up                                     # machine, container, host, VNC
+./vm.sh up                                     # machine, vkms, container
 ./vm.sh run nix develop -c cargo fmt --check
 ./vm.sh run nix develop -c cargo clippy -- -D warnings
 ./vm.sh run nix develop -c cargo test
-./vm.sh run nix develop -c cargo run           # shown in the VNC session
+./vm.sh run nix develop -c cargo run -- /dev/dri/card0
+./vm.sh shot /tmp/malaysia.png                 # PNG of the vkms scanout
 ./vm.sh sh                                     # shell in the box
 ./vm.sh down
 ```

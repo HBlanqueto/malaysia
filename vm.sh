@@ -9,7 +9,8 @@ in_box() { podman exec -w /work "$NAME" "$@"; }
 
 up() {
 	podman machine list --format '{{.Running}}' | grep -q true || podman machine start
-	podman container exists "$NAME" || podman run -d --name "$NAME" -p 127.0.0.1:5901:5900 \
+	podman machine ssh 'sudo modprobe vkms enable_writeback=1 enable_cursor=1 enable_overlay=1; until [ -e /dev/dri/card0 ]; do sleep 0.2; done; sudo chmod 666 /dev/dri/card0'
+	podman container exists "$NAME" || podman run -d --name "$NAME" -p 127.0.0.1:5901:5900 --device /dev/dri/card0 \
 		-v "$REPO":/work -v malaysia-nix:/nix -v malaysia-cache:/cache -w /work \
 		-e CARGO_TARGET_DIR=/cache/target -e LIBGL_ALWAYS_SOFTWARE=1 \
 		-e NIX_CONFIG="experimental-features = nix-command flakes" \
@@ -29,10 +30,16 @@ up() {
 	echo "vnc://127.0.0.1:5901"
 }
 
+shot() {
+	podman machine ssh 'mkdir -p /tmp/shot && rm -f /tmp/shot/shot.png && sudo podman run --rm --privileged --device /dev/dri/card0 -v malaysia-shot-nix:/nix -v malaysia-shot-cache:/root/.cache -v /tmp/shot:/out docker.io/nixos/nix nix --extra-experimental-features "nix-command flakes" shell nixpkgs#ffmpeg-headless -c sh -c "for f in bgra bgr0; do ffmpeg -y -loglevel quiet -device /dev/dri/card0 -f kmsgrab -i - -frames:v 1 -vf hwdownload,format=\$f,format=rgb24 /out/shot.png && break; done"'
+	podman machine ssh 'cat /tmp/shot/shot.png' >"$1"
+}
+
 case "${1:-}" in
 up) up ;;
+shot) shot "${2:?usage: $0 shot <file.png>}" ;;
 sh) podman exec -it -w /work "$NAME" sh ;;
 run) shift; podman exec -w /work "$NAME" "$@" ;;
 down) podman stop "$NAME"; podman machine stop ;;
-*) echo "usage: $0 up|sh|run <cmd...>|down" >&2; exit 2 ;;
+*) echo "usage: $0 up|sh|run <cmd...>|shot <file.png>|down" >&2; exit 2 ;;
 esac

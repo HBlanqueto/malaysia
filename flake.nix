@@ -22,17 +22,22 @@
               rustc
               clippy
               rustfmt
+              pkg-config
             ];
-            buildInputs = [ pkgs.libxkbcommon ];
+            buildInputs = with pkgs; [
+              libxkbcommon
+              libgbm
+            ];
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
               with pkgs;
               [
-                wayland
                 libglvnd
                 mesa
               ]
             );
             __EGL_VENDOR_LIBRARY_DIRS = "${pkgs.mesa}/share/glvnd/egl_vendor.d";
+            GBM_BACKENDS_PATH = "${pkgs.mesa}/lib/gbm";
+            hardeningDisable = [ "fortify" ];
           };
         }
       );
