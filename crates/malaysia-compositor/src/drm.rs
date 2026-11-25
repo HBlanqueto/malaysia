@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::path::Path;
+use std::path::PathBuf;
 
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
@@ -7,13 +7,16 @@ use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::exporter::gbm::{GbmFramebufferExporter, NodeFilter};
 use smithay::backend::drm::{DrmDevice, DrmDeviceFd, DrmEvent};
 use smithay::backend::egl::{EGLContext, EGLDisplay};
+use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
+use smithay::backend::udev::primary_gpu;
 use smithay::desktop::{Space, Window};
 use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::drm::control::{Device, ModeTypeFlags, connector};
+use smithay::reexports::input::Libinput;
 use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::DeviceFd;
@@ -27,11 +30,13 @@ pub struct Drm {
     device: DrmDevice,
     renderer: GlesRenderer,
     compositor: Compositor,
+    session: LibSeatSession,
+    libinput: Libinput,
 }
 
 impl Drm {
     pub fn init(
-        path: &str,
+        path: Option<PathBuf>,
         display_handle: &DisplayHandle,
         loop_handle: &LoopHandle<'static, State>,
     ) -> Result<(Drm, Output), Box<dyn Error>> {
@@ -39,8 +44,13 @@ impl Drm {
         if !session.is_active() {
             return Err("session is not active".into());
         }
+        let path = match path {
+            Some(path) => path,
+            None => primary_gpu(session.seat())?.ok_or("no GPU found")?,
+        };
+        tracing::info!(path = %path.display(), "drm backend");
         let fd = session.open(
-            Path::new(path),
+            &path,
             OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
         )?;
         let fd = DrmDeviceFd::new(DeviceFd::from(fd));
@@ -121,6 +131,16 @@ impl Drm {
             Some(gbm),
         )?;
 
+        let mut libinput = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
+            session.clone().into(),
+        );
+        libinput
+            .udev_assign_seat(&session.seat())
+            .map_err(|()| "libinput: udev_assign_seat failed")?;
+        loop_handle.insert_source(
+            LibinputInputBackend::new(libinput.clone()),
+            |event, _, state| state.process_input_event(event),
+        )?;
         loop_handle.insert_source(notifier, move |event, _, state| match event {
             DrmEvent::VBlank(_) => {
                 if let Backend::Drm(drm) = &mut state.backend
@@ -153,6 +173,8 @@ impl Drm {
                 device: drm,
                 renderer,
                 compositor,
+                session,
+                libinput,
             },
             output,
         ))
@@ -162,11 +184,22 @@ impl Drm {
         self.device.is_active()
     }
 
-    fn pause(&mut self) {
+    pub fn change_vt(&mut self, vt: i32) {
+        tracing::info!(vt, "switching vt");
+        if let Err(error) = self.session.change_vt(vt) {
+            tracing::error!(%error, vt, "vt switch failed");
+        }
+    }
+
+    pub fn pause(&mut self) {
+        self.libinput.suspend();
         self.device.pause();
     }
 
     fn activate(&mut self) -> Result<(), Box<dyn Error>> {
+        self.libinput
+            .resume()
+            .map_err(|()| "libinput resume failed")?;
         self.device.activate(false)?;
         self.compositor.reset_state()?;
         let _ = self.compositor.frame_submitted();

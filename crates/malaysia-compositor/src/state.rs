@@ -4,10 +4,11 @@ use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::{Color32F, gles::GlesRenderer};
 use smithay::desktop::space::SpaceRenderElements;
 use smithay::desktop::{Space, Window};
+use smithay::input::keyboard::Keycode;
 use smithay::input::{Seat, SeatState};
 use smithay::output::Output;
-use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+use smithay::reexports::calloop::{LoopHandle, LoopSignal};
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
@@ -40,6 +41,7 @@ pub enum Backend {
 pub struct State {
     pub display_handle: DisplayHandle,
     pub loop_handle: LoopHandle<'static, State>,
+    pub loop_signal: LoopSignal,
     pub start_time: Instant,
     pub backend: Backend,
     pub output: Output,
@@ -52,6 +54,7 @@ pub struct State {
     pub seat: Seat<State>,
     pub needs_redraw: bool,
     pub frame_pending: bool,
+    pub suppressed_keys: Vec<Keycode>,
 }
 
 #[derive(Default)]

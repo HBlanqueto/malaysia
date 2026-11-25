@@ -9,11 +9,11 @@ Last update: 2026-11-25.
 
 ## Where we are
 
-**Now:** step 8a, devices with udev and libinput.
+**Now:** step 8b, the cursor.
 
-The display after the last finished step (step 7b: a normal user started the
-compositor from a TTY of a NixOS machine; this frame was drawn after switching
-to another VT and back):
+The display after the last finished step (step 8a: on a NixOS machine, text
+typed on the keyboard reached the terminal before and after Ctrl+Alt+F2 and
+back):
 
 ![The display after the last finished step](screen.png)
 
@@ -26,9 +26,9 @@ to another VT and back):
 | 5 | Nested session: the winit backend returns and shares the frame code with DRM | the compositor inside another desktop | done `7f75682` |
 | 6 | Seat: keyboard and pointer | typing in a window | done `9427c17` |
 | 7a | A Nix package and a NixOS test machine | the compositor on a virtual GPU in a full Linux session | done `8c058c3` |
-| 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | done |
-| 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | next |
-| 8b | Cursor | a pointer that can be seen on a real display | to do |
+| 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | done `447a64a` |
+| 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | done |
+| 8b | Cursor | a pointer that can be seen on a real display | next |
 
 When step 8b is done the compositor runs directly on hardware and nested in
 another session. That is the goal of this stage.
@@ -57,11 +57,11 @@ prove is marked here as **not verified on hardware** until someone runs it.
 
 - Popups (menus) are not configured or drawn yet.
 - Every window opens at the top left corner, over the others.
-- Input only reaches the nested compositor. Directly on a display there is no
-  keyboard or mouse until step 8a.
 - Scroll, drag and drop and the clipboard are not tested.
-- Until step 8a there is no way to leave the compositor on a real machine
-  except from another machine (`pkill malaysia-compos` over ssh).
+- Directly on a display the pointer works but nothing draws it until step 8b.
+- Under logind, switching VT with Ctrl+Alt+Fn needs polkit; without it the
+  switch is refused and logged.
+- Displays and GPUs are read once at start: no hotplug.
 - The compositor must be started from the active VT; starting it from an
   inactive one is an error.
 - There is no signal handling: when the process is killed, logind or seatd
@@ -69,4 +69,6 @@ prove is marked here as **not verified on hardware** until someone runs it.
 
 ## Not verified on hardware
 
-- Everything: so far the compositor has only run on the virtual display.
+- Everything: so far the compositor has only run on virtual displays (vkms and
+  QEMU's virtio GPU) with software rendering, and with QEMU's keyboard and
+  mouse. A real GPU driver, a touchpad and several GPUs are untested.

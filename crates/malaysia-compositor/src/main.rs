@@ -4,6 +4,7 @@ mod input;
 mod state;
 mod winit;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -32,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(fmt::layer())
         .with(filter)
         .init();
-    let device = std::env::args().nth(1);
+    let device = std::env::args_os().nth(1).map(PathBuf::from);
     let nested = ["WAYLAND_DISPLAY", "DISPLAY"]
         .iter()
         .any(|name| std::env::var_os(name).is_some());
@@ -41,19 +42,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let display = Display::<State>::new()?;
     let display_handle = display.handle();
     let loop_handle = event_loop.handle();
-    let (backend, output) = match device {
-        Some(path) => {
-            tracing::info!(%path, "drm backend");
-            let (drm, output) = Drm::init(&path, &display_handle, &loop_handle)?;
-            (Backend::Drm(Box::new(drm)), output)
-        }
-        None if nested => {
-            tracing::info!("winit backend");
-            let (winit, output) =
-                Winit::init(&display_handle, &loop_handle, event_loop.get_signal())?;
-            (Backend::Winit(Box::new(winit)), output)
-        }
-        None => return Err("usage: malaysia-compositor [/dev/dri/cardN]".into()),
+    let (backend, output) = if device.is_none() && nested {
+        tracing::info!("winit backend");
+        let (winit, output) = Winit::init(&display_handle, &loop_handle)?;
+        (Backend::Winit(Box::new(winit)), output)
+    } else {
+        let (drm, output) = Drm::init(device, &display_handle, &loop_handle)?;
+        (Backend::Drm(Box::new(drm)), output)
     };
     let mut space = Space::default();
     space.map_output(&output, (0, 0));
@@ -90,17 +85,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         seat,
         display_handle,
         loop_handle,
+        loop_signal: event_loop.get_signal(),
         start_time: Instant::now(),
         backend,
         output,
         space,
         needs_redraw: true,
         frame_pending: false,
+        suppressed_keys: Vec::new(),
     };
     event_loop.run(None, &mut state, |state| {
         state.space.refresh();
         state.redraw_if_needed();
         let _ = state.display_handle.flush_clients();
     })?;
+    if let Backend::Drm(drm) = &mut state.backend {
+        drm.pause();
+    }
     Ok(())
 }

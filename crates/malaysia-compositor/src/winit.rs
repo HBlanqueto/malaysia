@@ -5,7 +5,7 @@ use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::desktop::{Space, Window};
 use smithay::output::{Mode, Output, PhysicalProperties, Subpixel};
-use smithay::reexports::calloop::{LoopHandle, LoopSignal};
+use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size, Transform};
 
@@ -28,7 +28,6 @@ impl Winit {
     pub fn init(
         display_handle: &DisplayHandle,
         loop_handle: &LoopHandle<'static, State>,
-        loop_signal: LoopSignal,
     ) -> Result<(Winit, Output), Box<dyn Error>> {
         let (backend, event_loop) = winit::init::<GlesRenderer>()?;
         let output = Output::new(
@@ -51,7 +50,7 @@ impl Winit {
         );
         output.create_global::<State>(display_handle);
 
-        loop_handle.insert_source(event_loop, move |event, _, state| match event {
+        loop_handle.insert_source(event_loop, |event, _, state| match event {
             WinitEvent::Resized { size, .. } => {
                 state
                     .output
@@ -59,7 +58,7 @@ impl Winit {
                 state.needs_redraw = true;
             }
             WinitEvent::Redraw => state.render(),
-            WinitEvent::CloseRequested => loop_signal.stop(),
+            WinitEvent::CloseRequested => state.loop_signal.stop(),
             WinitEvent::Input(event) => state.process_input_event(event),
             _ => {}
         })?;

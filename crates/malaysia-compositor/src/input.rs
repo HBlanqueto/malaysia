@@ -1,48 +1,98 @@
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-    KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+    InputTime, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+    PointerMotionEvent,
 };
 use smithay::desktop::{Window, WindowSurfaceType};
-use smithay::input::keyboard::FilterResult;
+use smithay::input::keyboard::{FilterResult, Keysym, ModifiersState, keysyms};
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Logical, Point, SERIAL_COUNTER, Serial};
+use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 
-use crate::state::State;
+use crate::state::{Backend, State};
 
 pub const REPEAT_DELAY: i32 = 200;
 pub const REPEAT_RATE: i32 = 25;
+
+#[derive(Debug, PartialEq)]
+enum KeyAction {
+    Quit,
+    SwitchVt(i32),
+}
+
+fn key_action(modifiers: &ModifiersState, keysym: Keysym) -> Option<KeyAction> {
+    match keysym.raw() {
+        vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 => Some(
+            KeyAction::SwitchVt((vt - keysyms::KEY_XF86Switch_VT_1 + 1) as i32),
+        ),
+        keysyms::KEY_BackSpace if modifiers.ctrl && modifiers.alt => Some(KeyAction::Quit),
+        _ => None,
+    }
+}
 
 impl State {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         match event {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
-                self.seat.get_keyboard().unwrap().input::<(), _>(
-                    self,
-                    event.key_code(),
-                    event.state(),
-                    serial,
-                    event.time(),
-                    |_, _, _| FilterResult::Forward,
-                );
+                let keycode = event.key_code();
+                let pressed = event.state() == KeyState::Pressed;
+                let action = self
+                    .seat
+                    .get_keyboard()
+                    .unwrap()
+                    .input(
+                        self,
+                        keycode,
+                        event.state(),
+                        serial,
+                        event.time(),
+                        |state, modifiers, handle| {
+                            if !pressed {
+                                return match state
+                                    .suppressed_keys
+                                    .iter()
+                                    .position(|key| *key == keycode)
+                                {
+                                    Some(index) => {
+                                        state.suppressed_keys.swap_remove(index);
+                                        FilterResult::Intercept(None)
+                                    }
+                                    None => FilterResult::Forward,
+                                };
+                            }
+                            match key_action(modifiers, handle.modified_sym()) {
+                                Some(action) => {
+                                    state.suppressed_keys.push(keycode);
+                                    FilterResult::Intercept(Some(action))
+                                }
+                                None => FilterResult::Forward,
+                            }
+                        },
+                    )
+                    .flatten();
+                match action {
+                    Some(KeyAction::Quit) => self.loop_signal.stop(),
+                    Some(KeyAction::SwitchVt(vt)) => {
+                        if let Backend::Drm(drm) = &mut self.backend {
+                            drm.change_vt(vt);
+                        }
+                    }
+                    None => {}
+                }
+            }
+            InputEvent::PointerMotion { event, .. } => {
+                let geometry = self.space.output_geometry(&self.output).unwrap();
+                let inside =
+                    Rectangle::new(geometry.loc, geometry.size - Size::from((1, 1))).to_f64();
+                let location = self.seat.get_pointer().unwrap().current_location() + event.delta();
+                self.move_pointer(location.constrain(inside), event.time());
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let output_geometry = self.space.output_geometry(&self.output).unwrap();
                 let location =
                     event.position_transformed(output_geometry.size) + output_geometry.loc.to_f64();
-                let under = self.surface_under(location);
-                let pointer = self.seat.get_pointer().unwrap();
-                pointer.motion(
-                    self,
-                    under,
-                    &MotionEvent {
-                        location,
-                        serial: SERIAL_COUNTER.next_serial(),
-                        time: event.time(),
-                    },
-                );
-                pointer.frame(self);
+                self.move_pointer(location, event.time());
             }
             InputEvent::PointerButton { event, .. } => {
                 let pointer = self.seat.get_pointer().unwrap();
@@ -92,6 +142,21 @@ impl State {
         }
     }
 
+    fn move_pointer(&mut self, location: Point<f64, Logical>, time: InputTime) {
+        let under = self.surface_under(location);
+        let pointer = self.seat.get_pointer().unwrap();
+        pointer.motion(
+            self,
+            under,
+            &MotionEvent {
+                location,
+                serial: SERIAL_COUNTER.next_serial(),
+                time,
+            },
+        );
+        pointer.frame(self);
+    }
+
     pub fn focus_window(&mut self, window: &Window, serial: Serial) {
         self.space.raise_element(window, true);
         for window in self.space.elements() {
@@ -121,5 +186,35 @@ impl State {
                         (surface, (surface_location + window_location).to_f64())
                     })
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ctrl_alt_backspace_quits_but_backspace_alone_is_forwarded() {
+        let ctrl_alt = ModifiersState {
+            ctrl: true,
+            alt: true,
+            ..Default::default()
+        };
+        let backspace = Keysym::new(keysyms::KEY_BackSpace);
+        assert_eq!(key_action(&ctrl_alt, backspace), Some(KeyAction::Quit));
+        assert_eq!(key_action(&ModifiersState::default(), backspace), None);
+    }
+
+    #[test]
+    fn xf86_switch_vt_n_switches_to_vt_n() {
+        let modifiers = ModifiersState::default();
+        assert_eq!(
+            key_action(&modifiers, Keysym::new(keysyms::KEY_XF86Switch_VT_1)),
+            Some(KeyAction::SwitchVt(1))
+        );
+        assert_eq!(
+            key_action(&modifiers, Keysym::new(keysyms::KEY_XF86Switch_VT_12)),
+            Some(KeyAction::SwitchVt(12))
+        );
     }
 }
