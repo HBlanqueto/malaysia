@@ -40,8 +40,13 @@ shot() {
 case "${1:-}" in
 up) up ;;
 shot) shot "${2:?usage: $0 shot <file.png>}" ;;
+test)
+	mkdir -p "${2:?usage: $0 test <dir>}"
+	in_box nix build --option extra-system-features kvm path:.#checks.$(in_box uname -m)-linux.vm -L -o /tmp/vm
+	for png in $(in_box sh -c 'cd /tmp/vm && ls *.png'); do in_box cat "/tmp/vm/$png" >"$2/$png"; done
+	;;
 sh) podman exec -it -w /work "$NAME" sh ;;
 run) shift; podman exec -w /work "$NAME" "$@" ;;
 down) podman stop "$NAME"; podman machine stop ;;
-*) echo "usage: $0 up|sh|run <cmd...>|shot <file.png>|down" >&2; exit 2 ;;
+*) echo "usage: $0 up|sh|run <cmd...>|shot <file.png>|test <dir>|down" >&2; exit 2 ;;
 esac

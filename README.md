@@ -30,6 +30,10 @@ WAYLAND_DISPLAY=wayland-2 foot
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`.
 
+`nix build` builds the compositor as a package. `nix build .#checks.<system>.vm`
+boots a NixOS machine, runs the compositor directly on its virtual GPU and
+checks that a terminal is drawn.
+
 On a Mac, `vm.sh` runs the same commands in a Linux box that has a virtual
 display and a headless desktop:
 
@@ -37,6 +41,7 @@ display and a headless desktop:
 ./vm.sh up
 ./vm.sh run nix develop -c cargo run -- /dev/dri/card0
 ./vm.sh shot screen.png
+./vm.sh test shots             # the NixOS machine check
 ```
 
 ## License

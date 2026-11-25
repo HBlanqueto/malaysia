@@ -162,6 +162,7 @@ with `grim` in the box or over VNC.
 ./vm.sh run nix develop -c cargo run -- /dev/dri/card0   # direct
 ./vm.sh run nix develop -c cargo run                     # nested
 ./vm.sh shot /tmp/malaysia.png                 # PNG of the vkms scanout
+./vm.sh test /tmp/shots                        # NixOS machine check, screenshots
 ./vm.sh sh                                     # shell in the box
 ./vm.sh down
 ```

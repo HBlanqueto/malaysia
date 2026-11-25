@@ -9,10 +9,10 @@ Last update: 2026-11-25.
 
 ## Where we are
 
-**Now:** step 7, the session, starting with the test machine.
+**Now:** step 7b, the session with libseat.
 
-The display after the last finished step (step 6: the compositor nested in
-another desktop, with the `foot` terminal taking typed text):
+The display after the last finished step (step 7a: the compositor directly on
+the virtual GPU of a NixOS machine, drawing the `foot` terminal):
 
 ![The display after the last finished step](screen.png)
 
@@ -23,9 +23,9 @@ another desktop, with the `foot` terminal taking typed text):
 | 3 | Logging with `tracing` | Smithay's warnings and the compositor's own messages | done `017f0a4` |
 | 4 | Windows: `wl_compositor`, `wl_shm`, `xdg_shell`, `wl_output` | an app drawn on the screen | done `80a5b31` |
 | 5 | Nested session: the winit backend returns and shares the frame code with DRM | the compositor inside another desktop | done `7f75682` |
-| 6 | Seat: keyboard and pointer | typing in a window | done |
-| 7a | A Nix package and a NixOS test machine | the compositor on a virtual GPU in a full Linux session | next |
-| 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | to do |
+| 6 | Seat: keyboard and pointer | typing in a window | done `9427c17` |
+| 7a | A Nix package and a NixOS test machine | the compositor on a virtual GPU in a full Linux session | done |
+| 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | next |
 | 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | to do |
 | 8b | Cursor | a pointer that can be seen on a real display | to do |
 
@@ -48,7 +48,8 @@ With a device argument the compositor runs directly on that device. With no
 argument it runs nested when `WAYLAND_DISPLAY` or `DISPLAY` is set.
 
 The box has no seat, no udev and no real GPU. Steps 7 and 8 are checked in a
-NixOS virtual machine with a full Linux session, and what only real hardware can
+NixOS virtual machine with a full Linux session (`./vm.sh test dir` runs it
+and writes its screenshots to `dir`; it is the flake's `checks.<system>.vm`), and what only real hardware can
 prove is marked here as **not verified on hardware** until someone runs it.
 
 ## Known gaps
