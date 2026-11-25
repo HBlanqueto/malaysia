@@ -1,4 +1,0 @@
-[D-BUS Service]
-Name=org.freedesktop.impl.portal.desktop.malaysia
-Exec=@out@/bin/xdg-desktop-portal-malaysia
-SystemdService=xdg-desktop-portal-malaysia.service

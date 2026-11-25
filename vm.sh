@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+export PATH=/opt/podman/bin:$PATH
+NAME=malaysia-dev
+REPO=/Users/humbe/src/malaysia
+PROFILE=/root/.nix-profile
+
+in_box() { podman exec -w /work "$NAME" "$@"; }
+
+up() {
+	podman machine list --format '{{.Running}}' | grep -q true || podman machine start
+	podman container exists "$NAME" || podman run -d --name "$NAME" -p 127.0.0.1:5901:5900 \
+		-v "$REPO":/work -v malaysia-nix:/nix -v malaysia-cache:/cache -w /work \
+		-e CARGO_TARGET_DIR=/cache/target -e LIBGL_ALWAYS_SOFTWARE=1 \
+		-e NIX_CONFIG="experimental-features = nix-command flakes" \
+		-e XDG_RUNTIME_DIR=/run/user/0 -e WAYLAND_DISPLAY=wayland-1 \
+		-e __EGL_VENDOR_LIBRARY_FILENAMES=$PROFILE/share/glvnd/egl_vendor.d/50_mesa.json \
+		-e LIBGL_DRIVERS_PATH=$PROFILE/lib/dri \
+		docker.io/nixos/nix sleep infinity
+	podman start "$NAME" >/dev/null
+	in_box sh -c "command -v sway >/dev/null" || in_box nix profile install \
+		nixpkgs#sway nixpkgs#wayvnc nixpkgs#mesa nixpkgs#dbus nixpkgs#procps \
+		nixpkgs#foot nixpkgs#wayland-utils nixpkgs#mesa-demos
+	in_box pgrep -x sway >/dev/null || podman exec -d -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/0/bus \
+		-e WLR_BACKENDS=headless -e WLR_RENDERER=pixman -e WLR_LIBINPUT_NO_DEVICES=1 "$NAME" \
+		sh -c 'mkdir -p -m700 /run/user/0; exec sway >/tmp/sway.log 2>&1'
+	until in_box test -S /run/user/0/wayland-1; do sleep 1; done
+	in_box pgrep -x wayvnc >/dev/null || podman exec -d "$NAME" sh -c 'exec wayvnc 0.0.0.0 5900 >/tmp/wayvnc.log 2>&1'
+	echo "vnc://127.0.0.1:5901"
+}
+
+case "${1:-}" in
+up) up ;;
+sh) podman exec -it -w /work "$NAME" sh ;;
+run) shift; podman exec -w /work "$NAME" "$@" ;;
+down) podman stop "$NAME"; podman machine stop ;;
+*) echo "usage: $0 up|sh|run <cmd...>|down" >&2; exit 2 ;;
+esac

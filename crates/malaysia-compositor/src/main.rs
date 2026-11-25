@@ -1,59 +1,77 @@
-#![deny(unsafe_code)]
+use std::sync::Arc;
 
-mod cli;
-mod logging;
+use smithay::backend::renderer::{Color32F, Frame, Renderer, gles::GlesRenderer};
+use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
+use smithay::reexports::calloop::{
+    EventLoop, Interest, LoopSignal, Mode, PostAction, generic::Generic,
+};
+use smithay::reexports::wayland_server::{Display, DisplayHandle};
+use smithay::utils::{Rectangle, Transform};
+use smithay::wayland::socket::ListeningSocketSource;
 
-use std::process::ExitCode;
+const CLEAR_COLOR: Color32F = Color32F::new(0.1, 0.1, 0.12, 1.0);
 
-use anyhow::Result;
-use nix::sys::signal::{SigSet, SigmaskHow, Signal, pthread_sigmask};
-
-fn block_shutdown_signals() {
-    let mut set = SigSet::empty();
-    for signal in [Signal::SIGUSR1, Signal::SIGTERM, Signal::SIGINT] {
-        set.add(signal);
-    }
-    if let Err(error) = pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&set), None) {
-        eprintln!("malaysia-compositor: could not block the shutdown signals: {error}");
-    }
+struct State {
+    display_handle: DisplayHandle,
+    loop_signal: LoopSignal,
+    backend: WinitGraphicsBackend<GlesRenderer>,
 }
 
-fn main() -> ExitCode {
-    block_shutdown_signals();
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("malaysia-compositor: {error:#}");
-            ExitCode::FAILURE
+impl State {
+    fn draw(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let size = self.backend.window_size();
+        {
+            let (renderer, mut framebuffer) = self.backend.bind()?;
+            let mut frame = renderer.render(&mut framebuffer, size, Transform::Flipped180)?;
+            frame.clear(CLEAR_COLOR, &[Rectangle::from_size(size)])?;
+            let _ = frame.finish()?;
         }
+        self.backend.submit(None)?;
+        Ok(())
     }
 }
 
-fn run() -> Result<()> {
-    match cli::parse(std::env::args().skip(1))? {
-        cli::Command::Help => print!("{}", cli::USAGE),
-        cli::Command::Version => println!("malaysia-compositor {}", env!("CARGO_PKG_VERSION")),
-        cli::Command::Run(options) => start(options)?,
-    }
-    Ok(())
-}
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut event_loop = EventLoop::<State>::try_new()?;
+    let display = Display::<State>::new()?;
+    let (backend, winit_events) = winit::init::<GlesRenderer>()?;
+    let socket = ListeningSocketSource::new_auto()?;
+    let socket_name = socket.socket_name().to_os_string();
 
-fn start(options: cli::Cli) -> Result<()> {
-    logging::init(options.log_level)?;
-    tracing::info!(
-        version = env!("CARGO_PKG_VERSION"),
-        backend = ?options.backend,
-        "malaysia-compositor starting"
-    );
-    match options.backend {
-        cli::Backend::Winit => malaysia_compositor::session::run()?,
-        cli::Backend::Drm => {
-            malaysia_compositor::udev::run(malaysia_compositor::udev::DrmOptions {
-                device: options.drm_device.map(std::path::PathBuf::from),
-                no_input: options.no_input,
-            })?
+    let handle = event_loop.handle();
+    handle.insert_source(socket, |stream, _, state| {
+        let _ = state.display_handle.insert_client(stream, Arc::new(()));
+    })?;
+    let display_handle = display.handle();
+    handle.insert_source(
+        Generic::new(display, Interest::READ, Mode::Level),
+        |_, display, state| {
+            unsafe { display.get_mut().dispatch_clients(state)? };
+            Ok(PostAction::Continue)
+        },
+    )?;
+    handle.insert_source(winit_events, |event, _, state| match event {
+        WinitEvent::Resized { .. } => state.backend.window().request_redraw(),
+        WinitEvent::Redraw => {
+            if let Err(error) = state.draw() {
+                eprintln!("draw failed: {error}");
+            }
         }
-    }
-    tracing::info!("malaysia-compositor stopped");
+        WinitEvent::CloseRequested => state.loop_signal.stop(),
+        _ => {}
+    })?;
+
+    unsafe { std::env::set_var("WAYLAND_DISPLAY", &socket_name) };
+    println!("{}", socket_name.to_string_lossy());
+
+    let mut state = State {
+        display_handle,
+        loop_signal: event_loop.get_signal(),
+        backend,
+    };
+    state.backend.window().request_redraw();
+    event_loop.run(None, &mut state, |state| {
+        let _ = state.display_handle.flush_clients();
+    })?;
     Ok(())
 }

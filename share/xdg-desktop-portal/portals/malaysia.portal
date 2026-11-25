@@ -1,4 +1,0 @@
-[portal]
-DBusName=org.freedesktop.impl.portal.desktop.malaysia
-Interfaces=org.freedesktop.impl.portal.Settings;org.freedesktop.impl.portal.Notification;
-UseIn=Malaysia
