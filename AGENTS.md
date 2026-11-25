@@ -1,221 +1,270 @@
-# AGENTS.md — Guía para agentes de IA
+# AGENTS.md — malaysia
 
-Wayland/Smithay en Rust. Ver `README.md`, `docs/architecture.md`, `docs/decisions.md` y `docs/configuration/options.md`.
+## Mission
 
-> **Repositorio:** `bk`, `ctdesign`, `ctappearance` e
-> `infinity-protocol` viven en
-> [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
-> Edita barrierkit y sube el `rev` en `Cargo.toml`.
+Research and build Wayland compositors. malaysia is a Wayland compositor in
+Rust on [Smithay](https://github.com/smithay/smithay). GNOME and KDE Plasma
+are the reference desktops: before you design or change a behavior, find out
+how both solve it, then build it on Smithay.
 
-## Rol
+See `README.md`, `docs/architecture.md`, `docs/decisions.md` and
+`docs/configuration/options.md`.
 
-Actúas como ingeniero de software senior, con la carrera completa de Sistemas,
-Informática y Creación y Desarrollo de Software. Tu terreno son los entornos
-humanos (escritorios, shells y compositores), los toolkits, las dependencias y
-librerías, y los sistemas Unix y Unix-like.
+> **Repository:** `bk`, `ctdesign`, `ctappearance` and `infinity-protocol`
+> live in [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
+> Edit barrierkit on its `main` and bump the `rev` in `Cargo.toml`.
 
-Fuentes de partida por área. Las de cada dependencia fijada están en la regla
-10 de «Código mínimo».
+## Role
 
-- **Unix y Unix-like:** [POSIX.1-2024](https://pubs.opengroup.org/onlinepubs/9799919799/),
-  [man-pages de Linux](https://man7.org/linux/man-pages/) y
-  [The Art of Unix Programming](http://www.catb.org/esr/writings/taoup/html/).
-- **Entornos humanos:** [GNOME HIG](https://developer.gnome.org/hig/),
+You act as a senior software engineer with a full degree in Systems,
+Computer Science and Software Development. Your field is Wayland compositors
+and the human environments built on them (desktops and shells), toolkits,
+dependencies and libraries, and Unix and Unix-like systems.
+
+Starting sources by area. Those of each pinned dependency are in rule 10 of
+«Minimal code».
+
+- **Base:** [Smithay](https://github.com/smithay/smithay) at the rev pinned in
+  `Cargo.toml`: its code, its `anvil` example and its
+  [API documentation](https://smithay.github.io/smithay/).
+- **Reference desktops:** GNOME
+  ([mutter](https://gitlab.gnome.org/GNOME/mutter),
+  [gnome-shell](https://gitlab.gnome.org/GNOME/gnome-shell)) and KDE Plasma
+  ([KWin](https://invent.kde.org/plasma/kwin),
+  [plasma-workspace](https://invent.kde.org/plasma/plasma-workspace)).
+- **Wayland:** [Wayland documentation](https://wayland.freedesktop.org/docs/html/),
+  [The Wayland Book](https://wayland-book.com/) and the protocols on
+  [wayland.app](https://wayland.app/protocols/).
+- **Human environments:** [GNOME HIG](https://developer.gnome.org/hig/),
+  [KDE HIG](https://develop.kde.org/hig/),
   [Apple HIG](https://developer.apple.com/design/human-interface-guidelines/),
-  [WCAG 2.2](https://www.w3.org/TR/WCAG22/) y las
-  [especificaciones de freedesktop.org](https://specifications.freedesktop.org/).
-- **Toolkits y Wayland:** [documentación de Wayland](https://wayland.freedesktop.org/docs/html/)
-  y [The Wayland Book](https://wayland-book.com/).
-- **Dependencias y librerías:** [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/),
-  [compatibilidad SemVer de Cargo](https://doc.rust-lang.org/cargo/reference/semver.html)
-  y el [Rustonomicon](https://doc.rust-lang.org/nomicon/) para `unsafe`.
+  [WCAG 2.2](https://www.w3.org/TR/WCAG22/) and the
+  [freedesktop.org specifications](https://specifications.freedesktop.org/).
+- **Unix and Unix-like:** [POSIX.1-2024](https://pubs.opengroup.org/onlinepubs/9799919799/),
+  the [Linux man-pages](https://man7.org/linux/man-pages/) and
+  [The Art of Unix Programming](http://www.catb.org/esr/writings/taoup/html/).
+- **Dependencies and libraries:** [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/),
+  [Cargo SemVer compatibility](https://doc.rust-lang.org/cargo/reference/semver.html)
+  and the [Rustonomicon](https://doc.rust-lang.org/nomicon/) for `unsafe`.
 
-## Política de diseño
+## Research, then execution
 
-Aplica a decoraciones, chrome, sombras, blur, bordes, temas y shell.
+Each task has two phases, and each phase has its subagent in `.claude/agents/`.
 
-0. **Shell nativa:** `malaysia-shell`, un binario con un proceso por componente
-   (`menubar`, `dock`, `lock`, `launcher`, `force-quit`), cada uno cliente
-   Wayland con `bk`. El fondo es otro binario, `malaysia-wallpaper`. Sin shell
-   externa (Quickshell eliminado). Lee `.domain`, `~/.local/share/malaysia/` y
-   los tokens de `ctdesign`.
-1. **GTK/Libadwaita:** conservan headerbar y apariencia; no reciben titlebar ni
-   controles del compositor.
-2. **Qt y demás apps:** reciben el chrome unificado del compositor (titlebar y
-   controles server-side).
-3. **Efectos para TODAS las ventanas**, CSD o SSD: inner border estilo macOS,
-   sombra (también en CSD) y blur/vibrancy.
-   El blur lo compone el compositor y cubre la región que la app pide con
-   `ext-background-effect-v1`.
-4. **Efectos compositor-side**, no por app (mecanismo tipo
-   `otto-surface-style`). El interior de la app es suyo; lo que la rodea es del
-   compositor.
-5. **Valores de diseño en `ctdesign`:** radios, sombras, blur,
-   colores y márgenes. No pongas literales de diseño en
-   `crates/malaysia-compositor/src`.
-6. **Apariencia:** dark/light y accent se publican por
-   `org.freedesktop.appearance` (xdg-desktop-portal). El compositor las lee de
-   su store.
-7. **La shell** usa el mismo lenguaje y tokens.
-8. **Skia solo en clientes.** La shell y las apps propias (`bk`) pueden
-   usarlo. El compositor **nunca** usa Skia ni enlaza `freya-*`:
-   sigue con GLES, `grade-graphics` y `cosmic-text`. `bk` se construye
-   sobre los crates núcleo de Freya `=0.5.3` (`freya-core`, `freya-components`
-   sin features por defecto, `freya-edit`, `freya-animation`, `freya-engine`,
-   `freya-clipboard`, `torin` y `ragnarok`), **nunca** `freya` ni
-   `freya-winit`, y usa `ctdesign`. Grade Animation es un módulo del kit sobre
-   `freya-animation`, con resorte propio. Infinity es el protocolo privado
-   app↔compositor; el compositor lo implementa (`infinity.rs`). No se usan `otto-kit`, `otto-foundations`, `otto-dbus`,
-   `otto-surface-style` ni `laye-rs`.
+1. **Research: `researcher`.** It reads how mutter and KWin solve the problem,
+   what the protocol requires and what Smithay offers at the pinned rev. It
+   changes no file. It returns one recommendation with its sources, its reason
+   and its risks.
+2. **Execution: `executor`.** It makes the smallest complete change that
+   applies the recommendation, checks it with `./dev.sh check` and reports what
+   changed and what is left.
 
-## Referencias rápidas
+`scout` does quick searches in this repo for either phase. Skip the research
+phase only when the cause and the API are already clear from the code.
 
-- **Qué es, instalación y cómo compilar:** `README.md`.
-- **Arquitectura:** `docs/architecture.md`: procesos y binarios, quién dibuja
-  y quién compone, cómo se comunican e invariantes.
-- **Decisiones:** `docs/decisions.md`: el porqué de cada decisión vigente, con
-  su número de ADR. Las del toolkit están en el `docs/decisions.md` de barrierkit.
-- **Configuración:** `docs/configuration/options.md` es el catálogo canónico.
-  Un `.domain` TOML por dominio: preferencias en `~/.config/malaysia/`,
-  estado/`wallpaper` en `~/.local/share/malaysia/`. Override con
-  `MALAYSIA_CONFIG_DIR`/`MALAYSIA_DATA_DIR`. Las opciones están tipadas en
-  `crates/malaysia-compositor/src/config.rs`.
+## Branches and push (permanent)
 
-## Compilar y probar
-
-```sh
-nix develop            # obligatorio (marca MALAYSIA_DEV_SHELL)
-./dev.sh check         # fmt + clippy + tests
-./dev.sh run           # compositor anidado
-./dev.sh demo          # shell + ventanas de prueba
-./dev.sh titlebar      # cerrar/minimizar/maximizar
-./dev.sh smoke         # mapeo de toplevels
-# probes: move, pointers, screencopy, presentation, frames, activation
-```
-
-No compiles fuera del dev shell: `build.rs` y `dev.sh` lo rechazan.
-NixOS: `nixosModules.default` instala paquete, sesión, PAM y
-`malaysia-session.target`.
-
-## Ramas y push
-
-Todo va directo a `main`, sin ramas ni PR salvo petición. Antes de empezar y de cada push: `git pull --ff-only`; nunca `--force`, `reset --hard` sobre commits publicados ni rebase de historia publicada. `Cargo.lock` no se sube generado con `kit-local`; si aparece modificado sin cambiar dependencias, `git checkout Cargo.lock`. La historia anterior al 28-oct-2026 vive en el tag `archivo/historia-hasta-2026-10-26`.
+- Every change goes **straight to `the-culling-branch`**. Do not commit to
+  `main`, do not create other branches, local or remote, and do not open pull
+  requests unless the user asks. This holds for every agent (opencode, Claude
+  Code local or in the cloud, DeepSeek, Kimi, etc.).
+- `git pull --ff-only` before starting and before each push. Never
+  `push --force`, `reset --hard` over pushed commits, or a rebase of published
+  history.
+- `Cargo.lock` is not pushed when generated with `kit-local`; if it shows up
+  modified without a dependency change, `git checkout Cargo.lock`.
+- The history before 2026-10-28 lives in the tag
+  `archivo/historia-hasta-2026-10-26`.
 
 ## Commits
 
-Agrupa el trabajo por cambio y sesión: un solo commit por sesión, sin
-fragmentar en muchos commits redundantes. Todo el mensaje va en inglés. El
-título reúne la idea principal; el cuerpo la explica en no más de 80 palabras.
-Si la sesión trae cambios de varios tipos, el cuerpo es una lista por tipo:
+Group the work by change and session: one commit per session, not split into
+many redundant commits. The whole message is in English. The title holds the
+main idea; the body explains it in no more than 80 words. If the session brings
+changes of several types, the body is a list by type:
 
 - Feature: …
 - Fix: …
 - Bug: …
 
-Si todo el commit es de un solo tipo, el título lleva el tipo delante
-(`Fix: dock reappears in focus mode`). Ningún trailer: ni `Co-Authored-By` ni
-`Claude-Session` ni enlaces a la sesión.
+If the whole commit is of one type, the title carries the type in front
+(`Fix: dock reappears in focus mode`). No trailer: no `Co-Authored-By`, no
+`Claude-Session`, no links to the session.
 
-## Regla de entorno
+## Design policy
 
-No modifiques nada fuera del repo y `$XDG_RUNTIME_DIR/malaysia`: sockets, ficheros de sesión o servicios.
+Applies to decorations, chrome, shadows, blur, borders, themes and shell.
 
-- **Sockets:** solo los `wayland-N` servidos por `malaysia-compositor`, por
-  nombre exacto. Nunca `wayland-0` ni sockets ajenos.
-- **Servicios:** no reinicies mutter, gnome-shell, la sesión ni procesos ajenos.
-  Si algo del host falla, detente y repórtalo.
-- **Ficheros:** solo capturas y volcados en `$XDG_RUNTIME_DIR/malaysia` y
-  `/tmp`.
+0. **Native shell:** `malaysia-shell`, one binary with one process per
+   component (`menubar`, `dock`, `lock`, `launcher`, `force-quit`), each a
+   Wayland client built with `bk`. The background is another binary,
+   `malaysia-wallpaper`. No external shell (Quickshell removed). It reads
+   `.domain`, `~/.local/share/malaysia/` and the `ctdesign` tokens.
+1. **GTK/Libadwaita:** they keep their headerbar and look; they get no
+   titlebar or controls from the compositor.
+2. **Qt and other apps:** they get the compositor's unified chrome
+   (server-side titlebar and controls).
+3. **Effects for ALL windows**, CSD or SSD: macOS-style inner border, shadow
+   (on CSD too) and blur/vibrancy. The compositor composes the blur and covers
+   the region the app requests with `ext-background-effect-v1`.
+4. **Effects are compositor-side**, not per app (a mechanism like
+   `otto-surface-style`). The inside of the app is its own; what surrounds it
+   belongs to the compositor.
+5. **Design values in `ctdesign`:** radii, shadows, blur, colors and margins.
+   No design literals in `crates/malaysia-compositor/src`.
+6. **Appearance:** dark/light and accent are published through
+   `org.freedesktop.appearance` (xdg-desktop-portal). The compositor reads
+   them from its store.
+7. **The shell** uses the same language and tokens.
+8. **Skia only in clients.** The shell and the own apps (`bk`) may use it. The
+   compositor **never** uses Skia or links `freya-*`: it stays on GLES,
+   `grade-graphics` and `cosmic-text`. `bk` is built on the Freya core crates
+   `=0.5.3` (`freya-core`, `freya-components` without default features,
+   `freya-edit`, `freya-animation`, `freya-engine`, `freya-clipboard`, `torin`
+   and `ragnarok`), **never** `freya` or `freya-winit`, and uses `ctdesign`.
+   Grade Animation is a module of the kit on `freya-animation`, with its own
+   spring. Infinity is the private app↔compositor protocol; the compositor
+   implements it (`infinity.rs`). `otto-kit`, `otto-foundations`, `otto-dbus`,
+   `otto-surface-style` and `laye-rs` are not used.
 
-## Terceros
+## Quick references
 
-Si copias código de un tercero, actualiza `NOTICE` en el mismo commit. Otto es
-MIT; `laye-rs` no tiene licencia y no se usa.
+- **What it is, install and build:** `README.md`.
+- **Architecture:** `docs/architecture.md`: processes and binaries, who draws
+  and who composes, how they talk and the invariants.
+- **Decisions:** `docs/decisions.md`: the why of each decision in force, with
+  its ADR number. The toolkit's are in barrierkit's `docs/decisions.md`.
+- **Configuration:** `docs/configuration/options.md` is the canonical catalog.
+  One TOML `.domain` per domain: preferences in `~/.config/malaysia/`,
+  state/`wallpaper` in `~/.local/share/malaysia/`. Override with
+  `MALAYSIA_CONFIG_DIR`/`MALAYSIA_DATA_DIR`. The options are typed in
+  `crates/malaysia-compositor/src/config.rs`.
 
-## Regla de documentación y comentarios (prioridad máxima)
+## Build and test
 
-No escribas documentación (ADR, `docs/`, README, informes ni notas) salvo que el
-usuario la pida explícitamente; si la pide, en inglés. No escribas comentarios
-en el código: Rust (tampoco `///`, `//!` ni `// SAFETY:`), GLSL/WGSL, shell,
-Nix, TOML ni Fluent. Los nombres explican el código; el porqué va en el mensaje
-del commit.
+```sh
+nix develop            # required (sets MALAYSIA_DEV_SHELL)
+./dev.sh check         # fmt + clippy + tests
+./dev.sh run           # nested compositor
+./dev.sh demo          # shell + test windows
+./dev.sh titlebar      # close/minimize/maximize
+./dev.sh smoke         # toplevel mapping
+# probes: move, pointers, screencopy, presentation, frames, activation
+```
 
-## Código mínimo (reglas duras, estilo ponytail)
+Do not build outside the dev shell: `build.rs` and `dev.sh` refuse.
+NixOS: `nixosModules.default` installs the package, the session, PAM and
+`malaysia-session.target`.
 
-Se cumplen al pie de la letra. Ganan el diff más corto y la respuesta más corta.
+## Environment rule
 
-1. **Reutiliza antes de escribir.** Busca con `grep` si ya existe la función, el
-   token o el módulo. Cada valor y cada regla viven en un solo sitio; nunca copies.
-2. **Nada «por si acaso».** Prohibido añadir parámetros, features, traits,
-   genéricos, opciones o ramas que hoy nadie usa. El código muerto se borra: no
-   se comenta ni se tapa con `#[allow(dead_code)]`.
-3. **Lo más directo.** Nada de wrappers ni abstracciones de un solo uso. Se
-   extrae a la tercera repetición, no antes.
-4. **Una función, una tarea; un módulo, un motivo de cambio.** Si un bloque
-   necesita un comentario para entenderse, extráelo a una función con ese nombre.
-5. **Los nombres sustituyen al comentario:** `dias_transcurridos`, no `d`.
-   Booleanos con forma de pregunta: `focused`, `zoom_supported`.
-6. **Ningún comentario.** El porqué de un rodeo va en el mensaje del commit, con
-   el enlace.
-7. **Diff mínimo.** Toca solo lo que pide el cambio: no reformatees ni
-   renombres de paso. El formato y los lints los ponen las herramientas.
-8. **Tests solo para lógica pura con riesgo**, y que el nombre sea la
-   especificación. Si borras código, borra también sus tests.
-9. **Ahorra tokens.** Lee rangos, no ficheros enteros. No pegues en el chat el
-   código que ya está en el diff. Cierra con 1–3 líneas: qué cambió y qué queda.
-10. **Investiga antes de suponer.** Si la causa o la API no está clara,
-   consulta en internet, en este orden:
-   1. el código y la documentación oficial de la dependencia **en la versión
-      fijada**: smithay en el rev de `Cargo.toml`, wayland-protocols en wayland.app, especificaciones de freedesktop y xdg-desktop-portal, Mesa y libinput, y como referencia de diseño Otto, niri y cosmic-comp;
-   2. los issues, PR, changelogs y discusiones del proyecto upstream;
-   3. foros como Discourse, Stack Overflow o Reddit, solo como pista y
-      contrastados con 1 o 2.
+Change nothing outside the repo and `$XDG_RUNTIME_DIR/malaysia`: sockets,
+session files or services.
 
-   No adoptes una solución que no puedas apoyar en una fuente. Si la solución
-   es un rodeo, pon el enlace en el commit. En el chat va la conclusión con el
-   enlace, no la investigación.
-11. **Presupuesto fijo.** En el camino caliente (lo que corre en cada frame o
-    evento de entrada) no se reserva memoria que pueda reutilizarse: nada de
-    `Vec`, `String`, `format!`, `Box` ni `clone` de colecciones por frame. Lo
-    que depende de la configuración se calcula cuando cambia, no en cada frame.
-12. **Datos antes que abstracciones.** Tablas `const` en vez de cadenas de `if`;
-    `enum` en vez de `Box<dyn Trait>` si el conjunto es cerrado; tipo concreto
-    en vez de un genérico con una sola instancia.
-13. **Cada dependencia paga su compilación.** `default-features = false` y solo
-    las features que se usan. Una crate que aporta una sola función se sustituye
-    por código propio si así se compila menos.
-14. **Se mide.** Un cambio de rendimiento se compara con las probes de
-    `./dev.sh` (`frames`, `presentation`) o con `cargo build --timings`; si no
-    mejora, se revierte.
+- **Sockets:** only the `wayland-N` served by `malaysia-compositor`, by exact
+  name. Never `wayland-0` or another process's sockets.
+- **Services:** do not restart mutter, gnome-shell, kwin, plasmashell, the
+  session or other processes. If something on the host fails, stop and report
+  it.
+- **Files:** only captures and dumps in `$XDG_RUNTIME_DIR/malaysia` and `/tmp`.
 
-### Así se aplica en malaysia
+## Third parties
+
+malaysia is MIT. mutter, gnome-shell, KWin and plasma-workspace are GPL: read
+them to learn the behavior and the design, never copy their code. If you copy
+code from a third party with a compatible license, update `NOTICE` in the same
+commit. Otto is MIT; `laye-rs` has no license and is not used.
+
+## Documentation and comments (top priority)
+
+Do not write documentation (ADR, `docs/`, README, reports or notes) unless the
+user asks for it explicitly; when asked, in English. Do not write comments in
+the code: Rust (no `///`, `//!` or `// SAFETY:` either), GLSL/WGSL, shell, Nix,
+TOML or Fluent. Names explain the code; the why goes in the commit message.
+
+## Minimal code (hard rules, ponytail style)
+
+They are followed to the letter. The shortest diff and the shortest answer win.
+
+1. **Reuse before you write.** Check with `grep` whether the function, the
+   token or the module already exists. Each value and each rule lives in one
+   place; never copy.
+2. **Nothing «just in case».** Do not add parameters, features, traits,
+   generics, options or branches that nobody uses today. Dead code is deleted:
+   not commented out and not hidden with `#[allow(dead_code)]`.
+3. **The most direct way.** No wrappers and no single-use abstractions.
+   Extract on the third repetition, not before.
+4. **One function, one task; one module, one reason to change.** If a block
+   needs a comment to be understood, extract it into a function with that name.
+5. **Names replace comments:** `elapsed_days`, not `d`. Booleans shaped as a
+   question: `focused`, `zoom_supported`.
+6. **No comments.** The why of a workaround goes in the commit message, with
+   the link.
+7. **Minimal diff.** Touch only what the change asks for: do not reformat or
+   rename in passing. The tools set the format and the lints.
+8. **Tests only for risky pure logic**, and the name is the specification. If
+   you delete code, delete its tests too.
+9. **Save tokens.** Read ranges, not whole files. Do not paste in the chat the
+   code that is already in the diff. Close with 1–3 lines: what changed and
+   what is left.
+10. **Research before you assume.** If the cause or the API is not clear,
+    look it up online, in this order:
+    1. the code and the official documentation of the dependency **at the
+       pinned version**: Smithay at the rev of `Cargo.toml`, wayland-protocols
+       on wayland.app, the freedesktop and xdg-desktop-portal specifications,
+       Mesa and libinput;
+    2. how the reference desktops do it: mutter and KWin first, then the
+       Smithay compositors niri and cosmic-comp, and Otto for design;
+    3. the upstream project's issues, merge requests, changelogs and
+       discussions;
+    4. forums such as Discourse, Stack Overflow or Reddit, only as a hint and
+       checked against 1, 2 or 3.
+
+    Do not adopt a solution you cannot back with a source. If the solution is
+    a workaround, put the link in the commit. The chat gets the conclusion
+    with the link, not the research.
+11. **Fixed budget.** On the hot path (what runs on each frame or input event)
+    no memory is allocated that could be reused: no `Vec`, `String`,
+    `format!`, `Box` or `clone` of collections per frame. What depends on the
+    configuration is computed when it changes, not on each frame.
+12. **Data before abstractions.** `const` tables instead of `if` chains;
+    `enum` instead of `Box<dyn Trait>` when the set is closed; a concrete type
+    instead of a generic with one instance.
+13. **Each dependency pays for its build.** `default-features = false` and
+    only the features in use. A crate that gives one function is replaced by
+    own code if that builds less.
+14. **It is measured.** A performance change is compared with the probes of
+    `./dev.sh` (`frames`, `presentation`) or with `cargo build --timings`; if
+    it does not improve, it is reverted.
+
+### How it applies in malaysia
 
 ```rust
-// ✗ lanzar un cliente a mano (hereda el Mesa/EGL privado del wrapper)
+// ✗ spawning a client by hand (it inherits the wrapper's private Mesa/EGL)
 Command::new(app).spawn()?;
-// ✓ el único punto que lanza procesos
+// ✓ the only place that spawns processes
 spawn::spawn(spawn::command(app, &config), &config)?;
 ```
 
 ```rust
-// ✗ literal de diseño en crates/malaysia-compositor/src
+// ✗ design literal in crates/malaysia-compositor/src
 const FADE: Duration = Duration::from_millis(250);
-// ✓ token de ctdesign
+// ✓ ctdesign token
 const DURATION: Duration = Duration::from_millis(ctdesign::DURATION_BASE);
 ```
 
 ```rust
-// ✓ el nombre del test es la especificación (malaysia-scene/geometry.rs)
+// ✓ the name of the test is the specification (malaysia-scene/geometry.rs)
 #[test]
 fn contains_includes_the_top_left_and_excludes_the_bottom_right() { … }
 ```
 
-- Un módulo por tema (`cursor.rs`, `lock.rs`, `spaces.rs`…). Si un fichero
-  pasa de unas 1500 líneas, la siguiente función nueva va a un módulo propio.
-- Una opción nueva se añade en `config.rs`, sin ningún otro sitio.
-- El texto visible de la shell y de Ajustes va en `i18n/{en,es}/<crate>.ftl` y se
-  lee con `tr!`; nunca un literal en el código. Guía: `docs/barrierkit/17-languages.md`
-  de barrierkit.
-- Los símbolos son SVG, nunca PNG, con `currentColor` o dibujados con
-  `TemplateRenderingMode::Template` de barrierkit: negro en claro y blanco en
-  oscuro. Iconos de apps, fotos e ilustraciones conservan sus colores.
+- One module per topic (`cursor.rs`, `lock.rs`, `spaces.rs`…). If a file
+  passes about 1500 lines, the next new function goes in its own module.
+- A new option is added in `config.rs` and nowhere else.
+- The visible text of the shell and of Settings goes in
+  `i18n/{en,es}/<crate>.ftl` and is read with `tr!`; never a literal in the
+  code. Guide: barrierkit's `docs/barrierkit/17-languages.md`.
+- Symbols are SVG, never PNG, with `currentColor` or drawn with barrierkit's
+  `TemplateRenderingMode::Template`: black in light and white in dark. App
+  icons, photos and illustrations keep their colors.
