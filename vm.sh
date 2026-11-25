@@ -2,15 +2,16 @@
 set -eu
 export PATH=/opt/podman/bin:$PATH
 NAME=malaysia-dev
-REPO=/Users/humbe/src/malaysia
+REPO=$(cd "$(dirname "$0")" && pwd)
+VKMS=/dev/dri/by-path/platform-vkms-card
 PROFILE=/root/.nix-profile
 
 in_box() { podman exec -w /work "$NAME" "$@"; }
 
 up() {
 	podman machine list --format '{{.Running}}' | grep -q true || podman machine start
-	podman machine ssh 'sudo modprobe vkms enable_writeback=1 enable_cursor=1 enable_overlay=1; until [ -e /dev/dri/card0 ]; do sleep 0.2; done; sudo chmod 666 /dev/dri/card0'
-	podman container exists "$NAME" || podman run -d --init --name "$NAME" -p 127.0.0.1:5901:5900 --device /dev/dri/card0 \
+	card=$(podman machine ssh "sudo modprobe vkms enable_writeback=1 enable_cursor=1 enable_overlay=1; until [ -e $VKMS ]; do sleep 0.2; done; sudo chmod 666 $VKMS; readlink -f $VKMS")
+	podman container exists "$NAME" || podman run -d --init --name "$NAME" -p 127.0.0.1:5901:5900 --device "$card" \
 		-v "$REPO":/work -v malaysia-nix:/nix -v malaysia-cache:/cache -w /work \
 		-e CARGO_TARGET_DIR=/cache/target -e LIBGL_ALWAYS_SOFTWARE=1 -e LIBSEAT_BACKEND=noop \
 		-e NIX_CONFIG="experimental-features = nix-command flakes" \
@@ -33,7 +34,7 @@ up() {
 }
 
 shot() {
-	podman machine ssh 'mkdir -p /tmp/shot && rm -f /tmp/shot/shot.png && sudo podman run --rm --privileged --device /dev/dri/card0 -v malaysia-shot-nix:/nix -v malaysia-shot-cache:/root/.cache -v /tmp/shot:/out docker.io/nixos/nix nix --extra-experimental-features "nix-command flakes" shell nixpkgs#ffmpeg-headless -c sh -c "for f in bgra bgr0; do ffmpeg -y -loglevel quiet -device /dev/dri/card0 -f kmsgrab -i - -frames:v 1 -vf hwdownload,format=\$f,format=rgb24 /out/shot.png && break; done"'
+	podman machine ssh 'c=$(readlink -f '"$VKMS"') && mkdir -p /tmp/shot && rm -f /tmp/shot/shot.png && sudo podman run --rm --cap-add SYS_ADMIN --device $c -v malaysia-shot-nix:/nix -v malaysia-shot-cache:/root/.cache -v /tmp/shot:/out:z docker.io/nixos/nix nix --extra-experimental-features "nix-command flakes" shell nixpkgs#ffmpeg-headless -c sh -c "for f in bgra bgr0; do ffmpeg -y -loglevel quiet -device $c -f kmsgrab -i - -frames:v 1 -vf hwdownload,format=\$f,format=rgb24 /out/shot.png && break; done"'
 	podman machine ssh 'cat /tmp/shot/shot.png' >"$1"
 }
 
@@ -46,7 +47,7 @@ test)
 	for png in $(in_box sh -c 'cd /tmp/vm && ls *.png'); do in_box cat "/tmp/vm/$png" >"$2/$png"; done
 	;;
 sh) podman exec -it -w /work "$NAME" sh ;;
-run) shift; podman exec -w /work "$NAME" "$@" ;;
+run) shift; in_box "$@" ;;
 down) podman stop "$NAME"; podman machine stop ;;
 *) echo "usage: $0 up|sh|run <cmd...>|shot <file.png>|test <dir>|down" >&2; exit 2 ;;
 esac

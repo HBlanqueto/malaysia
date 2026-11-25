@@ -117,9 +117,19 @@
                     ys = [y for _, y in points]
                     return min(xs), min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
 
-                def white(name):
-                    width, data = screen(name)
+                def white_points(width, data):
                     return [(i // 3 % width, i // 3 // width) for i in range(0, len(data), 3) if data[i:i + 3] == b"\xff\xff\xff"]
+
+                def white(name):
+                    return white_points(*screen(name))
+
+                def has_fallback_cursor(points):
+                    lit = set(points)
+                    return any(
+                        {(x - 1, y), (x, y - 1), (x + 16, y), (x, y + 16)}.isdisjoint(lit)
+                        and all((x + dx, y + dy) in lit for dx in range(16) for dy in range(16))
+                        for x, y in lit
+                    )
 
                 try:
                     machine.wait_for_file("/run/user/1000/wayland-1", timeout=600)
@@ -151,12 +161,18 @@
                     machine.send_monitor_command("mouse_move 200 200")
                     machine.wait_until_succeeds("grep -q 'wl_pointer#[0-9]*\\.enter' /tmp/foot.log", timeout=60)
                     machine.wait_until_succeeds("grep -q 'wl_pointer#[0-9]*\\.set_cursor' /tmp/foot.log", timeout=60)
-                    time.sleep(3)
-                    width, client = screen("cursor-client")
+                    for _ in range(60):
+                        width, client = screen("cursor-client")
+                        if not has_fallback_cursor(white_points(width, client)):
+                            break
+                        time.sleep(1)
                     machine.send_monitor_command("mouse_move 5000 5000")
                     machine.wait_until_succeeds("grep -q 'wl_pointer#[0-9]*\\.leave' /tmp/foot.log", timeout=60)
-                    time.sleep(3)
-                    _, away = screen("cursor-away")
+                    for _ in range(60):
+                        _, away = screen("cursor-away")
+                        if away[-3:] == b"\xff\xff\xff":
+                            break
+                        time.sleep(1)
                     corner = len(client) - 3
                     changed = [(i // 3 % width, i // 3 // width) for i in range(0, corner, 3) if client[i:i + 3] != away[i:i + 3]]
                     print("client cursor", bounds(changed) if changed else None, len(changed))
@@ -188,19 +204,10 @@
         in
         {
           default = pkgs.mkShell {
+            inputsFrom = [ self.packages.${system}.default ];
             packages = with pkgs; [
-              cargo
-              rustc
               clippy
               rustfmt
-              pkg-config
-            ];
-            buildInputs = with pkgs; [
-              libxkbcommon
-              libgbm
-              libinput
-              seatd
-              udev
             ];
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
               with pkgs;

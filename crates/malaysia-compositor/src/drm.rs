@@ -214,7 +214,9 @@ impl Drm {
             .map_err(|()| "libinput resume failed")?;
         self.device.activate(false)?;
         self.compositor.reset_state()?;
-        let _ = self.compositor.frame_submitted();
+        if let Err(error) = self.compositor.frame_submitted() {
+            tracing::warn!(%error, "frame submit after resume failed");
+        }
         Ok(())
     }
 
@@ -227,7 +229,7 @@ impl Drm {
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
         self.push_cursor(cursor, pointer, frame);
-        elements(&mut self.renderer, space, output, frame);
+        elements(&mut self.renderer, space, output, frame)?;
         let is_empty = self
             .compositor
             .render_frame(&mut self.renderer, frame, CLEAR_COLOR, FrameFlags::DEFAULT)?

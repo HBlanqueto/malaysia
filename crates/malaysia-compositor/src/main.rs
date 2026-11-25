@@ -28,16 +28,19 @@ use crate::winit::Winit;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let filter = std::env::var("RUST_LOG")
         .ok()
-        .and_then(|directives| directives.parse().ok())
+        .and_then(|directives| {
+            directives
+                .parse()
+                .map_err(|error| eprintln!("invalid RUST_LOG: {error}"))
+                .ok()
+        })
         .unwrap_or_else(|| Targets::new().with_default(tracing::Level::INFO));
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(filter)
         .init();
     let device = std::env::args_os().nth(1).map(PathBuf::from);
-    let nested = ["WAYLAND_DISPLAY", "DISPLAY"]
-        .iter()
-        .any(|name| std::env::var_os(name).is_some());
+    let nested = std::env::var_os("WAYLAND_DISPLAY").is_some();
 
     let mut event_loop = EventLoop::<State>::try_new()?;
     let display = Display::<State>::new()?;
@@ -57,9 +60,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let socket = ListeningSocketSource::new_auto()?;
     let socket_name = socket.socket_name().to_os_string();
     loop_handle.insert_source(socket, |stream, _, state| {
-        let _ = state
+        if let Err(error) = state
             .display_handle
-            .insert_client(stream, Arc::new(ClientState::default()));
+            .insert_client(stream, Arc::new(ClientState::default()))
+        {
+            tracing::warn!(%error, "client insert failed");
+        }
     })?;
     loop_handle.insert_source(
         Generic::new(display, Interest::READ, Mode::Level),
@@ -69,7 +75,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     )?;
 
-    unsafe { std::env::set_var("WAYLAND_DISPLAY", &socket_name) };
     tracing::info!(socket = %socket_name.to_string_lossy(), "listening");
 
     let mut seat_state = SeatState::new();
@@ -100,7 +105,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.run(None, &mut state, |state| {
         state.space.refresh();
         state.redraw_if_needed();
-        let _ = state.display_handle.flush_clients();
+        if let Err(error) = state.display_handle.flush_clients() {
+            tracing::warn!(%error, "client flush failed");
+        }
     })?;
     if let Backend::Drm(drm) = &mut state.backend {
         drm.pause();

@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::{Color32F, gles::GlesRenderer};
-use smithay::desktop::space::SpaceRenderElements;
+use smithay::desktop::space::{OutputError, SpaceRenderElements};
 use smithay::desktop::utils::send_frames_surface_tree;
 use smithay::desktop::{Space, Window};
 use smithay::input::keyboard::Keycode;
@@ -37,10 +37,10 @@ pub fn elements(
     space: &Space<Window>,
     output: &Output,
     frame: &mut Vec<Element>,
-) {
-    if let Ok(space_elements) = space.render_elements_for_output(renderer, output, 1.0) {
-        frame.extend(space_elements.into_iter().map(Element::from));
-    }
+) -> Result<(), OutputError> {
+    let space_elements = space.render_elements_for_output(renderer, output, 1.0)?;
+    frame.extend(space_elements.into_iter().map(Element::from));
+    Ok(())
 }
 
 pub enum Backend {
@@ -109,6 +109,7 @@ impl State {
         }
         .unwrap_or_else(|error| {
             tracing::warn!(%error, "render failed");
+            self.needs_redraw = true;
             false
         });
         self.frame_elements.clear();

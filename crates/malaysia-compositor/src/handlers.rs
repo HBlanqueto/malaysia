@@ -6,7 +6,7 @@ use smithay::reexports::wayland_server::protocol::{
     wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface,
 };
 use smithay::reexports::wayland_server::{Client, Resource};
-use smithay::utils::{SERIAL_COUNTER, Serial};
+use smithay::utils::{IsAlive, SERIAL_COUNTER, Serial};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
     CompositorClientState, CompositorHandler, CompositorState, get_parent, is_sync_subsurface,
@@ -89,7 +89,7 @@ impl XdgShellHandler for State {
             .space
             .elements()
             .rev()
-            .find(|window| window.toplevel().unwrap() != &surface)
+            .find(|window| window.alive() && window.toplevel().unwrap() != &surface)
             .cloned();
         match next {
             Some(window) => self.focus_window(&window, serial),
