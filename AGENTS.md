@@ -17,7 +17,7 @@ learn what was solved; never copy a file whole.
 - One step adds one dependency (or one Smithay feature) and one visible
   result. The flake grows in the same step, with only what that step needs.
 - A step is done when it passes the checks of «Build and test», is shown
-  working in the box and is pushed.
+  working in the box, `ROADMAP.md` and `README.md` say so, and it is pushed.
 - The compositor runs directly on DRM. The box has no seat, udev or real
   GPU: what needs them is verified on another Linux host before it is pushed.
 - The rules below that name code not yet rebuilt (shell, `bk`, `ctdesign`,
@@ -184,8 +184,11 @@ commit. Otto is MIT; `laye-rs` has no license and is not used.
 
 ## Documentation and comments (top priority)
 
-Do not write documentation (ADR, `docs/`, README, reports or notes) unless the
-user asks for it explicitly; when asked, in English. Do not write comments in
+The project has two documents, both in English: `ROADMAP.md`, which says
+which step is in progress and what is not verified, and `README.md`. Update
+both in the commit of each step, with plain and consistent wording. Do not
+write any other documentation (ADR, `docs/`, reports or notes) unless the user
+asks for it explicitly. Do not write comments in
 the code: Rust (no `///`, `//!` or `// SAFETY:` either), GLSL/WGSL, shell, Nix,
 TOML or Fluent. Names explain the code; the why goes in the commit message.
 
