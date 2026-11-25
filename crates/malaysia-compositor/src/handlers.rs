@@ -1,6 +1,9 @@
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
-use smithay::desktop::Window;
-use smithay::input::pointer::CursorImageStatus;
+use smithay::desktop::{
+    PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
+    find_popup_root_surface, get_popup_toplevel_coords,
+};
+use smithay::input::pointer::{CursorImageStatus, Focus};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_server::protocol::{
     wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface,
@@ -36,6 +39,7 @@ impl CompositorHandler for State {
     fn commit(&mut self, surface: &WlSurface) {
         on_commit_buffer_handler::<Self>(surface);
         self.needs_redraw = true;
+        self.popups.commit(surface);
         if is_sync_subsurface(surface) {
             return;
         }
@@ -43,16 +47,17 @@ impl CompositorHandler for State {
         while let Some(parent) = get_parent(&root) {
             root = parent;
         }
-        if let Some(window) = self
-            .space
-            .elements()
-            .find(|window| window.toplevel().unwrap().wl_surface() == &root)
-        {
+        if let Some(window) = self.window_for_surface(&root) {
             window.on_commit();
             let toplevel = window.toplevel().unwrap();
             if !toplevel.is_initial_configure_sent() {
                 toplevel.send_configure();
             }
+        } else if let Some(PopupKind::Xdg(popup)) = self.popups.find_popup(surface)
+            && !popup.is_initial_configure_sent()
+            && let Err(error) = popup.send_configure()
+        {
+            tracing::warn!(%error, "popup configure failed");
         }
     }
 }
@@ -81,9 +86,13 @@ impl XdgShellHandler for State {
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.needs_redraw = true;
         let keyboard = self.seat.get_keyboard().unwrap();
-        if keyboard.current_focus().as_ref() != Some(surface.wl_surface()) {
+        if keyboard
+            .current_focus()
+            .is_none_or(|focus| focus.alive() && self.root_surface(&focus) != *surface.wl_surface())
+        {
             return;
         }
+        keyboard.unset_grab(self);
         let serial = SERIAL_COUNTER.next_serial();
         let next = self
             .space
@@ -97,16 +106,93 @@ impl XdgShellHandler for State {
         }
     }
 
-    fn new_popup(&mut self, _surface: PopupSurface, _positioner: PositionerState) {}
+    fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
+        self.unconstrain_popup(&surface);
+        if let Err(error) = self.popups.track_popup(PopupKind::Xdg(surface)) {
+            tracing::warn!(%error, "popup tracking failed");
+        }
+    }
 
-    fn grab(&mut self, _surface: PopupSurface, _seat: WlSeat, _serial: Serial) {}
+    fn popup_destroyed(&mut self, _surface: PopupSurface) {
+        self.needs_redraw = true;
+    }
+
+    fn grab(&mut self, surface: PopupSurface, _seat: WlSeat, serial: Serial) {
+        let keyboard = self.seat.get_keyboard().unwrap();
+        let pointer = self.seat.get_pointer().unwrap();
+        let focused_root = keyboard
+            .current_focus()
+            .map(|focus| self.root_surface(&focus));
+        let kind = PopupKind::Xdg(surface);
+        let Some(root) = find_popup_root_surface(&kind).ok().filter(|root| {
+            self.window_for_surface(root).is_some() && focused_root.as_ref() == Some(root)
+        }) else {
+            return;
+        };
+        let Ok(mut grab) = self.popups.grab_popup(root, kind, &self.seat, serial) else {
+            return;
+        };
+        let previous_serial = grab.previous_serial().unwrap_or(serial);
+        if keyboard.is_grabbed()
+            && !(keyboard.has_grab(serial) || keyboard.has_grab(previous_serial))
+            || pointer.is_grabbed()
+                && !(pointer.has_grab(serial) || pointer.has_grab(previous_serial))
+        {
+            grab.ungrab(PopupUngrabStrategy::All);
+            return;
+        }
+        pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
+        keyboard.set_focus(self, grab.current_grab(), serial);
+        keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
+    }
 
     fn reposition_request(
         &mut self,
-        _surface: PopupSurface,
-        _positioner: PositionerState,
-        _token: u32,
+        surface: PopupSurface,
+        positioner: PositionerState,
+        token: u32,
     ) {
+        surface.with_pending_state(|state| {
+            state.geometry = positioner.get_geometry();
+            state.positioner = positioner;
+        });
+        self.unconstrain_popup(&surface);
+        surface.send_repositioned(token);
+    }
+}
+
+impl State {
+    fn root_surface(&self, surface: &WlSurface) -> WlSurface {
+        self.popups
+            .find_popup(surface)
+            .and_then(|popup| find_popup_root_surface(&popup).ok())
+            .unwrap_or_else(|| surface.clone())
+    }
+
+    fn window_for_surface(&self, surface: &WlSurface) -> Option<&Window> {
+        self.space
+            .elements()
+            .find(|window| window.toplevel().unwrap().wl_surface() == surface)
+    }
+
+    fn unconstrain_popup(&self, popup: &PopupSurface) {
+        let kind = PopupKind::Xdg(popup.clone());
+        let Some(window) = find_popup_root_surface(&kind)
+            .ok()
+            .and_then(|root| self.window_for_surface(&root))
+        else {
+            return;
+        };
+        let (Some(mut target), Some(window_geometry)) = (
+            self.space.output_geometry(&self.output),
+            self.space.element_geometry(window),
+        ) else {
+            return;
+        };
+        target.loc -= get_popup_toplevel_coords(&kind) + window_geometry.loc;
+        popup.with_pending_state(|state| {
+            state.geometry = state.positioner.get_unconstrained_geometry(target);
+        });
     }
 }
 

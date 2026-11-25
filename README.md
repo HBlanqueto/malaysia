@@ -4,8 +4,8 @@ Malaysia is a Wayland compositor written in Rust on
 [Smithay](https://github.com/Smithay/smithay).
 
 It is being rebuilt from its foundation, one dependency at a time. Today it
-draws the windows of Wayland clients that use `xdg_shell` and shared-memory
-buffers, and gives them a keyboard and a pointer. It runs in two ways:
+draws the windows and the menus of Wayland clients that use `xdg_shell` and
+shared-memory buffers, and gives them a keyboard and a pointer. It runs in two ways:
 
 - **Directly on a display.** Started from a TTY by a normal user, it takes its
   session from libseat, finds the GPU through udev, drives the display through
@@ -103,7 +103,8 @@ nix build .#checks.<system>.vm
 
 The last one boots a NixOS machine, logs a normal user in on a TTY, runs the
 compositor directly on the virtual GPU, types into a terminal, moves the mouse
-and checks the cursor, switches to another VT and back, types again and quits.
+and checks the cursor, switches to another VT and back, types again, opens and closes a menu in a
+text editor and quits.
 
 On a Mac, `vm.sh` runs all of this in a Linux box that has a virtual display
 and a headless desktop:

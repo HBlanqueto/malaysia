@@ -5,7 +5,7 @@ use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::{Color32F, gles::GlesRenderer};
 use smithay::desktop::space::{OutputError, SpaceRenderElements};
 use smithay::desktop::utils::send_frames_surface_tree;
-use smithay::desktop::{Space, Window};
+use smithay::desktop::{PopupManager, Space, Window};
 use smithay::input::keyboard::Keycode;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
@@ -56,6 +56,7 @@ pub struct State {
     pub backend: Backend,
     pub output: Output,
     pub space: Space<Window>,
+    pub popups: PopupManager,
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub shm_state: ShmState,

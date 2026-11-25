@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use smithay::desktop::Space;
+use smithay::desktop::{PopupManager, Space};
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{SeatState, keyboard::XkbConfig};
 use smithay::reexports::calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic};
@@ -96,6 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         backend,
         output,
         space,
+        popups: PopupManager::default(),
         needs_redraw: true,
         frame_pending: false,
         suppressed_keys: Vec::new(),
@@ -104,6 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     event_loop.run(None, &mut state, |state| {
         state.space.refresh();
+        state.popups.cleanup();
         state.redraw_if_needed();
         if let Err(error) = state.display_handle.flush_clients() {
             tracing::warn!(%error, "client flush failed");

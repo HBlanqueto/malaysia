@@ -9,12 +9,12 @@ Last update: 2026-11-25.
 
 ## Where we are
 
-**Now:** this stage is done and reviewed. The compositor runs directly on a
-display and nested in a Wayland session. Next is the first item of «After this
+**Now:** the compositor runs directly on a display and nested in a Wayland
+session, and apps show their menus. Next is the first item of «After this
 stage». Nothing has run on real hardware yet.
 
-The display after the last finished step (step 8b: on a NixOS machine, the
-terminal's own text cursor drawn where the mouse is):
+The display after the last finished step (step 9: on a NixOS machine, directly
+on the display, a text editor with its File menu open):
 
 ![The display after the last finished step](screen.png)
 
@@ -30,26 +30,26 @@ terminal's own text cursor drawn where the mouse is):
 | 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | done `447a64a` |
 | 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | done `983e166` |
 | 8b | Cursor | a pointer that can be seen on a real display | done `aa62ca9` |
-| review | The whole code read against Smithay's source | fixes for focus, hidden errors and a retried frame | done |
+| review | The whole code read against Smithay's source | fixes for focus, hidden errors and a retried frame | done `afa81d4` |
+| 9 | Popups: `xdg_popup` with its keyboard and pointer grab | a menu, its submenus and a context menu that stays inside the display | done |
 
-When step 8b is done the compositor runs directly on hardware and nested in
-another session. That is the goal of this stage.
+Steps 1 to 8b were the first stage: the compositor runs directly on hardware
+and nested in another session.
 
 ## After this stage
 
 In the order they will be taken, one at a time:
 
-1. Popups: today a menu is never shown, and every GTK or Qt app has menus.
-2. `linux-dmabuf`: until then every client draws with software rendering, so a
+1. `linux-dmabuf`: until then every client draws with software rendering, so a
    real machine looks slower than it is.
-3. Output scale, for HiDPI displays.
-4. Layer shell, which the shell needs to place its surfaces.
-5. `bk` returns, with its first two components: the lock screen and the
+2. Output scale, for HiDPI displays.
+3. Layer shell, which the shell needs to place its surfaces.
+4. `bk` returns, with its first two components: the lock screen and the
    screen capture portal.
-6. Hotplug and several displays.
-7. What a laptop needs: display power and idle, touchpad settings such as
+5. Hotplug and several displays.
+6. What a laptop needs: display power and idle, touchpad settings such as
    tap-to-click, signal handling.
-8. Design tokens from `ctdesign`, window management (placement, move, resize),
+7. Design tokens from `ctdesign`, window management (placement, move, resize),
    the rest of the shell and the apps.
 
 ## How the desktop is put together
@@ -73,7 +73,10 @@ prove is marked here as **not verified on hardware** until someone runs it.
 
 ## Known gaps
 
-- Popups (menus) are not configured or drawn yet.
+- A click outside an open menu closes the menu and also reaches the window
+  under it, without giving that window the focus. KWin keeps that click.
+- When an app closes its own menu, the keyboard focus returns to the window on
+  the next key or pointer event, not at once.
 - Every window opens at the top left corner, over the others.
 - The fallback cursor is a white square: it shows where no client sets its
   own cursor. Cursor themes come later.
@@ -101,3 +104,5 @@ prove is marked here as **not verified on hardware** until someone runs it.
 - A frame lost while the session is paused, and starting from a VT that is not
   the active one.
 - Scroll, drag and drop and the clipboard.
+- Menus were checked with one GTK 3 app. A Qt app and a popup that asks to be
+  moved after it is shown are untested.

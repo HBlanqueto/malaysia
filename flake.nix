@@ -79,6 +79,7 @@
                 environment.systemPackages = [
                   self.packages.${system}.default
                   pkgs.foot
+                  pkgs.mousepad
                 ];
                 virtualisation.qemu.options = [
                   "-vga none"
@@ -178,6 +179,15 @@
                     print("client cursor", bounds(changed) if changed else None, len(changed))
                     assert changed and max(bounds(changed)[2:]) <= 64
                     assert any(client[3 * (y * width + x):3 * (y * width + x) + 3] != b"\xff\xff\xff" for x, y in changed)
+                    machine.succeed("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 GDK_BACKEND=wayland mousepad >/tmp/mousepad.log 2>&1 &'")
+                    machine.wait_for_text("Mousepad", timeout=300)
+                    machine.send_key("alt-f")
+                    machine.wait_for_text("Save As", timeout=300)
+                    machine.screenshot("menu")
+                    machine.send_key("esc")
+                    machine.send_chars("zebra")
+                    machine.wait_for_text("zebra", timeout=300)
+                    machine.screenshot("menu-closed")
                     machine.send_key("ctrl-alt-backspace")
                     machine.wait_until_fails("pgrep -x malaysia-compos", timeout=60)
                     machine.wait_for_file("/tmp/exit", timeout=60)
