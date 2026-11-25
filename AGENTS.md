@@ -7,8 +7,21 @@ Rust on [Smithay](https://github.com/smithay/smithay). GNOME and KDE Plasma
 are the reference desktops: before you design or change a behavior, find out
 how both solve it, then build it on Smithay.
 
-See `README.md`, `docs/architecture.md`, `docs/decisions.md` and
-`docs/configuration/options.md`.
+## Rebuild from zero (in force since 2026-11-25)
+
+The project is being rebuilt from its foundation. The previous code left the
+branch at commit `8bbad9a`; it stays in the history at `fdb3f801` and as a
+read-only reference in `~/src/Remake-Malaysia/legacy/malaysia/`. Read it to
+learn what was solved; never copy a file whole.
+
+- One step adds one dependency (or one Smithay feature) and one visible
+  result. The flake grows in the same step, with only what that step needs.
+- A step is done when it passes the checks of «Build and test», is shown
+  working in the box and is pushed.
+- The compositor runs directly on DRM as soon as the base allows it; the
+  nested winit backend is temporary.
+- The rules below that name code not yet rebuilt (shell, `bk`, `ctdesign`,
+  `config.rs`, i18n) apply when that part returns.
 
 > **Repository:** `bk`, `ctdesign`, `ctappearance` and `infinity-protocol`
 > live in [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
@@ -49,15 +62,22 @@ Starting sources by area. Those of each pinned dependency are in rule 10 of
 
 ## Research, then execution
 
-Each task has two phases, and each phase has its subagent in `.claude/agents/`.
+Each task has two phases, and each phase has its subagents in `.claude/agents/`.
 
 1. **Research: `researcher`.** It reads how mutter and KWin solve the problem,
    what the protocol requires and what Smithay offers at the pinned rev. It
    changes no file. It returns one recommendation with its sources, its reason
    and its risks.
-2. **Execution: `executor`.** It makes the smallest complete change that
-   applies the recommendation, checks it with `./dev.sh check` and reports what
-   changed and what is left.
+2. **Execution: `executor` or `builder`.** `executor` (Sonnet) makes a small,
+   clear change; `builder` (Opus) does heavy or long work: new modules and
+   changes across several files. Both make the smallest complete change that
+   applies the recommendation, check it as «Build and test» says and report
+   what changed and what is left.
+
+`the-senior` (Fable) supports `researcher` and `scout` on concrete, complex
+steps: hardware (DRM, GPU, input, seats), the base of the project and merging
+code from several sources. It questions a recommendation or a diff before it
+is applied and answers go, change or stop. It changes no file.
 
 `scout` does quick searches in this repo for either phase. Skip the research
 phase only when the cause and the API are already clear from the code.
@@ -71,8 +91,6 @@ phase only when the cause and the API are already clear from the code.
 - `git pull --ff-only` before starting and before each push. Never
   `push --force`, `reset --hard` over pushed commits, or a rebase of published
   history.
-- `Cargo.lock` is not pushed when generated with `kit-local`; if it shows up
-  modified without a dependency change, `git checkout Cargo.lock`.
 - The history before 2026-10-28 lives in the tag
   `archivo/historia-hasta-2026-10-26`.
 
@@ -127,39 +145,26 @@ Applies to decorations, chrome, shadows, blur, borders, themes and shell.
    implements it (`infinity.rs`). `otto-kit`, `otto-foundations`, `otto-dbus`,
    `otto-surface-style` and `laye-rs` are not used.
 
-## Quick references
-
-- **What it is, install and build:** `README.md`.
-- **Architecture:** `docs/architecture.md`: processes and binaries, who draws
-  and who composes, how they talk and the invariants.
-- **Decisions:** `docs/decisions.md`: the why of each decision in force, with
-  its ADR number. The toolkit's are in barrierkit's `docs/decisions.md`.
-- **Configuration:** `docs/configuration/options.md` is the canonical catalog.
-  One TOML `.domain` per domain: preferences in `~/.config/malaysia/`,
-  state/`wallpaper` in `~/.local/share/malaysia/`. Override with
-  `MALAYSIA_CONFIG_DIR`/`MALAYSIA_DATA_DIR`. The options are typed in
-  `crates/malaysia-compositor/src/config.rs`.
-
 ## Build and test
 
-```sh
-nix develop            # required (sets MALAYSIA_DEV_SHELL)
-./dev.sh check         # fmt + clippy + tests
-./dev.sh run           # nested compositor
-./dev.sh demo          # shell + test windows
-./dev.sh titlebar      # close/minimize/maximize
-./dev.sh smoke         # toplevel mapping
-# probes: move, pointers, screencopy, presentation, frames, activation
-```
+The Mac does not build the compositor. Everything runs in the podman box of
+`vm.sh`: aarch64 Linux with Nix, a headless sway as host and VNC on
+`vnc://127.0.0.1:5901`.
 
-Do not build outside the dev shell: `build.rs` and `dev.sh` refuse.
-NixOS: `nixosModules.default` installs the package, the session, PAM and
-`malaysia-session.target`.
+```sh
+./vm.sh up                                     # machine, container, host, VNC
+./vm.sh run nix develop -c cargo fmt --check
+./vm.sh run nix develop -c cargo clippy -- -D warnings
+./vm.sh run nix develop -c cargo test
+./vm.sh run nix develop -c cargo run           # shown in the VNC session
+./vm.sh sh                                     # shell in the box
+./vm.sh down
+```
 
 ## Environment rule
 
-Change nothing outside the repo and `$XDG_RUNTIME_DIR/malaysia`: sockets,
-session files or services.
+Change nothing outside the repo, the podman machine and containers of `vm.sh`
+and `$XDG_RUNTIME_DIR/malaysia`: sockets, session files or services.
 
 - **Sockets:** only the `wayland-N` served by `malaysia-compositor`, by exact
   name. Never `wayland-0` or another process's sockets.
@@ -233,9 +238,9 @@ They are followed to the letter. The shortest diff and the shortest answer win.
 13. **Each dependency pays for its build.** `default-features = false` and
     only the features in use. A crate that gives one function is replaced by
     own code if that builds less.
-14. **It is measured.** A performance change is compared with the probes of
-    `./dev.sh` (`frames`, `presentation`) or with `cargo build --timings`; if
-    it does not improve, it is reverted.
+14. **It is measured.** A performance change is compared in the box, before
+    and after, or with `cargo build --timings`; if it does not improve, it is
+    reverted.
 
 ### How it applies in malaysia
 
