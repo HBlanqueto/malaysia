@@ -6,3 +6,5 @@ license.workspace = true
 
 [dependencies]
 smithay.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

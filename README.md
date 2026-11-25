@@ -17,8 +17,9 @@ nix develop
 cargo run -- /dev/dri/card0
 ```
 
-The argument is the DRM device to drive. The compositor prints the name of its
-Wayland socket and stops with Ctrl+C.
+The argument is the DRM device to drive. The compositor logs the mode it chose
+and the name of its Wayland socket, and stops with Ctrl+C. `RUST_LOG` sets the
+log level per module, for example `RUST_LOG=smithay=debug`.
 
 On a Mac, `vm.sh` runs the same commands in a Linux box with a virtual
 display:

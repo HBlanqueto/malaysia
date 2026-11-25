@@ -9,14 +9,14 @@ Last update: 2026-11-25.
 
 ## Where we are
 
-**Now:** step 3, logging.
+**Now:** step 4, windows.
 
 | Step | What it adds | What can be seen | State |
 |---|---|---|---|
 | 1 | Smithay, event loop, Wayland socket | a window with one color, nested | done `8bbad9a` |
 | 2 | DRM/KMS output through GBM and GLES | the same color, directly on a display | done `da8a2c9` |
-| 3 | Logging with `tracing` | Smithay's warnings and the compositor's own messages | next |
-| 4 | Windows: `wl_compositor`, `wl_shm`, `xdg_shell`, `wl_output` | an app drawn on the screen | to do |
+| 3 | Logging with `tracing` | Smithay's warnings and the compositor's own messages | done |
+| 4 | Windows: `wl_compositor`, `wl_shm`, `xdg_shell`, `wl_output` | an app drawn on the screen | next |
 | 5 | Nested session: the winit backend returns and shares the frame code with DRM | the compositor inside another desktop | to do |
 | 6 | Seat: keyboard and pointer | typing in a window, a cursor | to do |
 | 7 | Session with libseat | start from a TTY as a normal user, switch VT | to do |

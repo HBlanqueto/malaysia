@@ -16,6 +16,7 @@ use smithay::reexports::drm::control::{Device, ModeTypeFlags, connector};
 use smithay::reexports::wayland_server::{Display, DisplayHandle};
 use smithay::utils::{DeviceFd, Transform};
 use smithay::wayland::socket::ListeningSocketSource;
+use tracing_subscriber::{filter::Targets, fmt, prelude::*};
 
 const CLEAR_COLOR: Color32F = Color32F::new(0.1, 0.1, 0.12, 1.0);
 
@@ -44,6 +45,14 @@ impl State {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let filter = std::env::var("RUST_LOG")
+        .ok()
+        .and_then(|directives| directives.parse().ok())
+        .unwrap_or_else(|| Targets::new().with_default(tracing::Level::INFO));
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(filter)
+        .init();
     let path = std::env::args()
         .nth(1)
         .ok_or("usage: malaysia-compositor /dev/dri/cardN")?;
@@ -70,6 +79,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(connector.modes().first())
         .copied()
         .ok_or("connector has no mode")?;
+    tracing::info!(
+        connector = ?connector.interface(),
+        id = connector.interface_id(),
+        width = mode.size().0,
+        height = mode.size().1,
+        refresh = mode.vrefresh(),
+        "mode chosen"
+    );
     let crtc = connector
         .encoders()
         .iter()
@@ -127,14 +144,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map_err(Into::into)
                 .and_then(|_| state.draw())
             {
-                eprintln!("draw failed: {error}");
+                tracing::error!(%error, "draw failed");
             }
         }
-        DrmEvent::Error(error) => eprintln!("drm error: {error}"),
+        DrmEvent::Error(error) => tracing::error!(%error, "drm error"),
     })?;
 
     unsafe { std::env::set_var("WAYLAND_DISPLAY", &socket_name) };
-    println!("{}", socket_name.to_string_lossy());
+    tracing::info!(socket = %socket_name.to_string_lossy(), "listening");
 
     let mut state = State {
         display_handle,
