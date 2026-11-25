@@ -54,7 +54,7 @@ after two minutes in case the keyboard does not answer:
 
 ```sh
 (sleep 3; WAYLAND_DISPLAY=wayland-1 foot) &
-timeout 120 malaysia-compositor 2>~/malaysia.log
+timeout 120 malaysia-compositor >~/malaysia.log 2>&1
 ```
 
 What it needs:
