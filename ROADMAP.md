@@ -54,26 +54,8 @@ In the order they will be taken, one at a time:
 
 ## How the desktop is put together
 
-Decided on 2026-11-25, after reading how GNOME, Plasma, COSMIC, niri, Hyprland
-and macOS do the same. None of it is built yet.
-
-| Part | Decision |
-|---|---|
-| Model | Separate processes. The compositor keeps capture, the lock protocol and the keyboard; the shell is a set of client processes, one per component. |
-| System bus | D-Bus through `zbus`, for logind, localed, NetworkManager, BlueZ and UPower. |
-| Start | systemd user units. The compositor is one unit; each shell component is started on demand by its D-Bus name. |
-| Wi-Fi and Bluetooth | The menu bar calls NetworkManager and BlueZ directly through `zbus`. No crate per service and no daemon of our own in between. |
-| Portal | Our own, from the start. Its picker is the permission to capture. Until it exists, sandboxed apps cannot capture or share the screen. |
-| Screenshots | The compositor serves `ext-image-copy-capture`, checked with `grim`. A component of the shell comes later. |
-| Lock screen | Our own client from the start: the `lock` component on `ext-session-lock`, with PAM. The compositor never draws the lock. |
-| Clipboard | The compositor serves data control now. The history lives in the launcher and is off by default. |
-| Keyboard | The compositor applies the xkb layout and reads the default from localed. The menu bar shows the layout and asks for the change. Input methods are outside programs that use the standard protocol. |
-| Language | Inherited from the system at login. A language per app is a variable set when the app is started, added when it is needed. |
-| Settings | One process owns the settings files and announces each change on D-Bus. The compositor and the shell only listen. |
-
-New dependencies, each added in the step that first needs it: `zbus`,
-`pipewire` (screen sharing) and `pam-client` (unlocking). The Wayland
-protocols named above are already in Smithay at the pinned rev.
+The decisions and the new dependencies are in the «Design» section of
+[README.md](README.md). None of it is built yet.
 
 ## How each step is checked
 
