@@ -9,10 +9,11 @@ Last update: 2026-11-25.
 
 ## Where we are
 
-**Now:** step 7b, the session with libseat.
+**Now:** step 8a, devices with udev and libinput.
 
-The display after the last finished step (step 7a: the compositor directly on
-the virtual GPU of a NixOS machine, drawing the `foot` terminal):
+The display after the last finished step (step 7b: a normal user started the
+compositor from a TTY of a NixOS machine; this frame was drawn after switching
+to another VT and back):
 
 ![The display after the last finished step](screen.png)
 
@@ -24,9 +25,9 @@ the virtual GPU of a NixOS machine, drawing the `foot` terminal):
 | 4 | Windows: `wl_compositor`, `wl_shm`, `xdg_shell`, `wl_output` | an app drawn on the screen | done `80a5b31` |
 | 5 | Nested session: the winit backend returns and shares the frame code with DRM | the compositor inside another desktop | done `7f75682` |
 | 6 | Seat: keyboard and pointer | typing in a window | done `9427c17` |
-| 7a | A Nix package and a NixOS test machine | the compositor on a virtual GPU in a full Linux session | done |
-| 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | next |
-| 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | to do |
+| 7a | A Nix package and a NixOS test machine | the compositor on a virtual GPU in a full Linux session | done `8c058c3` |
+| 7b | Session with libseat | start from a TTY as a normal user, pause and resume on VT switch | done |
+| 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | next |
 | 8b | Cursor | a pointer that can be seen on a real display | to do |
 
 When step 8b is done the compositor runs directly on hardware and nested in
@@ -59,8 +60,12 @@ prove is marked here as **not verified on hardware** until someone runs it.
 - Input only reaches the nested compositor. Directly on a display there is no
   keyboard or mouse until step 8a.
 - Scroll, drag and drop and the clipboard are not tested.
-- Until step 8a there is no way to leave the compositor on a real machine, so
-  step 7b is only run in the test machine.
+- Until step 8a there is no way to leave the compositor on a real machine
+  except from another machine (`pkill malaysia-compos` over ssh).
+- The compositor must be started from the active VT; starting it from an
+  inactive one is an error.
+- There is no signal handling: when the process is killed, logind or seatd
+  give the VT back.
 
 ## Not verified on hardware
 

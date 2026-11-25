@@ -1,6 +1,5 @@
 use std::error::Error;
-use std::fs::OpenOptions;
-use std::os::fd::OwnedFd;
+use std::path::Path;
 
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
@@ -9,10 +8,13 @@ use smithay::backend::drm::exporter::gbm::{GbmFramebufferExporter, NodeFilter};
 use smithay::backend::drm::{DrmDevice, DrmDeviceFd, DrmEvent};
 use smithay::backend::egl::{EGLContext, EGLDisplay};
 use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::session::libseat::LibSeatSession;
+use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::desktop::{Space, Window};
 use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::drm::control::{Device, ModeTypeFlags, connector};
+use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::DeviceFd;
 
@@ -22,6 +24,7 @@ type Compositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
 
 pub struct Drm {
+    device: DrmDevice,
     renderer: GlesRenderer,
     compositor: Compositor,
 }
@@ -32,8 +35,15 @@ impl Drm {
         display_handle: &DisplayHandle,
         loop_handle: &LoopHandle<'static, State>,
     ) -> Result<(Drm, Output), Box<dyn Error>> {
-        let file = OpenOptions::new().read(true).write(true).open(path)?;
-        let fd = DrmDeviceFd::new(DeviceFd::from(OwnedFd::from(file)));
+        let (mut session, session_notifier) = LibSeatSession::new()?;
+        if !session.is_active() {
+            return Err("session is not active".into());
+        }
+        let fd = session.open(
+            Path::new(path),
+            OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
+        )?;
+        let fd = DrmDeviceFd::new(DeviceFd::from(fd));
         let (mut drm, notifier) = DrmDevice::new(fd.clone(), true)?;
         let gbm = GbmDevice::new(fd)?;
         let egl = unsafe { EGLDisplay::new(gbm.clone())? };
@@ -122,13 +132,45 @@ impl Drm {
             }
             DrmEvent::Error(error) => tracing::error!(%error, "drm error"),
         })?;
+        loop_handle.insert_source(session_notifier, |event, _, state| {
+            tracing::info!(?event, "session");
+            let Backend::Drm(drm) = &mut state.backend else {
+                return;
+            };
+            match event {
+                SessionEvent::PauseSession => drm.pause(),
+                SessionEvent::ActivateSession => {
+                    if let Err(error) = drm.activate() {
+                        tracing::error!(%error, "session resume failed");
+                    }
+                    state.frame_pending = false;
+                    state.needs_redraw = true;
+                }
+            }
+        })?;
         Ok((
             Drm {
+                device: drm,
                 renderer,
                 compositor,
             },
             output,
         ))
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.device.is_active()
+    }
+
+    fn pause(&mut self) {
+        self.device.pause();
+    }
+
+    fn activate(&mut self) -> Result<(), Box<dyn Error>> {
+        self.device.activate(false)?;
+        self.compositor.reset_state()?;
+        let _ = self.compositor.frame_submitted();
+        Ok(())
     }
 
     pub fn render(

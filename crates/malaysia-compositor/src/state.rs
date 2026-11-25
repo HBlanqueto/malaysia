@@ -67,6 +67,7 @@ impl State {
             return;
         }
         match &self.backend {
+            Backend::Drm(drm) if !drm.is_active() => {}
             Backend::Drm(_) => self.render(),
             Backend::Winit(winit) => {
                 self.frame_pending = true;

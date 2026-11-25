@@ -36,6 +36,7 @@
               libxkbcommon
               libgbm
               libglvnd
+              seatd
               wayland
             ];
             RUSTFLAGS = map (arg: "-C link-arg=${arg}") [
@@ -60,6 +61,16 @@
             nodes.machine =
               { lib, ... }:
               {
+                users.users.alice = {
+                  isNormalUser = true;
+                  uid = 1000;
+                };
+                services.getty.autologinUser = "alice";
+                programs.bash.loginShellInit = ''
+                  if [ "$(tty)" = /dev/tty1 ]; then
+                    malaysia-compositor /dev/dri/card0 >/tmp/malaysia.log 2>&1; echo $? >/tmp/exit
+                  fi
+                '';
                 hardware.graphics.enable = true;
                 fonts.enableDefaultPackages = true;
                 environment.systemPackages = [
@@ -76,19 +87,37 @@
                 virtualisation.sharedDirectories = lib.mkForce { };
               };
             testScript = ''
-              machine.wait_for_unit("multi-user.target", timeout=600)
-              machine.succeed("XDG_RUNTIME_DIR=/tmp malaysia-compositor /dev/dri/card0 >/tmp/malaysia.log 2>&1 &")
-              machine.wait_for_file("/tmp/wayland-1", timeout=300)
-              machine.succeed("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY=wayland-1 foot -o font=monospace:size=24 sh -c 'echo malaysia; sleep 600' >/tmp/foot.log 2>&1 &")
-              machine.wait_for_text("malaysia", timeout=300)
-              machine.screenshot("foot")
+              def foot(text):
+                  machine.succeed(f"su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 foot -o font=monospace:size=24 sh -c \"echo {text}; sleep 600\"' >>/tmp/foot.log 2>&1 &")
+                  machine.wait_for_text(text, timeout=300)
+
+              try:
+                  machine.wait_for_file("/run/user/1000/wayland-1", timeout=600)
+                  foot("malaysia")
+                  machine.screenshot("foot")
+                  machine.succeed("chvt 2")
+                  machine.wait_until_succeeds("grep -q PauseSession /tmp/malaysia.log", timeout=60)
+                  machine.wait_for_text("automatic login", timeout=300)
+                  machine.screenshot("vt2")
+                  machine.succeed("chvt 1")
+                  machine.wait_until_succeeds("grep -q ActivateSession /tmp/malaysia.log", timeout=60)
+                  foot("resumed")
+                  machine.screenshot("resumed")
+                  machine.succeed("pkill -x malaysia-compos")
+                  machine.wait_until_fails("pgrep -x malaysia-compos", timeout=60)
+                  machine.wait_for_file("/tmp/exit", timeout=60)
+                  machine.send_chars("tty >/tmp/tty\n")
+                  machine.wait_until_succeeds("grep -qx /dev/tty1 /tmp/tty", timeout=60)
+                  machine.screenshot("text-vt")
+              finally:
+                  print(machine.execute("cat /tmp/malaysia.log /tmp/foot.log")[1])
               compositor_log = machine.succeed("cat /tmp/malaysia.log")
-              print(compositor_log)
-              print(machine.succeed("cat /tmp/foot.log"))
-              machine.succeed("pgrep -x malaysia-compos")
+              print("exit", machine.succeed("cat /tmp/exit"))
+              assert machine.succeed("fgconsole").strip() == "1"
               assert "drm backend" in compositor_log and "mode chosen" in compositor_log
               for line in compositor_log.splitlines():
-                  assert "ERROR" not in line and not (("EGL" in line or "GBM" in line) and "fail" in line.lower()), line
+                  assert "ERROR" not in line, line
+                  assert not (("EGL" in line or "GBM" in line) and "fail" in line.lower()), line
             '';
           };
         }
@@ -111,6 +140,7 @@
             buildInputs = with pkgs; [
               libxkbcommon
               libgbm
+              seatd
             ];
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
               with pkgs;

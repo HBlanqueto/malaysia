@@ -12,7 +12,7 @@ up() {
 	podman machine ssh 'sudo modprobe vkms enable_writeback=1 enable_cursor=1 enable_overlay=1; until [ -e /dev/dri/card0 ]; do sleep 0.2; done; sudo chmod 666 /dev/dri/card0'
 	podman container exists "$NAME" || podman run -d --init --name "$NAME" -p 127.0.0.1:5901:5900 --device /dev/dri/card0 \
 		-v "$REPO":/work -v malaysia-nix:/nix -v malaysia-cache:/cache -w /work \
-		-e CARGO_TARGET_DIR=/cache/target -e LIBGL_ALWAYS_SOFTWARE=1 \
+		-e CARGO_TARGET_DIR=/cache/target -e LIBGL_ALWAYS_SOFTWARE=1 -e LIBSEAT_BACKEND=noop \
 		-e NIX_CONFIG="experimental-features = nix-command flakes" \
 		-e XDG_RUNTIME_DIR=/run/user/0 -e WAYLAND_DISPLAY=wayland-1 \
 		-e __EGL_VENDOR_LIBRARY_FILENAMES=$PROFILE/share/glvnd/egl_vendor.d/50_mesa.json \

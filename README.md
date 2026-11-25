@@ -7,7 +7,9 @@ It is being rebuilt from its foundation, one dependency at a time. Today it
 draws the windows of Wayland clients that use `xdg_shell` and shared-memory
 buffers, either directly on a display through DRM/KMS or nested as a window in
 another desktop. Nested, it takes keyboard and pointer input: a terminal such
-as `foot` works. Directly on a display it has no input yet. [ROADMAP.md](ROADMAP.md) says
+as `foot` works. Directly on a display it takes its session from libseat, so
+a normal user can start it from a TTY with logind or seatd, but it has no
+input there yet. [ROADMAP.md](ROADMAP.md) says
 which step is in progress and what comes next.
 
 ## Build and run
@@ -31,8 +33,9 @@ WAYLAND_DISPLAY=wayland-2 foot
 `RUST_LOG=smithay=debug`.
 
 `nix build` builds the compositor as a package. `nix build .#checks.<system>.vm`
-boots a NixOS machine, runs the compositor directly on its virtual GPU and
-checks that a terminal is drawn.
+boots a NixOS machine, logs a normal user in on a TTY, runs the compositor
+directly on the virtual GPU and checks that a terminal is drawn before and
+after switching to another VT.
 
 On a Mac, `vm.sh` runs the same commands in a Linux box that has a virtual
 display and a headless desktop:
