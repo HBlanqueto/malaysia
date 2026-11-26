@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
-use smithay::backend::renderer::{Color32F, gles::GlesRenderer};
+use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::desktop::utils::send_frames_surface_tree;
 use smithay::desktop::{PopupManager, Space, Window};
 use smithay::input::keyboard::Keycode;
@@ -25,8 +25,6 @@ use crate::desktops::{Slide, desktop_x, gap, gap_x, stride};
 use crate::drm::Drm;
 use crate::effects::{Clipped, Effects, Lines, Shadow};
 use crate::winit::Winit;
-
-pub const CLEAR_COLOR: Color32F = Color32F::new(0.1, 0.1, 0.12, 1.0);
 
 render_elements! {
     pub Element<=GlesRenderer>;

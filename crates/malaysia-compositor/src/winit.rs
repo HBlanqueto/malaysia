@@ -13,7 +13,7 @@ use smithay::wayland::fractional_scale::with_fractional_scale;
 
 use crate::desktops::Slide;
 use crate::effects::Effects;
-use crate::state::{CLEAR_COLOR, Element, State, elements};
+use crate::state::{Element, State, elements};
 
 pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
@@ -139,7 +139,7 @@ impl Winit {
             &mut framebuffer,
             self.age,
             frame,
-            CLEAR_COLOR,
+            ctdesign::DESKTOP_BACKGROUND.premultiplied(),
         )?;
         drop(framebuffer);
         let Some(damage) = result.damage else {

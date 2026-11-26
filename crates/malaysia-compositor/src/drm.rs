@@ -9,7 +9,6 @@ use smithay::backend::drm::exporter::gbm::{GbmFramebufferExporter, NodeFilter};
 use smithay::backend::drm::{DrmDevice, DrmDeviceFd, DrmEvent};
 use smithay::backend::egl::{EGLContext, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
-use smithay::backend::renderer::Color32F;
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::solid::{SolidColorBuffer, SolidColorRenderElement};
 use smithay::backend::renderer::element::surface::render_elements_from_surface_tree;
@@ -31,10 +30,7 @@ use smithay::wayland::compositor::with_states;
 use crate::desktops::Slide;
 use crate::effects::Effects;
 use crate::scale::output_scale;
-use crate::state::{Backend, CLEAR_COLOR, Element, State, elements};
-
-const CURSOR_SIZE: i32 = 16;
-const CURSOR_COLOR: Color32F = Color32F::new(1.0, 1.0, 1.0, 1.0);
+use crate::state::{Backend, Element, State, elements};
 
 type Compositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
@@ -202,7 +198,13 @@ impl Drm {
                 compositor,
                 session,
                 libinput,
-                cursor_fallback: SolidColorBuffer::new((CURSOR_SIZE, CURSOR_SIZE), CURSOR_COLOR),
+                cursor_fallback: SolidColorBuffer::new(
+                    (
+                        ctdesign::CURSOR_FALLBACK_SIZE,
+                        ctdesign::CURSOR_FALLBACK_SIZE,
+                    ),
+                    ctdesign::CURSOR_FALLBACK_COLOR.premultiplied(),
+                ),
             },
             output,
         ))
@@ -255,7 +257,12 @@ impl Drm {
         );
         let is_empty = self
             .compositor
-            .render_frame(&mut self.renderer, frame, CLEAR_COLOR, FrameFlags::DEFAULT)?
+            .render_frame(
+                &mut self.renderer,
+                frame,
+                ctdesign::DESKTOP_BACKGROUND.premultiplied(),
+                FrameFlags::DEFAULT,
+            )?
             .is_empty;
         if is_empty {
             return Ok(false);
