@@ -29,24 +29,12 @@ pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesTexProgram, GlesError>
 }
 
 pub struct Clipped {
-    surface: WaylandSurfaceRenderElement<GlesRenderer>,
-    shape: Shape,
-    program: GlesTexProgram,
+    pub(super) surface: WaylandSurfaceRenderElement<GlesRenderer>,
+    pub(super) shape: Shape,
+    pub(super) program: GlesTexProgram,
 }
 
 impl Clipped {
-    pub fn new(
-        surface: WaylandSurfaceRenderElement<GlesRenderer>,
-        shape: Shape,
-        program: GlesTexProgram,
-    ) -> Clipped {
-        Clipped {
-            surface,
-            shape,
-            program,
-        }
-    }
-
     fn bands_without_corners(&self, origin: Point<i32, Physical>) -> [Rectangle<i32, Physical>; 3] {
         let corner = (self.shape.curve.reach() * self.shape.radius).ceil() as i32;
         let loc = self.shape.bounds.loc - origin;
@@ -123,16 +111,13 @@ impl RenderElement<GlesRenderer> for Clipped {
         opaque_regions: &[Rectangle<i32, Physical>],
         cache: Option<&UserDataMap>,
     ) -> Result<(), GlesError> {
-        let WaylandSurfaceTexture::Texture(texture) = self.surface.texture() else {
+        let (WaylandSurfaceTexture::Texture(texture), Transform::Normal) =
+            (self.surface.texture(), self.surface.transform())
+        else {
             return self
                 .surface
                 .draw(frame, src, dst, damage, opaque_regions, cache);
         };
-        if self.surface.transform() != Transform::Normal {
-            return self
-                .surface
-                .draw(frame, src, dst, damage, opaque_regions, cache);
-        }
         let texture_size = texture.size().to_f64();
         let dst_per_src_x = dst.size.w as f64 / src.size.w;
         let dst_per_src_y = dst.size.h as f64 / src.size.h;

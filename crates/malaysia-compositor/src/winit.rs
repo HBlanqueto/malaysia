@@ -122,7 +122,7 @@ impl Winit {
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
         let (renderer, mut framebuffer) = self.backend.bind()?;
-        elements(renderer, &self.effects, space, output, frame)?;
+        elements(renderer, &self.effects, space, output, frame);
         let result = self.damage_tracker.render_output(
             renderer,
             &mut framebuffer,

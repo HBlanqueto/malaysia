@@ -244,7 +244,7 @@ impl Drm {
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
         self.push_cursor(output, cursor, pointer, frame);
-        elements(&mut self.renderer, &self.effects, space, output, frame)?;
+        elements(&mut self.renderer, &self.effects, space, output, frame);
         let is_empty = self
             .compositor
             .render_frame(&mut self.renderer, frame, CLEAR_COLOR, FrameFlags::DEFAULT)?

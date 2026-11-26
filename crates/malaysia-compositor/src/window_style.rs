@@ -63,8 +63,9 @@ impl Dispatch2<LimitlessWindowStyleV1, State> for WindowStyle {
             with_states(&surface, |states| {
                 states
                     .data_map
-                    .insert_if_missing(|| BarCorner(Cell::new(radius)));
-                states.data_map.get::<BarCorner>().unwrap().0.set(radius);
+                    .get_or_insert(|| BarCorner(Cell::new(radius)))
+                    .0
+                    .set(radius);
             });
             state.needs_redraw = true;
         }

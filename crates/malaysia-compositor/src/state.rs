@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::{Color32F, gles::GlesRenderer};
-use smithay::desktop::space::OutputError;
 use smithay::desktop::utils::send_frames_surface_tree;
 use smithay::desktop::{PopupManager, Space, Window};
 use smithay::input::keyboard::Keycode;
@@ -41,17 +40,14 @@ pub fn elements(
     space: &Space<Window>,
     output: &Output,
     frame: &mut Vec<Element>,
-) -> Result<(), OutputError> {
-    let output_geometry = space.output_geometry(output).ok_or(OutputError::Unmapped)?;
+) {
     let scale = output.current_scale().fractional_scale();
     for (index, window) in space.elements().rev().enumerate() {
-        let Some(mut geometry) = space.element_geometry(window) else {
+        let Some(geometry) = space.element_geometry(window) else {
             continue;
         };
-        geometry.loc -= output_geometry.loc;
         effects.push_window(renderer, window, geometry, scale, index == 0, frame);
     }
-    Ok(())
 }
 
 pub enum Backend {

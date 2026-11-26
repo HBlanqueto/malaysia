@@ -27,7 +27,8 @@ pub struct Effects {
     lines: GlesPixelProgram,
     shadow: GlesPixelProgram,
     curve: Curve,
-    dark: bool,
+    lines_scheme: ctdesign::FrameLines,
+    shadow_scheme: ctdesign::WindowShadow,
 }
 
 #[derive(Clone, Copy)]
@@ -52,18 +53,16 @@ pub struct Drawn {
 }
 
 fn drawn(window: &Window, look: Look) -> RefMut<'_, Drawn> {
-    window.user_data().insert_if_missing(|| {
-        RefCell::new(Drawn {
-            lines: Id::new(),
-            shadow: Id::new(),
-            commit: CommitCounter::default(),
-            look: None,
-        })
-    });
     let mut drawn = window
         .user_data()
-        .get::<RefCell<Drawn>>()
-        .unwrap()
+        .get_or_insert(|| {
+            RefCell::new(Drawn {
+                lines: Id::new(),
+                shadow: Id::new(),
+                commit: CommitCounter::default(),
+                look: None,
+            })
+        })
         .borrow_mut();
     if drawn.look != Some(look) {
         drawn.look = Some(look);
@@ -79,7 +78,16 @@ impl Effects {
             lines: lines::compile(renderer)?,
             shadow: shadow::compile(renderer)?,
             curve: Curve::new(ctdesign::CORNER_WINDOW.smoothing),
-            dark,
+            lines_scheme: if dark {
+                ctdesign::FRAME_LINES_DARK
+            } else {
+                ctdesign::FRAME_LINES_LIGHT
+            },
+            shadow_scheme: if dark {
+                ctdesign::WINDOW_SHADOW_DARK
+            } else {
+                ctdesign::WINDOW_SHADOW_LIGHT
+            },
         })
     }
 
@@ -132,7 +140,7 @@ impl Effects {
             shape,
             width,
             main,
-            self.dark,
+            self.lines_scheme,
             self.lines.clone(),
         )));
         let tree = render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<_>>(
@@ -143,17 +151,20 @@ impl Effects {
             1.0,
             Kind::Unspecified,
         );
-        frame.extend(
-            tree.into_iter()
-                .map(|surface| Element::Clipped(Clipped::new(surface, shape, self.clip.clone()))),
-        );
+        frame.extend(tree.into_iter().map(|surface| {
+            Element::Clipped(Clipped {
+                surface,
+                shape,
+                program: self.clip.clone(),
+            })
+        }));
         frame.push(Element::Shadow(Shadow::new(
             &drawn,
             shape,
             width,
             scale,
             main,
-            self.dark,
+            self.shadow_scheme,
             self.shadow.clone(),
         )));
     }

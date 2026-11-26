@@ -42,18 +42,13 @@ impl Lines {
         shape: Shape,
         width: i32,
         main: bool,
-        dark: bool,
+        lines: ctdesign::FrameLines,
         program: GlesPixelProgram,
     ) -> Lines {
         let area = Rectangle::new(
             shape.bounds.loc - Point::from((width, width)),
             shape.bounds.size + Size::from((2 * width, 2 * width)),
         );
-        let lines = if dark {
-            ctdesign::FRAME_LINES_DARK
-        } else {
-            ctdesign::FRAME_LINES_LIGHT
-        };
         let (outline, inner_line) = if main {
             (lines.outer, lines.inner)
         } else {
@@ -82,10 +77,7 @@ impl Element for Lines {
     }
 
     fn src(&self) -> Rectangle<f64, Buffer> {
-        Rectangle::from_size(Size::from((
-            self.area.size.w as f64,
-            self.area.size.h as f64,
-        )))
+        Rectangle::from_size((self.area.size.w as f64, self.area.size.h as f64).into())
     }
 
     fn geometry(&self, _scale: Scale<f64>) -> Rectangle<i32, Physical> {
