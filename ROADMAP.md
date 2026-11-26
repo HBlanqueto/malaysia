@@ -83,6 +83,12 @@ Then:
    tap-to-click.
 6. The rest of window management, the shell and the apps.
 
+Proposed on 2026-11-26 and not built: full screen as a Space of its own,
+Expansion (malaysia's Mission Control) and Split View, as steps A to K in
+[crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md).
+The proposal fixes their order among themselves; where they go in the lists
+above is still to be decided.
+
 ## How the desktop is put together
 
 The decisions and the new dependencies are in the «Design» section of
@@ -147,6 +153,27 @@ Later pass (2026-11-26), with the tables in barrierkit
   centre, halve and restore a window. Sources:
   https://support.apple.com/guide/mac-help/mh14112/mac and
   https://support.apple.com/guide/mac-help/mchl9674d0b0/mac.
+
+Mission Control, full screen and Split View (2026-11-26), with the tables in
+barrierkit `docs/research/macos-mission-control-2026-11-26.md`:
+
+- **Mission Control windows:** one scale for all of them, never above 1. A
+  window that fits stays where it is; overlapping ones are pushed apart,
+  about 13 from each other, inside an area 20 from the sides, 40 below the
+  strip and 15 above the Dock. One critically damped spring, ω0 25, moves
+  every window in, out and on a pick. The wallpaper is not dimmed or blurred.
+  The rule that places overlapping windows is not found: the best algorithm
+  matches 23 of 30 measured arrangements.
+- **Spaces strip:** 40 high with the names, 146 with thumbnails of 1/16 of the
+  display once the pointer enters it (a spring of ω0 16); blur σ 27.5.
+- **Full screen:** the Space goes right after the Desktop the window came
+  from, which was also the current one in every run. The window grows in place (ω0 25, ζ 1.4) while the row slides, about
+  550 ms in all, and returns to its Desktop and its exact frame. Inside, the
+  window has square corners and no shadow, on black.
+- **Split View:** a black divider of 12 with no margin, a smallest tile of 87,
+  no snapping; a double-click makes the halves equal.
+- **Not measured:** whether a swipe follows the fingers, and anything in
+  light mode or on another display size.
 
 Not measured: banners and Notification Center, glass at slider 0, the system
 switches (Reduce Transparency, Increase Contrast, Reduce Motion), mouse drag

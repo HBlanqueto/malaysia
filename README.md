@@ -19,7 +19,9 @@ It runs in two ways:
 - **Nested.** Started inside a Wayland session, it is a window of that desktop.
 
 [ROADMAP.md](ROADMAP.md) says which step is in progress, what is missing and
-what has not been verified. Nested, it has run on a laptop with a real GPU;
+what has not been verified. The proposal for full screen, Expansion
+(malaysia's Mission Control) and Split View, none of it built, is in
+[crates/malaysia-compositor/src/workspaces](crates/malaysia-compositor/src/workspaces/README.md). Nested, it has run on a laptop with a real GPU;
 directly on a real display it has not run yet.
 
 ## Design
