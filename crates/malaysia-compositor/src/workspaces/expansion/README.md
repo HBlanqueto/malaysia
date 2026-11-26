@@ -70,39 +70,41 @@ own text and "reported" is the press; the measurements give the source.
 
 ## Layout
 
-macOS was measured on 30 arrangements of 1 to 9 windows. No algorithm was
-found that reproduces all of them, so this part is not 1:1 yet.
+macOS was measured on 116 arrangements of 1 to 9 windows. The rule for a few
+overlapping windows is found; the rule for the scale and for dense
+arrangements is not, so this part is not 1:1 yet.
 
 What holds in every arrangement, and what the tests of step C must assert:
 
 - one scale for all windows, never above 1; a small window is never enlarged;
-- a window that fits stays where it is at scale 1;
+- a window that fits and overlaps nothing stays where it is at scale 1;
 - a window that does not fit shrinks about its own centre and is then moved
   inside the area;
-- windows that do not overlap keep their place and their gaps;
-- about 13 between the edges of two neighbours (11 to 16 measured), at every
-  scale; cascades leave more;
+- an overlapping pair is pushed apart along the line between the two centres
+  until it is clear on one axis; both windows move the same distance,
+  whatever their sizes;
+- two windows with the same centre split at 45°: the one behind goes up and
+  left, the one in front down and right. Stacking order decides, not the
+  order of creation;
+- a pushed pair ends 12 to 15 apart, at every scale;
+- the scale drops only when a window is held by two walls at once; a window
+  held by one wall slides along it;
 - the area: 20 from each side, 40 below the strip, 15 above the Dock. With
   one window it is 17 tighter at the top and at the bottom, and a lone window
   that must shrink is capped at a height of 1220 on a display 1440 high,
   which is the area of several windows minus 41.
 
-The algorithm to build first is section 8 of the measurements: scale each
-window about its own centre, move it inside the area, push overlapping pairs
-apart along the line between their centres a fifth of the way per sweep, and
-take the largest scale at which the sweeps come to rest. It matches macOS to
-1 in 19 arrangements and to 3 in four more: everything without overlap and
-one window. Two windows on the same frame are 11 off. It is wrong for the
-dense cases: a cascade of six
-comes out at .69 where macOS gives .57 with different slots, and four
-windows in two rows are placed 289 away. macOS seems to assign slots as a
-whole instead of pushing pairs.
+The algorithm to build is section 8 of the measurements, with its constants:
+sweeps that move each window three quarters of the way out of every overlap
+at once, a tie offset of a quarter of a point per stacking place, walls that
+give 2 and 3, and the scale times .995 in each sweep where a window is
+cornered. It is within 3 of macOS in 78 of the 116 arrangements, and it
+predicted three fresh ones to 1 to 3 before they were measured. That covers
+windows alone, without overlap, pairs, and chains of three. It is 11 to 33
+off for a pair in a corner, where its scale is a stand-in, and hundreds off
+for cascades of four and more and for two rows that overlap.
 
-Until cascade placement is built every window sits at the same corner, which
-is the dense case. Ties between windows on the same frame are broken by
-creation order: the later window goes down and to the right.
-
-The measurements list the arrangements to capture next to find the real rule.
+Cascade placement makes a cascade the usual case, so the dense case matters.
 The layout is one pure function, so replacing it later touches nothing else.
 
 ## State

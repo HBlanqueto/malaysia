@@ -161,8 +161,10 @@ barrierkit `docs/research/macos-mission-control-2026-11-26.md`:
   about 13 from each other, inside an area 20 from the sides, 40 below the
   strip and 15 above the Dock. One critically damped spring, ω0 25, moves
   every window in, out and on a pick. The wallpaper is not dimmed or blurred.
-  The rule that places overlapping windows is not found: the best algorithm
-  matches 23 of 30 measured arrangements.
+  A pair is pushed along the line between its centres, both windows the same
+  distance, and stacking order breaks a tie. The rule for the scale and for
+  cascades is not found: the best algorithm matches 78 of 116 measured
+  arrangements.
 - **Spaces strip:** 40 high with the names, 146 with thumbnails of 1/16 of the
   display once the pointer enters it (a spring of ω0 16); blur σ 27.5.
 - **Full screen:** the Space goes right after the Desktop the window came
