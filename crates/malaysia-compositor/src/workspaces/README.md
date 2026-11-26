@@ -13,7 +13,8 @@ and the sources are in barrierkit,
 
 ## What exists
 
-Steps 16 to 20, in `desktops.rs`, `state.rs` and `window_grab.rs`:
+Steps 16 to 23, in `desktops.rs`, `state.rs`, `placement.rs`, `window_grab.rs`,
+`tiling.rs` and `spring.rs`:
 
 - the row is a `Vec<Space<Window>>` and the index of the current one;
 - Control+Left and Right slide between Desktops with macOS's overdamped
@@ -24,7 +25,13 @@ Steps 16 to 20, in `desktops.rs`, `state.rs` and `window_grab.rs`:
 - a window is dragged by its title bar, and Control+arrows during the drag
   carry it to the next Desktop;
 - Control+Right on the last Desktop with windows adds one, and an empty last
-  Desktop is dropped when it is left.
+  Desktop is dropped when it is left;
+- a new window opens in a cascade, each one a step down and right of the
+  last, in `placement.rs`;
+- a window is resized by its own edges and corners with the same
+  `WindowGrab` as the move;
+- Ctrl+Super with F, C, an arrow or R tiles the focused window at once, in
+  `tiling.rs`: Fill, Center, the halves and Return to Previous Size.
 
 ## The row
 
@@ -64,15 +71,14 @@ only for an app that was just launched, on its first Desktop.
 
 ## What the steps share
 
-- **The spring.** `desktops.rs` has it in closed form, with position and
-  velocity at a time, started from any position and velocity. It is written
-  for the slide alone: its ω0 and ζ are constants of the module and it
-  divides by the square root of ζ² − 1, which is zero for the critically
-  damped springs of Expansion (ζ 1). The first step that needs a second
-  spring (the tiling shortcuts, if they come first) moves the function and
-  `rests`, which reads the same constants, to `spring.rs` at the root of the
-  crate, gives them ω0 and ζ as arguments and adds the critical case. The tiling shortcuts
-  (45, 1.38), full screen (25, 1.4) and Expansion (25, 1 and 16, 1) read it.
+- **The spring.** `spring.rs` at the root of the crate has it in closed form,
+  with position and velocity at a time, started from any position and
+  velocity, and ω0 and ζ as arguments; `rests` takes ω0 too. `desktops.rs`
+  passes the slide's constants. It divides by the square root of ζ² − 1,
+  which is zero for the critically damped springs of Expansion (ζ 1): the
+  first step that needs that case adds it. The tiling shortcuts landed
+  without their spring (45, 1.38); that one, full screen (25, 1.4) and
+  Expansion (25, 1 and 16, 1) read it.
   The underdamped case has no user and is not written. BarrierKit's own
   spring cannot be used: it lives in `bk`, which links Freya, and it cannot
   be overdamped.
@@ -164,15 +170,15 @@ key, and the drag comes with Expansion's strip.
 
 ## Steps
 
-In this order among themselves. The roadmap has cascade placement, the tiling
-shortcuts and interactive resize next; step C needs the first of them, and
-steps A and B need none. Each is one visible result.
+In this order among themselves. Cascade placement, interactive resize and the
+tiling shortcuts are done (steps 21, 22 and 23); step C needed the first of
+them, and steps A and B need none. Each is one visible result.
 
 | Step | What it adds | What can be seen | Needs |
 |---|---|---|---|
 | A | Full screen from a client's request: `fullscreen_request` and `unfullscreen_request`, the entry with its saved frame, placement at first commit, `wm_capabilities` with Fullscreen only | `foot --fullscreen`, or mpv with F, fills the display on a Space of its own right of its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | nothing new |
 | B | A key for the same: Control+Super+F | any window goes full screen and back | A |
-| C | Expansion on a key | Control+Up spreads the windows; a click picks one | cascade placement; `spring.rs` |
+| C | Expansion on a key | Control+Up spreads the windows; a click picks one | cascade placement (done); `spring.rs` (exists) |
 | D | Expansion's strip | live thumbnails of every Space, "+" and close | C; the first blur |
 | E | Drag a window to a Space in Expansion | windows move between Desktops | D |
 | F | The hover ring, and Control+arrows while Expansion is open | a ring on the window under the pointer; the window area slides to the next Desktop | C |
@@ -202,6 +208,9 @@ hardware plane, which also needs `linux-dmabuf`.
   it; Wayland has one state for both. The proposal accepts the difference.
 - **Where these steps go** against `linux-dmabuf`, layer shell and `bk` in
   the roadmap. The table above only fixes their order among themselves.
+- **Control+Super+F is proposed here for full screen (step B) and is already
+  Fill in the tiling shortcuts of step 23** (Ctrl+Super stands in for
+  macOS's fn+Control there). One of the two needs another key before step B.
 - **Wallpaper before Expansion's strip?** Without one, the thumbnail of an
   empty Desktop is an empty rectangle.
 
@@ -216,8 +225,9 @@ hardware plane, which also needs `linux-dmabuf`.
 - A client may drop its full-screen state when it is moved before it has
   drawn at the new size. The order is: configure, and move the window to its
   Space when it commits that size (`with_committed_state`).
-- This proposal was written against `3fa9ea0`. Function names in it may have
-  moved since.
+- This proposal was written against `3fa9ea0` and brought up to date with `219f8d3`
+  on 2026-11-26 where it names code. Function names in it may have moved
+  since.
 
 ## Sources
 

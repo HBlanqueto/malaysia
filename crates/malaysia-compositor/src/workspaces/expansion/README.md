@@ -115,12 +115,11 @@ One progress value `p` from 0 (Desktop) to 1 (Expansion) and one enum:
 window is drawn at the mix of its own rectangle and its slot by `p`.
 
 The spring and the clock are those of the slide between Desktops
-(`desktops.rs`). The spring is the closed-form solution, so it can start from
+(`spring.rs` and `desktops.rs`). The spring is the closed-form solution, so it can start from
 any position and velocity: a key pressed while the windows are still moving,
-or fingers lifted, continue without a jump. It is written for the slide's
-overdamped constants only, and `rests` reads the same constants. The first
-step that needs a second spring moves both to `spring.rs`, gives them ω0 and
-ζ as arguments and adds the critically damped case, which Expansion uses.
+or fingers lifted, continue without a jump. It lives in `spring.rs` with ω0
+and ζ as arguments, overdamped only: the critically damped case, which
+Expansion uses, is still to be added by its first user.
 
 The strip has its own two values, both on the same spring type: its slide
 (0 to 40) and its growth (40 to 146).
@@ -135,8 +134,9 @@ cleared and filled again, never allocated per frame.
 - `Effects::push_window` already builds every element of a window for both
   backends, at a `geometry` and a `desktop_offset` that the slide sets. It
   gains the factor of Expansion, under a name of its own: `scale` is already
-  the output's, and the function is at seven arguments, so the window's
-  placement may become one value. `state::elements` gives it the mix of the
+  the output's, and the function takes eight and carries
+  `#[expect(clippy::too_many_arguments)]`, which is one more reason for the
+  window's placement to become one value. `state::elements` gives it the mix of the
   window's own rectangle and its slot.
 - The corner shader of `Clipped` takes its size from `Shape.bounds` and only
   its position from the drawn rectangle, so a scaled window cannot be made by
@@ -191,13 +191,12 @@ unmaps the output from it when the slide rests.
 ## Steps
 
 The letters are those of the table in [../README.md](../README.md). They
-follow cascade placement: before it every window opens at the top left
+follow cascade placement, which is done (step 21): before it every window opens at the top left
 corner, and the layout has nothing to keep. Each step is one visible result.
 
 - **C. Expansion on a key.** Control+Up spreads the windows, a click picks
    one, Escape closes. No strip, no text. Adds the `EXPANSION_*` spring,
-   margin and gap tokens, `spring.rs` if the tiling shortcuts have not made
-   it, the factor in `push_window`, the layout function with its tests. Until
+   margin and gap tokens, the critically damped case in `spring.rs`, the factor in `push_window`, the layout function with its tests. Until
    the strip exists the area starts 80 below the top, as if it were there.
 - **D. The strip.** It slides in with the windows, grows under the pointer and
    shows live thumbnails with the ring on the current one; a click on a

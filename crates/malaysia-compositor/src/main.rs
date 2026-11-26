@@ -4,6 +4,7 @@ mod handlers;
 mod input;
 mod placement;
 mod scale;
+mod spring;
 mod state;
 mod tiling;
 mod window_grab;

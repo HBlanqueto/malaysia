@@ -18,7 +18,7 @@ shadow, Ctrl+Left and Ctrl+Right slide between Desktops, and a window is
 dragged by its own title bar and carried along to the next Desktop, a new
 window opens in a cascade, a window is resized by its own edges, and
 Ctrl+Super with F, C, an arrow or R tiles the focused window at once. Next is
-the spring of a tile (measured: ω0 45, ζ 1.38, 240 ms). `linux-dmabuf` waited for a real GPU, which the
+Expansion on a key. `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -66,8 +66,11 @@ and nested in another session.
 In the order they will be taken, one at a time. On 2026-11-26 the user asked to
 take the macOS window model first, so these come before the rest:
 
-1. The spring of a tile, then pairs and quarters, then restoring a tiled
-   window when it is dragged away.
+1. Expansion, the Mission Control of this compositor: steps C to F and I of
+   [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md),
+   starting with C, Expansion on a key.
+2. The spring of a tile (measured: ω0 45, ζ 1.38, 240 ms), then pairs and
+   quarters, then restoring a tiled window when it is dragged away.
 
 Then:
 
@@ -84,11 +87,9 @@ Then:
    tap-to-click.
 6. The rest of window management, the shell and the apps.
 
-Proposed on 2026-11-26 and not built: full screen as a Space of its own,
-Expansion (malaysia's Mission Control) and Split View, as steps A to K in
-[crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md).
-The proposal fixes their order among themselves; where they go in the lists
-above is still to be decided.
+Proposed on 2026-11-26 and not built: full screen as a Space of its own and
+Split View (steps A, B, G, J and K of the same file). They keep their order
+among themselves; where they go in the lists above is still to be decided.
 
 ## How the desktop is put together
 
