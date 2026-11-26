@@ -7,7 +7,9 @@ It is being rebuilt from its foundation, one dependency at a time. Today it
 draws the windows and the menus of Wayland clients that use `xdg_shell` and
 shared-memory buffers, and gives them a keyboard and a pointer. A HiDPI
 display gets a scale chosen from its physical size and resolution, whole or
-fractional. It runs in two ways:
+fractional. It tells BarrierKit apps, through `limitless_window_style_v1`, that
+the compositor frames their windows, though it does not draw that frame yet.
+It runs in two ways:
 
 - **Directly on a display.** Started from a TTY by a normal user, it takes its
   session from libseat, finds the GPU through udev, drives the display through

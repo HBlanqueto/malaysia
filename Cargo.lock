@@ -628,6 +628,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "limitless"
+version = "0.1.0"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=cb5bbef2cf3fa14fe6905ea4236208e8c65b2e60#cb5bbef2cf3fa14fe6905ea4236208e8c65b2e60"
+dependencies = [
+ "bitflags",
+ "wayland-backend",
+ "wayland-scanner",
+ "wayland-server",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -655,6 +666,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 name = "malaysia-compositor"
 version = "0.1.0"
 dependencies = [
+ "limitless",
  "smithay",
  "tracing",
  "tracing-subscriber",

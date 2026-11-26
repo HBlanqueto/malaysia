@@ -3,12 +3,14 @@ mod handlers;
 mod input;
 mod scale;
 mod state;
+mod window_style;
 mod winit;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
+use limitless::server::style::limitless_window_style_v1::limitless_window_style_v1::LimitlessWindowStyleV1;
 use smithay::desktop::{PopupManager, Space};
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{SeatState, keyboard::XkbConfig};
@@ -26,6 +28,7 @@ use tracing_subscriber::{filter::Targets, fmt, prelude::*};
 use crate::drm::Drm;
 use crate::input::{REPEAT_DELAY, REPEAT_RATE};
 use crate::state::{Backend, ClientState, State};
+use crate::window_style::WindowStyle;
 use crate::winit::Winit;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -87,6 +90,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     FractionalScaleManagerState::new::<State>(&display_handle);
     ViewporterState::new::<State>(&display_handle);
+    display_handle
+        .create_global::<State, LimitlessWindowStyleV1, _>(window_style::VERSION, WindowStyle);
 
     let mut state = State {
         compositor_state: CompositorState::new::<State>(&display_handle),

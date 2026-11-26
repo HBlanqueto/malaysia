@@ -11,8 +11,9 @@ Last update: 2026-11-25.
 
 **Now:** the compositor runs directly on a display and nested in a Wayland
 session, apps show their menus, and a HiDPI display gets a scale, whole or
-fractional. Next is layer shell; `linux-dmabuf` waits for a real GPU. Nothing
-has run on real hardware yet.
+fractional, and a BarrierKit app leaves its frame to the compositor. Next is
+layer shell; `linux-dmabuf` waits for a real GPU. Nothing has run on real
+hardware yet.
 
 The display after the last finished step (step 11: on a NixOS machine whose
 display reports a 180x100 mm panel at 1600x900, directly on the display, a
@@ -36,6 +37,7 @@ terminal drawn at a scale of 5/3):
 | 9 | Popups: `xdg_popup` with its keyboard and pointer grab | a menu, its submenus and a context menu that stays inside the display | done `5c5d116` |
 | 10 | Output scale: 1 to 4, chosen from the display's physical size and mode with mutter's rule; nested, the host's scale | windows, menus and the cursor twice as large on a HiDPI panel | done `17d9fe9` |
 | 11 | Fractional scale: `wp_fractional_scale_v1` and `wp_viewporter`, and mutter's fractional rule (steps of a half, a third and a quarter that divide the mode) | a terminal drawn sharp at 5/3 | done |
+| 12 | `limitless`, the protocol shared with BarrierKit: the `limitless_window_style_v1` global at version 1 | a BarrierKit app leaves its frame and its round corners to the compositor | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -80,6 +82,8 @@ prove is marked here as **not verified on hardware** until someone runs it.
 
 ## Known gaps
 
+- The compositor does not draw the frame or round the corners of windows yet,
+  so a BarrierKit app is shown square and without a border.
 - A click outside an open menu closes the menu and also reaches the window
   under it, without giving that window the focus. KWin keeps that click.
 - When an app closes its own menu, the keyboard focus returns to the window on
