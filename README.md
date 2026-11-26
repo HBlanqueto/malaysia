@@ -20,8 +20,8 @@ It runs in two ways:
 
 [ROADMAP.md](ROADMAP.md) says which step is in progress, what is missing and
 what has not been verified. The proposal for full screen, Expansion
-(malaysia's Mission Control) and Split View, of which only Expansion on a key
-and its strip are built, is in
+(malaysia's Mission Control) and Split View, of which only Expansion on a key,
+its strip and the drag of a window to a Space are built, is in
 [crates/malaysia-compositor/src/workspaces](crates/malaysia-compositor/src/workspaces/README.md). Nested, it has run on a laptop with a real GPU;
 directly on a real display it has not run yet.
 
@@ -96,7 +96,8 @@ Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
 one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
 top then lists the Desktops; when the pointer enters it, it grows and shows
 every Desktop live. A click on one goes there, "+" adds a Desktop and the
-close button of a thumbnail removes one.
+close button of a thumbnail removes one. A window dragged onto the thumbnail
+of another Desktop moves there.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
 shadow in the light scheme; without it they are dark. It is temporary, until

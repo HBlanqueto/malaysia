@@ -61,6 +61,12 @@ pub fn send_changed_state(window: &Window) {
     }
 }
 
+pub fn move_window(window: &Window, from: &mut Space<Window>, to: &mut Space<Window>) {
+    let location = from.element_location(window).unwrap();
+    from.unmap_elem(window);
+    to.map_element(window.clone(), location, false);
+}
+
 fn switch_target(direction: Direction, current: usize, last: usize) -> Option<usize> {
     match direction {
         Direction::Left => current.checked_sub(1),
@@ -178,9 +184,7 @@ impl State {
             let Some(window) = removed.elements().next().cloned() else {
                 break;
             };
-            let location = removed.element_location(&window).unwrap();
-            removed.unmap_elem(&window);
-            heir.map_element(window, location, false);
+            move_window(&window, &mut removed, heir);
         }
         self.current_desktop = current_after_removal(index, self.current_desktop);
         self.slide = None;

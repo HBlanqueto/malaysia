@@ -165,6 +165,8 @@ impl State {
                     let picking =
                         expansion_open && state == ButtonState::Released && self.expansion.pressed;
                     self.expansion.pressed = expansion_open && state == ButtonState::Pressed;
+                    self.expansion.drag_origin =
+                        self.expansion.pressed.then(|| pointer.current_location());
                     if picking {
                         self.pick_in_expansion(event.time());
                     }

@@ -10,16 +10,20 @@ use smithay::utils::{FrameExtents, IsAlive, Logical, Point, Rectangle, SERIAL_CO
 
 use crate::spring::{Motion, rests};
 use crate::state::State;
+use crate::workspaces::desktops::{move_window, send_changed_state};
 use layout::arrange;
 use strip::{Hit, Strip};
 
 const OMEGA: f64 = ctdesign::EXPANSION_OMEGA as f64;
 const DAMPING: f64 = ctdesign::EXPANSION_DAMPING as f64;
+const DRAG_THRESHOLD: f64 = ctdesign::DRAG.threshold as f64;
 
 #[derive(Default)]
 pub struct Expansion {
     pub open: bool,
     pub pressed: bool,
+    pub drag_origin: Option<Point<f64, Logical>>,
+    pub dragged: Option<(Window, Point<f64, Logical>)>,
     pub strip: Strip,
     pub desktop: usize,
     progress: f64,
@@ -149,7 +153,31 @@ impl State {
         Some((location - Point::from((0.0, top)), output.size.to_f64()))
     }
 
+    fn strip_hit(&self, location: Point<f64, Logical>) -> Option<Hit> {
+        self.on_strip(location).and_then(|(point, output)| {
+            self.expansion.strip.hit(point, self.desktops.len(), output)
+        })
+    }
+
+    fn drag_in_expansion(&mut self, location: Point<f64, Logical>) {
+        let Some(origin) = self.expansion.drag_origin else {
+            return;
+        };
+        let moved = location - origin;
+        if moved.x.abs().max(moved.y.abs()) <= DRAG_THRESHOLD {
+            return;
+        }
+        self.expansion.drag_origin = None;
+        if self.strip_hit(origin).is_none() {
+            self.expansion.dragged = self
+                .window_at(origin)
+                .map(|(window, top_left)| (window, origin - top_left));
+        }
+    }
+
     pub fn hover_expansion(&mut self, location: Point<f64, Logical>) {
+        self.drag_in_expansion(location);
+        self.needs_redraw |= self.expansion.dragged.is_some();
         let Some((point, output)) = self.on_strip(location) else {
             return;
         };
@@ -161,6 +189,9 @@ impl State {
             .hover(point, self.desktops.len(), output, now)
         {
             self.needs_redraw = true;
+        }
+        if self.expansion.dragged.is_some() {
+            self.expansion.strip.hovered = None;
         }
         if !was_grown && self.expansion.strip.grown {
             self.wake_desktops();
@@ -174,6 +205,8 @@ impl State {
     }
 
     pub fn close_expansion(&mut self, picked: Option<Window>, time: InputTime) {
+        self.expansion.dragged = None;
+        self.expansion.drag_origin = None;
         self.aim_expansion(false);
         let focused = picked.or_else(|| self.top_window());
         if let Some(window) = focused {
@@ -185,9 +218,13 @@ impl State {
 
     pub fn pick_in_expansion(&mut self, time: InputTime) {
         let location = self.seat.get_pointer().unwrap().current_location();
-        let hit = self.on_strip(location).and_then(|(point, output)| {
-            self.expansion.strip.hit(point, self.desktops.len(), output)
-        });
+        let hit = self.strip_hit(location);
+        if let Some((window, _)) = self.expansion.dragged.take() {
+            self.drop_window(window, hit);
+            self.hover_expansion(location);
+            self.needs_redraw = true;
+            return;
+        }
         match hit {
             Some(Hit::Thumbnail(index)) => {
                 if index != self.current_desktop {
@@ -205,19 +242,34 @@ impl State {
                 self.needs_redraw = true;
             }
             Some(Hit::Bar) => {}
-            None => self.pick_window(location, time),
+            None => self.close_expansion(self.window_at(location).map(|(window, _)| window), time),
         }
     }
 
-    fn pick_window(&mut self, location: Point<f64, Logical>, time: InputTime) {
-        let picked = laid_out(&self.desktops[self.expansion.desktop])
+    fn drop_window(&mut self, window: Window, hit: Option<Hit>) {
+        let origin = self.expansion.desktop;
+        let Some(Hit::Thumbnail(target)) = hit else {
+            return;
+        };
+        if target == origin || !window.alive() {
+            return;
+        }
+        window.set_activated(false);
+        send_changed_state(&window);
+        let [from, to] = self.desktops.get_disjoint_mut([origin, target]).unwrap();
+        move_window(&window, from, to);
+        self.rearrange_expansion();
+    }
+
+    fn window_at(&self, location: Point<f64, Logical>) -> Option<(Window, Point<f64, Logical>)> {
+        laid_out(&self.desktops[self.expansion.desktop])
             .rev()
-            .find(|(window, frame)| {
-                let (loc, factor) = self.expansion.drawn(window, *frame);
-                Rectangle::new(loc, frame.size.to_f64().upscale(factor)).contains(location)
+            .find_map(|(window, frame)| {
+                let (loc, factor) = self.expansion.drawn(window, frame);
+                Rectangle::new(loc, frame.size.to_f64().upscale(factor))
+                    .contains(location)
+                    .then(|| (window.clone(), loc))
             })
-            .map(|(window, _)| window.clone());
-        self.close_expansion(picked, time);
     }
 
     pub fn arrange_expansion(&mut self) {
@@ -229,6 +281,7 @@ impl State {
             return;
         };
         let expansion = &mut self.expansion;
+        expansion.desktop = self.current_desktop;
         if laid_out(desktop)
             .map(|(_, frame)| frame.to_f64())
             .eq(expansion.frames.iter().copied())
@@ -239,7 +292,6 @@ impl State {
         expansion
             .frames
             .extend(laid_out(desktop).map(|(_, frame)| frame.to_f64()));
-        expansion.desktop = self.current_desktop;
         expansion.scale = arrange(
             area(output, expansion.strip.target_height()),
             &expansion.frames,

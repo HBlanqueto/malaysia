@@ -20,7 +20,9 @@ window opens in a cascade, a window is resized by its own edges, and
 Ctrl+Super with F, C, an arrow or R tiles the focused window at once, and
 Ctrl+Up spreads the windows of the Desktop (Expansion on a key) under a strip
 that shows every Desktop live, adds one with "+" and removes one with its
-close button. Next is dragging a window to a Space, step E of
+close button, and a window spread there is dragged onto the thumbnail of
+another Desktop and moves there. Next is the hover ring and Ctrl+arrows while
+Expansion is open, step F of
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -61,7 +63,8 @@ scale of 5/3):
 | 22 | Interactive resize: `xdg_toplevel.resize` and a pointer grab | a window resized by dragging its own edges and corners, the opposite edge staying still | done `1ee5505` |
 | 23 | Tiling by keyboard: Fill, Center, the halves and Return to Previous Size | Ctrl+Super with F, C, an arrow or R fills the display, centres the window, puts it in a half, or returns it to the frame it had before | done `219f8d3` |
 | 24 | Expansion on a key: the layout fitted to macOS, the spring of ω0 25, the window drawn at a factor | Ctrl+Up spreads the windows of the Desktop with no overlap and one scale, a click picks one, Escape or Ctrl+Up again puts them back | done `6b8fa7c` |
-| 25 | Expansion's strip: thumbnails of every Space, "+" and close | with Expansion open a bar slides in at the top; the pointer makes it grow and show every Desktop live; a click on one goes there, "+" adds a Desktop and the close button of a thumbnail removes one | done |
+| 25 | Expansion's strip: thumbnails of every Space, "+" and close | with Expansion open a bar slides in at the top; the pointer makes it grow and show every Desktop live; a click on one goes there, "+" adds a Desktop and the close button of a thumbnail removes one | done `dc70f98` |
+| 26 | Drag a window to a Space in Expansion | a window spread in Expansion, dragged onto the thumbnail of another Desktop, moves there | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -73,8 +76,9 @@ take the macOS window model first, so these come before the rest:
 
 1. Expansion, the Mission Control of this compositor: steps C to F and I of
    [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md).
-   Steps C, Expansion on a key, and D, the strip, are done; E, dragging a
-   window to a Space, is next.
+   Steps C, Expansion on a key, D, the strip, and E, dragging a window to a
+   Space, are done; F, the hover ring and Ctrl+arrows while Expansion is
+   open, is next.
 2. The spring of a tile (measured: ω0 45, ζ 1.38, 240 ms), then pairs and
    quarters, then restoring a tiled window when it is dragged away.
 
@@ -273,9 +277,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   and every popup of the windows left behind is closed.
 - Every new window opens on the current Desktop and takes the focus, also a
   dialog or a window of an app on a hidden one.
-- A dragged window goes to another Desktop only with Ctrl+Left or Ctrl+Right:
-  there is no drag to the display edge or onto Expansion's strip, and no
-  «Assign To». That Ctrl+arrow carries a dragged window is reported by macOS
+- A window held by its title bar goes to another Desktop with Ctrl+Left or
+  Ctrl+Right, and in Expansion a window is dragged onto the thumbnail of
+  another Desktop; there is no drag to the display edge and no «Assign To». That Ctrl+arrow carries a dragged window is reported by macOS
   users, not documented by Apple and not measured.
 - A dragged window released mid-slide stays still until the strip rests; a
   second key press before that makes it jump into its Desktop.
@@ -354,8 +358,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   and Ctrl+Up never does.
 - Expansion has no hover ring, no title, no swipe and no hot corner.
 - Expansion's strip has no blur. Over the flat Desktop background its tint
-  gives what the blur would, but a window dragged under the strip would show
-  sharp.
+  gives what the blur would; a window under it, which happens only while
+  Expansion opens or the strip grows, shows sharp. A dragged window is drawn
+  above the strip.
 - The strip has no names (text is step I), so collapsed it shows only the
   pill and the "+". The thumbnails appear at their final place as the strip
   grows; the hand-over from names to thumbnails is not measured.
@@ -374,6 +379,19 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   takes the focus at close.
 - Adding or removing a Space is not animated.
 - Ctrl+Left and Ctrl+Right do nothing while Expansion is open.
+- Dragging a window in Expansion is not measured on macOS. The drag starts
+  past the kit's drag threshold of 8, GNOME's and GTK's default, on either
+  axis. The dragged window keeps its slot's scale and does not shrink near
+  the strip. It is drawn above the strip and its ring, without the strip's
+  shadow on it. The target is not highlighted and the close
+  button hides during a drag. A drop anywhere but another Desktop's thumbnail
+  makes the window jump back to its slot, and the windows left re-arrange
+  with a jump. Expansion stays open after a drop. The window lands at its old
+  frame, on top of the other Desktop. A drop on "+" does nothing (macOS, by
+  press reports, makes a Desktop for the window). Escape mid-drag closes
+  Expansion. The window stays in its own thumbnail during the drag.
+- There is no drop onto a full-screen Space (Split View) and no reordering of
+  thumbnails.
 - A resize of the display while Expansion is open keeps the old slots.
 - A slot can pass the margin of Expansion's area by 2 at the sides and 3 at
   the top and bottom, which is the slack of the fit.
@@ -382,6 +400,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Dragging a window to a Space in Expansion (step 26): nested only, at scales
+  1 and 5/3, with `foot`. Not checked: directly on a display.
 - Expansion's strip (step 25): nested only, at scales 1 and 5/3, with
   `foot`, and the machine check, which adds a Desktop with "+" and goes to
   it by its thumbnail. Not checked: the rest directly on a display.

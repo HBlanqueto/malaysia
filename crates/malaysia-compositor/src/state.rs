@@ -47,6 +47,7 @@ pub struct Row<'a> {
     pub current: usize,
     pub slide: Option<&'a Slide>,
     pub expansion: &'a Expansion,
+    pub pointer: Point<f64, Logical>,
 }
 
 pub fn elements(
@@ -61,6 +62,7 @@ pub fn elements(
         current,
         slide,
         expansion,
+        pointer,
     } = row;
     let position = slide.map_or(current as f64, |slide| slide.position);
     let carried = slide.and_then(|slide| slide.carried.as_ref());
@@ -68,6 +70,25 @@ pub fn elements(
     let width = output.current_mode().map_or(0, |mode| mode.size.w);
     let height = output.current_mode().map_or(0, |mode| mode.size.h);
     let stride = stride(width, scale);
+    let dragged = expansion.dragged.as_ref().map(|(window, _)| window);
+    if let Some((window, grip)) = &expansion.dragged
+        && let Some(geometry) = desktops[expansion.desktop].element_geometry(window)
+    {
+        let factor = expansion.drawn(window, geometry).1;
+        let main = desktops[current].elements().next_back() == Some(window);
+        effects.push_window(
+            renderer,
+            window,
+            Placement {
+                geometry: Rectangle::new((pointer - *grip).to_i32_round(), geometry.size),
+                desktop_offset: (desktop_x(expansion.desktop, position, stride), 0).into(),
+                expansion: factor,
+            },
+            scale,
+            main,
+            frame,
+        );
+    }
     if let (Some(top), Some(geometry)) = (
         expansion.strip_top(),
         desktops[current].output_geometry(output),
@@ -92,6 +113,9 @@ pub fn elements(
         }
         let strip_x = desktop_x(index, position, stride);
         for (order, window) in desktop.elements().rev().enumerate() {
+            if Some(window) == dragged {
+                continue;
+            }
             let x = if Some(window) == carried { 0 } else { strip_x };
             if x.abs() >= width {
                 continue;
@@ -238,6 +262,7 @@ impl State {
             current: self.current_desktop,
             slide: self.slide.as_ref(),
             expansion: &self.expansion,
+            pointer,
         };
         let rendered = match &mut self.backend {
             Backend::Drm(drm) => {

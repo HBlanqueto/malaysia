@@ -4,8 +4,8 @@ Expansion is malaysia's Mission Control: the windows of the current Desktop
 shrink into one layer with no overlap, a strip at the top lists the Desktops
 and the full-screen Spaces, and the user picks a window or a Space.
 
-This file is a proposal. Steps C, Expansion on a key, and D, the strip, are
-built, in `mod.rs`, `layout.rs` and `strip.rs` of this folder and in
+This file is a proposal. Steps C, Expansion on a key, D, the strip, and E,
+the drag of a window to a Space, are built, in `mod.rs`, `layout.rs` and `strip.rs` of this folder and in
 `effects/strip.rs` and `effects/badge.rs`; none of the rest is. It was written on 2026-11-26 on
 a Mac, which cannot build the compositor, from measurements of macOS 27.2.1 and
 from reading gnome-shell, KWin, niri and Smithay at the pinned rev. The row of
@@ -218,8 +218,10 @@ corner, and the layout has nothing to keep. Each step is one visible result.
    tokens and frame callbacks for the windows in thumbnails. The strip's
    blur, the first blur of the rebuild, is a step of its own after the
    wallpaper.
-- **E. Drag a window to a Space.** Onto a thumbnail and onto "+", with a
-   pointer grab like `WindowGrab`.
+- **E. Drag a window to a Space (built).** A window dragged onto the
+   thumbnail of another Desktop moves there. It is plain state in
+   `Expansion` with a movement threshold, not a pointer grab. A drop on "+"
+   is not built.
 - **F. Hover ring and Control+arrows while open.**
 - **H. Swipes.** Three fingers up and down for Expansion, sideways for the
    slide, following the fingers. libinput's swipe events are read directly;
