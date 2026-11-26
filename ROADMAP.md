@@ -78,6 +78,9 @@ for the nested one. `./vm.sh shot file.png` captures the virtual display.
 With a device argument the compositor runs directly on that device. With no
 argument it runs nested when `WAYLAND_DISPLAY` is set.
 
+Nested input is checked without a person: the compositor runs inside a
+headless sway with wayvnc, and a script sends pointer and key events over VNC.
+
 Steps 7 and 8 need a seat, udev and a GPU, which the box of a Mac lacks. They
 are checked in a NixOS virtual machine with a full Linux session, the flake's
 `checks.<system>.vm` (on a Mac, `./vm.sh test dir` runs it and writes its
@@ -120,8 +123,6 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   inactive one is an error.
 - A display mode is trusted as the kernel reports it; one with a zero total or
   a zero refresh would panic the compositor.
-- Nested, every pointer motion draws a frame although the host draws the
-  cursor. The one-line change waits for a before-and-after measurement.
 - Each frame that renders nothing inserts a one-shot timer to send its frame
   callbacks one refresh later; a reusable timer is not done.
 
@@ -142,9 +143,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - A second signal while the compositor is stopping: by calloop's code it stays
   blocked until the signal source is dropped at the end of `main`, and then
   ends the process with that signal's status. Not exercised.
-- A refused menu grab that closes the menu, and the keys released when the
-  host takes the keyboard from the nested compositor: both follow the protocol
-  and niri, and neither was exercised, because nothing here can inject input.
+- A refused menu grab that closes the menu: it follows the protocol and
+  mutter, and was not exercised, because no client here reaches the refused
+  path.
 - A page flip that the kernel never reports freezes the screen until the next
   VT switch; there is no page-flip watchdog.
 - If the session cannot be resumed, drawing is retried on every refresh with a

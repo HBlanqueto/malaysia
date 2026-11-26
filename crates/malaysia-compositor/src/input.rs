@@ -158,7 +158,9 @@ impl State {
             },
         );
         pointer.frame(self);
-        self.needs_redraw = true;
+        if let Backend::Drm(_) = self.backend {
+            self.needs_redraw = true;
+        }
     }
 
     pub fn focus_window(&mut self, window: &Window, serial: Serial) {
