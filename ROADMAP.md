@@ -10,8 +10,8 @@ Last update: 2026-11-25.
 ## Where we are
 
 **Now:** the compositor runs directly on a display and nested in a Wayland
-session, and apps show their menus. Next is the first item of «After this
-stage». Nothing has run on real hardware yet.
+session, and apps show their menus. Next is output scale; `linux-dmabuf`
+waits for a real GPU. Nothing has run on real hardware yet.
 
 The display after the last finished step (step 9: on a NixOS machine, directly
 on the display, a text editor with its File menu open):
@@ -31,7 +31,7 @@ on the display, a text editor with its File menu open):
 | 8a | Devices with udev and libinput | real keyboard and mouse, the GPU found without an argument, Ctrl+Alt+Fn and Ctrl+Alt+Backspace | done `983e166` |
 | 8b | Cursor | a pointer that can be seen on a real display | done `aa62ca9` |
 | review | The whole code read against Smithay's source | fixes for focus, hidden errors and a retried frame | done `afa81d4` |
-| 9 | Popups: `xdg_popup` with its keyboard and pointer grab | a menu, its submenus and a context menu that stays inside the display | done |
+| 9 | Popups: `xdg_popup` with its keyboard and pointer grab | a menu, its submenus and a context menu that stays inside the display | done `5c5d116` |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -41,7 +41,10 @@ and nested in another session.
 In the order they will be taken, one at a time:
 
 1. `linux-dmabuf`: until then every client draws with software rendering, so a
-   real machine looks slower than it is.
+   real machine looks slower than it is. It is written and kept out of the
+   branch: it only turns on with a hardware render node, and the test machines
+   have none, so it waits for a real GPU to be checked on. The steps below go
+   ahead meanwhile.
 2. Output scale, for HiDPI displays.
 3. Layer shell, which the shell needs to place its surfaces.
 4. `bk` returns, with its first two components: the lock screen and the
