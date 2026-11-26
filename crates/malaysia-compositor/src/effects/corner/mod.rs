@@ -1,4 +1,4 @@
-use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, SQRT_2};
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 
 #[derive(Clone, Copy)]
 pub struct Curve {
@@ -10,9 +10,9 @@ impl Curve {
     pub fn new(smoothing: f32) -> Curve {
         let reach = 1.0 + smoothing;
         let arc_measure = FRAC_PI_2 * (1.0 - smoothing);
-        let arc_section = (arc_measure / 2.0).sin() * SQRT_2;
-        let theta = (FRAC_PI_2 - arc_measure) / 2.0;
         let beta = FRAC_PI_4 * smoothing;
+        let arc_section = beta.cos() - beta.sin();
+        let theta = (FRAC_PI_2 - arc_measure) / 2.0;
         let c = (theta / 2.0).tan() * beta.cos();
         let rise = c * beta.tan();
         let b = (reach - arc_section - c - rise) / 3.0;
@@ -23,6 +23,14 @@ impl Curve {
         }
     }
 
+    pub fn fit(self, radius: f32, half_side: f32) -> (f32, Curve) {
+        let radius = radius.min(half_side);
+        if self.reach() * radius <= half_side {
+            return (radius, self);
+        }
+        (radius, Curve::new(half_side / radius - 1.0))
+    }
+
     pub fn reach(self) -> f32 {
         self.bezier[0]
     }
@@ -31,6 +39,7 @@ impl Curve {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::f32::consts::SQRT_2;
 
     const CAPTURE: &str = include_str!("window-16.csv");
     const CAPTURE_SIZE: usize = 32;
@@ -115,5 +124,20 @@ mod tests {
         assert!(signed_distance(curve, [reach - 1.0, 0.0], radius) < 0.0);
         let diagonal = radius * (1.0 - SQRT_2 / 2.0);
         assert!(signed_distance(curve, [diagonal, diagonal], radius).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_corner_too_large_for_its_side_ends_its_tails_at_the_middle_and_is_the_exact_circle_at_half_the_side()
+     {
+        let curve = Curve::new(ctdesign::CORNER_WINDOW.smoothing);
+        let (radius, same) = curve.fit(16.0, 30.0);
+        assert_eq!(radius, 16.0);
+        assert_eq!(same.bezier, curve.bezier);
+        let (radius, shorter) = curve.fit(16.0, 20.0);
+        assert!((shorter.reach() * radius - 20.0).abs() < 1e-4);
+        let (radius, circle) = curve.fit(16.0, 10.0);
+        assert_eq!(radius, 10.0);
+        assert_eq!(circle.bezier, [1.0; 4]);
+        assert_eq!(circle.rise, 0.0);
     }
 }

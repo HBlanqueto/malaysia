@@ -106,10 +106,15 @@ impl Effects {
                 Kind::Unspecified,
             ));
         }
+        let bounds: Rectangle<i32, Physical> = geometry.to_physical_precise_round(scale);
+        let (radius, curve) = self.curve.fit(
+            corner_radius(surface) * scale as f32,
+            bounds.size.w.min(bounds.size.h) as f32 / 2.0,
+        );
         let shape = Shape {
-            bounds: geometry.to_physical_precise_round(scale),
-            radius: corner_radius(surface) * scale as f32,
-            curve: self.curve,
+            bounds,
+            radius,
+            curve,
         };
         let width = (f64::from(ctdesign::FRAME_LINE_WIDTH) * scale)
             .round()
