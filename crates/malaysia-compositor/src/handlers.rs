@@ -3,13 +3,14 @@ use smithay::desktop::{
     PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Space, Window,
     find_popup_root_surface, get_popup_toplevel_coords,
 };
-use smithay::input::pointer::{ClickGrab, CursorImageStatus, Focus};
+use smithay::input::pointer::{ClickGrab, CursorImageStatus, Focus, GrabStartData};
 use smithay::input::{Seat, SeatHandler, SeatState};
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
 use smithay::reexports::wayland_server::protocol::{
     wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface,
 };
 use smithay::reexports::wayland_server::{Client, Resource};
-use smithay::utils::{IsAlive, SERIAL_COUNTER, Serial};
+use smithay::utils::{IsAlive, Logical, Point, SERIAL_COUNTER, Serial};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
     CompositorClientState, CompositorHandler, CompositorState, get_parent, is_sync_subsurface,
@@ -28,6 +29,7 @@ use smithay::wayland::shell::xdg::{
 use smithay::wayland::shm::{ShmHandler, ShmState};
 
 use crate::move_grab::MoveGrab;
+use crate::resize_grab::ResizeGrab;
 use crate::state::{ClientState, State};
 
 impl CompositorHandler for State {
@@ -57,6 +59,7 @@ impl CompositorHandler for State {
             if !toplevel.is_initial_configure_sent() {
                 toplevel.send_configure();
             }
+            self.anchor_resized(&window);
         } else if let Some(PopupKind::Xdg(popup)) = self.popups.find_popup(surface)
             && !popup.is_initial_configure_sent()
             && let Err(error) = popup.send_configure()
@@ -110,26 +113,28 @@ impl XdgShellHandler for State {
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, serial: Serial) {
-        let pointer = self.seat.get_pointer().unwrap();
-        if let Some(start_data) = pointer
-            .with_grab(|grab_serial, grab| {
-                (grab_serial == serial && grab.is::<ClickGrab<State>>())
-                    .then(|| grab.start_data().clone())
-            })
-            .flatten()
-            && start_data
-                .focus
-                .as_ref()
-                .is_some_and(|(focus, _)| focus.id().same_client_as(&surface.wl_surface().id()))
-            && let Some(window) = self.window_for_surface(surface.wl_surface()).cloned()
-            && let Some(initial_location) =
-                self.desktops[self.current_desktop].element_location(&window)
-        {
+        if let Some((start_data, window, initial_location)) = self.grab_start(&surface, serial) {
             let grab = MoveGrab {
                 start_data,
                 window,
                 initial_location,
             };
+            let pointer = self.seat.get_pointer().unwrap();
+            pointer.set_grab(self, grab, serial, Focus::Clear);
+        }
+    }
+
+    fn resize_request(
+        &mut self,
+        surface: ToplevelSurface,
+        _seat: WlSeat,
+        serial: Serial,
+        edges: ResizeEdge,
+    ) {
+        if let Some((start_data, window, _)) = self.grab_start(&surface, serial)
+            && let Some(grab) = ResizeGrab::new(start_data, window, edges)
+        {
+            let pointer = self.seat.get_pointer().unwrap();
             pointer.set_grab(self, grab, serial, Focus::Clear);
         }
     }
@@ -196,6 +201,30 @@ impl State {
             .find_popup(surface)
             .and_then(|popup| find_popup_root_surface(&popup).ok())
             .unwrap_or_else(|| surface.clone())
+    }
+
+    fn grab_start(
+        &self,
+        surface: &ToplevelSurface,
+        serial: Serial,
+    ) -> Option<(GrabStartData<State>, Window, Point<i32, Logical>)> {
+        let start_data =
+            self.seat
+                .get_pointer()
+                .unwrap()
+                .with_grab(|grab_serial, grab| {
+                    (grab_serial == serial && grab.is::<ClickGrab<State>>())
+                        .then(|| grab.start_data().clone())
+                })
+                .flatten()
+                .filter(|start_data| {
+                    start_data.focus.as_ref().is_some_and(|(focus, _)| {
+                        focus.id().same_client_as(&surface.wl_surface().id())
+                    })
+                })?;
+        let window = self.window_for_surface(surface.wl_surface())?.clone();
+        let location = self.desktops[self.current_desktop].element_location(&window)?;
+        Some((start_data, window, location))
     }
 
     fn window_for_surface(&self, surface: &WlSurface) -> Option<&Window> {

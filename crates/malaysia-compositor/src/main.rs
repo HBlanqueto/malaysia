@@ -5,6 +5,7 @@ mod handlers;
 mod input;
 mod move_grab;
 mod placement;
+mod resize_grab;
 mod scale;
 mod state;
 mod window_style;

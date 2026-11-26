@@ -15,9 +15,10 @@ fractional, a BarrierKit app leaves its frame to the compositor, a
 signal stops the compositor cleanly, and every window gets the continuous
 corner of macOS with an outline outside, an inner line inside and the macOS
 shadow, Ctrl+Left and Ctrl+Right slide between Desktops, and a window is
-dragged by its own title bar and carried along to the next Desktop, and a new
-window opens in a cascade. Next is interactive resize. `linux-dmabuf` waited for a real GPU, which the development
-laptop now has. Nested, the compositor has run on that laptop's GPU; directly
+dragged by its own title bar and carried along to the next Desktop, a new
+window opens in a cascade, and a window is resized by its own edges. Next are
+the tiling shortcuts. `linux-dmabuf` waited for a real GPU, which the
+development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
 The display after step 11 (on a NixOS machine whose display reports a
@@ -52,7 +53,8 @@ scale of 5/3):
 | 18 | `suspended` for the windows of a hidden Desktop | a client on a hidden Desktop is told it is suspended when the slide ends, gets its pending frame callbacks once, and is told it is shown again at the switch back | done `8b5cf44` |
 | 19 | Interactive move: `xdg_toplevel.move` and a pointer grab | a window dragged by its own title bar | done `bbbedb9` |
 | 20 | A dragged window goes along to the next Desktop | holding a window by its title bar and pressing Ctrl+Left or Ctrl+Right takes it to that Desktop, still under the pointer | done `ca36aeb` |
-| 21 | Cascade placement: `WINDOW_CASCADE_STEP` and `WINDOW_CENTER_TOP` | the first window of a Desktop opens centred with a quarter of the free height above it, each next one 29 right and 29 down from the one in front, and a dialog over its parent | done |
+| 21 | Cascade placement: `WINDOW_CASCADE_STEP` and `WINDOW_CENTER_TOP` | the first window of a Desktop opens centred with a quarter of the free height above it, each next one 29 right and 29 down from the one in front, and a dialog over its parent | done `f0df1b9` |
+| 22 | Interactive resize: `xdg_toplevel.resize` and a pointer grab | a window resized by dragging its own edges and corners, the opposite edge staying still | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -62,8 +64,7 @@ and nested in another session.
 In the order they will be taken, one at a time. On 2026-11-26 the user asked to
 take the macOS window model first, so these come before the rest:
 
-1. Interactive resize: `xdg_toplevel.resize`.
-2. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
+1. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
    with a spring of ω0 45 and ζ 1.38, as measured; the margin of tiled windows
    is still to be measured.
 
@@ -272,11 +273,18 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   only window of the last Desktop is dragged.
 - A dragged window released mid-slide stays still until the strip rests; a
   second key press before that makes it jump into its Desktop.
-- Only the app starts a move, from its own title bar: there is no interactive
-  resize, no move with a modifier and a drag, no touch or tablet drag, and no
+- Only the app starts a move or a resize, from its own title bar and edges:
+  there is none started by the compositor (a modifier and a drag, or an edge
+  drawn for an app without decorations), no touch or tablet drag, and no
   snapping to the edges or tiling.
-- A request to resize, maximize or minimize is not answered: the window stays
-  as it is, and a Qt title bar then shows its restore button.
+- A request to maximize, minimize or go full screen is not answered: the
+  window stays as it is, and a Qt title bar then shows its restore button.
+- After a resize the next configures carry the last size asked for, not the
+  one the client committed, so a client that changes its own size afterwards
+  goes back to it when the focus changes. mutter and KWin follow the committed
+  size.
+- A move started before the last commit of a resize can leave the window
+  displaced by that last change of size.
 - With a Qt app Smithay logs `surface missing from known popups` each time a
   menu closes. The menus work; the cause is not looked into.
 - A window can be dragged until only the point held is left on the display.
@@ -307,6 +315,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Interactive resize (step 22): nested, at scale 1, with `foot` and a Qt 6
+  app. Not checked: GTK 4, another scale, directly on a display, and the
+  frame of a window smaller than about 43 points.
 - Cascade placement (step 21): nested, at scales 1 and 1.25, and the machine
   check. Not checked: a dialog of a real toolkit.
 - Desktops (step 16): nested, and directly on the virtual display of the
