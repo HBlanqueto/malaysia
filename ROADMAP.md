@@ -92,9 +92,8 @@ at scale 1, 1280×720 and 960×540 at scale 2.
   The Open panel with no window is centered horizontally and its top is
   `(screen height − panel height) / 4 + 2`: 250 at 1440 and 160 at 1080 for a
   panel 448 high. Two points only.
-- **Spaces:** the switch with Control+arrow is a slide of about 126 frames at
-  180 Hz (about 0.7 s) with a fast start and a slow end. This timing is rough:
-  the screen capture also sees other windows change.
+- **Spaces:** the switch with Control+arrow is a slide with a fast start and a
+  slow end. Its timing is in the later pass below.
 - **Frames:** the display link ticks every 5.556 ms (180 Hz) with a spread of
   0.03 ms over 539 frames. Screen capture saw 11.1 ms gaps in about a quarter of
   the frames, and it cannot tell if the compositor or the capture caused them.
