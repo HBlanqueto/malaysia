@@ -18,8 +18,9 @@ shadow, Ctrl+Left and Ctrl+Right slide between Desktops, and a window is
 dragged by its own title bar and carried along to the next Desktop, a new
 window opens in a cascade, a window is resized by its own edges, and
 Ctrl+Super with F, C, an arrow or R tiles the focused window at once, and
-Ctrl+Up spreads the windows of the Desktop (Expansion on a key). Next is
-Expansion's strip, step D of
+Ctrl+Up spreads the windows of the Desktop (Expansion on a key) under a strip
+that shows every Desktop live, adds one with "+" and removes one with its
+close button. Next is dragging a window to a Space, step E of
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -51,7 +52,7 @@ scale of 5/3):
 | review | An audit of the code on the Linux laptop | nested, the compositor stops when its host goes away and releases the keys when the host takes the keyboard; a menu whose grab is refused is closed | done |
 | 14 | `ctdesign`, BarrierKit's design tokens, and the compositor's own effects module | every window cut to the continuous corner of a macOS window, with the outline outside it and the inner line inside it, in light and dark and for the main window and the others; a BarrierKit app gets the corner of its bar (all four bars are 16 in barrierkit's data, so `set_bar` gives the default 16.8 for every bar and changes nothing visible today) | done `e43b9a5` |
 | 15 | the window shadow from `WINDOW_SHADOW_*` | every window casts the macOS shadow, stronger under the main window | done `2ed869e` |
-| 16 | Desktops: one `Space` per Desktop | Ctrl+Right on the last Desktop with windows opens an empty one, Ctrl+Left and Ctrl+Right move between them, and an empty last Desktop goes away when left | done `5837b11` |
+| 16 | Desktops: one `Space` per Desktop | Ctrl+Left and Ctrl+Right move between them; until step 25, Ctrl+Right on the last Desktop with windows opened an empty one and an empty last Desktop went away when left | done `5837b11` |
 | 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a black band of 64 between them, and a second key press mid-slide carries on from where the strip is | done `174f353` |
 | 18 | `suspended` for the windows of a hidden Desktop | a client on a hidden Desktop is told it is suspended when the slide ends, gets its pending frame callbacks once, and is told it is shown again at the switch back | done `8b5cf44` |
 | 19 | Interactive move: `xdg_toplevel.move` and a pointer grab | a window dragged by its own title bar | done `bbbedb9` |
@@ -59,7 +60,8 @@ scale of 5/3):
 | 21 | Cascade placement: `WINDOW_CASCADE_STEP` and `WINDOW_CENTER_TOP` | the first window of a Desktop opens centred with a quarter of the free height above it, each next one 29 right and 29 down from the one in front, and a dialog over its parent | done `f0df1b9` |
 | 22 | Interactive resize: `xdg_toplevel.resize` and a pointer grab | a window resized by dragging its own edges and corners, the opposite edge staying still | done `1ee5505` |
 | 23 | Tiling by keyboard: Fill, Center, the halves and Return to Previous Size | Ctrl+Super with F, C, an arrow or R fills the display, centres the window, puts it in a half, or returns it to the frame it had before | done `219f8d3` |
-| 24 | Expansion on a key: the layout fitted to macOS, the spring of ω0 25, the window drawn at a factor | Ctrl+Up spreads the windows of the Desktop with no overlap and one scale, a click picks one, Escape or Ctrl+Up again puts them back | done |
+| 24 | Expansion on a key: the layout fitted to macOS, the spring of ω0 25, the window drawn at a factor | Ctrl+Up spreads the windows of the Desktop with no overlap and one scale, a click picks one, Escape or Ctrl+Up again puts them back | done `6b8fa7c` |
+| 25 | Expansion's strip: thumbnails of every Space, "+" and close | with Expansion open a bar slides in at the top; the pointer makes it grow and show every Desktop live; a click on one goes there, "+" adds a Desktop and the close button of a thumbnail removes one | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -71,7 +73,8 @@ take the macOS window model first, so these come before the rest:
 
 1. Expansion, the Mission Control of this compositor: steps C to F and I of
    [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md).
-   Step C, Expansion on a key, is done; D, the strip, is next.
+   Steps C, Expansion on a key, and D, the strip, are done; E, dragging a
+   window to a Space, is next.
 2. The spring of a tile (measured: ω0 45, ζ 1.38, 240 ms), then pairs and
    quarters, then restoring a tiled window when it is dragged away.
 
@@ -250,6 +253,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - The fallback cursor is a white square: it shows where no client sets its
   own cursor. Cursor themes come later.
 - The pointer starts at the top left corner.
+- An absolute pointer has run only in the machine check, as QEMU's USB
+  tablet; not on a real display.
 - Nested, the host draws its own cursor; the client's cursor is not shown.
 - Nested works inside a Wayland session only; an X11 host is not supported.
 - The compositor starts no program; a client is started by hand.
@@ -264,18 +269,14 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   `suspended`, as in mutter and KWin, so a client that draws without waiting
   for that state sleeps until it is shown.
 - Ctrl+Left and Ctrl+Right no longer reach apps, as on macOS.
-- Desktops are created by the key, because there is no Mission Control. An
-  empty Desktop in the middle stays and an empty last one is dropped when it
-  is left; macOS keeps both.
 - A pointer grab (a held button, an open menu) ends at the switch,
   and every popup of the windows left behind is closed.
 - Every new window opens on the current Desktop and takes the focus, also a
   dialog or a window of an app on a hidden one.
 - A dragged window goes to another Desktop only with Ctrl+Left or Ctrl+Right:
-  there is no drag to the display edge, no Mission Control and no «Assign To».
-  That Ctrl+arrow carries a dragged window is reported by macOS users, not
-  documented by Apple and not measured. Ctrl+Right does nothing while the
-  only window of the last Desktop is dragged.
+  there is no drag to the display edge or onto Expansion's strip, and no
+  «Assign To». That Ctrl+arrow carries a dragged window is reported by macOS
+  users, not documented by Apple and not measured.
 - A dragged window released mid-slide stays still until the strip rests; a
   second key press before that makes it jump into its Desktop.
 - Only the app starts a move or a resize, from its own title bar and edges:
@@ -351,11 +352,29 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   frames.
 - Ctrl+Up, Ctrl+Down and Escape no longer reach apps while Expansion is open,
   and Ctrl+Up never does.
-- Expansion has no strip, no hover ring, no title, no swipe and no hot corner.
+- Expansion has no hover ring, no title, no swipe and no hot corner.
+- Expansion's strip has no blur. Over the flat Desktop background its tint
+  gives what the blur would, but a window dragged under the strip would show
+  sharp.
+- The strip has no names (text is step I), so collapsed it shows only the
+  pill and the "+". The thumbnails appear at their final place as the strip
+  grows; the hand-over from names to thumbnails is not measured.
+- The strip slides with Expansion's spring, half way at 67 ms, where macOS
+  measured 47 to 58 on entry.
+- The ring of the current thumbnail is BarrierKit's accent, not macOS's blue.
+  The cross of the close button and the colour of the strip's last line are
+  not measured.
+- Thumbnails have no shadow and no frame lines.
+- More Spaces than fit run off both sides of the strip's row.
+- Every client draws at full rate while the thumbnails show.
+- With no wallpaper, the strip and an empty thumbnail are 8 levels apart.
+- The strip does not grow when the pointer is already at the top as Expansion
+  opens, until the pointer moves.
+- The windows of a removed Desktop land above the heir's, and the top one
+  takes the focus at close.
+- Adding or removing a Space is not animated.
 - Ctrl+Left and Ctrl+Right do nothing while Expansion is open.
 - A resize of the display while Expansion is open keeps the old slots.
-- Ctrl+Left or Ctrl+Right during Expansion's closing motion draws the Desktop
-  it reaches with the slots and scale of the one it left.
 - A slot can pass the margin of Expansion's area by 2 at the sides and 3 at
   the top and bottom, which is the slack of the fit.
 - `foot` snaps to its cell grid at its first configure after a fractional
@@ -363,6 +382,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Expansion's strip (step 25): nested only, at scales 1 and 5/3, with
+  `foot`, and the machine check, which adds a Desktop with "+" and goes to
+  it by its thumbnail. Not checked: the rest directly on a display.
 - Expansion on a key (step 24): nested only, at scales 1 and 5/3, with
   `foot`. Not checked: directly on a display.
 - Tiling by keyboard (step 23): nested, at scale 1, with `foot` and a Qt 6

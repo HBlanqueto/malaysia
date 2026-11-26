@@ -4,8 +4,9 @@ Expansion is malaysia's Mission Control: the windows of the current Desktop
 shrink into one layer with no overlap, a strip at the top lists the Desktops
 and the full-screen Spaces, and the user picks a window or a Space.
 
-This file is a proposal. Step C, Expansion on a key, is built, in `mod.rs`
-and `layout.rs` of this folder; none of the rest is. It was written on 2026-11-26 on
+This file is a proposal. Steps C, Expansion on a key, and D, the strip, are
+built, in `mod.rs`, `layout.rs` and `strip.rs` of this folder and in
+`effects/strip.rs` and `effects/badge.rs`; none of the rest is. It was written on 2026-11-26 on
 a Mac, which cannot build the compositor, from measurements of macOS 27.2.1 and
 from reading gnome-shell, KWin, niri and Smithay at the pinned rev. The row of
 workspaces it sits on, and the order of the steps, are in
@@ -43,7 +44,7 @@ own text and "reported" is the press; the measurements give the source.
    of the menu bar. It holds one name per Desktop in cells 95 wide, centred,
    the current one on a pill, and a "+" at the right. When the pointer enters
    it, it grows to 146 with a spring of ω0 16 and shows a live thumbnail of
-   each Space, 1/16 of the display, 32 apart. It stays grown until Expansion
+   each Space, 90 high (1/16 only on a display 1440 high), 32 apart. It stays grown until Expansion
    closes. The window area starts 40 below the strip (about 38 once it has
    grown), so growing the strip computes the layout again. From rest the
    spring of 16 is half way at 105 ms and at 90 % at 243 ms; macOS, counted
@@ -133,8 +134,8 @@ any position and velocity: a key pressed while the windows are still moving,
 or fingers lifted, continue without a jump. It lives in `spring.rs` with ω0
 and ζ as arguments, overdamped and, since step C, critically damped.
 
-The strip has its own two values, both on the same spring type: its slide
-(0 to 40) and its growth (40 to 146).
+The strip has one value of its own, its growth (40 to 146), on the same
+spring type; its slide is Expansion's progress `p`.
 
 The layout is a pure function from the area and the window rectangles to the
 slots. It runs when Expansion opens, when a window is mapped, unmapped or
@@ -209,13 +210,14 @@ corner, and the layout has nothing to keep. Each step is one visible result.
    one, Escape closes. No strip, no text. Adds the `EXPANSION_*` spring and
    margin tokens (the gap is a constant of the fit in `layout.rs`), the critically damped case in `spring.rs`, the factor in `push_window`, the layout function with its tests. Until
    the strip exists the area starts 80 below the top, as if it were there.
-- **D. The strip.** It slides in with the windows, grows under the pointer and
+- **D. The strip (built).** It slides in with the windows, grows under the pointer and
    shows live thumbnails with the ring on the current one; a click on a
    thumbnail switches; "+" adds a Desktop and the close button removes one.
    From this step Desktops are no longer added by Control+Right or dropped
    when left empty: the "+" owns them, as on macOS. Adds the `SPACES_*`
-   tokens, the strip's blur (the first blur of the rebuild), frame callbacks
-   for the windows in thumbnails.
+   tokens and frame callbacks for the windows in thumbnails. The strip's
+   blur, the first blur of the rebuild, is a step of its own after the
+   wallpaper.
 - **E. Drag a window to a Space.** Onto a thumbnail and onto "+", with a
    pointer grab like `WindowGrab`.
 - **F. Hover ring and Control+arrows while open.**
@@ -258,8 +260,8 @@ How each is proved:
   rule is gnome-shell's: progress is distance over 300, a slow release goes to
   the nearest end, a fast one is projected.
 - The margins on another display size or with the Dock elsewhere; every
-  number comes from 2560×1440 at scale 1. The thumbnail is taken as 1/16 of
-  the display; it may be a fixed height of 90 instead.
+  number comes from 2560×1440 at scale 1. The thumbnail is taken as a fixed
+  height of 90; it may be 1/16 of the display instead.
 - The fonts (sizes are matched by the width of the ink only), the radii of
   the thumbnail ring and of the pill, the hover ring at a small scale.
 - Light mode. Every tone here is dark.

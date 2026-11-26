@@ -6,7 +6,7 @@ use smithay::output::Output;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
 use smithay::utils::{IsAlive, SERIAL_COUNTER};
 
-use crate::spring::{rests, spring};
+use crate::spring::{Motion, rests};
 use crate::state::State;
 use crate::window_grab::{Drag, WindowGrab};
 
@@ -17,15 +17,14 @@ pub enum Direction {
 }
 
 pub struct Slide {
-    from: f64,
+    motion: Motion,
     pub position: f64,
-    velocity: f64,
-    started: Duration,
     pub carried: Option<Window>,
 }
 
 const OMEGA: f64 = ctdesign::DESKTOP_SWITCH_OMEGA as f64;
 const DAMPING: f64 = ctdesign::DESKTOP_SWITCH_DAMPING as f64;
+pub const MAX_DESKTOPS: usize = 16;
 
 pub fn gap(scale: f64) -> i32 {
     (f64::from(ctdesign::DESKTOP_GAP) * scale).round() as i32
@@ -62,35 +61,27 @@ pub fn send_changed_state(window: &Window) {
     }
 }
 
-fn switch_target(
-    direction: Direction,
-    current: usize,
-    last: usize,
-    last_has_windows: bool,
-) -> Option<usize> {
+fn switch_target(direction: Direction, current: usize, last: usize) -> Option<usize> {
     match direction {
         Direction::Left => current.checked_sub(1),
-        Direction::Right if current < last => Some(current + 1),
-        Direction::Right => last_has_windows.then_some(last + 1),
+        Direction::Right => (current < last).then_some(current + 1),
+    }
+}
+
+fn current_after_removal(removed: usize, current: usize) -> usize {
+    if removed <= current && current > 0 {
+        current - 1
+    } else {
+        current
     }
 }
 
 impl State {
     fn strip(&self, now: Duration) -> (f64, f64) {
         let target = self.current_desktop as f64;
-        match &self.slide {
-            Some(slide) => {
-                let (offset, velocity) = spring(
-                    OMEGA,
-                    DAMPING,
-                    slide.from - target,
-                    slide.velocity,
-                    now.saturating_sub(slide.started).as_secs_f64(),
-                );
-                (target + offset, velocity)
-            }
-            None => (target, 0.0),
-        }
+        self.slide.as_ref().map_or((target, 0.0), |slide| {
+            slide.motion.at(OMEGA, DAMPING, target, now)
+        })
     }
 
     pub fn advance_slide(&mut self, now: Duration) {
@@ -114,12 +105,30 @@ impl State {
             return;
         }
         self.slide = None;
+        if !self.expansion.strip.grown {
+            self.suspend_hidden_desktops(now);
+        }
+    }
+
+    pub fn suspend_hidden_desktops(&mut self, now: Duration) {
         for (index, desktop) in self.desktops.iter_mut().enumerate() {
             if index != self.current_desktop && desktop.outputs().next().is_some() {
                 for window in desktop.elements() {
                     suspend(window, &self.output, now);
                 }
                 desktop.unmap_output(&self.output);
+            }
+        }
+    }
+
+    pub fn wake_desktops(&mut self) {
+        for desktop in &mut self.desktops {
+            desktop.map_output(&self.output, (0, 0));
+            for window in desktop.elements() {
+                window.toplevel().unwrap().with_pending_state(|state| {
+                    state.states.unset(ToplevelState::Suspended);
+                });
+                send_changed_state(window);
             }
         }
     }
@@ -142,6 +151,43 @@ impl State {
     }
 
     pub fn switch_desktop(&mut self, direction: Direction, time: InputTime) {
+        let last = self.desktops.len() - 1;
+        if let Some(target) = switch_target(direction, self.current_desktop, last) {
+            self.show_desktop(target, time);
+        }
+    }
+
+    pub fn add_desktop(&mut self) {
+        if self.desktops.len() == MAX_DESKTOPS {
+            return;
+        }
+        let mut desktop = Space::default();
+        if self.expansion.strip.grown {
+            desktop.map_output(&self.output, (0, 0));
+        }
+        self.desktops.push(desktop);
+    }
+
+    pub fn remove_desktop(&mut self, index: usize) {
+        if self.desktops.len() == 1 {
+            return;
+        }
+        let mut removed = self.desktops.remove(index);
+        let heir = &mut self.desktops[index.saturating_sub(1)];
+        loop {
+            let Some(window) = removed.elements().next().cloned() else {
+                break;
+            };
+            let location = removed.element_location(&window).unwrap();
+            removed.unmap_elem(&window);
+            heir.map_element(window, location, false);
+        }
+        self.current_desktop = current_after_removal(index, self.current_desktop);
+        self.slide = None;
+        self.rearrange_expansion();
+    }
+
+    pub fn show_desktop(&mut self, target: usize, time: InputTime) {
         let pointer = self.seat.get_pointer().unwrap();
         let carried = pointer
             .with_grab(|_, grab| {
@@ -154,23 +200,16 @@ impl State {
                 let location = self.desktops[self.current_desktop].element_location(&window)?;
                 Some((window, location))
             });
-        let carried_window = carried.as_ref().map(|(window, _)| window);
-        let last = self.desktops.len() - 1;
-        let last_has_windows = self.desktops[last]
-            .elements()
-            .any(|window| Some(window) != carried_window);
-        let Some(target) = switch_target(direction, self.current_desktop, last, last_has_windows)
-        else {
-            return;
-        };
         let now = self.start_time.elapsed();
         let (from, velocity) = self.strip(now);
         self.slide = Some(Slide {
-            from,
+            motion: Motion {
+                from,
+                velocity,
+                started: now,
+            },
             position: from,
-            velocity,
-            started: now,
-            carried: carried_window.cloned(),
+            carried: carried.as_ref().map(|(window, _)| window.clone()),
         });
         match &carried {
             Some((window, _)) => self.desktops[self.current_desktop].unmap_elem(window),
@@ -182,9 +221,6 @@ impl State {
             window.set_activated(false);
             send_changed_state(window);
         }
-        if target == self.desktops.len() {
-            self.desktops.push(Space::default());
-        }
         self.desktops[target].map_output(&self.output, (0, 0));
         if let Some((window, location)) = carried {
             self.desktops[target].map_element(window, location, true);
@@ -195,20 +231,17 @@ impl State {
             });
         }
         self.current_desktop = target;
-        match self.top_window() {
-            Some(window) => self.focus_window(&window, serial),
-            None => self
-                .seat
-                .get_keyboard()
-                .unwrap()
-                .set_focus(self, None, serial),
+        if !self.expansion.open {
+            match self.top_window() {
+                Some(window) => self.focus_window(&window, serial),
+                None => self
+                    .seat
+                    .get_keyboard()
+                    .unwrap()
+                    .set_focus(self, None, serial),
+            }
         }
         self.move_pointer(pointer.current_location(), time);
-        while self.desktops.len() > self.current_desktop + 1
-            && self.desktops.last().unwrap().elements().next().is_none()
-        {
-            self.desktops.pop();
-        }
         self.needs_redraw = true;
     }
 }
@@ -216,18 +249,28 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::spring::spring;
 
     #[test]
     fn left_moves_one_back_and_stops_at_the_first_desktop() {
-        assert_eq!(switch_target(Direction::Left, 0, 2, true), None);
-        assert_eq!(switch_target(Direction::Left, 2, 2, true), Some(1));
+        assert_eq!(switch_target(Direction::Left, 0, 2), None);
+        assert_eq!(switch_target(Direction::Left, 2, 2), Some(1));
     }
 
     #[test]
-    fn right_moves_one_forward_and_adds_a_desktop_only_after_a_last_one_with_windows() {
-        assert_eq!(switch_target(Direction::Right, 1, 1, true), Some(2));
-        assert_eq!(switch_target(Direction::Right, 1, 1, false), None);
-        assert_eq!(switch_target(Direction::Right, 0, 1, false), Some(1));
+    fn right_moves_one_forward_and_stops_at_the_last_desktop() {
+        assert_eq!(switch_target(Direction::Right, 0, 1), Some(1));
+        assert_eq!(switch_target(Direction::Right, 1, 1), None);
+        assert_eq!(switch_target(Direction::Right, 0, 0), None);
+    }
+
+    #[test]
+    fn removing_the_current_desktop_or_one_before_it_moves_the_current_index_down_except_at_the_first()
+     {
+        assert_eq!(current_after_removal(2, 2), 1);
+        assert_eq!(current_after_removal(0, 2), 1);
+        assert_eq!(current_after_removal(3, 2), 2);
+        assert_eq!(current_after_removal(0, 0), 0);
     }
 
     fn first_millisecond_at_or_below(fraction: f64) -> u32 {

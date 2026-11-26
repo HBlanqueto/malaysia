@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
+use smithay::backend::renderer::element::utils::CropRenderElement;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::desktop::utils::send_frames_surface_tree;
 use smithay::desktop::{PopupManager, Space, Window};
@@ -15,25 +16,30 @@ use smithay::reexports::calloop::{LoopHandle, LoopSignal};
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::render_elements;
-use smithay::utils::Rectangle;
+use smithay::utils::{Logical, Point, Rectangle, Size};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
 use crate::drm::Drm;
-use crate::effects::{Clipped, Effects, Lines, Placement, Shadow};
+use crate::effects::{Badge, Clipped, Effects, Lines, Placement, Shadow, round_edges};
 use crate::winit::Winit;
 use crate::workspaces::desktops::{Slide, desktop_x, gap, gap_x, stride};
 use crate::workspaces::expansion::Expansion;
+use crate::workspaces::expansion::strip::{
+    add_centre, close_centre, pill, thumbnail, thumbnail_factor,
+};
 
 render_elements! {
     pub Element<=GlesRenderer>;
     Surface=WaylandSurfaceRenderElement<GlesRenderer>,
     Clipped=Clipped,
+    Thumbnail=CropRenderElement<Clipped>,
     Lines=Lines,
     Shadow=Shadow,
     Solid=SolidColorRenderElement,
+    Badge=Badge,
 }
 
 pub struct Row<'a> {
@@ -62,6 +68,20 @@ pub fn elements(
     let width = output.current_mode().map_or(0, |mode| mode.size.w);
     let height = output.current_mode().map_or(0, |mode| mode.size.h);
     let stride = stride(width, scale);
+    if let (Some(top), Some(geometry)) = (
+        expansion.strip_top(),
+        desktops[current].output_geometry(output),
+    ) {
+        push_strip(
+            renderer,
+            effects,
+            &row,
+            top,
+            geometry.size.to_f64(),
+            scale,
+            frame,
+        );
+    }
     let others = desktops
         .iter()
         .enumerate()
@@ -80,7 +100,7 @@ pub fn elements(
                 continue;
             };
             let main = index == current && order == 0;
-            let (loc, factor) = if index == current {
+            let (loc, factor) = if index == expansion.desktop {
                 expansion.drawn(window, geometry)
             } else {
                 (geometry.loc.to_f64(), 1.0)
@@ -105,6 +125,53 @@ pub fn elements(
             frame,
         );
     }
+}
+
+fn push_strip(
+    renderer: &mut GlesRenderer,
+    effects: &Effects,
+    row: &Row,
+    top: f64,
+    output: Size<f64, Logical>,
+    scale: f64,
+    frame: &mut Vec<Element>,
+) {
+    let strip = &row.expansion.strip;
+    let count = row.desktops.len();
+    let shift = Point::from((0.0, top));
+    let on_screen = |rectangle: Rectangle<f64, Logical>| {
+        round_edges(Rectangle::new(rectangle.loc + shift, rectangle.size).to_physical(scale))
+    };
+    let bar = on_screen(Rectangle::from_size(Size::from((output.w, strip.height()))));
+    let ring = (strip.grown && strip.motion.is_none())
+        .then(|| on_screen(thumbnail(row.current, count, output)));
+    let close = strip
+        .hovered
+        .map(|index| (close_centre(thumbnail(index, count, output)) + shift).to_physical(scale));
+    effects.push_strip_controls(ring, close, scale, frame);
+    if strip.grown {
+        let factor = thumbnail_factor(output);
+        for (index, desktop) in row.desktops.iter().enumerate() {
+            let whole = on_screen(thumbnail(index, count, output));
+            let Some(clip) = whole.intersection(bar) else {
+                continue;
+            };
+            for window in desktop.elements().rev() {
+                if let Some(geometry) = desktop.element_geometry(window) {
+                    let placement = Placement {
+                        geometry,
+                        desktop_offset: whole.loc,
+                        expansion: factor,
+                    };
+                    effects.push_thumbnail(renderer, window, placement, clip, scale, frame);
+                }
+            }
+            effects.push_thumbnail_backdrop(index, clip, frame);
+        }
+    }
+    let add = (add_centre(strip.growth, output) + shift).to_physical(scale);
+    let pill = (!strip.grown).then(|| on_screen(pill(row.current, count, output)));
+    effects.push_strip_bar(bar, add, pill, scale, frame);
 }
 
 pub enum Backend {

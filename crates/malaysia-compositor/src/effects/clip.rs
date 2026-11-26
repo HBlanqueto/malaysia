@@ -31,6 +31,7 @@ pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesTexProgram, GlesError>
 pub struct Clipped {
     pub(super) surface: WaylandSurfaceRenderElement<GlesRenderer>,
     pub(super) shape: Shape,
+    pub(super) origin: Point<i32, Physical>,
     pub(super) factor: f64,
     pub(super) program: GlesTexProgram,
 }
@@ -47,7 +48,7 @@ fn scaled_about(
     )
 }
 
-fn round_edges(rectangle: Rectangle<f64, Physical>) -> Rectangle<i32, Physical> {
+pub fn round_edges(rectangle: Rectangle<f64, Physical>) -> Rectangle<i32, Physical> {
     Rectangle::from_extremities(
         rectangle.loc.to_i32_round(),
         (rectangle.loc + rectangle.size).to_i32_round(),
@@ -92,7 +93,7 @@ impl Element for Clipped {
     fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
         round_edges(scaled_about(
             self.surface.geometry(scale),
-            self.shape.bounds.loc,
+            self.origin,
             self.factor,
         ))
     }
@@ -109,8 +110,7 @@ impl Element for Clipped {
             .into_iter()
             .map(|mut damage| {
                 damage.loc += surface_location;
-                let mut scaled =
-                    scaled_about(damage, self.shape.bounds.loc, self.factor).to_i32_up::<i32>();
+                let mut scaled = scaled_about(damage, self.origin, self.factor).to_i32_up::<i32>();
                 scaled.loc -= location;
                 scaled
             })

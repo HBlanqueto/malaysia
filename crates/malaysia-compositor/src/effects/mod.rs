@@ -1,7 +1,10 @@
+mod badge;
 mod clip;
 mod corner;
 mod lines;
+mod shaded;
 mod shadow;
+mod strip;
 
 use std::cell::{RefCell, RefMut};
 
@@ -15,13 +18,15 @@ use smithay::backend::renderer::utils::CommitCounter;
 use smithay::desktop::{PopupManager, Window};
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 
-pub use clip::Clipped;
+pub use badge::Badge;
+pub use clip::{Clipped, round_edges};
 pub use lines::Lines;
 pub use shadow::Shadow;
 
 use crate::state::Element;
 use crate::window_style::corner_radius;
 use corner::Curve;
+use strip::Chrome;
 
 pub struct Placement {
     pub geometry: Rectangle<i32, Logical>,
@@ -33,8 +38,10 @@ pub struct Effects {
     clip: GlesTexProgram,
     lines: GlesPixelProgram,
     shadow: GlesPixelProgram,
+    badge: GlesPixelProgram,
     curve: Curve,
     gap: Id,
+    strip: Chrome,
     lines_scheme: ctdesign::FrameLines,
     shadow_scheme: ctdesign::WindowShadow,
 }
@@ -80,14 +87,30 @@ fn drawn(window: &Window, look: Look) -> RefMut<'_, Drawn> {
     drawn
 }
 
+fn pixels(points: f64, scale: f64) -> i32 {
+    (points * scale).round().max(1.0) as i32
+}
+
+fn solid(id: &Id, geometry: Rectangle<i32, Physical>, color: ctdesign::Rgba) -> Element {
+    Element::Solid(SolidColorRenderElement::new(
+        id.clone(),
+        geometry,
+        CommitCounter::default(),
+        color.premultiplied(),
+        Kind::Unspecified,
+    ))
+}
+
 impl Effects {
     pub fn new(renderer: &mut GlesRenderer, dark: bool) -> Result<Effects, GlesError> {
         Ok(Effects {
             clip: clip::compile(renderer)?,
             lines: lines::compile(renderer)?,
             shadow: shadow::compile(renderer)?,
+            badge: badge::compile(renderer)?,
             curve: Curve::new(ctdesign::CORNER_WINDOW.smoothing),
             gap: Id::new(),
+            strip: Chrome::new(dark),
             lines_scheme: if dark {
                 ctdesign::FRAME_LINES_DARK
             } else {
@@ -101,14 +124,19 @@ impl Effects {
         })
     }
 
+    fn shape(&self, bounds: Rectangle<i32, Physical>, radius: f32) -> Shape {
+        let (radius, curve) = self
+            .curve
+            .fit(radius, bounds.size.w.min(bounds.size.h) as f32 / 2.0);
+        Shape {
+            bounds,
+            radius,
+            curve,
+        }
+    }
+
     pub fn push_gap(&self, geometry: Rectangle<i32, Physical>, frame: &mut Vec<Element>) {
-        frame.push(Element::Solid(SolidColorRenderElement::new(
-            self.gap.clone(),
-            geometry,
-            CommitCounter::default(),
-            ctdesign::DESKTOP_GAP_COLOR.premultiplied(),
-            Kind::Unspecified,
-        )));
+        frame.push(solid(&self.gap, geometry, ctdesign::DESKTOP_GAP_COLOR));
     }
 
     pub fn push_window(
@@ -143,18 +171,8 @@ impl Effects {
         let mut bounds: Rectangle<i32, Physical> = geometry.to_physical_precise_round(scale);
         bounds.loc += desktop_offset;
         bounds.size = bounds.size.to_f64().upscale(expansion).to_i32_round();
-        let (radius, curve) = self.curve.fit(
-            corner_radius(surface) * (scale * expansion) as f32,
-            bounds.size.w.min(bounds.size.h) as f32 / 2.0,
-        );
-        let shape = Shape {
-            bounds,
-            radius,
-            curve,
-        };
-        let width = (f64::from(ctdesign::FRAME_LINE_WIDTH) * scale)
-            .round()
-            .max(1.0) as i32;
+        let shape = self.shape(bounds, corner_radius(surface) * (scale * expansion) as f32);
+        let width = pixels(f64::from(ctdesign::FRAME_LINE_WIDTH), scale);
         let drawn = drawn(
             window,
             Look {
@@ -164,12 +182,26 @@ impl Effects {
                 expansion,
             },
         );
+        let (outline, inner_line, window_shadow) = if main {
+            (
+                self.lines_scheme.outer,
+                self.lines_scheme.inner,
+                self.shadow_scheme.main,
+            )
+        } else {
+            (
+                self.lines_scheme.outer_inactive,
+                self.lines_scheme.inner_inactive,
+                self.shadow_scheme.inactive,
+            )
+        };
         frame.push(Element::Lines(Lines::new(
-            &drawn,
+            drawn.lines.clone(),
+            drawn.commit,
             shape,
             width,
-            main,
-            self.lines_scheme,
+            outline,
+            inner_line,
             self.lines.clone(),
         )));
         let tree = render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<_>>(
@@ -184,17 +216,19 @@ impl Effects {
             Element::Clipped(Clipped {
                 surface,
                 shape,
+                origin: shape.bounds.loc,
                 factor: expansion,
                 program: self.clip.clone(),
             })
         }));
+        let shadow_scale = scale * expansion;
         frame.push(Element::Shadow(Shadow::new(
-            &drawn,
+            drawn.shadow.clone(),
+            drawn.commit,
             shape,
             width,
-            scale * expansion,
-            main,
-            self.shadow_scheme,
+            shadow::scaled(window_shadow, shadow_scale),
+            ctdesign::WINDOW_SHADOW_SPREAD * shadow_scale as f32,
             self.shadow.clone(),
         )));
     }

@@ -1,12 +1,13 @@
-use smithay::backend::renderer::element::{Element, Id, RenderElement};
+use ctdesign::Rgba;
+use smithay::backend::renderer::element::Id;
 use smithay::backend::renderer::gles::{
-    GlesError, GlesFrame, GlesPixelProgram, GlesRenderer, Uniform, UniformName, UniformType,
+    GlesError, GlesPixelProgram, GlesRenderer, Uniform, UniformName, UniformType,
 };
 use smithay::backend::renderer::utils::CommitCounter;
-use smithay::utils::user_data::UserDataMap;
-use smithay::utils::{Buffer, Physical, Point, Rectangle, Scale, Size};
+use smithay::utils::{Point, Rectangle, Size};
 
-use super::{Drawn, Shape};
+use super::Shape;
+use super::shaded::Shaded;
 
 pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesPixelProgram, GlesError> {
     renderer.compile_custom_pixel_shader(
@@ -25,91 +26,36 @@ pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesPixelProgram, GlesErro
     )
 }
 
-pub struct Lines {
-    id: Id,
-    commit: CommitCounter,
-    area: Rectangle<i32, Physical>,
-    width: f32,
-    shape: Shape,
-    outline: [f32; 4],
-    inner_line: [f32; 4],
-    program: GlesPixelProgram,
-}
+pub type Lines = Shaded<6>;
 
 impl Lines {
     pub fn new(
-        drawn: &Drawn,
+        id: Id,
+        commit: CommitCounter,
         shape: Shape,
         width: i32,
-        main: bool,
-        lines: ctdesign::FrameLines,
+        outline: Rgba,
+        inner_line: Rgba,
         program: GlesPixelProgram,
     ) -> Lines {
         let area = Rectangle::new(
             shape.bounds.loc - Point::from((width, width)),
             shape.bounds.size + Size::from((2 * width, 2 * width)),
         );
-        let (outline, inner_line) = if main {
-            (lines.outer, lines.inner)
-        } else {
-            (lines.outer_inactive, lines.inner_inactive)
-        };
-        Lines {
-            id: drawn.lines.clone(),
-            commit: drawn.commit,
+        Shaded {
+            id,
+            commit,
             area,
-            width: width as f32,
-            shape,
-            outline: outline.premultiplied(),
-            inner_line: inner_line.premultiplied(),
+            opacity: 1.0,
             program,
-        }
-    }
-}
-
-impl Element for Lines {
-    fn id(&self) -> &Id {
-        &self.id
-    }
-
-    fn current_commit(&self) -> CommitCounter {
-        self.commit
-    }
-
-    fn src(&self) -> Rectangle<f64, Buffer> {
-        Rectangle::from_size((self.area.size.w as f64, self.area.size.h as f64).into())
-    }
-
-    fn geometry(&self, _scale: Scale<f64>) -> Rectangle<i32, Physical> {
-        self.area
-    }
-}
-
-impl RenderElement<GlesRenderer> for Lines {
-    fn draw(
-        &self,
-        frame: &mut GlesFrame<'_, '_>,
-        src: Rectangle<f64, Buffer>,
-        dst: Rectangle<i32, Physical>,
-        damage: &[Rectangle<i32, Physical>],
-        _opaque_regions: &[Rectangle<i32, Physical>],
-        _cache: Option<&UserDataMap>,
-    ) -> Result<(), GlesError> {
-        frame.render_pixel_shader_to(
-            &self.program,
-            src,
-            dst,
-            Size::from((self.area.size.w, self.area.size.h)),
-            Some(damage),
-            1.0,
-            &[
-                Uniform::new("width", self.width),
-                Uniform::new("radius", self.shape.radius),
-                Uniform::new("outline", self.outline),
-                Uniform::new("inner_line", self.inner_line),
-                Uniform::new("curve", self.shape.curve.bezier),
-                Uniform::new("rise", self.shape.curve.rise),
+            uniforms: [
+                Uniform::new("width", width as f32),
+                Uniform::new("radius", shape.radius),
+                Uniform::new("outline", outline.premultiplied()),
+                Uniform::new("inner_line", inner_line.premultiplied()),
+                Uniform::new("curve", shape.curve.bezier),
+                Uniform::new("rise", shape.curve.rise),
             ],
-        )
+        }
     }
 }

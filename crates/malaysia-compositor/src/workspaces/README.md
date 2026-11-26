@@ -4,8 +4,8 @@ This folder is for the row of workspaces: the Desktops, the full-screen
 Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
-This file is a proposal. Of its steps only C, Expansion on a key, is built,
-in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
+This file is a proposal. Of its steps only C, Expansion on a key, and D, its
+strip, are built, in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
 Desktops as they are today.
 It was written on 2026-11-26 on a Mac, which cannot build the compositor, so
 that the session on Linux can check it and build from it. The measured tables
@@ -25,8 +25,6 @@ Steps 16 to 23, in `desktops.rs`, `state.rs`, `placement.rs`, `window_grab.rs`,
 - the windows of a hidden Desktop are told they are `suspended`;
 - a window is dragged by its title bar, and Control+arrows during the drag
   carry it to the next Desktop;
-- Control+Right on the last Desktop with windows adds one, and an empty last
-  Desktop is dropped when it is left;
 - a new window opens in a cascade, each one a step down and right of the
   last, in `placement.rs`;
 - a window is resized by its own edges and corners with the same
@@ -34,7 +32,10 @@ Steps 16 to 23, in `desktops.rs`, `state.rs`, `placement.rs`, `window_grab.rs`,
 - Ctrl+Super with F, C, an arrow or R tiles the focused window at once, in
   `tiling.rs`: Fill, Center, the halves and Return to Previous Size;
 - Ctrl+Up spreads the windows of the current Desktop with no overlap and a
-  click picks one, in `expansion/` (step C, step 24 of the roadmap).
+  click picks one, in `expansion/` (step C, step 24 of the roadmap);
+- Expansion's strip shows every Desktop live once the pointer enters it, a
+  click on one goes there, "+" adds a Desktop and the close button of a
+  thumbnail removes one (step D, step 25 of the roadmap).
 
 ## The row
 
@@ -50,7 +51,7 @@ The proposal keeps the `Vec` and gives each entry one more field:
 - an entry with that frame is a full-screen Space; one without is a Desktop;
 - there is always at least one Desktop;
 - one function removes an entry, and it moves the current index down when the
-  removed entry was before it. Leaving full screen, a full-screen window that
+  removed entry was before it or was the current one, except at the first. Leaving full screen, a full-screen window that
   closes and the close button of Expansion all use it.
 
 No identifier per Desktop is needed. A full-screen Space is inserted right
@@ -58,8 +59,9 @@ after the current entry, and its window returns to the nearest Desktop,
 looking left first and then right. As long as the row is not reordered that
 is the Desktop it came from, as on macOS.
 
-Two rules of step 16 end when Expansion's strip brings the "+": Control+Right
-no longer adds a Desktop, and an empty Desktop is no longer dropped. On macOS
+Two rules of step 16 ended when Expansion's strip brought the "+" (step D):
+Control+Right no longer adds a Desktop, and an empty Desktop is no longer
+dropped. On macOS
 a Desktop that is emptied stays.
 
 A new window is still mapped on the current entry when its toplevel is
@@ -181,7 +183,7 @@ them, and steps A and B need none. Each is one visible result.
 | A | Full screen from a client's request: `fullscreen_request` and `unfullscreen_request`, the entry with its saved frame, placement at first commit, `wm_capabilities` with Fullscreen only | `foot --fullscreen`, or mpv with F, fills the display on a Space of its own right of its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | nothing new |
 | B | A key for the same: Control+Super+F | any window goes full screen and back | A |
 | C | Expansion on a key (built) | Control+Up spreads the windows; a click picks one | cascade placement (done); `spring.rs` (exists) |
-| D | Expansion's strip | live thumbnails of every Space, "+" and close | C; the first blur |
+| D | Expansion's strip (built) | live thumbnails of every Space, "+" and close | C |
 | E | Drag a window to a Space in Expansion | windows move between Desktops | D |
 | F | The hover ring, and Control+arrows while Expansion is open | a ring on the window under the pointer; the window area slides to the next Desktop | C |
 | G | The full-screen transition | the window grows while the row slides | A, `spring.rs` |

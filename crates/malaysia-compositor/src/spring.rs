@@ -1,3 +1,19 @@
+use std::time::Duration;
+
+pub struct Motion {
+    pub from: f64,
+    pub velocity: f64,
+    pub started: Duration,
+}
+
+impl Motion {
+    pub fn at(&self, omega: f64, damping: f64, target: f64, now: Duration) -> (f64, f64) {
+        let seconds = now.saturating_sub(self.started).as_secs_f64();
+        let (offset, velocity) = spring(omega, damping, self.from - target, self.velocity, seconds);
+        (target + offset, velocity)
+    }
+}
+
 pub fn spring(omega: f64, damping: f64, offset: f64, velocity: f64, seconds: f64) -> (f64, f64) {
     let decay = damping * omega;
     let spread = omega * (damping * damping - 1.0).sqrt();

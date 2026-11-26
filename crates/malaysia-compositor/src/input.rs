@@ -209,6 +209,9 @@ impl State {
             },
         );
         pointer.frame(self);
+        if self.expansion.open {
+            self.hover_expansion(location);
+        }
         if let Backend::Drm(_) = self.backend {
             self.needs_redraw = true;
         }

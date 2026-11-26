@@ -21,7 +21,7 @@ It runs in two ways:
 [ROADMAP.md](ROADMAP.md) says which step is in progress, what is missing and
 what has not been verified. The proposal for full screen, Expansion
 (malaysia's Mission Control) and Split View, of which only Expansion on a key
-is built, is in
+and its strip are built, is in
 [crates/malaysia-compositor/src/workspaces](crates/malaysia-compositor/src/workspaces/README.md). Nested, it has run on a laptop with a real GPU;
 directly on a real display it has not run yet.
 
@@ -81,8 +81,7 @@ WAYLAND_DISPLAY=wayland-1 foot
 ```
 
 Directly on a display, Ctrl+Alt+Backspace quits and Ctrl+Alt+F1 to F12 switch
-to another VT. In both ways Ctrl+Right on the last Desktop with windows
-opens an empty one, and Ctrl+Left and Ctrl+Right slide between Desktops
+to another VT. In both ways Ctrl+Left and Ctrl+Right slide between Desktops
 with macOS's spring, a black band of 64 between them. A window is dragged
 by its own title bar, and Ctrl+Left or Ctrl+Right while it is held takes it
 along to that Desktop.
@@ -94,7 +93,10 @@ Ctrl+Super with F fills the display with the focused window, with C centres
 it, with an arrow puts it in that half, and with R returns it to the frame it
 had before it was tiled; Super stands in for macOS's fn.
 Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
-one, and Escape, Ctrl+Down or Ctrl+Up again puts them back.
+one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
+top then lists the Desktops; when the pointer enters it, it grows and shows
+every Desktop live. A click on one goes there, "+" adds a Desktop and the
+close button of a thumbnail removes one.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
 shadow in the light scheme; without it they are dark. It is temporary, until

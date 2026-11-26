@@ -121,6 +121,7 @@
               ''
                 import subprocess
                 import time
+                from typing import Any
 
                 def screen(name, node=machine):
                     node.screenshot(name)
@@ -146,6 +147,19 @@
                         and all((x + dx, y + dy) in lit for dx in range(16) for dy in range(16))
                         for x, y in lit
                     )
+
+                def point_at(x, y):
+                    events: Any = [
+                        {"type": "abs", "data": {"axis": "x", "value": round(x * 0x7fff / width)}},
+                        {"type": "abs", "data": {"axis": "y", "value": round(y * 0x7fff / height)}}]
+                    qmp = machine.qmp_client
+                    assert qmp
+                    qmp.send("input-send-event", {"events": events})
+                    time.sleep(2)
+
+                def click():
+                    machine.send_monitor_command("mouse_button 1")
+                    machine.send_monitor_command("mouse_button 0")
 
                 try:
                     machine.wait_for_file("/run/user/1000/wayland-1", timeout=600)
@@ -203,7 +217,17 @@
                     machine.send_chars("zebra")
                     machine.wait_for_text("zebra", timeout=300)
                     machine.screenshot("menu-closed")
-                    machine.send_key("ctrl-right")
+                    machine.send_key("ctrl-up")
+                    time.sleep(2)
+                    width, data = screen("strip")
+                    height = len(data) // 3 // width
+                    point_at(width // 2, 20)
+                    point_at(width - 27, 77)
+                    click()
+                    time.sleep(2)
+                    machine.screenshot("strip-added")
+                    point_at(round(width / 2 + 16 + 45 * width / height), 74)
+                    click()
                     for _ in range(60):
                         if "zebra" not in machine.get_screen_text():
                             break
