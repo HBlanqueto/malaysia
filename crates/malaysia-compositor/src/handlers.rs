@@ -60,6 +60,7 @@ impl CompositorHandler for State {
             }
             self.anchor_resized(&window);
             self.finish_move_resize(&window);
+            self.arrange_expansion();
         } else if let Some(PopupKind::Xdg(popup)) = self.popups.find_popup(surface)
             && !popup.is_initial_configure_sent()
             && let Err(error) = popup.send_configure()
@@ -87,11 +88,14 @@ impl XdgShellHandler for State {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new_wayland_window(surface);
         self.desktops[self.current_desktop].map_element(window.clone(), (0, 0), false);
-        self.focus_window(&window, SERIAL_COUNTER.next_serial());
+        if !self.expansion.open {
+            self.focus_window(&window, SERIAL_COUNTER.next_serial());
+        }
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.needs_redraw = true;
+        self.arrange_expansion();
         let keyboard = self.seat.get_keyboard().unwrap();
         if keyboard
             .current_focus()
@@ -101,12 +105,7 @@ impl XdgShellHandler for State {
         }
         keyboard.unset_grab(self);
         let serial = SERIAL_COUNTER.next_serial();
-        let next = self.desktops[self.current_desktop]
-            .elements()
-            .rev()
-            .find(|window| window.alive() && window.toplevel().unwrap() != &surface)
-            .cloned();
-        match next {
+        match self.top_window() {
             Some(window) => self.focus_window(&window, serial),
             None => keyboard.set_focus(self, None, serial),
         }

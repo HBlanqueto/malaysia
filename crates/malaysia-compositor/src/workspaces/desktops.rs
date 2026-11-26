@@ -124,6 +124,23 @@ impl State {
         }
     }
 
+    pub fn dismiss_popups(&self) {
+        for window in self.desktops[self.current_desktop].elements() {
+            let toplevel = window.toplevel().unwrap();
+            for (popup, _) in PopupManager::popups_for_surface(toplevel.wl_surface()) {
+                let _ = PopupManager::dismiss_popup(toplevel.wl_surface(), &popup);
+            }
+        }
+    }
+
+    pub fn top_window(&self) -> Option<Window> {
+        self.desktops[self.current_desktop]
+            .elements()
+            .rev()
+            .find(|window| window.alive())
+            .cloned()
+    }
+
     pub fn switch_desktop(&mut self, direction: Direction, time: InputTime) {
         let pointer = self.seat.get_pointer().unwrap();
         let carried = pointer
@@ -160,11 +177,8 @@ impl State {
             None => pointer.unset_grab(self, SERIAL_COUNTER.next_serial(), time),
         }
         let serial = SERIAL_COUNTER.next_serial();
+        self.dismiss_popups();
         for window in self.desktops[self.current_desktop].elements() {
-            let toplevel = window.toplevel().unwrap();
-            for (popup, _) in PopupManager::popups_for_surface(toplevel.wl_surface()) {
-                let _ = PopupManager::dismiss_popup(toplevel.wl_surface(), &popup);
-            }
             window.set_activated(false);
             send_changed_state(window);
         }
@@ -181,12 +195,7 @@ impl State {
             });
         }
         self.current_desktop = target;
-        let top_window = self.desktops[target]
-            .elements()
-            .rev()
-            .find(|window| window.alive())
-            .cloned();
-        match top_window {
+        match self.top_window() {
             Some(window) => self.focus_window(&window, serial),
             None => self
                 .seat

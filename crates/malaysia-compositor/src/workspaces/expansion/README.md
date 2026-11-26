@@ -4,7 +4,8 @@ Expansion is malaysia's Mission Control: the windows of the current Desktop
 shrink into one layer with no overlap, a strip at the top lists the Desktops
 and the full-screen Spaces, and the user picks a window or a Space.
 
-This file is a proposal. None of it is built. It was written on 2026-11-26 on
+This file is a proposal. Step C, Expansion on a key, is built, in `mod.rs`
+and `layout.rs` of this folder; none of the rest is. It was written on 2026-11-26 on
 a Mac, which cannot build the compositor, from measurements of macOS 27.2.1 and
 from reading gnome-shell, KWin, niri and Smithay at the pinned rev. The row of
 workspaces it sits on, and the order of the steps, are in
@@ -77,7 +78,8 @@ arrangements is not, so this part is not 1:1 yet.
 What holds in every arrangement, and what the tests of step C must assert:
 
 - one scale for all windows, never above 1; a small window is never enlarged;
-- a window that fits and overlaps nothing stays where it is at scale 1;
+- a window that fits and overlaps nothing stays at scale 1, where it is but
+  for a quarter of a point per stacking place (the tie offset);
 - a window that does not fit shrinks about its own centre and is then moved
   inside the area;
 - an overlapping pair is pushed apart along the line between the two centres
@@ -86,7 +88,7 @@ What holds in every arrangement, and what the tests of step C must assert:
 - two windows with the same centre split at 45°: the one behind goes up and
   left, the one in front down and right. Stacking order decides, not the
   order of creation;
-- a pushed pair ends 12 to 15 apart, at every scale;
+- a pushed pair ends at least 12.5 apart on one axis, at every scale;
 - the scale drops only when a window is held by two walls at once; a window
   held by one wall slides along it;
 - the area: 20 from each side, 40 below the strip, 15 above the Dock. With
@@ -104,6 +106,17 @@ windows alone, without overlap, pairs, and chains of three. It is 11 to 33
 off for a pair in a corner, where its scale is a stand-in, and hundreds off
 for cascades of four and more and for two rows that overlap.
 
+`layout.rs` ports that script. Where the script and the text of the
+measurements differ, it follows the script:
+
+- when 400 sweeps do not settle, the start scale is bisected 18 times between
+  .05 and its first value, and the largest scale that settles is kept;
+  section 8 leaves that step out;
+- a lone window is moved inside the one-window area after it shrinks, so the
+  centre of `n1full` is at 714, not 711;
+- a pair 12 apart is closer than the margin of 12.5, so it is still pushed,
+  about 1.2 with the tie offset.
+
 Cascade placement makes a cascade the usual case, so the dense case matters.
 The layout is one pure function, so replacing it later touches nothing else.
 
@@ -118,8 +131,7 @@ The spring and the clock are those of the slide between Desktops
 (`spring.rs` and `desktops.rs`). The spring is the closed-form solution, so it can start from
 any position and velocity: a key pressed while the windows are still moving,
 or fingers lifted, continue without a jump. It lives in `spring.rs` with ω0
-and ζ as arguments, overdamped only: the critically damped case, which
-Expansion uses, is still to be added by its first user.
+and ζ as arguments, overdamped and, since step C, critically damped.
 
 The strip has its own two values, both on the same spring type: its slide
 (0 to 40) and its growth (40 to 146).
@@ -132,22 +144,21 @@ cleared and filled again, never allocated per frame.
 ## Drawing
 
 - `Effects::push_window` already builds every element of a window for both
-  backends, at a `geometry` and a `desktop_offset` that the slide sets. It
-  gains the factor of Expansion, under a name of its own: `scale` is already
-  the output's, and the function takes eight and carries
-  `#[expect(clippy::too_many_arguments)]`, which is one more reason for the
-  window's placement to become one value. `state::elements` gives it the mix of the
-  window's own rectangle and its slot.
+  backends. It takes the window's placement as one value, `Placement`: the
+  `geometry`, the `desktop_offset` that the slide sets and the factor of
+  Expansion, under a name of its own because `scale` is already the output's.
+  `state::elements` gives it the mix of the window's own rectangle and its
+  slot.
 - The corner shader of `Clipped` takes its size from `Shape.bounds` and only
   its position from the drawn rectangle, so a scaled window cannot be made by
   wrapping `Clipped` in Smithay's `RescaleRenderElement`: the rectangle would
   shrink and the corner would still be computed for the full size.
-  Instead the surface elements are built at the target and wrapped in
-  `RescaleRenderElement` inside `Clipped`, which keeps a clone of the texture,
-  and the `Shape` of the clip, the lines and the shadow are built for the
-  target rectangle with the radius times the factor. The shadow gets the scale
-  times the factor, so its reach shrinks with the window and its alpha does
-  not, as measured.
+  What was built instead: `Clipped` takes the factor and scales its own
+  rectangle and damage about the window's top-left, with no rescale wrapper,
+  and the `Shape` of the clip, the lines and the shadow is built for the
+  scaled rectangle with the radius times the factor. The shadow gets the
+  scale times the factor, so its reach shrinks with the window and its alpha
+  does not, as measured.
 - Scaling everything in one wrapper around the finished elements, as niri does,
   was rejected: it also shrinks the one-pixel lines and the half-pixel edge of
   the corner, which then flicker.
@@ -194,9 +205,9 @@ The letters are those of the table in [../README.md](../README.md). They
 follow cascade placement, which is done (step 21): before it every window opens at the top left
 corner, and the layout has nothing to keep. Each step is one visible result.
 
-- **C. Expansion on a key.** Control+Up spreads the windows, a click picks
-   one, Escape closes. No strip, no text. Adds the `EXPANSION_*` spring,
-   margin and gap tokens, the critically damped case in `spring.rs`, the factor in `push_window`, the layout function with its tests. Until
+- **C. Expansion on a key (built).** Control+Up spreads the windows, a click picks
+   one, Escape closes. No strip, no text. Adds the `EXPANSION_*` spring and
+   margin tokens (the gap is a constant of the fit in `layout.rs`), the critically damped case in `spring.rs`, the factor in `push_window`, the layout function with its tests. Until
    the strip exists the area starts 80 below the top, as if it were there.
 - **D. The strip.** It slides in with the windows, grows under the pointer and
    shows live thumbnails with the ring on the current one; a click on a

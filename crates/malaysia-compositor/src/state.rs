@@ -22,9 +22,10 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
 use crate::drm::Drm;
-use crate::effects::{Clipped, Effects, Lines, Shadow};
+use crate::effects::{Clipped, Effects, Lines, Placement, Shadow};
 use crate::winit::Winit;
 use crate::workspaces::desktops::{Slide, desktop_x, gap, gap_x, stride};
+use crate::workspaces::expansion::Expansion;
 
 render_elements! {
     pub Element<=GlesRenderer>;
@@ -35,15 +36,26 @@ render_elements! {
     Solid=SolidColorRenderElement,
 }
 
+pub struct Row<'a> {
+    pub desktops: &'a [Space<Window>],
+    pub current: usize,
+    pub slide: Option<&'a Slide>,
+    pub expansion: &'a Expansion,
+}
+
 pub fn elements(
     renderer: &mut GlesRenderer,
     effects: &Effects,
-    desktops: &[Space<Window>],
-    current: usize,
-    slide: Option<&Slide>,
+    row: Row,
     output: &Output,
     frame: &mut Vec<Element>,
 ) {
+    let Row {
+        desktops,
+        current,
+        slide,
+        expansion,
+    } = row;
     let position = slide.map_or(current as f64, |slide| slide.position);
     let carried = slide.and_then(|slide| slide.carried.as_ref());
     let scale = output.current_scale().fractional_scale();
@@ -68,11 +80,19 @@ pub fn elements(
                 continue;
             };
             let main = index == current && order == 0;
+            let (loc, factor) = if index == current {
+                expansion.drawn(window, geometry)
+            } else {
+                (geometry.loc.to_f64(), 1.0)
+            };
             effects.push_window(
                 renderer,
                 window,
-                geometry,
-                (x, 0).into(),
+                Placement {
+                    geometry: Rectangle::new(loc.to_i32_round(), geometry.size),
+                    desktop_offset: (x, 0).into(),
+                    expansion: factor,
+                },
                 scale,
                 main,
                 frame,
@@ -102,6 +122,7 @@ pub struct State {
     pub desktops: Vec<Space<Window>>,
     pub current_desktop: usize,
     pub slide: Option<Slide>,
+    pub expansion: Expansion,
     pub popups: PopupManager,
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
@@ -140,9 +161,17 @@ impl State {
 
     pub fn render(&mut self) {
         self.needs_redraw = false;
-        self.advance_slide(self.start_time.elapsed());
+        let now = self.start_time.elapsed();
+        self.advance_slide(now);
+        self.advance_expansion(now);
         self.frame_pending = true;
         let pointer = self.seat.get_pointer().unwrap().current_location();
+        let row = Row {
+            desktops: &self.desktops,
+            current: self.current_desktop,
+            slide: self.slide.as_ref(),
+            expansion: &self.expansion,
+        };
         let rendered = match &mut self.backend {
             Backend::Drm(drm) => {
                 drm.push_cursor(
@@ -151,21 +180,9 @@ impl State {
                     pointer,
                     &mut self.frame_elements,
                 );
-                drm.render(
-                    &self.desktops,
-                    self.current_desktop,
-                    self.slide.as_ref(),
-                    &self.output,
-                    &mut self.frame_elements,
-                )
+                drm.render(row, &self.output, &mut self.frame_elements)
             }
-            Backend::Winit(winit) => winit.render(
-                &self.desktops,
-                self.current_desktop,
-                self.slide.as_ref(),
-                &self.output,
-                &mut self.frame_elements,
-            ),
+            Backend::Winit(winit) => winit.render(row, &self.output, &mut self.frame_elements),
         }
         .unwrap_or_else(|error| {
             tracing::warn!(%error, "render failed");

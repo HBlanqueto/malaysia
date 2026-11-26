@@ -3,7 +3,7 @@ use std::error::Error;
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
-use smithay::desktop::{Space, Window};
+use smithay::desktop::Space;
 use smithay::input::keyboard::KeyboardSource;
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::{LoopHandle, LoopSignal};
@@ -12,8 +12,7 @@ use smithay::utils::{Physical, Size, Transform};
 use smithay::wayland::fractional_scale::with_fractional_scale;
 
 use crate::effects::Effects;
-use crate::state::{Element, State, elements};
-use crate::workspaces::desktops::Slide;
+use crate::state::{Element, Row, State, elements};
 
 pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
@@ -118,22 +117,12 @@ impl Winit {
 
     pub fn render(
         &mut self,
-        desktops: &[Space<Window>],
-        current: usize,
-        slide: Option<&Slide>,
+        row: Row,
         output: &Output,
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
         let (renderer, mut framebuffer) = self.backend.bind()?;
-        elements(
-            renderer,
-            &self.effects,
-            desktops,
-            current,
-            slide,
-            output,
-            frame,
-        );
+        elements(renderer, &self.effects, row, output, frame);
         let result = self.damage_tracker.render_output(
             renderer,
             &mut framebuffer,

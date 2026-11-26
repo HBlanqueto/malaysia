@@ -37,6 +37,7 @@ use crate::input::{REPEAT_DELAY, REPEAT_RATE};
 use crate::state::{Backend, ClientState, State};
 use crate::window_style::WindowStyle;
 use crate::winit::Winit;
+use crate::workspaces::expansion::Expansion;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let filter = std::env::var("RUST_LOG")
@@ -123,6 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         desktops: vec![space],
         current_desktop: 0,
         slide: None,
+        expansion: Expansion::default(),
         popups: PopupManager::default(),
         needs_redraw: true,
         frame_pending: false,

@@ -4,8 +4,9 @@ This folder is for the row of workspaces: the Desktops, the full-screen
 Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
-This file is a proposal. None of it is built: the only code in the folder is
-`desktops.rs`, the Desktops as they are today.
+This file is a proposal. Of its steps only C, Expansion on a key, is built,
+in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
+Desktops as they are today.
 It was written on 2026-11-26 on a Mac, which cannot build the compositor, so
 that the session on Linux can check it and build from it. The measured tables
 and the sources are in barrierkit,
@@ -31,7 +32,9 @@ Steps 16 to 23, in `desktops.rs`, `state.rs`, `placement.rs`, `window_grab.rs`,
 - a window is resized by its own edges and corners with the same
   `WindowGrab` as the move;
 - Ctrl+Super with F, C, an arrow or R tiles the focused window at once, in
-  `tiling.rs`: Fill, Center, the halves and Return to Previous Size.
+  `tiling.rs`: Fill, Center, the halves and Return to Previous Size;
+- Ctrl+Up spreads the windows of the current Desktop with no overlap and a
+  click picks one, in `expansion/` (step C, step 24 of the roadmap).
 
 ## The row
 
@@ -74,9 +77,8 @@ only for an app that was just launched, on its first Desktop.
 - **The spring.** `spring.rs` at the root of the crate has it in closed form,
   with position and velocity at a time, started from any position and
   velocity, and ω0 and ζ as arguments; `rests` takes ω0 too. `desktops.rs`
-  passes the slide's constants. It divides by the square root of ζ² − 1,
-  which is zero for the critically damped springs of Expansion (ζ 1): the
-  first step that needs that case adds it. The tiling shortcuts landed
+  passes the slide's constants. Step C added the critically damped case
+  (ζ 1) that Expansion uses. The tiling shortcuts landed
   without their spring (45, 1.38); that one, full screen (25, 1.4) and
   Expansion (25, 1 and 16, 1) read it.
   The underdamped case has no user and is not written. BarrierKit's own
@@ -178,7 +180,7 @@ them, and steps A and B need none. Each is one visible result.
 |---|---|---|---|
 | A | Full screen from a client's request: `fullscreen_request` and `unfullscreen_request`, the entry with its saved frame, placement at first commit, `wm_capabilities` with Fullscreen only | `foot --fullscreen`, or mpv with F, fills the display on a Space of its own right of its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | nothing new |
 | B | A key for the same: Control+Super+F | any window goes full screen and back | A |
-| C | Expansion on a key | Control+Up spreads the windows; a click picks one | cascade placement (done); `spring.rs` (exists) |
+| C | Expansion on a key (built) | Control+Up spreads the windows; a click picks one | cascade placement (done); `spring.rs` (exists) |
 | D | Expansion's strip | live thumbnails of every Space, "+" and close | C; the first blur |
 | E | Drag a window to a Space in Expansion | windows move between Desktops | D |
 | F | The hover ring, and Control+arrows while Expansion is open | a ring on the window under the pointer; the window area slides to the next Desktop | C |

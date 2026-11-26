@@ -23,6 +23,12 @@ use crate::state::Element;
 use crate::window_style::corner_radius;
 use corner::Curve;
 
+pub struct Placement {
+    pub geometry: Rectangle<i32, Logical>,
+    pub desktop_offset: Point<i32, Physical>,
+    pub expansion: f64,
+}
+
 pub struct Effects {
     clip: GlesTexProgram,
     lines: GlesPixelProgram,
@@ -45,6 +51,7 @@ struct Look {
     size: Size<i32, Physical>,
     radius: f32,
     main: bool,
+    expansion: f64,
 }
 
 pub struct Drawn {
@@ -104,17 +111,20 @@ impl Effects {
         )));
     }
 
-    #[expect(clippy::too_many_arguments)]
     pub fn push_window(
         &self,
         renderer: &mut GlesRenderer,
         window: &Window,
-        geometry: Rectangle<i32, Logical>,
-        desktop_offset: Point<i32, Physical>,
+        placement: Placement,
         scale: f64,
         main: bool,
         frame: &mut Vec<Element>,
     ) {
+        let Placement {
+            geometry,
+            desktop_offset,
+            expansion,
+        } = placement;
         let surface = window.toplevel().unwrap().wl_surface();
         let location = (geometry.loc - window.geometry().loc).to_physical_precise_round(scale)
             + desktop_offset;
@@ -132,8 +142,9 @@ impl Effects {
         }
         let mut bounds: Rectangle<i32, Physical> = geometry.to_physical_precise_round(scale);
         bounds.loc += desktop_offset;
+        bounds.size = bounds.size.to_f64().upscale(expansion).to_i32_round();
         let (radius, curve) = self.curve.fit(
-            corner_radius(surface) * scale as f32,
+            corner_radius(surface) * (scale * expansion) as f32,
             bounds.size.w.min(bounds.size.h) as f32 / 2.0,
         );
         let shape = Shape {
@@ -150,6 +161,7 @@ impl Effects {
                 size: shape.bounds.size,
                 radius: shape.radius,
                 main,
+                expansion,
             },
         );
         frame.push(Element::Lines(Lines::new(
@@ -172,6 +184,7 @@ impl Effects {
             Element::Clipped(Clipped {
                 surface,
                 shape,
+                factor: expansion,
                 program: self.clip.clone(),
             })
         }));
@@ -179,7 +192,7 @@ impl Effects {
             &drawn,
             shape,
             width,
-            scale,
+            scale * expansion,
             main,
             self.shadow_scheme,
             self.shadow.clone(),

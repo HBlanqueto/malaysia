@@ -1,14 +1,17 @@
 pub fn spring(omega: f64, damping: f64, offset: f64, velocity: f64, seconds: f64) -> (f64, f64) {
-    let spread = (damping * damping - 1.0).sqrt();
-    let slow_rate = omega * (-damping + spread);
-    let fast_rate = omega * (-damping - spread);
-    let slow = (velocity - fast_rate * offset) / (slow_rate - fast_rate);
-    let fast = offset - slow;
-    let slow_decay = (slow_rate * seconds).exp();
-    let fast_decay = (fast_rate * seconds).exp();
+    let decay = damping * omega;
+    let spread = omega * (damping * damping - 1.0).sqrt();
+    let slow = ((spread - decay) * seconds).exp();
+    let fast = ((-spread - decay) * seconds).exp();
+    let even = (slow + fast) / 2.0;
+    let odd = if spread == 0.0 {
+        seconds * slow
+    } else {
+        (slow - fast) / (2.0 * spread)
+    };
     (
-        slow * slow_decay + fast * fast_decay,
-        slow * slow_rate * slow_decay + fast * fast_rate * fast_decay,
+        offset * even + (velocity + decay * offset) * odd,
+        velocity * even - (decay * velocity + omega * omega * offset) * odd,
     )
 }
 
@@ -30,6 +33,26 @@ mod tests {
         let (continued, continued_velocity) = spring(OMEGA, DAMPING, 1.0, 0.0, 0.3);
         assert!((restarted - continued).abs() < 1e-12);
         assert!((restarted_velocity - continued_velocity).abs() < 1e-12);
+
+        let (offset, velocity) = spring(OMEGA, 1.0, 1.0, 0.0, 0.1);
+        let (restarted, restarted_velocity) = spring(OMEGA, 1.0, offset, velocity, 0.2);
+        let (continued, continued_velocity) = spring(OMEGA, 1.0, 1.0, 0.0, 0.3);
+        assert!((restarted - continued).abs() < 1e-12);
+        assert!((restarted_velocity - continued_velocity).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_critically_damped_step_from_rest_is_half_way_near_67_ms_and_at_ninety_percent_near_156_ms()
+    {
+        let first_millisecond_at_or_below = |remaining: f64| {
+            (0..)
+                .find(|&millisecond| {
+                    spring(OMEGA, 1.0, 1.0, 0.0, millisecond as f64 / 1000.0).0 <= remaining
+                })
+                .unwrap()
+        };
+        assert!((66..=69).contains(&first_millisecond_at_or_below(0.5)));
+        assert!((154..=158).contains(&first_millisecond_at_or_below(0.1)));
     }
 
     #[test]

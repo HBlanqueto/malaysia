@@ -31,7 +31,27 @@ pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesTexProgram, GlesError>
 pub struct Clipped {
     pub(super) surface: WaylandSurfaceRenderElement<GlesRenderer>,
     pub(super) shape: Shape,
+    pub(super) factor: f64,
     pub(super) program: GlesTexProgram,
+}
+
+fn scaled_about(
+    rectangle: Rectangle<i32, Physical>,
+    origin: Point<i32, Physical>,
+    factor: f64,
+) -> Rectangle<f64, Physical> {
+    let origin = origin.to_f64();
+    Rectangle::new(
+        origin + (rectangle.loc.to_f64() - origin).upscale(factor),
+        rectangle.size.to_f64().upscale(factor),
+    )
+}
+
+fn round_edges(rectangle: Rectangle<f64, Physical>) -> Rectangle<i32, Physical> {
+    Rectangle::from_extremities(
+        rectangle.loc.to_i32_round(),
+        (rectangle.loc + rectangle.size).to_i32_round(),
+    )
 }
 
 impl Clipped {
@@ -70,7 +90,11 @@ impl Element for Clipped {
     }
 
     fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
-        self.surface.geometry(scale)
+        round_edges(scaled_about(
+            self.surface.geometry(scale),
+            self.shape.bounds.loc,
+            self.factor,
+        ))
     }
 
     fn damage_since(
@@ -78,10 +102,25 @@ impl Element for Clipped {
         scale: Scale<f64>,
         commit: Option<CommitCounter>,
     ) -> DamageSet<i32, Physical> {
-        self.surface.damage_since(scale, commit)
+        let surface_location = self.surface.geometry(scale).loc;
+        let location = self.geometry(scale).loc;
+        self.surface
+            .damage_since(scale, commit)
+            .into_iter()
+            .map(|mut damage| {
+                damage.loc += surface_location;
+                let mut scaled =
+                    scaled_about(damage, self.shape.bounds.loc, self.factor).to_i32_up::<i32>();
+                scaled.loc -= location;
+                scaled
+            })
+            .collect()
     }
 
     fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
+        if self.factor != 1.0 {
+            return OpaqueRegions::default();
+        }
         let bands = self.bands_without_corners(self.surface.geometry(scale).loc);
         self.surface
             .opaque_regions(scale)
@@ -145,5 +184,20 @@ impl RenderElement<GlesRenderer> for Clipped {
                 Uniform::new("rise", self.shape.curve.rise),
             ],
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_rectangle_scaled_about_its_origin_rounds_both_edges_so_neighbours_stay_adjacent() {
+        let origin = Point::from((5, 5));
+        let left = Rectangle::new((15, 5).into(), (10, 10).into());
+        let right = Rectangle::new((25, 5).into(), (10, 10).into());
+        let left = round_edges(scaled_about(left, origin, 0.33));
+        let right = round_edges(scaled_about(right, origin, 0.33));
+        assert_eq!(left.loc.x + left.size.w, right.loc.x);
     }
 }

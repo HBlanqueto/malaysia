@@ -31,6 +31,6 @@ void main() {
     color = color * alpha;
 #endif
 
-    vec2 position = v_coords * frame_from_texture.xy + frame_from_texture.zw;
+    vec2 position = floor(v_coords * frame_from_texture.xy + frame_from_texture.zw) + 0.5;
     gl_FragColor = color * coverage(min(position, frame_size - position), radius);
 }

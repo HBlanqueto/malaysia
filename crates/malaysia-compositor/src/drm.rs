@@ -16,7 +16,6 @@ use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::primary_gpu;
-use smithay::desktop::{Space, Window};
 use smithay::input::pointer::{CursorImageAttributes, CursorImageStatus};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale};
 use smithay::reexports::calloop::LoopHandle;
@@ -29,8 +28,7 @@ use smithay::wayland::compositor::with_states;
 
 use crate::effects::Effects;
 use crate::scale::output_scale;
-use crate::state::{Backend, Element, State, elements};
-use crate::workspaces::desktops::Slide;
+use crate::state::{Backend, Element, Row, State, elements};
 
 type Compositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
@@ -240,21 +238,11 @@ impl Drm {
 
     pub fn render(
         &mut self,
-        desktops: &[Space<Window>],
-        current: usize,
-        slide: Option<&Slide>,
+        row: Row,
         output: &Output,
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
-        elements(
-            &mut self.renderer,
-            &self.effects,
-            desktops,
-            current,
-            slide,
-            output,
-            frame,
-        );
+        elements(&mut self.renderer, &self.effects, row, output, frame);
         let is_empty = self
             .compositor
             .render_frame(

@@ -1,6 +1,6 @@
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-    InputTime, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+    InputTime, KeyState, KeyboardKeyEvent, MouseButton, PointerAxisEvent, PointerButtonEvent,
     PointerMotionEvent,
 };
 use smithay::desktop::{Window, WindowSurfaceType};
@@ -23,9 +23,15 @@ enum KeyAction {
     SwitchDesktop(Direction),
     Tile(Tile),
     RestoreTiled,
+    OpenExpansion,
+    CloseExpansion,
 }
 
-fn key_action(modifiers: &ModifiersState, keysym: Keysym) -> Option<KeyAction> {
+fn key_action(
+    modifiers: &ModifiersState,
+    keysym: Keysym,
+    expansion_open: bool,
+) -> Option<KeyAction> {
     let control_only = modifiers.ctrl && !modifiers.alt && !modifiers.shift && !modifiers.logo;
     let control_super = modifiers.ctrl && modifiers.logo && !modifiers.alt && !modifiers.shift;
     match keysym.raw() {
@@ -33,6 +39,12 @@ fn key_action(modifiers: &ModifiersState, keysym: Keysym) -> Option<KeyAction> {
             KeyAction::SwitchVt((vt - keysyms::KEY_XF86Switch_VT_1 + 1) as i32),
         ),
         keysyms::KEY_BackSpace if modifiers.ctrl && modifiers.alt => Some(KeyAction::Quit),
+        keysyms::KEY_Up | keysyms::KEY_Down if control_only && expansion_open => {
+            Some(KeyAction::CloseExpansion)
+        }
+        keysyms::KEY_Escape if expansion_open => Some(KeyAction::CloseExpansion),
+        _ if expansion_open => None,
+        keysyms::KEY_Up if control_only => Some(KeyAction::OpenExpansion),
         keysyms::KEY_Left if control_only => Some(KeyAction::SwitchDesktop(Direction::Left)),
         keysyms::KEY_Right if control_only => Some(KeyAction::SwitchDesktop(Direction::Right)),
         keysyms::KEY_f | keysyms::KEY_F if control_super => Some(KeyAction::Tile(Tile::Fill)),
@@ -77,7 +89,8 @@ impl State {
                                     None => FilterResult::Forward,
                                 };
                             }
-                            match key_action(modifiers, handle.modified_sym()) {
+                            match key_action(modifiers, handle.modified_sym(), state.expansion.open)
+                            {
                                 Some(action) => {
                                     state.suppressed_keys.push(keycode);
                                     FilterResult::Intercept(Some(action))
@@ -102,6 +115,8 @@ impl State {
                     }
                     Some(KeyAction::Tile(tile)) => self.tile(tile),
                     Some(KeyAction::RestoreTiled) => self.restore_tiled(),
+                    Some(KeyAction::OpenExpansion) => self.open_expansion(event.time()),
+                    Some(KeyAction::CloseExpansion) => self.close_expansion(None, event.time()),
                     None => {}
                 }
             }
@@ -126,7 +141,9 @@ impl State {
                 let pointer = self.seat.get_pointer().unwrap();
                 let serial = SERIAL_COUNTER.next_serial();
                 let state = event.state();
+                let expansion_open = self.expansion.open;
                 if state == ButtonState::Pressed
+                    && !expansion_open
                     && !pointer.is_grabbed()
                     && let Some((window, _)) = self.desktops[self.current_desktop]
                         .element_under(pointer.current_location())
@@ -144,6 +161,14 @@ impl State {
                     },
                 );
                 pointer.frame(self);
+                if event.button() == Some(MouseButton::Left) {
+                    let picking =
+                        expansion_open && state == ButtonState::Released && self.expansion.pressed;
+                    self.expansion.pressed = expansion_open && state == ButtonState::Pressed;
+                    if picking {
+                        self.pick_in_expansion(event.time());
+                    }
+                }
             }
             InputEvent::PointerAxis { event, .. } => {
                 let source = event.source();
@@ -207,6 +232,9 @@ impl State {
         &self,
         location: Point<f64, Logical>,
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
+        if self.expansion.open {
+            return None;
+        }
         self.desktops[self.current_desktop]
             .element_under(location)
             .and_then(|(window, window_location)| {
@@ -231,8 +259,14 @@ mod tests {
             ..Default::default()
         };
         let backspace = Keysym::new(keysyms::KEY_BackSpace);
-        assert_eq!(key_action(&ctrl_alt, backspace), Some(KeyAction::Quit));
-        assert_eq!(key_action(&ModifiersState::default(), backspace), None);
+        assert_eq!(
+            key_action(&ctrl_alt, backspace, false),
+            Some(KeyAction::Quit)
+        );
+        assert_eq!(
+            key_action(&ModifiersState::default(), backspace, false),
+            None
+        );
     }
 
     #[test]
@@ -248,15 +282,15 @@ mod tests {
         let left = Keysym::new(keysyms::KEY_Left);
         let right = Keysym::new(keysyms::KEY_Right);
         assert_eq!(
-            key_action(&ctrl, left),
+            key_action(&ctrl, left, false),
             Some(KeyAction::SwitchDesktop(Direction::Left))
         );
         assert_eq!(
-            key_action(&ctrl, right),
+            key_action(&ctrl, right, false),
             Some(KeyAction::SwitchDesktop(Direction::Right))
         );
-        assert_eq!(key_action(&ctrl_shift, left), None);
-        assert_eq!(key_action(&ctrl_shift, right), None);
+        assert_eq!(key_action(&ctrl_shift, left, false), None);
+        assert_eq!(key_action(&ctrl_shift, right, false), None);
     }
 
     #[test]
@@ -266,7 +300,7 @@ mod tests {
             logo: true,
             ..Default::default()
         };
-        let action = |keysym| key_action(&ctrl_super, Keysym::new(keysym));
+        let action = |keysym| key_action(&ctrl_super, Keysym::new(keysym), false);
         assert_eq!(action(keysyms::KEY_f), Some(KeyAction::Tile(Tile::Fill)));
         assert_eq!(action(keysyms::KEY_F), Some(KeyAction::Tile(Tile::Fill)));
         assert_eq!(action(keysyms::KEY_C), Some(KeyAction::Tile(Tile::Center)));
@@ -277,20 +311,60 @@ mod tests {
             Some(KeyAction::Tile(Tile::Bottom))
         );
         assert_eq!(
-            key_action(&ModifiersState::default(), Keysym::new(keysyms::KEY_f)),
+            key_action(
+                &ModifiersState::default(),
+                Keysym::new(keysyms::KEY_f),
+                false
+            ),
             None
         );
+    }
+
+    #[test]
+    fn ctrl_up_opens_expansion_and_while_open_ctrl_up_ctrl_down_and_escape_close_it_and_desktop_and_tiling_keys_do_nothing()
+     {
+        let ctrl = ModifiersState {
+            ctrl: true,
+            ..Default::default()
+        };
+        let ctrl_super = ModifiersState { logo: true, ..ctrl };
+        let up = Keysym::new(keysyms::KEY_Up);
+        let down = Keysym::new(keysyms::KEY_Down);
+        let escape = Keysym::new(keysyms::KEY_Escape);
+        let left = Keysym::new(keysyms::KEY_Left);
+        assert_eq!(key_action(&ctrl, up, false), Some(KeyAction::OpenExpansion));
+        assert_eq!(key_action(&ctrl, up, true), Some(KeyAction::CloseExpansion));
+        assert_eq!(
+            key_action(&ctrl, down, true),
+            Some(KeyAction::CloseExpansion)
+        );
+        assert_eq!(
+            key_action(&ModifiersState::default(), escape, true),
+            Some(KeyAction::CloseExpansion)
+        );
+        assert_eq!(key_action(&ctrl, down, false), None);
+        assert_eq!(key_action(&ModifiersState::default(), escape, false), None);
+        assert_eq!(
+            key_action(&ctrl_super, up, false),
+            Some(KeyAction::Tile(Tile::Top))
+        );
+        assert_eq!(key_action(&ctrl_super, up, true), None);
+        assert_eq!(key_action(&ctrl, left, true), None);
     }
 
     #[test]
     fn xf86_switch_vt_n_switches_to_vt_n() {
         let modifiers = ModifiersState::default();
         assert_eq!(
-            key_action(&modifiers, Keysym::new(keysyms::KEY_XF86Switch_VT_1)),
+            key_action(&modifiers, Keysym::new(keysyms::KEY_XF86Switch_VT_1), false),
             Some(KeyAction::SwitchVt(1))
         );
         assert_eq!(
-            key_action(&modifiers, Keysym::new(keysyms::KEY_XF86Switch_VT_12)),
+            key_action(
+                &modifiers,
+                Keysym::new(keysyms::KEY_XF86Switch_VT_12),
+                false
+            ),
             Some(KeyAction::SwitchVt(12))
         );
     }

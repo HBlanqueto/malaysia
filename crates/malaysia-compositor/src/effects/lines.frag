@@ -10,7 +10,7 @@ uniform vec4 inner_line;
 float coverage(vec2 edge, float corner_radius);
 
 void main() {
-    vec2 position = v_coords * size;
+    vec2 position = floor(v_coords * size) + 0.5;
     vec2 edge = min(position, size - position);
     float outer_shape = coverage(edge, radius + width);
     float frame_shape = coverage(edge - width, radius);

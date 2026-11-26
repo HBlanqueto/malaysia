@@ -1,7 +1,7 @@
 use std::cell::Cell;
 
 use smithay::desktop::Window;
-use smithay::utils::{FrameExtents, IsAlive, Logical, Point, Rectangle, Serial, Size};
+use smithay::utils::{FrameExtents, Logical, Point, Rectangle, Serial, Size};
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg::SurfaceCachedState;
 
@@ -97,12 +97,11 @@ impl State {
         if self.seat.get_pointer().unwrap().is_grabbed() {
             return None;
         }
-        let desktop = &self.desktops[self.current_desktop];
-        let window = desktop.elements().rev().find(|window| window.alive())?;
-        let frame = desktop
-            .element_geometry(window)
+        let window = self.top_window()?;
+        let frame = self.desktops[self.current_desktop]
+            .element_geometry(&window)
             .filter(|frame| !frame.size.is_empty())?;
-        Some((window.clone(), frame))
+        Some((window, frame))
     }
 
     fn move_resize(&mut self, window: &Window, target: Rectangle<i32, Logical>) {

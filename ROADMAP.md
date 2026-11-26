@@ -17,8 +17,10 @@ corner of macOS with an outline outside, an inner line inside and the macOS
 shadow, Ctrl+Left and Ctrl+Right slide between Desktops, and a window is
 dragged by its own title bar and carried along to the next Desktop, a new
 window opens in a cascade, a window is resized by its own edges, and
-Ctrl+Super with F, C, an arrow or R tiles the focused window at once. Next is
-Expansion on a key. `linux-dmabuf` waited for a real GPU, which the
+Ctrl+Super with F, C, an arrow or R tiles the focused window at once, and
+Ctrl+Up spreads the windows of the Desktop (Expansion on a key). Next is
+Expansion's strip, step D of
+[crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -56,7 +58,8 @@ scale of 5/3):
 | 20 | A dragged window goes along to the next Desktop | holding a window by its title bar and pressing Ctrl+Left or Ctrl+Right takes it to that Desktop, still under the pointer | done `ca36aeb` |
 | 21 | Cascade placement: `WINDOW_CASCADE_STEP` and `WINDOW_CENTER_TOP` | the first window of a Desktop opens centred with a quarter of the free height above it, each next one 29 right and 29 down from the one in front, and a dialog over its parent | done `f0df1b9` |
 | 22 | Interactive resize: `xdg_toplevel.resize` and a pointer grab | a window resized by dragging its own edges and corners, the opposite edge staying still | done `1ee5505` |
-| 23 | Tiling by keyboard: Fill, Center, the halves and Return to Previous Size | Ctrl+Super with F, C, an arrow or R fills the display, centres the window, puts it in a half, or returns it to the frame it had before | done |
+| 23 | Tiling by keyboard: Fill, Center, the halves and Return to Previous Size | Ctrl+Super with F, C, an arrow or R fills the display, centres the window, puts it in a half, or returns it to the frame it had before | done `219f8d3` |
+| 24 | Expansion on a key: the layout fitted to macOS, the spring of ω0 25, the window drawn at a factor | Ctrl+Up spreads the windows of the Desktop with no overlap and one scale, a click picks one, Escape or Ctrl+Up again puts them back | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -67,8 +70,8 @@ In the order they will be taken, one at a time. On 2026-11-26 the user asked to
 take the macOS window model first, so these come before the rest:
 
 1. Expansion, the Mission Control of this compositor: steps C to F and I of
-   [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md),
-   starting with C, Expansion on a key.
+   [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md).
+   Step C, Expansion on a key, is done; D, the strip, is next.
 2. The spring of a tile (measured: ω0 45, ζ 1.38, 240 ms), then pairs and
    quarters, then restoring a tiled window when it is dragged away.
 
@@ -334,9 +337,34 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - Each frame that renders nothing inserts a one-shot timer to send its frame
   callbacks one refresh later; a reusable timer is not done. The last frames
   of a slide move no pixel, so each slide inserts several.
+- Expansion's layout is the fit of the Mac's script, not macOS itself: within
+  3 points for windows alone, pairs and chains of three, 11 to 33 off for a
+  pair in a corner and far off for cascades of four or more (nine cascaded
+  windows end at scale .513 where macOS gave .434).
+- The margins of Expansion's area come from one display size, and the bottom
+  one assumes no Dock.
+- A new layout while Expansion is open (a window opened, closed or resized)
+  jumps to its slots; it is not animated.
+- A popup mapped while Expansion is open is drawn unscaled.
+- The frame lines stay one pixel at every scale of Expansion.
+- A click during Expansion's closing animation reaches the windows' real
+  frames.
+- Ctrl+Up, Ctrl+Down and Escape no longer reach apps while Expansion is open,
+  and Ctrl+Up never does.
+- Expansion has no strip, no hover ring, no title, no swipe and no hot corner.
+- Ctrl+Left and Ctrl+Right do nothing while Expansion is open.
+- A resize of the display while Expansion is open keeps the old slots.
+- Ctrl+Left or Ctrl+Right during Expansion's closing motion draws the Desktop
+  it reaches with the slots and scale of the one it left.
+- A slot can pass the margin of Expansion's area by 2 at the sides and 3 at
+  the top and bottom, which is the slack of the fit.
+- `foot` snaps to its cell grid at its first configure after a fractional
+  scale, so it loses a few pixels of height the first time its state changes.
 
 ## Not verified
 
+- Expansion on a key (step 24): nested only, at scales 1 and 5/3, with
+  `foot`. Not checked: directly on a display.
 - Tiling by keyboard (step 23): nested, at scale 1, with `foot` and a Qt 6
   app. Not checked: GTK 4, directly on a display, and a fractional scale.
 - Interactive resize (step 22): nested, at scale 1, with `foot` and a Qt 6
