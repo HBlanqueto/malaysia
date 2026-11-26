@@ -11,8 +11,8 @@ Last update: 2026-11-25.
 
 **Now:** the compositor runs directly on a display and nested in a Wayland
 session, apps show their menus, a HiDPI display gets a scale, whole or
-fractional, and a BarrierKit app leaves its frame to the compositor. Next is
-layer shell. `linux-dmabuf` waited for a real GPU, which the development
+fractional, a BarrierKit app leaves its frame to the compositor, and a
+signal stops the compositor cleanly. Next is layer shell. `linux-dmabuf` waited for a real GPU, which the development
 laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -39,6 +39,8 @@ scale of 5/3):
 | 10 | Output scale: 1 to 4, chosen from the display's physical size and mode with mutter's rule; nested, the host's scale | windows, menus and the cursor twice as large on a HiDPI panel | done `17d9fe9` |
 | 11 | Fractional scale: `wp_fractional_scale_v1` and `wp_viewporter`, and mutter's fractional rule (steps of a half, a third and a quarter that divide the mode) | a terminal drawn sharp at 5/3 | done `44fba23` |
 | 12 | `limitless`, the protocol shared with BarrierKit: the `limitless_window_style_v1` global at version 1 | a BarrierKit app leaves its frame and its round corners to the compositor, which does not draw them yet | done `da4b026` |
+| 13 | Signals: `calloop`'s `signals` feature, so SIGTERM, SIGINT and SIGHUP stop the event loop | `./dev.sh demo` ended with Ctrl-C, or the compositor ended with `kill`, logs the signal and leaves no socket behind | done |
+| review | An audit of the code on the Linux laptop | nested, the compositor stops when its host goes away and releases the keys when the host takes the keyboard; a menu whose grab is refused is closed | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -57,7 +59,7 @@ In the order they will be taken, one at a time:
    screen capture portal.
 4. Hotplug and several displays.
 5. What a laptop needs: display power and idle, touchpad settings such as
-   tap-to-click, signal handling.
+   tap-to-click.
 6. Design tokens from `ctdesign`, window management (placement, move, resize),
    the rest of the shell and the apps.
 
@@ -116,11 +118,12 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - Displays and GPUs are read once at start: no hotplug.
 - The compositor must be started from the active VT; starting it from an
   inactive one is an error.
-- There is no signal handling: when the process is killed, logind or seatd
-  give the VT back, and its `wayland-N` socket file stays behind until the
-  next start takes the name back.
-- A menu whose grab is refused, because its window lost the focus, stays open.
-  `xdg_popup.grab` asks for it to be dismissed.
+- A display mode is trusted as the kernel reports it; one with a zero total or
+  a zero refresh would panic the compositor.
+- Nested, every pointer motion draws a frame although the host draws the
+  cursor. The one-line change waits for a before-and-after measurement.
+- Each frame that renders nothing inserts a one-shot timer to send its frame
+  callbacks one refresh later; a reusable timer is not done.
 
 ## Not verified
 
@@ -129,8 +132,23 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   run on virtual ones (vkms and QEMU's virtio GPU) with software rendering,
   and with QEMU's keyboard and mouse. A real GPU driver on the direct backend,
   a touchpad and several GPUs are untested.
-- The hardware cursor plane: on the virtual displays the cursor was always
-  drawn into the frame.
+- The hardware cursor plane: built without `renderer_pixman`, Smithay puts a
+  client's cursor on the plane only when it is an ARGB8888 `wl_shm` buffer
+  drawn at exactly the output's scale, uncropped, on an untransformed output
+  and no larger than the plane; the white fallback square and every other
+  cursor are drawn into the frame. Which path a real display takes has not
+  been observed.
+- Signals on the direct backend: the stop was checked nested only.
+- A second signal while the compositor is stopping: by calloop's code it stays
+  blocked until the signal source is dropped at the end of `main`, and then
+  ends the process with that signal's status. Not exercised.
+- A refused menu grab that closes the menu, and the keys released when the
+  host takes the keyboard from the nested compositor: both follow the protocol
+  and niri, and neither was exercised, because nothing here can inject input.
+- A page flip that the kernel never reports freezes the screen until the next
+  VT switch; there is no page-flip watchdog.
+- If the session cannot be resumed, drawing is retried on every refresh with a
+  warning each time.
 - A frame lost while the session is paused, and starting from a VT that is not
   the active one.
 - Scroll, drag and drop and the clipboard.

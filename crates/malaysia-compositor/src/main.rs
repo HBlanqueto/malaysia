@@ -14,6 +14,7 @@ use limitless::server::style::limitless_window_style_v1::limitless_window_style_
 use smithay::desktop::{PopupManager, Space};
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{SeatState, keyboard::XkbConfig};
+use smithay::reexports::calloop::signals::{Signal, Signals};
 use smithay::reexports::calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic};
 use smithay::reexports::wayland_server::Display;
 use smithay::wayland::compositor::CompositorState;
@@ -49,12 +50,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let nested = std::env::var_os("WAYLAND_DISPLAY").is_some();
 
     let mut event_loop = EventLoop::<State>::try_new()?;
+    let signals = Signals::new(&[Signal::SIGTERM, Signal::SIGINT, Signal::SIGHUP])?;
     let display = Display::<State>::new()?;
     let display_handle = display.handle();
     let loop_handle = event_loop.handle();
     let (backend, output) = if device.is_none() && nested {
         tracing::info!("winit backend");
-        let (winit, output) = Winit::init(&display_handle, &loop_handle)?;
+        let (winit, output) = Winit::init(&display_handle, &loop_handle, event_loop.get_signal())?;
         (Backend::Winit(Box::new(winit)), output)
     } else {
         let (drm, output) = Drm::init(device, &display_handle, &loop_handle)?;
@@ -80,6 +82,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(PostAction::Continue)
         },
     )?;
+    loop_handle.insert_source(signals, |event, _, state| {
+        tracing::info!(signal = ?event.signal(), "stopping: signal");
+        state.loop_signal.stop();
+    })?;
 
     tracing::info!(socket = %socket_name.to_string_lossy(), "listening");
 

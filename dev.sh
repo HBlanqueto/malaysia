@@ -8,7 +8,7 @@ log="$XDG_RUNTIME_DIR/malaysia/demo.log"
 target/debug/malaysia-compositor >"$log" 2>&1 &
 compositor=$!
 client=
-trap 'kill "$compositor" $client 2>/dev/null || true' EXIT
+trap 'kill "$compositor" $client 2>/dev/null || true; wait "$compositor" 2>/dev/null || true' EXIT
 trap exit INT TERM
 socket=
 while [ -z "$socket" ]; do

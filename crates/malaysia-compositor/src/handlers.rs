@@ -125,10 +125,11 @@ impl XdgShellHandler for State {
         let focused_root = keyboard
             .current_focus()
             .map(|focus| self.root_surface(&focus));
-        let kind = PopupKind::Xdg(surface);
+        let kind = PopupKind::Xdg(surface.clone());
         let Some(root) = find_popup_root_surface(&kind).ok().filter(|root| {
             self.window_for_surface(root).is_some() && focused_root.as_ref() == Some(root)
         }) else {
+            surface.send_popup_done();
             return;
         };
         let Ok(mut grab) = self.popups.grab_popup(root, kind, &self.seat, serial) else {

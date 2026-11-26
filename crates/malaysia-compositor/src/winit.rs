@@ -4,8 +4,9 @@ use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::desktop::{Space, Window};
+use smithay::input::keyboard::KeyboardSource;
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
-use smithay::reexports::calloop::LoopHandle;
+use smithay::reexports::calloop::{LoopHandle, LoopSignal};
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size, Transform};
 use smithay::wayland::fractional_scale::with_fractional_scale;
@@ -16,6 +17,15 @@ pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
     damage_tracker: OutputDamageTracker,
     age: usize,
+}
+
+struct StopLoopOnDrop(LoopSignal);
+
+impl Drop for StopLoopOnDrop {
+    fn drop(&mut self) {
+        tracing::info!("the winit backend ended");
+        self.0.stop();
+    }
 }
 
 fn mode(size: Size<i32, Physical>) -> Mode {
@@ -29,6 +39,7 @@ impl Winit {
     pub fn init(
         display_handle: &DisplayHandle,
         loop_handle: &LoopHandle<'static, State>,
+        loop_signal: LoopSignal,
     ) -> Result<(Winit, Output), Box<dyn Error>> {
         let (backend, event_loop) = winit::init::<GlesRenderer>()?;
         let output = Output::new(
@@ -51,30 +62,39 @@ impl Winit {
         );
         output.create_global::<State>(display_handle);
 
-        loop_handle.insert_source(event_loop, |event, _, state| match event {
-            WinitEvent::Resized { size, scale_factor } => {
-                state.output.change_current_state(
-                    Some(mode(size)),
-                    None,
-                    Some(Scale::Fractional(scale_factor)),
-                    None,
-                );
-                for window in state.space.elements() {
-                    window.with_surfaces(|_, states| {
-                        with_fractional_scale(states, |fractional| {
-                            fractional.set_preferred_scale(scale_factor)
-                        })
-                    });
+        let stop_loop_on_drop = StopLoopOnDrop(loop_signal);
+        loop_handle.insert_source(event_loop, move |event, _, state| {
+            let _ = &stop_loop_on_drop;
+            match event {
+                WinitEvent::Resized { size, scale_factor } => {
+                    state.output.change_current_state(
+                        Some(mode(size)),
+                        None,
+                        Some(Scale::Fractional(scale_factor)),
+                        None,
+                    );
+                    for window in state.space.elements() {
+                        window.with_surfaces(|_, states| {
+                            with_fractional_scale(states, |fractional| {
+                                fractional.set_preferred_scale(scale_factor)
+                            })
+                        });
+                    }
+                    state.needs_redraw = true;
                 }
-                state.needs_redraw = true;
+                WinitEvent::Redraw => state.render(),
+                WinitEvent::CloseRequested => {
+                    tracing::info!("stopping: the host closed the window");
+                    state.loop_signal.stop();
+                }
+                WinitEvent::Input(event) => state.process_input_event(event),
+                WinitEvent::Focus(false) => {
+                    let keyboard = state.seat.get_keyboard().unwrap();
+                    keyboard.release_source(state, KeyboardSource::Physical);
+                    state.suppressed_keys.clear();
+                }
+                _ => {}
             }
-            WinitEvent::Redraw => state.render(),
-            WinitEvent::CloseRequested => {
-                tracing::info!("stopping: the host closed the window");
-                state.loop_signal.stop();
-            }
-            WinitEvent::Input(event) => state.process_input_event(event),
-            _ => {}
         })?;
         Ok((
             Winit {
