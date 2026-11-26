@@ -15,10 +15,12 @@ use smithay::input::{SeatState, keyboard::XkbConfig};
 use smithay::reexports::calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic};
 use smithay::reexports::wayland_server::Display;
 use smithay::wayland::compositor::CompositorState;
+use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 use smithay::wayland::socket::ListeningSocketSource;
+use smithay::wayland::viewporter::ViewporterState;
 use tracing_subscriber::{filter::Targets, fmt, prelude::*};
 
 use crate::drm::Drm;
@@ -82,6 +84,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut seat = seat_state.new_wl_seat(&display_handle, "seat0");
     seat.add_keyboard(XkbConfig::default(), REPEAT_DELAY, REPEAT_RATE)?;
     seat.add_pointer();
+
+    FractionalScaleManagerState::new::<State>(&display_handle);
+    ViewporterState::new::<State>(&display_handle);
 
     let mut state = State {
         compositor_state: CompositorState::new::<State>(&display_handle),

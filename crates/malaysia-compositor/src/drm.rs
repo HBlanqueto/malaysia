@@ -28,7 +28,7 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point};
 use smithay::wayland::compositor::with_states;
 
-use crate::scale::integer_scale;
+use crate::scale::output_scale;
 use crate::state::{Backend, CLEAR_COLOR, Element, State, elements};
 
 const CURSOR_SIZE: i32 = 16;
@@ -89,7 +89,7 @@ impl Drm {
             .ok_or("connector has no mode")?;
         let (width_mm, height_mm) = connector.size().unwrap_or((0, 0));
         let output_mode = Mode::from(mode);
-        let scale = integer_scale((width_mm as i32, height_mm as i32).into(), output_mode.size);
+        let scale = output_scale((width_mm as i32, height_mm as i32).into(), output_mode.size);
         tracing::info!(
             connector = ?connector.interface(),
             id = connector.interface_id(),
@@ -131,7 +131,7 @@ impl Drm {
         output.change_current_state(
             Some(output_mode),
             None,
-            Some(Scale::Integer(scale)),
+            Some(Scale::Fractional(scale)),
             Some((0, 0).into()),
         );
         output.create_global::<State>(display_handle);

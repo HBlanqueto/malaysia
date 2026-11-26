@@ -88,7 +88,7 @@
             };
           hidpiEdid = pkgs.runCommand "hidpi-edid" { } ''
             mkdir -p $out/lib/firmware/edid
-            ${pkgs.qemu_test}/bin/qemu-edid -x 1600 -y 900 -d 270 -o $out/lib/firmware/edid/hidpi.bin
+            ${pkgs.qemu_test}/bin/qemu-edid -x 1600 -y 900 -d 225 -o $out/lib/firmware/edid/hidpi.bin
           '';
         in
         {
@@ -215,14 +215,14 @@
                 assert machine.succeed("cat /tmp/exit").strip() == "0"
                 assert machine.succeed("fgconsole").strip() == "1"
                 assert "drm backend path=/dev/dri/card0" in compositor_log
-                assert "scale=1" in compositor_log
+                assert "scale=1.0" in compositor_log
                 for line in compositor_log.splitlines():
                     assert "ERROR" not in line, line
                 machine.shutdown()
 
                 try:
                     hidpi.wait_for_file("/run/user/1000/wayland-1", timeout=600)
-                    hidpi.succeed("grep -q 'mode chosen.*width=1600 height=900.*scale=2' /tmp/malaysia.log")
+                    hidpi.succeed("grep -q 'mode chosen.*width=1600 height=900.*scale=1.6666666666666667' /tmp/malaysia.log")
                     hidpi.wait_until_succeeds("[ $(grep -c 'New device' /tmp/malaysia.log) -ge $(ls /dev/input/event* | wc -l) ]", timeout=120)
                     hidpi.send_monitor_command("mouse_move 300 300")
                     for _ in range(60):
@@ -231,7 +231,7 @@
                             break
                         time.sleep(1)
                     print("hidpi fallback", bounds(fallback), len(fallback))
-                    assert bounds(fallback)[2:] == (32, 32) and len(fallback) == 1024
+                    assert bounds(fallback)[2:] == (27, 27) and len(fallback) == 729
                     hidpi.send_monitor_command("mouse_move 5000 5000")
                     for _ in range(60):
                         corner = white("hidpi-corner", hidpi)
@@ -247,7 +247,8 @@
                     hidpi.wait_for_text("malaysia", timeout=300)
                     hidpi.screenshot("hidpi-typed")
                     hidpi.succeed("grep -q 'wl_output#[0-9]*\\.scale(2)' /tmp/foot.log")
-                    hidpi.succeed("grep -q 'set_buffer_scale(2)' /tmp/foot.log")
+                    hidpi.succeed("grep -q 'preferred_scale(200)' /tmp/foot.log")
+                    hidpi.succeed("grep -q 'set_destination(' /tmp/foot.log")
                 finally:
                     print(hidpi.execute("grep -v 'GL Extensions\\|EGL.*extensions' /tmp/malaysia.log")[1])
               '';

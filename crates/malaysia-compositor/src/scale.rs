@@ -4,8 +4,8 @@ const MOBILE_TARGET_DPI: f64 = 135.0;
 const LARGE_TARGET_DPI: f64 = 110.0;
 const LARGE_MIN_DIAGONAL_INCHES: f64 = 20.0;
 const MM_PER_INCH: f64 = 25.4;
-const INTEGER_BIAS: f64 = 0.125;
 const MAX_SCALE: i32 = 4;
+const MAX_DENOMINATOR: i32 = 4;
 const MIN_LOGICAL_AREA: i32 = 600 * 600;
 const ASPECT_RATIOS_AS_SIZE: [(i32, i32); 6] = [
     (1600, 900),
@@ -16,9 +16,9 @@ const ASPECT_RATIOS_AS_SIZE: [(i32, i32); 6] = [
     (16, 10),
 ];
 
-pub fn integer_scale(size_mm: Size<i32, Raw>, mode_size: Size<i32, Physical>) -> i32 {
+pub fn output_scale(size_mm: Size<i32, Raw>, mode_size: Size<i32, Physical>) -> f64 {
     if size_mm.w <= 0 || size_mm.h <= 0 || ASPECT_RATIOS_AS_SIZE.contains(&(size_mm.w, size_mm.h)) {
-        return 1;
+        return 1.0;
     }
     let diagonal_inches = f64::from(size_mm.w).hypot(f64::from(size_mm.h)) / MM_PER_INCH;
     let target_dpi = if diagonal_inches < LARGE_MIN_DIAGONAL_INCHES {
@@ -27,45 +27,53 @@ pub fn integer_scale(size_mm: Size<i32, Raw>, mode_size: Size<i32, Physical>) ->
         LARGE_TARGET_DPI
     };
     let dpi = f64::from(mode_size.w).hypot(f64::from(mode_size.h)) / diagonal_inches;
-    let ideal = dpi / target_dpi - INTEGER_BIAS;
-    (1..=MAX_SCALE)
-        .filter(|scale| {
-            mode_size.w % scale == 0
-                && mode_size.h % scale == 0
-                && (mode_size.w / scale) * (mode_size.h / scale) >= MIN_LOGICAL_AREA
+    let ideal = dpi / target_dpi;
+    (1..=MAX_DENOMINATOR)
+        .flat_map(|denominator| {
+            (denominator..=MAX_SCALE * denominator).map(move |numerator| (numerator, denominator))
         })
+        .filter(|&(numerator, denominator)| {
+            mode_size.w * denominator % numerator == 0
+                && mode_size.h * denominator % numerator == 0
+                && (mode_size.w * denominator / numerator) * (mode_size.h * denominator / numerator)
+                    >= MIN_LOGICAL_AREA
+        })
+        .map(|(numerator, denominator)| f64::from(numerator) / f64::from(denominator))
         .min_by(|a, b| {
-            (f64::from(*a) - ideal)
+            (a - ideal)
                 .abs()
-                .total_cmp(&(f64::from(*b) - ideal).abs())
+                .total_cmp(&(b - ideal).abs())
+                .then(a.total_cmp(b))
         })
-        .unwrap_or(1)
+        .unwrap_or(1.0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn scale(size_mm: (i32, i32), mode_size: (i32, i32)) -> i32 {
-        integer_scale(size_mm.into(), mode_size.into())
+    fn scale(size_mm: (i32, i32), mode_size: (i32, i32)) -> f64 {
+        output_scale(size_mm.into(), mode_size.into())
     }
 
     #[test]
-    fn matches_the_integer_scales_mutter_expects() {
+    fn matches_the_fractional_scales_mutter_expects() {
         for (size_mm, mode_size, expected) in [
-            ((65, 129), (720, 1440), 1),
-            ((68, 144), (1080, 2280), 2),
-            ((64, 142), (1080, 2400), 2),
-            ((286, 179), (2560, 1600), 2),
-            ((303, 202), (2400, 1600), 1),
-            ((290, 180), (3840, 2400), 2),
-            ((300, 190), (3840, 2400), 2),
-            ((509, 286), (1920, 1080), 1),
-            ((509, 286), (3840, 2160), 2),
-            ((598, 336), (3840, 2160), 1),
-            ((708, 398), (3840, 2160), 1),
-            ((554, 312), (3840, 2160), 1),
-            ((522, 294), (3840, 2160), 2),
+            ((65, 129), (720, 1440), 5.0 / 3.0),
+            ((68, 144), (1080, 2280), 2.5),
+            ((64, 142), (1080, 2400), 8.0 / 3.0),
+            ((286, 179), (2560, 1600), 5.0 / 3.0),
+            ((303, 202), (2400, 1600), 4.0 / 3.0),
+            ((290, 180), (3840, 2400), 2.5),
+            ((300, 190), (3840, 2400), 2.5),
+            ((509, 286), (1920, 1080), 1.0),
+            ((509, 286), (3840, 2160), 5.0 / 3.0),
+            ((598, 336), (3840, 2160), 1.5),
+            ((708, 398), (3840, 2160), 1.25),
+            ((554, 312), (3840, 2160), 5.0 / 3.0),
+            ((522, 294), (3840, 2160), 5.0 / 3.0),
+            ((150, 80), (1600, 900), 2.0),
+            ((180, 100), (1600, 900), 5.0 / 3.0),
         ] {
             assert_eq!(
                 scale(size_mm, mode_size),
@@ -81,13 +89,7 @@ mod tests {
             .into_iter()
             .chain(ASPECT_RATIOS_AS_SIZE)
         {
-            assert_eq!(scale(size_mm, (3840, 2160)), 1, "{size_mm:?}");
+            assert_eq!(scale(size_mm, (3840, 2160)), 1.0, "{size_mm:?}");
         }
-    }
-
-    #[test]
-    fn a_150_by_80_mm_panel_gives_two_at_1600x900_and_one_at_1280x800() {
-        assert_eq!(scale((150, 80), (1600, 900)), 2);
-        assert_eq!(scale((150, 80), (1280, 800)), 1);
     }
 }

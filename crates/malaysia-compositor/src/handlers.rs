@@ -13,7 +13,9 @@ use smithay::utils::{IsAlive, SERIAL_COUNTER, Serial};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
     CompositorClientState, CompositorHandler, CompositorState, get_parent, is_sync_subsurface,
+    with_states,
 };
+use smithay::wayland::fractional_scale::{FractionalScaleHandler, with_fractional_scale};
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::pointer_constraints::PointerConstraintsHandler;
 use smithay::wayland::selection::SelectionHandler;
@@ -231,5 +233,14 @@ impl DataDeviceHandler for State {
 impl WaylandDndGrabHandler for State {}
 
 impl OutputHandler for State {}
+
+impl FractionalScaleHandler for State {
+    fn new_fractional_scale(&mut self, surface: WlSurface) {
+        let scale = self.output.current_scale().fractional_scale();
+        with_states(&surface, |states| {
+            with_fractional_scale(states, |fractional| fractional.set_preferred_scale(scale))
+        });
+    }
+}
 
 smithay::delegate_dispatch2!(State);

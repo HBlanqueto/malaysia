@@ -10,13 +10,13 @@ Last update: 2026-11-25.
 ## Where we are
 
 **Now:** the compositor runs directly on a display and nested in a Wayland
-session, apps show their menus, and a HiDPI display gets a whole-number
-scale. Next is fractional scale; `linux-dmabuf` waits for a real GPU. Nothing
+session, apps show their menus, and a HiDPI display gets a scale, whole or
+fractional. Next is layer shell; `linux-dmabuf` waits for a real GPU. Nothing
 has run on real hardware yet.
 
-The display after the last finished step (step 10: on a NixOS machine whose
-display reports a small 1600x900 panel, directly on the display, a terminal
-drawn at scale 2):
+The display after the last finished step (step 11: on a NixOS machine whose
+display reports a 180x100 mm panel at 1600x900, directly on the display, a
+terminal drawn at a scale of 5/3):
 
 ![The display after the last finished step](screen.png)
 
@@ -34,7 +34,8 @@ drawn at scale 2):
 | 8b | Cursor | a pointer that can be seen on a real display | done `aa62ca9` |
 | review | The whole code read against Smithay's source | fixes for focus, hidden errors and a retried frame | done `afa81d4` |
 | 9 | Popups: `xdg_popup` with its keyboard and pointer grab | a menu, its submenus and a context menu that stays inside the display | done `5c5d116` |
-| 10 | Output scale: 1 to 4, chosen from the display's physical size and mode with mutter's rule; nested, the host's scale | windows, menus and the cursor twice as large on a HiDPI panel | done |
+| 10 | Output scale: 1 to 4, chosen from the display's physical size and mode with mutter's rule; nested, the host's scale | windows, menus and the cursor twice as large on a HiDPI panel | done `17d9fe9` |
+| 11 | Fractional scale: `wp_fractional_scale_v1` and `wp_viewporter`, and mutter's fractional rule (steps of a half, a third and a quarter that divide the mode) | a terminal drawn sharp at 5/3 | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -48,15 +49,13 @@ In the order they will be taken, one at a time:
    branch: it only turns on with a hardware render node, and the test machines
    have none, so it waits for a real GPU to be checked on. The steps below go
    ahead meanwhile.
-2. Fractional scale (`wp_fractional_scale_v1` and `wp_viewporter`): the
-   displays whose right scale is 1.25, 1.5 or 1.75 stay at 1 until then.
-3. Layer shell, which the shell needs to place its surfaces.
-4. `bk` returns, with its first two components: the lock screen and the
+2. Layer shell, which the shell needs to place its surfaces.
+3. `bk` returns, with its first two components: the lock screen and the
    screen capture portal.
-5. Hotplug and several displays.
-6. What a laptop needs: display power and idle, touchpad settings such as
+4. Hotplug and several displays.
+5. What a laptop needs: display power and idle, touchpad settings such as
    tap-to-click, signal handling.
-7. Design tokens from `ctdesign`, window management (placement, move, resize),
+6. Design tokens from `ctdesign`, window management (placement, move, resize),
    the rest of the shell and the apps.
 
 ## How the desktop is put together
@@ -85,14 +84,20 @@ prove is marked here as **not verified on hardware** until someone runs it.
 - When an app closes its own menu, the keyboard focus returns to the window on
   the next key or pointer event, not at once.
 - Every window opens at the top left corner, over the others.
-- The scale is a whole number. A 14 inch 1440p panel, a 16 inch 2560x1600
-  panel and a 27 inch 4K monitor stay at 1; a 14 inch 2880x1800 panel gets 2.
-- The scale cannot be set by hand: a display that reports a wrong size gets a
-  wrong scale, and one that reports none (a TV, a projector) gets 1.
-- At scale 2 a client that draws with `wl_shm` fills four times the pixels on
-  the CPU, until `linux-dmabuf`.
+- The scale follows mutter's rule and cannot be set by hand. A 13.3 inch
+  2560x1600 panel and a 14 inch 2880x1800 panel get 5/3 (KWin would give 2,
+  niri 1.75), a 16 inch 2560x1600 panel 4/3, a 27 inch 4K monitor 1.5. A
+  display that reports a wrong size gets a wrong scale, and one that reports
+  none (a TV, a projector) gets 1.
+- At 1.25 and 1.75 (a 14 inch 1920x1200 panel, for example) a decoration drawn
+  as a subsurface, such as foot's title bar, sits one pixel low and loses a
+  row: Smithay rounds a half pixel that way.
+- A client without `wp_fractional_scale_v1` (GTK 3) draws at the next whole
+  scale and is scaled down: the right size, a little soft.
+- Above scale 1 a client that draws with `wl_shm` fills up to four times the
+  pixels on the CPU, until `linux-dmabuf`.
 - A client is not told which display its cursor is on, so some toolkits draw
-  the cursor at scale 1 and it looks soft at scale 2. foot and GTK are right.
+  the cursor at scale 1 and it looks soft above it. foot and GTK are right.
 - The fallback cursor is a white square: it shows where no client sets its
   own cursor. Cursor themes come later.
 - The pointer starts at the top left corner.
@@ -120,7 +125,8 @@ prove is marked here as **not verified on hardware** until someone runs it.
   the active one.
 - Scroll, drag and drop and the clipboard.
 - Scale on a real panel: the rule was checked with mutter's own table of
-  displays and on a virtual display made to report a small panel. A client's
-  own cursor at scale 2 on the direct backend was not checked.
+  displays and on a virtual display made to report a small panel, at 5/3. A
+  client's own cursor above scale 1 on the direct backend, GTK 4 and Qt 6
+  were not checked.
 - Menus were checked with one GTK 3 app. A Qt app and a popup that asks to be
   moved after it is shown are untested.

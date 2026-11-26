@@ -8,6 +8,7 @@ use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size, Transform};
+use smithay::wayland::fractional_scale::with_fractional_scale;
 
 use crate::state::{CLEAR_COLOR, Element, State, elements};
 
@@ -58,6 +59,13 @@ impl Winit {
                     Some(Scale::Fractional(scale_factor)),
                     None,
                 );
+                for window in state.space.elements() {
+                    window.with_surfaces(|_, states| {
+                        with_fractional_scale(states, |fractional| {
+                            fractional.set_preferred_scale(scale_factor)
+                        })
+                    });
+                }
                 state.needs_redraw = true;
             }
             WinitEvent::Redraw => state.render(),
