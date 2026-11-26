@@ -1,6 +1,6 @@
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::desktop::{
-    PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
+    PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Space, Window,
     find_popup_root_surface, get_popup_toplevel_coords,
 };
 use smithay::input::pointer::{CursorImageStatus, Focus};
@@ -81,7 +81,7 @@ impl XdgShellHandler for State {
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new_wayland_window(surface);
-        self.space.map_element(window.clone(), (0, 0), false);
+        self.desktops[self.current_desktop].map_element(window.clone(), (0, 0), false);
         self.focus_window(&window, SERIAL_COUNTER.next_serial());
     }
 
@@ -96,8 +96,7 @@ impl XdgShellHandler for State {
         }
         keyboard.unset_grab(self);
         let serial = SERIAL_COUNTER.next_serial();
-        let next = self
-            .space
+        let next = self.desktops[self.current_desktop]
             .elements()
             .rev()
             .find(|window| window.alive() && window.toplevel().unwrap() != &surface)
@@ -173,8 +172,9 @@ impl State {
     }
 
     fn window_for_surface(&self, surface: &WlSurface) -> Option<&Window> {
-        self.space
-            .elements()
+        self.desktops
+            .iter()
+            .flat_map(Space::elements)
             .find(|window| window.toplevel().unwrap().wl_surface() == surface)
     }
 
@@ -187,8 +187,10 @@ impl State {
             return;
         };
         let (Some(mut target), Some(window_geometry)) = (
-            self.space.output_geometry(&self.output),
-            self.space.element_geometry(window),
+            self.desktops[self.current_desktop].output_geometry(&self.output),
+            self.desktops
+                .iter()
+                .find_map(|desktop| desktop.element_geometry(window)),
         ) else {
             return;
         };

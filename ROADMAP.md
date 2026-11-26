@@ -14,8 +14,8 @@ session, apps show their menus, a HiDPI display gets a scale, whole or
 fractional, a BarrierKit app leaves its frame to the compositor, a
 signal stops the compositor cleanly, and every window gets the continuous
 corner of macOS with an outline outside, an inner line inside and the macOS
-shadow. Next is
-layer shell. `linux-dmabuf` waited for a real GPU, which the development
+shadow, and Ctrl+Left and Ctrl+Right move between Desktops. Next is
+the slide between Desktops. `linux-dmabuf` waited for a real GPU, which the development
 laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -46,13 +46,25 @@ scale of 5/3):
 | review | An audit of the code on the Linux laptop | nested, the compositor stops when its host goes away and releases the keys when the host takes the keyboard; a menu whose grab is refused is closed | done |
 | 14 | `ctdesign`, BarrierKit's design tokens, and the compositor's own effects module | every window cut to the continuous corner of a macOS window, with the outline outside it and the inner line inside it, in light and dark and for the main window and the others; a BarrierKit app gets the corner of its bar (all four bars are 16 in barrierkit's data, so `set_bar` gives the default 16.8 for every bar and changes nothing visible today) | done `e43b9a5` |
 | 15 | the window shadow from `WINDOW_SHADOW_*` | every window casts the macOS shadow, stronger under the main window | done `2ed869e` |
+| 16 | Desktops: one `Space` per Desktop | Ctrl+Right on the last Desktop with windows opens an empty one, Ctrl+Left and Ctrl+Right move between them, and an empty last Desktop goes away when left | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
 
 ## After this stage
 
-In the order they will be taken, one at a time:
+In the order they will be taken, one at a time. On 2026-11-26 the user asked to
+take the macOS window model first, so these three come before the rest:
+
+1. The slide between Desktops: a spring with ω0 24 and ζ 1.73 and a gap of 64
+   between Desktops, as measured.
+2. Cascade placement: a new window goes 29 right and 29 down from the previous
+   one, as measured; where the first window goes is still to be measured.
+3. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
+   with a spring of ω0 45 and ζ 1.38, as measured; the margin of tiled windows
+   is still to be measured.
+
+Then:
 
 1. `linux-dmabuf`: until then every client draws with software rendering, so a
    real machine looks slower than it is. It is written and kept out of the
@@ -121,6 +133,15 @@ Later pass (2026-11-26), with the tables in barrierkit
   and about .045 for blurring materials; light windows are not tinted.
 - **Not understood:** the window open shows no scale animation, and the menu
   bar ink and Control Center ignore the light scheme.
+
+- **Desktops and tiling (documented by Apple, not measured):** Desktops are
+  added with + in Mission Control, up to 16, and a Desktop that is emptied
+  stays. Control+Left and Control+Right move between them. A full-screen app
+  or Split View is a Space of its own. A window can be assigned to all
+  Desktops, to one, or to none. fn+Control+F, C, the arrows and R fill,
+  centre, halve and restore a window. Sources:
+  https://support.apple.com/guide/mac-help/mh14112/mac and
+  https://support.apple.com/guide/mac-help/mchl9674d0b0/mac.
 
 Not measured: banners and Notification Center, glass at slider 0, the system
 switches (Reduce Transparency, Increase Contrast, Reduce Motion), mouse drag
@@ -191,11 +212,26 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   inactive one is an error.
 - A display mode is trusted as the kernel reports it; one with a zero total or
   a zero refresh would panic the compositor.
+- A window on a hidden Desktop gets no frame callback and no `suspended`
+  state.
+- Ctrl+Left and Ctrl+Right no longer reach apps, as on macOS.
+- Desktops are created by the key, because there is no Mission Control. An
+  empty Desktop in the middle stays and an empty last one is dropped when it
+  is left; macOS keeps both.
+- A pointer grab (a held button, an open menu, a drag) ends at the switch,
+  and every popup of the Desktop left is closed.
+- Every new window opens on the current Desktop and takes the focus, also a
+  dialog or a window of an app on a hidden one.
+- Windows cannot be moved between Desktops.
+- The switch between Desktops has no slide yet.
 - Each frame that renders nothing inserts a one-shot timer to send its frame
   callbacks one refresh later; a reusable timer is not done.
 
 ## Not verified
 
+- Desktops (step 16): nested, and directly on the virtual display of the
+  machine check, which switches to an empty Desktop and back. Not checked: a
+  drag at the switch, a Qt app.
 - Real hardware: nested, the compositor has run on a laptop with an AMD GPU,
   with clients that draw through `wl_shm`. Directly on a display it has only
   run on virtual ones (vkms and QEMU's virtio GPU) with software rendering,

@@ -1,3 +1,4 @@
+mod desktops;
 mod drm;
 mod effects;
 mod handlers;
@@ -115,7 +116,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         start_time: Instant::now(),
         backend,
         output,
-        space,
+        desktops: vec![space],
+        current_desktop: 0,
         popups: PopupManager::default(),
         needs_redraw: true,
         frame_pending: false,
@@ -124,7 +126,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         frame_elements: Vec::new(),
     };
     event_loop.run(None, &mut state, |state| {
-        state.space.refresh();
+        for desktop in &mut state.desktops {
+            desktop.refresh();
+        }
         state.popups.cleanup();
         state.redraw_if_needed();
         if let Err(error) = state.display_handle.flush_clients() {

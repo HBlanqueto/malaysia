@@ -77,7 +77,7 @@ impl Winit {
                         Some(Scale::Fractional(scale_factor)),
                         None,
                     );
-                    for window in state.space.elements() {
+                    for window in state.desktops.iter().flat_map(Space::elements) {
                         window.with_surfaces(|_, states| {
                             with_fractional_scale(states, |fractional| {
                                 fractional.set_preferred_scale(scale_factor)

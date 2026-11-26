@@ -9,6 +9,7 @@ use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 
+use crate::desktops::Direction;
 use crate::state::{Backend, State};
 
 pub const REPEAT_DELAY: i32 = 200;
@@ -18,14 +19,18 @@ pub const REPEAT_RATE: i32 = 25;
 enum KeyAction {
     Quit,
     SwitchVt(i32),
+    SwitchDesktop(Direction),
 }
 
 fn key_action(modifiers: &ModifiersState, keysym: Keysym) -> Option<KeyAction> {
+    let control_only = modifiers.ctrl && !modifiers.alt && !modifiers.shift && !modifiers.logo;
     match keysym.raw() {
         vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 => Some(
             KeyAction::SwitchVt((vt - keysyms::KEY_XF86Switch_VT_1 + 1) as i32),
         ),
         keysyms::KEY_BackSpace if modifiers.ctrl && modifiers.alt => Some(KeyAction::Quit),
+        keysyms::KEY_Left if control_only => Some(KeyAction::SwitchDesktop(Direction::Left)),
+        keysyms::KEY_Right if control_only => Some(KeyAction::SwitchDesktop(Direction::Right)),
         _ => None,
     }
 }
@@ -81,18 +86,25 @@ impl State {
                             drm.change_vt(vt);
                         }
                     }
+                    Some(KeyAction::SwitchDesktop(direction)) => {
+                        self.switch_desktop(direction, event.time())
+                    }
                     None => {}
                 }
             }
             InputEvent::PointerMotion { event, .. } => {
-                let geometry = self.space.output_geometry(&self.output).unwrap();
+                let geometry = self.desktops[self.current_desktop]
+                    .output_geometry(&self.output)
+                    .unwrap();
                 let inside =
                     Rectangle::new(geometry.loc, geometry.size - Size::from((1, 1))).to_f64();
                 let location = self.seat.get_pointer().unwrap().current_location() + event.delta();
                 self.move_pointer(location.constrain(inside), event.time());
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
-                let output_geometry = self.space.output_geometry(&self.output).unwrap();
+                let output_geometry = self.desktops[self.current_desktop]
+                    .output_geometry(&self.output)
+                    .unwrap();
                 let location =
                     event.position_transformed(output_geometry.size) + output_geometry.loc.to_f64();
                 self.move_pointer(location, event.time());
@@ -103,7 +115,8 @@ impl State {
                 let state = event.state();
                 if state == ButtonState::Pressed
                     && !pointer.is_grabbed()
-                    && let Some((window, _)) = self.space.element_under(pointer.current_location())
+                    && let Some((window, _)) = self.desktops[self.current_desktop]
+                        .element_under(pointer.current_location())
                 {
                     let window = window.clone();
                     self.focus_window(&window, serial);
@@ -145,7 +158,7 @@ impl State {
         }
     }
 
-    fn move_pointer(&mut self, location: Point<f64, Logical>, time: InputTime) {
+    pub fn move_pointer(&mut self, location: Point<f64, Logical>, time: InputTime) {
         let under = self.surface_under(location);
         let pointer = self.seat.get_pointer().unwrap();
         pointer.motion(
@@ -164,8 +177,9 @@ impl State {
     }
 
     pub fn focus_window(&mut self, window: &Window, serial: Serial) {
-        self.space.raise_element(window, true);
-        for window in self.space.elements() {
+        let desktop = &mut self.desktops[self.current_desktop];
+        desktop.raise_element(window, true);
+        for window in desktop.elements() {
             let toplevel = window.toplevel().unwrap();
             if toplevel.is_initial_configure_sent() {
                 toplevel.send_pending_configure();
@@ -183,7 +197,7 @@ impl State {
         &self,
         location: Point<f64, Logical>,
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
-        self.space
+        self.desktops[self.current_desktop]
             .element_under(location)
             .and_then(|(window, window_location)| {
                 window
@@ -209,6 +223,30 @@ mod tests {
         let backspace = Keysym::new(keysyms::KEY_BackSpace);
         assert_eq!(key_action(&ctrl_alt, backspace), Some(KeyAction::Quit));
         assert_eq!(key_action(&ModifiersState::default(), backspace), None);
+    }
+
+    #[test]
+    fn ctrl_arrow_switches_desktop_but_ctrl_shift_arrow_is_forwarded() {
+        let ctrl = ModifiersState {
+            ctrl: true,
+            ..Default::default()
+        };
+        let ctrl_shift = ModifiersState {
+            shift: true,
+            ..ctrl
+        };
+        let left = Keysym::new(keysyms::KEY_Left);
+        let right = Keysym::new(keysyms::KEY_Right);
+        assert_eq!(
+            key_action(&ctrl, left),
+            Some(KeyAction::SwitchDesktop(Direction::Left))
+        );
+        assert_eq!(
+            key_action(&ctrl, right),
+            Some(KeyAction::SwitchDesktop(Direction::Right))
+        );
+        assert_eq!(key_action(&ctrl_shift, left), None);
+        assert_eq!(key_action(&ctrl_shift, right), None);
     }
 
     #[test]

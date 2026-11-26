@@ -203,6 +203,16 @@
                     machine.send_chars("zebra")
                     machine.wait_for_text("zebra", timeout=300)
                     machine.screenshot("menu-closed")
+                    machine.send_key("ctrl-right")
+                    for _ in range(60):
+                        if "zebra" not in machine.get_screen_text():
+                            break
+                        time.sleep(1)
+                    else:
+                        raise AssertionError("the first Desktop is still shown")
+                    machine.screenshot("second-desktop")
+                    machine.send_key("ctrl-left")
+                    machine.wait_for_text("zebra", timeout=300)
                     machine.send_key("ctrl-alt-backspace")
                     machine.wait_until_fails("pgrep -x malaysia-compos", timeout=60)
                     machine.wait_for_file("/tmp/exit", timeout=60)

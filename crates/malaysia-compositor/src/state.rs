@@ -62,7 +62,8 @@ pub struct State {
     pub start_time: Instant,
     pub backend: Backend,
     pub output: Output,
-    pub space: Space<Window>,
+    pub desktops: Vec<Space<Window>>,
+    pub current_desktop: usize,
     pub popups: PopupManager,
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
@@ -105,15 +106,17 @@ impl State {
         let pointer = self.seat.get_pointer().unwrap().current_location();
         let rendered = match &mut self.backend {
             Backend::Drm(drm) => drm.render(
-                &self.space,
+                &self.desktops[self.current_desktop],
                 &self.output,
                 &self.cursor_status,
                 pointer,
                 &mut self.frame_elements,
             ),
-            Backend::Winit(winit) => {
-                winit.render(&self.space, &self.output, &mut self.frame_elements)
-            }
+            Backend::Winit(winit) => winit.render(
+                &self.desktops[self.current_desktop],
+                &self.output,
+                &mut self.frame_elements,
+            ),
         }
         .unwrap_or_else(|error| {
             tracing::warn!(%error, "render failed");
@@ -148,7 +151,7 @@ impl State {
     pub fn frame_done(&mut self) {
         self.frame_pending = false;
         let time = self.start_time.elapsed();
-        for window in self.space.elements() {
+        for window in self.desktops[self.current_desktop].elements() {
             window.send_frame(&self.output, time, Some(Duration::ZERO), |_, _| {
                 Some(self.output.clone())
             });
