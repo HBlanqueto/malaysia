@@ -72,7 +72,10 @@ impl State {
                     )
                     .flatten();
                 match action {
-                    Some(KeyAction::Quit) => self.loop_signal.stop(),
+                    Some(KeyAction::Quit) => {
+                        tracing::info!("stopping: quit key");
+                        self.loop_signal.stop();
+                    }
                     Some(KeyAction::SwitchVt(vt)) => {
                         if let Backend::Drm(drm) = &mut self.backend {
                             drm.change_vt(vt);

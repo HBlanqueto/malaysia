@@ -63,7 +63,8 @@ cargo run -- /dev/dri/card0    # directly on that DRM device, in any case
 
 The compositor logs the backend it chose and the name of its Wayland socket,
 normally `wayland-1`. It starts no program: clients reach it through that
-name.
+name. It also logs why it stops; when the log gives no reason, a signal ended
+it.
 
 `nix develop -c ./dev.sh demo` builds, starts the nested compositor and opens
 a terminal (`foot`) in it. Closing the window or pressing Ctrl-C ends it.

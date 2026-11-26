@@ -69,7 +69,10 @@ impl Winit {
                 state.needs_redraw = true;
             }
             WinitEvent::Redraw => state.render(),
-            WinitEvent::CloseRequested => state.loop_signal.stop(),
+            WinitEvent::CloseRequested => {
+                tracing::info!("stopping: the host closed the window");
+                state.loop_signal.stop();
+            }
             WinitEvent::Input(event) => state.process_input_event(event),
             _ => {}
         })?;
