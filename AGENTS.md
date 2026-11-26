@@ -17,9 +17,9 @@ was solved; never copy a file whole.
 
 - One step adds one dependency (or one Smithay feature) and one visible
   result. The flake grows in the same step, with only what that step needs.
-- A step is done when it passes the checks of «Build and test», is shown
-  working on the host (on a Mac, in the box of `vm.sh`), `ROADMAP.md` and
-  `README.md` say so, and it is pushed.
+- A step is done when it passes the checks of «Build and test» and the audit
+  of «Research, then execution», is shown working on the host (on a Mac, in
+  the box of `vm.sh`), `ROADMAP.md` and `README.md` say so, and it is pushed.
 - The compositor runs directly on DRM. On a Mac, the box of `vm.sh` has no
   seat, udev or real GPU: what needs them is verified on a Linux host before
   it is pushed.
@@ -65,7 +65,8 @@ Starting sources by area. Those of each pinned dependency are in rule 10 of
 
 ## Research, then execution
 
-Each task has two phases, and each phase has its subagents in `.claude/agents/`.
+Each task has three phases, and each phase has its subagents in
+`.claude/agents/`.
 
 1. **Research: `researcher`.** It reads how mutter and KWin solve the problem,
    what the protocol requires and what Smithay offers at the pinned rev. It
@@ -76,6 +77,14 @@ Each task has two phases, and each phase has its subagents in `.claude/agents/`.
    changes across several files. Both make the smallest complete change that
    applies the recommendation, check it as «Build and test» says and report
    what changed and what is left.
+3. **Audit: every subagent.** While a step is checked, and before it is
+   committed, the code it added or touched is audited for what can be
+   deleted, merged or written shorter, so that nothing is redundant. `scout`
+   finds what is repeated or already exists in the repo; `researcher` finds
+   what Smithay at the pinned rev or `ctdesign` already gives in place of own
+   code; `the-senior` questions the diff and ranks the findings; `executor`
+   or `builder` applies the ones that hold and runs the checks again. A
+   reduction changes no behaviour and no pixel drawn.
 
 `the-senior` (Fable) supports `researcher` and `scout` on concrete, complex
 steps: hardware (DRM, GPU, input, seats), the base of the project and merging
