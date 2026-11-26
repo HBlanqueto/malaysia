@@ -14,8 +14,9 @@ session, apps show their menus, a HiDPI display gets a scale, whole or
 fractional, a BarrierKit app leaves its frame to the compositor, a
 signal stops the compositor cleanly, and every window gets the continuous
 corner of macOS with an outline outside, an inner line inside and the macOS
-shadow, and Ctrl+Left and Ctrl+Right slide between Desktops. Next is
-cascade placement. `linux-dmabuf` waited for a real GPU, which the development
+shadow, Ctrl+Left and Ctrl+Right slide between Desktops, and a window is
+dragged by its own title bar. Next is carrying a dragged window to the next
+Desktop. `linux-dmabuf` waited for a real GPU, which the development
 laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -49,6 +50,7 @@ scale of 5/3):
 | 16 | Desktops: one `Space` per Desktop | Ctrl+Right on the last Desktop with windows opens an empty one, Ctrl+Left and Ctrl+Right move between them, and an empty last Desktop goes away when left | done `5837b11` |
 | 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a black band of 64 between them, and a second key press mid-slide carries on from where the strip is | done `174f353` |
 | 18 | `suspended` for the windows of a hidden Desktop | a client on a hidden Desktop is told it is suspended when the slide ends, gets its pending frame callbacks once, and is told it is shown again at the switch back | done `8b5cf44` |
+| 19 | Interactive move: `xdg_toplevel.move` and a pointer grab | a window dragged by its own title bar | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -56,13 +58,16 @@ and nested in another session.
 ## After this stage
 
 In the order they will be taken, one at a time. On 2026-11-26 the user asked to
-take the macOS window model first, so these two come before the rest:
+take the macOS window model first, so these come before the rest:
 
-1. Cascade placement: a new window goes 29 right and 29 down from the previous
+1. A dragged window carried to the next Desktop with Ctrl+Left and
+   Ctrl+Right.
+2. Cascade placement: a new window goes 29 right and 29 down from the previous
    one, as measured; where the first window goes is still to be measured.
-2. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
+3. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
    with a spring of ω0 45 and ζ 1.38, as measured; the margin of tiled windows
    is still to be measured.
+4. Interactive resize: `xdg_toplevel.resize`.
 
 Then:
 
@@ -77,8 +82,7 @@ Then:
 4. Hotplug and several displays.
 5. What a laptop needs: display power and idle, touchpad settings such as
    tap-to-click.
-6. Window management (placement, move, resize), the rest of the shell and the
-   apps.
+6. The rest of window management, the shell and the apps.
 
 ## How the desktop is put together
 
@@ -225,7 +229,16 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   and every popup of the Desktop left is closed.
 - Every new window opens on the current Desktop and takes the focus, also a
   dialog or a window of an app on a hidden one.
-- Windows cannot be moved between Desktops.
+- A window can be dragged, but not to another Desktop: Ctrl+Left or
+  Ctrl+Right mid-drag ends the drag and the window stays on its Desktop.
+- Only the app starts a move, from its own title bar: there is no interactive
+  resize, no move with a modifier and a drag, no touch or tablet drag, and no snapping to
+  the edges or tiling.
+- A window can be dragged until only the point held is left on the display.
+  macOS keeps the title bar below the menu bar and reachable; how is not
+  measured.
+- After a drag the pointer focus and its position are those of one motion
+  before the last, until the next motion.
 - A second key press mid-slide is not measured on macOS. Ours carries the
   speed of the strip and can pass the target by at most 6 % of a Desktop.
 - The spring is read when the frame is rendered, not when it is presented.

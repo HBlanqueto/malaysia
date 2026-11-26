@@ -3,6 +3,7 @@ mod drm;
 mod effects;
 mod handlers;
 mod input;
+mod move_grab;
 mod scale;
 mod state;
 mod window_style;

@@ -3,7 +3,7 @@ use smithay::desktop::{
     PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Space, Window,
     find_popup_root_surface, get_popup_toplevel_coords,
 };
-use smithay::input::pointer::{CursorImageStatus, Focus};
+use smithay::input::pointer::{ClickGrab, CursorImageStatus, Focus};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_server::protocol::{
     wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface,
@@ -27,6 +27,7 @@ use smithay::wayland::shell::xdg::{
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 
+use crate::move_grab::MoveGrab;
 use crate::state::{ClientState, State};
 
 impl CompositorHandler for State {
@@ -104,6 +105,31 @@ impl XdgShellHandler for State {
         match next {
             Some(window) => self.focus_window(&window, serial),
             None => keyboard.set_focus(self, None, serial),
+        }
+    }
+
+    fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, serial: Serial) {
+        let pointer = self.seat.get_pointer().unwrap();
+        if let Some(start_data) = pointer
+            .with_grab(|grab_serial, grab| {
+                (grab_serial == serial && grab.is::<ClickGrab<State>>())
+                    .then(|| grab.start_data().clone())
+            })
+            .flatten()
+            && start_data
+                .focus
+                .as_ref()
+                .is_some_and(|(focus, _)| focus.id().same_client_as(&surface.wl_surface().id()))
+            && let Some(window) = self.window_for_surface(surface.wl_surface()).cloned()
+            && let Some(initial_location) =
+                self.desktops[self.current_desktop].element_location(&window)
+        {
+            let grab = MoveGrab {
+                start_data,
+                window,
+                initial_location,
+            };
+            pointer.set_grab(self, grab, serial, Focus::Clear);
         }
     }
 
