@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::{Color32F, gles::GlesRenderer};
-use smithay::desktop::space::{OutputError, SpaceRenderElements};
+use smithay::desktop::space::OutputError;
 use smithay::desktop::utils::send_frames_surface_tree;
 use smithay::desktop::{PopupManager, Space, Window};
 use smithay::input::keyboard::Keycode;
@@ -21,25 +21,35 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
 use crate::drm::Drm;
+use crate::effects::{Clipped, Effects, Lines};
 use crate::winit::Winit;
 
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.1, 0.1, 0.12, 1.0);
 
 render_elements! {
     pub Element<=GlesRenderer>;
-    Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
     Surface=WaylandSurfaceRenderElement<GlesRenderer>,
+    Clipped=Clipped,
+    Lines=Lines,
     Solid=SolidColorRenderElement,
 }
 
 pub fn elements(
     renderer: &mut GlesRenderer,
+    effects: &Effects,
     space: &Space<Window>,
     output: &Output,
     frame: &mut Vec<Element>,
 ) -> Result<(), OutputError> {
-    let space_elements = space.render_elements_for_output(renderer, output, 1.0)?;
-    frame.extend(space_elements.into_iter().map(Element::from));
+    let output_geometry = space.output_geometry(output).ok_or(OutputError::Unmapped)?;
+    let scale = output.current_scale().fractional_scale();
+    for (index, window) in space.elements().rev().enumerate() {
+        let Some(mut geometry) = space.element_geometry(window) else {
+            continue;
+        };
+        geometry.loc -= output_geometry.loc;
+        effects.push_window(renderer, window, geometry, scale, index == 0, frame);
+    }
     Ok(())
 }
 

@@ -1,4 +1,5 @@
 mod drm;
+mod effects;
 mod handlers;
 mod input;
 mod scale;
@@ -46,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(fmt::layer())
         .with(filter)
         .init();
+    let dark = std::env::var("MALAYSIA_SCHEME").is_ok_and(|scheme| scheme == "dark");
     let device = std::env::args_os().nth(1).map(PathBuf::from);
     let nested = std::env::var_os("WAYLAND_DISPLAY").is_some();
 
@@ -56,10 +58,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let loop_handle = event_loop.handle();
     let (backend, output) = if device.is_none() && nested {
         tracing::info!("winit backend");
-        let (winit, output) = Winit::init(&display_handle, &loop_handle, event_loop.get_signal())?;
+        let (winit, output) =
+            Winit::init(&display_handle, &loop_handle, event_loop.get_signal(), dark)?;
         (Backend::Winit(Box::new(winit)), output)
     } else {
-        let (drm, output) = Drm::init(device, &display_handle, &loop_handle)?;
+        let (drm, output) = Drm::init(device, &display_handle, &loop_handle, dark)?;
         (Backend::Drm(Box::new(drm)), output)
     };
     let mut space = Space::default();

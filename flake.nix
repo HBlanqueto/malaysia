@@ -197,7 +197,7 @@
                     machine.succeed("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 GDK_BACKEND=wayland mousepad >/tmp/mousepad.log 2>&1 &'")
                     machine.wait_for_text("Mousepad", timeout=300)
                     machine.send_key("alt-f")
-                    machine.wait_for_text("Save As", timeout=300)
+                    machine.wait_for_text("Save ?As", timeout=300)
                     machine.screenshot("menu")
                     machine.send_key("esc")
                     machine.send_chars("zebra")

@@ -8,7 +8,8 @@ draws the windows and the menus of Wayland clients that use `xdg_shell` and
 shared-memory buffers, and gives them a keyboard and a pointer. A HiDPI
 display gets a scale chosen from its physical size and resolution, whole or
 fractional. It tells BarrierKit apps, through `limitless_window_style_v1`, that
-the compositor frames their windows, though it does not draw that frame yet.
+the compositor frames their windows, and it draws that frame on every window:
+the continuous corner of macOS, an outline outside and an inner line inside.
 It runs in two ways:
 
 - **Directly on a display.** Started from a TTY by a normal user, it takes its
@@ -77,7 +78,9 @@ WAYLAND_DISPLAY=wayland-1 foot
 
 Directly on a display, Ctrl+Alt+Backspace quits and Ctrl+Alt+F1 to F12 switch
 to another VT. `RUST_LOG` sets the log level per module, for example
-`RUST_LOG=smithay=debug`.
+`RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=dark` draws the window frame in
+the dark scheme; without it the frame is light. It is temporary, until the
+appearance store exists.
 
 ### First run on a real machine
 

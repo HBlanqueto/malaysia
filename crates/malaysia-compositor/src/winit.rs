@@ -11,10 +11,12 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size, Transform};
 use smithay::wayland::fractional_scale::with_fractional_scale;
 
+use crate::effects::Effects;
 use crate::state::{CLEAR_COLOR, Element, State, elements};
 
 pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
+    effects: Effects,
     damage_tracker: OutputDamageTracker,
     age: usize,
 }
@@ -40,8 +42,10 @@ impl Winit {
         display_handle: &DisplayHandle,
         loop_handle: &LoopHandle<'static, State>,
         loop_signal: LoopSignal,
+        dark: bool,
     ) -> Result<(Winit, Output), Box<dyn Error>> {
-        let (backend, event_loop) = winit::init::<GlesRenderer>()?;
+        let (mut backend, event_loop) = winit::init::<GlesRenderer>()?;
+        let effects = Effects::new(backend.renderer(), dark)?;
         let output = Output::new(
             "winit".to_string(),
             PhysicalProperties {
@@ -100,6 +104,7 @@ impl Winit {
             Winit {
                 damage_tracker: OutputDamageTracker::from_output(&output),
                 age: 0,
+                effects,
                 backend,
             },
             output,
@@ -117,7 +122,7 @@ impl Winit {
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
         let (renderer, mut framebuffer) = self.backend.bind()?;
-        elements(renderer, space, output, frame)?;
+        elements(renderer, &self.effects, space, output, frame)?;
         let result = self.damage_tracker.render_output(
             renderer,
             &mut framebuffer,

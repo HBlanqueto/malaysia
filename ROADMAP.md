@@ -5,14 +5,16 @@ or one Smithay feature and one result that can be seen. A step is done when it
 passes `cargo fmt`, `cargo clippy -D warnings` and its run check, and is pushed
 to `the-culling-branch`.
 
-Last update: 2026-11-25.
+Last update: 2026-11-26.
 
 ## Where we are
 
 **Now:** the compositor runs directly on a display and nested in a Wayland
 session, apps show their menus, a HiDPI display gets a scale, whole or
-fractional, a BarrierKit app leaves its frame to the compositor, and a
-signal stops the compositor cleanly. Next is layer shell. `linux-dmabuf` waited for a real GPU, which the development
+fractional, a BarrierKit app leaves its frame to the compositor, a
+signal stops the compositor cleanly, and every window gets the continuous
+corner of macOS with an outline outside and an inner line inside. Next is
+layer shell. `linux-dmabuf` waited for a real GPU, which the development
 laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -41,6 +43,7 @@ scale of 5/3):
 | 12 | `limitless`, the protocol shared with BarrierKit: the `limitless_window_style_v1` global at version 1 | a BarrierKit app leaves its frame and its round corners to the compositor, which does not draw them yet | done `da4b026` |
 | 13 | Signals: `calloop`'s `signals` feature, so SIGTERM, SIGINT and SIGHUP stop the event loop | `./dev.sh demo` ended with Ctrl-C, or the compositor ended with `kill`, logs the signal and leaves no socket behind | done |
 | review | An audit of the code on the Linux laptop | nested, the compositor stops when its host goes away and releases the keys when the host takes the keyboard; a menu whose grab is refused is closed | done |
+| 14 | `ctdesign`, BarrierKit's design tokens, and the compositor's own effects module | every window cut to the continuous corner of a macOS window, with the outline outside it and the inner line inside it, in light and dark and for the main window and the others; a BarrierKit app gets the corner of its bar (all four bars are 16 in barrierkit's data, so `set_bar` gives the default 16.8 for every bar and changes nothing visible today) | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -60,8 +63,8 @@ In the order they will be taken, one at a time:
 4. Hotplug and several displays.
 5. What a laptop needs: display power and idle, touchpad settings such as
    tap-to-click.
-6. Design tokens from `ctdesign`, window management (placement, move, resize),
-   the rest of the shell and the apps.
+6. Window management (placement, move, resize), the rest of the shell and the
+   apps.
 
 ## How the desktop is put together
 
@@ -142,8 +145,18 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Known gaps
 
-- The compositor does not draw the frame or round the corners of windows yet,
-  so a BarrierKit app is shown square and without a border.
+- The window shadow is not drawn. The `ctdesign` shadow tokens are two layers
+  (blur 48 and 12), while macOS measured as one blurred box, so barrierkit
+  changes first.
+- A closing window disappears at once. The close animation needs a snapshot
+  of the dead surface and an animation clock, which do not exist yet.
+- Every window is cut to its window geometry, so a client's own shadow outside
+  it (GTK) is not shown.
+- A window whose buffer is rotated or flipped is
+  drawn square.
+- The scheme of the frame lines comes from `MALAYSIA_SCHEME` (`dark`, or
+  light by default), read once at start. It is temporary, until the
+  appearance store exists.
 - A click outside an open menu closes the menu and also reaches the window
   under it, without giving that window the focus. KWin keeps that click.
 - When an app closes its own menu, the keyboard focus returns to the window on
@@ -212,3 +225,16 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   were not checked.
 - Menus were checked with one GTK 3 app. A Qt app and a popup that asks to be
   moved after it is shown are untested.
+- The window frame (step 14) was checked nested only, in a headless sway at
+  scales 1, 1.25 and 2; nothing of it ran directly on a display. On a Mac, two
+  things are still to be measured: a capture at 2x of the uncovered pixels in row 0 of the window
+  corner (15.15 computed against 16.00 measured), and whether the light inner line exists, since it cannot be seen on
+  white.
+- A BarrierKit app that sets its bar: the corner per bar follows the protocol
+  and was not exercised with a real `bk` app. All four `WINDOW_CORNER` bars are
+  16 in barrierkit's data, so `set_bar` gives the default 16.8 for every bar and
+  changes nothing visible today.
+- Cost of the lines element: it covers the whole window, so any damage inside
+  it pays a blended shader pass. Only CPU was measured (about 52.4 to 54.6 ms
+  per second, nested, 1280x800, debug build); GPU time on the laptop's panel was
+  not.

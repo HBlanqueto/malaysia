@@ -28,6 +28,7 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point};
 use smithay::wayland::compositor::with_states;
 
+use crate::effects::Effects;
 use crate::scale::output_scale;
 use crate::state::{Backend, CLEAR_COLOR, Element, State, elements};
 
@@ -40,6 +41,7 @@ type Compositor =
 pub struct Drm {
     device: DrmDevice,
     renderer: GlesRenderer,
+    effects: Effects,
     compositor: Compositor,
     session: LibSeatSession,
     libinput: Libinput,
@@ -51,6 +53,7 @@ impl Drm {
         path: Option<PathBuf>,
         display_handle: &DisplayHandle,
         loop_handle: &LoopHandle<'static, State>,
+        dark: bool,
     ) -> Result<(Drm, Output), Box<dyn Error>> {
         let (mut session, session_notifier) = LibSeatSession::new()?;
         if !session.is_active() {
@@ -69,7 +72,8 @@ impl Drm {
         let (mut drm, notifier) = DrmDevice::new(fd.clone(), true)?;
         let gbm = GbmDevice::new(fd)?;
         let egl = unsafe { EGLDisplay::new(gbm.clone())? };
-        let renderer = unsafe { GlesRenderer::new(EGLContext::new(&egl)?)? };
+        let mut renderer = unsafe { GlesRenderer::new(EGLContext::new(&egl)?)? };
+        let effects = Effects::new(&mut renderer, dark)?;
 
         let resources = drm.resource_handles()?;
         let connector = resources
@@ -193,6 +197,7 @@ impl Drm {
             Drm {
                 device: drm,
                 renderer,
+                effects,
                 compositor,
                 session,
                 libinput,
@@ -239,7 +244,7 @@ impl Drm {
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
         self.push_cursor(output, cursor, pointer, frame);
-        elements(&mut self.renderer, space, output, frame)?;
+        elements(&mut self.renderer, &self.effects, space, output, frame)?;
         let is_empty = self
             .compositor
             .render_frame(&mut self.renderer, frame, CLEAR_COLOR, FrameFlags::DEFAULT)?
