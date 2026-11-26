@@ -236,8 +236,13 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - A dragged window released mid-slide stays still until the strip rests; a
   second key press before that makes it jump into its Desktop.
 - Only the app starts a move, from its own title bar: there is no interactive
-  resize, no move with a modifier and a drag, no touch or tablet drag, and no snapping to
-  the edges or tiling.
+  resize, no move with a modifier and a drag, no touch or tablet drag, and no
+  snapping to the edges or tiling.
+- A request to resize, maximize or minimize is not answered: the window stays
+  as it is, and a Qt title bar then shows its restore button.
+- A dialog opens at the top left corner, not over its parent.
+- With a Qt app Smithay logs `surface missing from known popups` each time a
+  menu closes. The menus work; the cause is not looked into.
 - A window can be dragged until only the point held is left on the display.
   macOS keeps the title bar below the menu bar and reachable; how is not
   measured.
@@ -267,10 +272,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 ## Not verified
 
 - Desktops (step 16): nested, and directly on the virtual display of the
-  machine check, which switches to an empty Desktop and back. Not checked: a
-  drag at the switch, a Qt app.
+  machine check, which switches to an empty Desktop and back.
 - A dragged window carried to the next Desktop (step 20): nested only, at
-  scale 1, with `foot`. Not checked: directly on a display, a Qt app.
+  scale 1, with `foot` and with a Qt 6 app. Not checked: directly on a
+  display.
 - The carried window gets `wl_surface.leave` at the key press and
   `wl_surface.enter` right after, because it is taken out of one Desktop and
   put on the other.
@@ -307,8 +312,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   displays and on a virtual display made to report a small panel, at 5/3. A
   client's own cursor above scale 1 on the direct backend, GTK 4 and Qt 6
   were not checked.
-- Menus were checked with one GTK 3 app. A Qt app and a popup that asks to be
-  moved after it is shown are untested.
+- Menus were checked with one GTK 3 app and, nested, one Qt 6 app (FeatherPad:
+  its window, menus, drag, Desktop switch and close). A popup that asks to be
+  moved after it is shown is untested.
 - The window frame (step 14) was checked nested only, in a headless sway at
   scales 1, 1.25 and 2; nothing of it ran directly on a display. On a Mac, two
   things are still to be measured: a capture at 2x of the uncovered pixels in row 0 of the window
