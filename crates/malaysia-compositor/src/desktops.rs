@@ -41,8 +41,22 @@ fn rests(offset: f64, velocity: f64, stride: f64) -> bool {
     offset.abs().max(velocity.abs() / OMEGA) * stride < 0.5
 }
 
+pub fn gap(scale: f64) -> i32 {
+    (f64::from(ctdesign::DESKTOP_GAP) * scale).round() as i32
+}
+
 pub fn stride(width: i32, scale: f64) -> i32 {
-    width + (f64::from(ctdesign::DESKTOP_GAP) * scale).round() as i32
+    width + gap(scale)
+}
+
+pub fn gap_x(position: f64, count: usize, width: i32, scale: f64) -> Option<i32> {
+    let next = position.floor() + 1.0;
+    if !(1.0..count as f64).contains(&next) {
+        return None;
+    }
+    let gap = gap(scale);
+    let x = desktop_x(next as usize, position, stride(width, scale)) - gap;
+    (x + gap > 0 && x < width).then_some(x)
 }
 
 pub fn desktop_x(index: usize, position: f64, stride: i32) -> i32 {
@@ -234,5 +248,13 @@ mod tests {
         assert_eq!(desktop_x(1, 0.0, stride(1280, 1.0)), 1280 + 64);
         assert_eq!(desktop_x(0, 1.0, stride(2560, 2.0)), -(2560 + 128));
         assert_eq!(desktop_x(1, 1.0, stride(2560, 2.0)), 0);
+    }
+
+    #[test]
+    fn the_gap_sits_left_of_the_arriving_desktop_and_is_absent_at_rest() {
+        assert_eq!(gap_x(0.5, 2, 1280, 1.0), Some(1280 + 64 - 672 - 64));
+        assert_eq!(gap_x(0.0, 2, 1280, 1.0), None);
+        assert_eq!(gap_x(1.0, 2, 1280, 1.0), None);
+        assert_eq!(gap_x(0.5, 1, 1280, 1.0), None);
     }
 }

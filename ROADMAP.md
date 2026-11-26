@@ -47,8 +47,8 @@ scale of 5/3):
 | 14 | `ctdesign`, BarrierKit's design tokens, and the compositor's own effects module | every window cut to the continuous corner of a macOS window, with the outline outside it and the inner line inside it, in light and dark and for the main window and the others; a BarrierKit app gets the corner of its bar (all four bars are 16 in barrierkit's data, so `set_bar` gives the default 16.8 for every bar and changes nothing visible today) | done `e43b9a5` |
 | 15 | the window shadow from `WINDOW_SHADOW_*` | every window casts the macOS shadow, stronger under the main window | done `2ed869e` |
 | 16 | Desktops: one `Space` per Desktop | Ctrl+Right on the last Desktop with windows opens an empty one, Ctrl+Left and Ctrl+Right move between them, and an empty last Desktop goes away when left | done `5837b11` |
-| 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a gap of 64 between them, and a second key press mid-slide carries on from where the strip is | done `174f353` |
-| 18 | `suspended` for the windows of a hidden Desktop | a client on a hidden Desktop is told it is suspended when the slide ends, gets its pending frame callbacks once, and is told it is shown again at the switch back | done |
+| 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a black band of 64 between them, and a second key press mid-slide carries on from where the strip is | done `174f353` |
+| 18 | `suspended` for the windows of a hidden Desktop | a client on a hidden Desktop is told it is suspended when the slide ends, gets its pending frame callbacks once, and is told it is shown again at the switch back | done `8b5cf44` |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -232,7 +232,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - A window wider than the display shows over the neighbouring Desktop during
   the slide.
 - During the slide the pointer hits the target Desktop at its rest position.
-- The gap between Desktops shows the clear colour.
+- The gap between Desktops is a black band from `DESKTOP_GAP_COLOR`. Its colour
+  was observed on macOS, not sampled. With no wallpaper yet the Desktops show
+  the clear colour, so the band has little contrast.
 - The slide has no Reduce Motion and no touchpad gesture.
 - A slide redraws the whole display on every refresh for about 1.1 s, though
   after 0.6 s the strip moves under 18 pixels. Nested, in a debug build, one

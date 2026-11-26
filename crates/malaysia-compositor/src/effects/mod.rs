@@ -5,6 +5,7 @@ mod shadow;
 
 use std::cell::{RefCell, RefMut};
 
+use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
@@ -27,6 +28,7 @@ pub struct Effects {
     lines: GlesPixelProgram,
     shadow: GlesPixelProgram,
     curve: Curve,
+    gap: Id,
     lines_scheme: ctdesign::FrameLines,
     shadow_scheme: ctdesign::WindowShadow,
 }
@@ -78,6 +80,7 @@ impl Effects {
             lines: lines::compile(renderer)?,
             shadow: shadow::compile(renderer)?,
             curve: Curve::new(ctdesign::CORNER_WINDOW.smoothing),
+            gap: Id::new(),
             lines_scheme: if dark {
                 ctdesign::FRAME_LINES_DARK
             } else {
@@ -89,6 +92,16 @@ impl Effects {
                 ctdesign::WINDOW_SHADOW_LIGHT
             },
         })
+    }
+
+    pub fn push_gap(&self, geometry: Rectangle<i32, Physical>, frame: &mut Vec<Element>) {
+        frame.push(Element::Solid(SolidColorRenderElement::new(
+            self.gap.clone(),
+            geometry,
+            CommitCounter::default(),
+            ctdesign::DESKTOP_GAP_COLOR.premultiplied(),
+            Kind::Unspecified,
+        )));
     }
 
     #[expect(clippy::too_many_arguments)]

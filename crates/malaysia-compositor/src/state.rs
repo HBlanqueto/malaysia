@@ -15,12 +15,13 @@ use smithay::reexports::calloop::{LoopHandle, LoopSignal};
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::render_elements;
+use smithay::utils::Rectangle;
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
-use crate::desktops::{Slide, desktop_x, stride};
+use crate::desktops::{Slide, desktop_x, gap, gap_x, stride};
 use crate::drm::Drm;
 use crate::effects::{Clipped, Effects, Lines, Shadow};
 use crate::winit::Winit;
@@ -47,6 +48,7 @@ pub fn elements(
 ) {
     let scale = output.current_scale().fractional_scale();
     let width = output.current_mode().map_or(0, |mode| mode.size.w);
+    let height = output.current_mode().map_or(0, |mode| mode.size.h);
     let stride = stride(width, scale);
     let others = desktops
         .iter()
@@ -72,6 +74,12 @@ pub fn elements(
                 frame,
             );
         }
+    }
+    if let Some(x) = gap_x(position, desktops.len(), width, scale) {
+        effects.push_gap(
+            Rectangle::new((x, 0).into(), (gap(scale), height).into()),
+            frame,
+        );
     }
 }
 

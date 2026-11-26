@@ -199,7 +199,7 @@ checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 [[package]]
 name = "ctdesign"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=966e2613bff6794ef3eeffc02f48daa20f107033#966e2613bff6794ef3eeffc02f48daa20f107033"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=82d06f3f03715227b47e0e176e10732636de9600#82d06f3f03715227b47e0e176e10732636de9600"
 dependencies = [
  "serde_json",
 ]
@@ -645,7 +645,7 @@ dependencies = [
 [[package]]
 name = "limitless"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=966e2613bff6794ef3eeffc02f48daa20f107033#966e2613bff6794ef3eeffc02f48daa20f107033"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=82d06f3f03715227b47e0e176e10732636de9600#82d06f3f03715227b47e0e176e10732636de9600"
 dependencies = [
  "bitflags",
  "wayland-backend",
