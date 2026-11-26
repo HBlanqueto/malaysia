@@ -5,6 +5,7 @@ mod input;
 mod placement;
 mod scale;
 mod state;
+mod tiling;
 mod window_grab;
 mod window_style;
 mod winit;

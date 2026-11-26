@@ -89,6 +89,9 @@ The first window of a Desktop opens centred, a quarter of the free height
 above it; each next one opens 29 right and 29 down from the one in front,
 and a dialog opens over its parent.
 A window is resized by dragging its own edges and corners.
+Ctrl+Super with F fills the display with the focused window, with C centres
+it, with an arrow puts it in that half, and with R returns it to the frame it
+had before it was tiled; Super stands in for macOS's fn.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
 shadow in the light scheme; without it they are dark. It is temporary, until

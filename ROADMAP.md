@@ -16,8 +16,9 @@ signal stops the compositor cleanly, and every window gets the continuous
 corner of macOS with an outline outside, an inner line inside and the macOS
 shadow, Ctrl+Left and Ctrl+Right slide between Desktops, and a window is
 dragged by its own title bar and carried along to the next Desktop, a new
-window opens in a cascade, and a window is resized by its own edges. Next are
-the tiling shortcuts. `linux-dmabuf` waited for a real GPU, which the
+window opens in a cascade, a window is resized by its own edges, and
+Ctrl+Super with F, C, an arrow or R tiles the focused window at once. Next is
+the spring of a tile (measured: ω0 45, ζ 1.38, 240 ms). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -54,7 +55,8 @@ scale of 5/3):
 | 19 | Interactive move: `xdg_toplevel.move` and a pointer grab | a window dragged by its own title bar | done `bbbedb9` |
 | 20 | A dragged window goes along to the next Desktop | holding a window by its title bar and pressing Ctrl+Left or Ctrl+Right takes it to that Desktop, still under the pointer | done `ca36aeb` |
 | 21 | Cascade placement: `WINDOW_CASCADE_STEP` and `WINDOW_CENTER_TOP` | the first window of a Desktop opens centred with a quarter of the free height above it, each next one 29 right and 29 down from the one in front, and a dialog over its parent | done `f0df1b9` |
-| 22 | Interactive resize: `xdg_toplevel.resize` and a pointer grab | a window resized by dragging its own edges and corners, the opposite edge staying still | done |
+| 22 | Interactive resize: `xdg_toplevel.resize` and a pointer grab | a window resized by dragging its own edges and corners, the opposite edge staying still | done `1ee5505` |
+| 23 | Tiling by keyboard: Fill, Center, the halves and Return to Previous Size | Ctrl+Super with F, C, an arrow or R fills the display, centres the window, puts it in a half, or returns it to the frame it had before | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -64,9 +66,8 @@ and nested in another session.
 In the order they will be taken, one at a time. On 2026-11-26 the user asked to
 take the macOS window model first, so these come before the rest:
 
-1. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
-   with a spring of ω0 45 and ζ 1.38, as measured; the margin of tiled windows
-   is still to be measured.
+1. The spring of a tile, then pairs and quarters, then restoring a tiled
+   window when it is dragged away.
 
 Then:
 
@@ -276,13 +277,33 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - Only the app starts a move or a resize, from its own title bar and edges:
   there is none started by the compositor (a modifier and a drag, or an edge
   drawn for an app without decorations), no touch or tablet drag, and no
-  snapping to the edges or tiling.
+  snapping to the edges; tiling is by keyboard only.
 - A request to maximize, minimize or go full screen is not answered: the
   window stays as it is, and a Qt title bar then shows its restore button.
-- After a resize the next configures carry the last size asked for, not the
-  one the client committed, so a client that changes its own size afterwards
-  goes back to it when the focus changes. mutter and KWin follow the committed
-  size.
+- The margin of tiled windows is not measured on macOS, so
+  `WINDOW_TILE_MARGIN` is 0.
+- A tile is applied at once, with no spring. There are no pairs, no quarters,
+  and a tiled window dragged away keeps its tiled size.
+- Whether macOS restores the position as well as the size, and what it does
+  with a window that cannot take the size of a tile, are not measured. Ours
+  restores position and size, and refuses a tile outside the client's minimum
+  and maximum.
+- A terminal snaps to its cells and leaves a gap at the right or bottom of its
+  tile (foot: up to 5 at the right and 11 at the bottom of a half).
+- An answer that arrives after a move begun meanwhile still lands the window
+  on its tile.
+- A tile does not follow a change of the display's size.
+- A tile asked before the client has answered a Return to Previous Size saves
+  the tiled frame as the previous one.
+- Return to Previous Size goes back to the frame before the first tile, even
+  after the window was moved or resized by hand since.
+- A focus change between the end of a pointer resize and the commit of a tile
+  asked meanwhile tells the client it may pick its size (0x0) before the tile
+  is committed.
+- A tile sends only a size, no `tiled` or `maximized` state.
+- Super stands in for fn, and Ctrl+Super+F is also what macOS's
+  Control+Command+F (full screen) would map to.
+- The letters are matched by keysym, so a non-Latin layout has no F, C or R.
 - A move started before the last commit of a resize can leave the window
   displaced by that last change of size.
 - With a Qt app Smithay logs `surface missing from known popups` each time a
@@ -315,6 +336,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Tiling by keyboard (step 23): nested, at scale 1, with `foot` and a Qt 6
+  app. Not checked: GTK 4, directly on a display, and a fractional scale.
 - Interactive resize (step 22): nested, at scale 1, with `foot` and a Qt 6
   app. Not checked: GTK 4, another scale, directly on a display, and the
   frame of a window smaller than about 43 points.

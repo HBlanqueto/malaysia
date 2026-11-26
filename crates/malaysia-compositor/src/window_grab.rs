@@ -96,14 +96,21 @@ impl State {
             send_if_all_acked(toplevel);
             return;
         };
-        let finished = toplevel.with_cached_state(|state| {
-            state
-                .last_acked
-                .as_ref()
-                .is_some_and(|acked| acked.serial >= last)
-        });
+        let finished = acked(toplevel, last);
+        if finished {
+            toplevel.with_pending_state(|state| state.size = None);
+        }
         cell.set((!finished).then_some(resize));
     }
+}
+
+pub fn acked(toplevel: &ToplevelSurface, serial: Serial) -> bool {
+    toplevel.with_cached_state(|state| {
+        state
+            .last_acked
+            .as_ref()
+            .is_some_and(|acked| acked.serial >= serial)
+    })
 }
 
 fn send_if_all_acked(toplevel: &ToplevelSurface) {

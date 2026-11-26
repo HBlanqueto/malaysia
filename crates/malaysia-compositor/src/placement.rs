@@ -17,7 +17,7 @@ fn cascaded(previous: i32, start: i32, free: i32, length: i32) -> i32 {
     }
 }
 
-fn location(
+pub fn location(
     free: Rectangle<i32, Logical>,
     size: Size<i32, Logical>,
     parent: Option<Rectangle<i32, Logical>>,

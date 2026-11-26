@@ -59,6 +59,7 @@ impl CompositorHandler for State {
                 toplevel.send_configure();
             }
             self.anchor_resized(&window);
+            self.finish_move_resize(&window);
         } else if let Some(PopupKind::Xdg(popup)) = self.popups.find_popup(surface)
             && !popup.is_initial_configure_sent()
             && let Err(error) = popup.send_configure()

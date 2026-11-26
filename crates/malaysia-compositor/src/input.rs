@@ -10,6 +10,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 
 use crate::state::{Backend, State};
+use crate::tiling::Tile;
 use crate::workspaces::desktops::{Direction, send_changed_state};
 
 pub const REPEAT_DELAY: i32 = 200;
@@ -20,10 +21,13 @@ enum KeyAction {
     Quit,
     SwitchVt(i32),
     SwitchDesktop(Direction),
+    Tile(Tile),
+    RestoreTiled,
 }
 
 fn key_action(modifiers: &ModifiersState, keysym: Keysym) -> Option<KeyAction> {
     let control_only = modifiers.ctrl && !modifiers.alt && !modifiers.shift && !modifiers.logo;
+    let control_super = modifiers.ctrl && modifiers.logo && !modifiers.alt && !modifiers.shift;
     match keysym.raw() {
         vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 => Some(
             KeyAction::SwitchVt((vt - keysyms::KEY_XF86Switch_VT_1 + 1) as i32),
@@ -31,6 +35,13 @@ fn key_action(modifiers: &ModifiersState, keysym: Keysym) -> Option<KeyAction> {
         keysyms::KEY_BackSpace if modifiers.ctrl && modifiers.alt => Some(KeyAction::Quit),
         keysyms::KEY_Left if control_only => Some(KeyAction::SwitchDesktop(Direction::Left)),
         keysyms::KEY_Right if control_only => Some(KeyAction::SwitchDesktop(Direction::Right)),
+        keysyms::KEY_f | keysyms::KEY_F if control_super => Some(KeyAction::Tile(Tile::Fill)),
+        keysyms::KEY_c | keysyms::KEY_C if control_super => Some(KeyAction::Tile(Tile::Center)),
+        keysyms::KEY_Left if control_super => Some(KeyAction::Tile(Tile::Left)),
+        keysyms::KEY_Right if control_super => Some(KeyAction::Tile(Tile::Right)),
+        keysyms::KEY_Up if control_super => Some(KeyAction::Tile(Tile::Top)),
+        keysyms::KEY_Down if control_super => Some(KeyAction::Tile(Tile::Bottom)),
+        keysyms::KEY_r | keysyms::KEY_R if control_super => Some(KeyAction::RestoreTiled),
         _ => None,
     }
 }
@@ -89,6 +100,8 @@ impl State {
                     Some(KeyAction::SwitchDesktop(direction)) => {
                         self.switch_desktop(direction, event.time())
                     }
+                    Some(KeyAction::Tile(tile)) => self.tile(tile),
+                    Some(KeyAction::RestoreTiled) => self.restore_tiled(),
                     None => {}
                 }
             }
@@ -244,6 +257,29 @@ mod tests {
         );
         assert_eq!(key_action(&ctrl_shift, left), None);
         assert_eq!(key_action(&ctrl_shift, right), None);
+    }
+
+    #[test]
+    fn ctrl_super_keys_tile_also_with_caps_lock_and_ctrl_super_left_does_not_switch_desktop() {
+        let ctrl_super = ModifiersState {
+            ctrl: true,
+            logo: true,
+            ..Default::default()
+        };
+        let action = |keysym| key_action(&ctrl_super, Keysym::new(keysym));
+        assert_eq!(action(keysyms::KEY_f), Some(KeyAction::Tile(Tile::Fill)));
+        assert_eq!(action(keysyms::KEY_F), Some(KeyAction::Tile(Tile::Fill)));
+        assert_eq!(action(keysyms::KEY_C), Some(KeyAction::Tile(Tile::Center)));
+        assert_eq!(action(keysyms::KEY_R), Some(KeyAction::RestoreTiled));
+        assert_eq!(action(keysyms::KEY_Left), Some(KeyAction::Tile(Tile::Left)));
+        assert_eq!(
+            action(keysyms::KEY_Down),
+            Some(KeyAction::Tile(Tile::Bottom))
+        );
+        assert_eq!(
+            key_action(&ModifiersState::default(), Keysym::new(keysyms::KEY_f)),
+            None
+        );
     }
 
     #[test]
