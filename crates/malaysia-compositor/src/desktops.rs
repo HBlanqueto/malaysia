@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use smithay::backend::input::InputTime;
-use smithay::desktop::{PopupManager, Space};
+use smithay::desktop::{PopupManager, Space, Window};
+use smithay::output::Output;
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
 use smithay::utils::{IsAlive, SERIAL_COUNTER};
 
 use crate::state::State;
@@ -45,6 +47,17 @@ pub fn stride(width: i32, scale: f64) -> i32 {
 
 pub fn desktop_x(index: usize, position: f64, stride: i32) -> i32 {
     ((index as f64 - position) * f64::from(stride)).round() as i32
+}
+
+fn suspend(window: &Window, output: &Output, time: Duration) {
+    let toplevel = window.toplevel().unwrap();
+    toplevel.with_pending_state(|state| {
+        state.states.set(ToplevelState::Suspended);
+    });
+    if toplevel.is_initial_configure_sent() {
+        toplevel.send_pending_configure();
+    }
+    window.send_frame(output, time, Some(Duration::ZERO), |_, _| None);
 }
 
 fn switch_target(
@@ -92,7 +105,10 @@ impl State {
         self.slide = None;
         self.strip_position = target;
         for (index, desktop) in self.desktops.iter_mut().enumerate() {
-            if index != self.current_desktop {
+            if index != self.current_desktop && desktop.outputs().next().is_some() {
+                for window in desktop.elements() {
+                    suspend(window, &self.output, now);
+                }
                 desktop.unmap_output(&self.output);
             }
         }
@@ -129,6 +145,11 @@ impl State {
             self.desktops.push(Space::default());
         }
         self.desktops[target].map_output(&self.output, (0, 0));
+        for window in self.desktops[target].elements() {
+            window.toplevel().unwrap().with_pending_state(|state| {
+                state.states.unset(ToplevelState::Suspended);
+            });
+        }
         self.current_desktop = target;
         let top_window = self.desktops[target]
             .elements()

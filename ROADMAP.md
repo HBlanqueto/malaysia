@@ -47,7 +47,8 @@ scale of 5/3):
 | 14 | `ctdesign`, BarrierKit's design tokens, and the compositor's own effects module | every window cut to the continuous corner of a macOS window, with the outline outside it and the inner line inside it, in light and dark and for the main window and the others; a BarrierKit app gets the corner of its bar (all four bars are 16 in barrierkit's data, so `set_bar` gives the default 16.8 for every bar and changes nothing visible today) | done `e43b9a5` |
 | 15 | the window shadow from `WINDOW_SHADOW_*` | every window casts the macOS shadow, stronger under the main window | done `2ed869e` |
 | 16 | Desktops: one `Space` per Desktop | Ctrl+Right on the last Desktop with windows opens an empty one, Ctrl+Left and Ctrl+Right move between them, and an empty last Desktop goes away when left | done `5837b11` |
-| 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a gap of 64 between them, and a second key press mid-slide carries on from where the strip is | done |
+| 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a gap of 64 between them, and a second key press mid-slide carries on from where the strip is | done `174f353` |
+| 18 | `suspended` for the windows of a hidden Desktop | a client on a hidden Desktop is told it is suspended when the slide ends, gets its pending frame callbacks once, and is told it is shown again at the switch back | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -213,8 +214,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   inactive one is an error.
 - A display mode is trusted as the kernel reports it; one with a zero total or
   a zero refresh would panic the compositor.
-- A window on a hidden Desktop gets no frame callback and no `suspended`
-  state.
+- A window on a hidden Desktop gets no frame callback after the one sent with
+  `suspended`, as in mutter and KWin, so a client that draws without waiting
+  for that state sleeps until it is shown.
 - Ctrl+Left and Ctrl+Right no longer reach apps, as on macOS.
 - Desktops are created by the key, because there is no Mission Control. An
   empty Desktop in the middle stays and an empty last one is dropped when it
