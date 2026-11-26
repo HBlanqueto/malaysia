@@ -210,6 +210,7 @@
                         time.sleep(1)
                     else:
                         raise AssertionError("the first Desktop is still shown")
+                    time.sleep(2)
                     machine.screenshot("second-desktop")
                     machine.send_key("ctrl-left")
                     machine.wait_for_text("zebra", timeout=300)

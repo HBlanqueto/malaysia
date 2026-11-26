@@ -14,8 +14,8 @@ session, apps show their menus, a HiDPI display gets a scale, whole or
 fractional, a BarrierKit app leaves its frame to the compositor, a
 signal stops the compositor cleanly, and every window gets the continuous
 corner of macOS with an outline outside, an inner line inside and the macOS
-shadow, and Ctrl+Left and Ctrl+Right move between Desktops. Next is
-the slide between Desktops. `linux-dmabuf` waited for a real GPU, which the development
+shadow, and Ctrl+Left and Ctrl+Right slide between Desktops. Next is
+cascade placement. `linux-dmabuf` waited for a real GPU, which the development
 laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -46,7 +46,8 @@ scale of 5/3):
 | review | An audit of the code on the Linux laptop | nested, the compositor stops when its host goes away and releases the keys when the host takes the keyboard; a menu whose grab is refused is closed | done |
 | 14 | `ctdesign`, BarrierKit's design tokens, and the compositor's own effects module | every window cut to the continuous corner of a macOS window, with the outline outside it and the inner line inside it, in light and dark and for the main window and the others; a BarrierKit app gets the corner of its bar (all four bars are 16 in barrierkit's data, so `set_bar` gives the default 16.8 for every bar and changes nothing visible today) | done `e43b9a5` |
 | 15 | the window shadow from `WINDOW_SHADOW_*` | every window casts the macOS shadow, stronger under the main window | done `2ed869e` |
-| 16 | Desktops: one `Space` per Desktop | Ctrl+Right on the last Desktop with windows opens an empty one, Ctrl+Left and Ctrl+Right move between them, and an empty last Desktop goes away when left | done |
+| 16 | Desktops: one `Space` per Desktop | Ctrl+Right on the last Desktop with windows opens an empty one, Ctrl+Left and Ctrl+Right move between them, and an empty last Desktop goes away when left | done `5837b11` |
+| 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a gap of 64 between them, and a second key press mid-slide carries on from where the strip is | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -54,13 +55,11 @@ and nested in another session.
 ## After this stage
 
 In the order they will be taken, one at a time. On 2026-11-26 the user asked to
-take the macOS window model first, so these three come before the rest:
+take the macOS window model first, so these two come before the rest:
 
-1. The slide between Desktops: a spring with ω0 24 and ζ 1.73 and a gap of 64
-   between Desktops, as measured.
-2. Cascade placement: a new window goes 29 right and 29 down from the previous
+1. Cascade placement: a new window goes 29 right and 29 down from the previous
    one, as measured; where the first window goes is still to be measured.
-3. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
+2. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
    with a spring of ω0 45 and ζ 1.38, as measured; the margin of tiled windows
    is still to be measured.
 
@@ -123,8 +122,10 @@ Later pass (2026-11-26), with the tables in barrierkit
 - **Window shadow:** a blurred box moved down. The main window has σ 19.5, dy 18
   and alpha .689 dark or .393 light; any other window has σ 7.75, dy 7 and alpha
   .431 or .210. Dark is about twice light.
-- **Space switch:** a spring with ω0 24 and ζ 1.73, 64 of gap between Spaces,
-  about 1 s until the last pixel and t90 at about 325 ms. Mission Control is a
+- **Space switch:** a spring measured at ω0 23 to 24 and ζ 1.72 to 1.75, 64
+  of gap between Spaces, half way at 103 to 119 ms, t90 at 319 to 331 ms and
+  about 1 s until the last pixel. The token is ω0 23 and ζ 1.72, because that
+  pair is half way at 109 ms and at 90 % at 327 ms, inside both ranges. Mission Control is a
   critically damped spring (ω0 25) of about 260 ms.
 - **Dock:** magnification 59 to 128 in about 115 ms with a radius of influence
   of 207; auto-hide waits about 250 ms; its glass blur is about 16.
@@ -170,7 +171,7 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 - Menus have no shadow.
 - A closing window disappears at once. The close animation needs a snapshot
-  of the dead surface and an animation clock, which do not exist yet.
+  of the dead surface, which does not exist yet.
 - Every window is cut to its window geometry, so a client's own shadow outside
   it (GTK) is not shown.
 - A window whose buffer is rotated or flipped is
@@ -223,15 +224,34 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - Every new window opens on the current Desktop and takes the focus, also a
   dialog or a window of an app on a hidden one.
 - Windows cannot be moved between Desktops.
-- The switch between Desktops has no slide yet.
+- A second key press mid-slide is not measured on macOS. Ours carries the
+  speed of the strip and can pass the target by at most 6 % of a Desktop.
+- The spring is read when the frame is rendered, not when it is presented.
+- A window wider than the display shows over the neighbouring Desktop during
+  the slide.
+- During the slide the pointer hits the target Desktop at its rest position.
+- The gap between Desktops shows the clear colour.
+- The slide has no Reduce Motion and no touchpad gesture.
+- A slide redraws the whole display on every refresh for about 1.1 s, though
+  after 0.6 s the strip moves under 18 pixels. Nested, in a debug build, one
+  slide costs 49 to 78 ms of CPU against 4 ms for the instant switch.
+- The windows of the Desktop left keep their frame callbacks and the display
+  until the strip rests.
+- The top window of the Desktop left takes the shadow of a window that is not
+  main at the key press; macOS is not measured there.
 - Each frame that renders nothing inserts a one-shot timer to send its frame
-  callbacks one refresh later; a reusable timer is not done.
+  callbacks one refresh later; a reusable timer is not done. The last frames
+  of a slide move no pixel, so each slide inserts several.
 
 ## Not verified
 
 - Desktops (step 16): nested, and directly on the virtual display of the
   machine check, which switches to an empty Desktop and back. Not checked: a
   drag at the switch, a Qt app.
+- The slide between Desktops (step 17): nested at scale 1, on the laptop, and
+  the machine check, which waits for the strip to rest. Not checked: the
+  slide on a real GPU directly on a display, a fractional scale, and a VT
+  switch mid-slide.
 - Real hardware: nested, the compositor has run on a laptop with an AMD GPU,
   with clients that draw through `wl_shm`. Directly on a display it has only
   run on virtual ones (vkms and QEMU's virtio GPU) with software rendering,

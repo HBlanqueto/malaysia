@@ -12,7 +12,7 @@ use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::{GlesError, GlesPixelProgram, GlesRenderer, GlesTexProgram};
 use smithay::backend::renderer::utils::CommitCounter;
 use smithay::desktop::{PopupManager, Window};
-use smithay::utils::{Logical, Physical, Rectangle, Size};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 
 pub use clip::Clipped;
 pub use lines::Lines;
@@ -91,17 +91,20 @@ impl Effects {
         })
     }
 
+    #[expect(clippy::too_many_arguments)]
     pub fn push_window(
         &self,
         renderer: &mut GlesRenderer,
         window: &Window,
         geometry: Rectangle<i32, Logical>,
+        desktop_offset: Point<i32, Physical>,
         scale: f64,
         main: bool,
         frame: &mut Vec<Element>,
     ) {
         let surface = window.toplevel().unwrap().wl_surface();
-        let location = (geometry.loc - window.geometry().loc).to_physical_precise_round(scale);
+        let location = (geometry.loc - window.geometry().loc).to_physical_precise_round(scale)
+            + desktop_offset;
         for (popup, popup_offset) in PopupManager::popups_for_surface(surface) {
             let offset = (window.geometry().loc + popup_offset - popup.geometry().loc)
                 .to_physical_precise_round(scale);
@@ -114,7 +117,8 @@ impl Effects {
                 Kind::Unspecified,
             ));
         }
-        let bounds: Rectangle<i32, Physical> = geometry.to_physical_precise_round(scale);
+        let mut bounds: Rectangle<i32, Physical> = geometry.to_physical_precise_round(scale);
+        bounds.loc += desktop_offset;
         let (radius, curve) = self.curve.fit(
             corner_radius(surface) * scale as f32,
             bounds.size.w.min(bounds.size.h) as f32 / 2.0,

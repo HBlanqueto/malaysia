@@ -1,3 +1,4 @@
+use std::iter;
 use std::time::{Duration, Instant};
 
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
@@ -19,6 +20,7 @@ use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
+use crate::desktops::{Slide, desktop_x, stride};
 use crate::drm::Drm;
 use crate::effects::{Clipped, Effects, Lines, Shadow};
 use crate::winit::Winit;
@@ -37,16 +39,39 @@ render_elements! {
 pub fn elements(
     renderer: &mut GlesRenderer,
     effects: &Effects,
-    space: &Space<Window>,
+    desktops: &[Space<Window>],
+    current: usize,
+    position: f64,
     output: &Output,
     frame: &mut Vec<Element>,
 ) {
     let scale = output.current_scale().fractional_scale();
-    for (index, window) in space.elements().rev().enumerate() {
-        let Some(geometry) = space.element_geometry(window) else {
+    let width = output.current_mode().map_or(0, |mode| mode.size.w);
+    let stride = stride(width, scale);
+    let others = desktops
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != current);
+    for (index, desktop) in iter::once((current, &desktops[current])).chain(others) {
+        let x = desktop_x(index, position, stride);
+        if x.abs() >= width || desktop.outputs().next().is_none() {
             continue;
-        };
-        effects.push_window(renderer, window, geometry, scale, index == 0, frame);
+        }
+        for (order, window) in desktop.elements().rev().enumerate() {
+            let Some(geometry) = desktop.element_geometry(window) else {
+                continue;
+            };
+            let main = index == current && order == 0;
+            effects.push_window(
+                renderer,
+                window,
+                geometry,
+                (x, 0).into(),
+                scale,
+                main,
+                frame,
+            );
+        }
     }
 }
 
@@ -64,6 +89,8 @@ pub struct State {
     pub output: Output,
     pub desktops: Vec<Space<Window>>,
     pub current_desktop: usize,
+    pub slide: Option<Slide>,
+    pub strip_position: f64,
     pub popups: PopupManager,
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
@@ -102,18 +129,29 @@ impl State {
 
     pub fn render(&mut self) {
         self.needs_redraw = false;
+        self.advance_slide(self.start_time.elapsed());
         self.frame_pending = true;
         let pointer = self.seat.get_pointer().unwrap().current_location();
         let rendered = match &mut self.backend {
-            Backend::Drm(drm) => drm.render(
-                &self.desktops[self.current_desktop],
-                &self.output,
-                &self.cursor_status,
-                pointer,
-                &mut self.frame_elements,
-            ),
+            Backend::Drm(drm) => {
+                drm.push_cursor(
+                    &self.output,
+                    &self.cursor_status,
+                    pointer,
+                    &mut self.frame_elements,
+                );
+                drm.render(
+                    &self.desktops,
+                    self.current_desktop,
+                    self.strip_position,
+                    &self.output,
+                    &mut self.frame_elements,
+                )
+            }
             Backend::Winit(winit) => winit.render(
-                &self.desktops[self.current_desktop],
+                &self.desktops,
+                self.current_desktop,
+                self.strip_position,
                 &self.output,
                 &mut self.frame_elements,
             ),
@@ -151,7 +189,12 @@ impl State {
     pub fn frame_done(&mut self) {
         self.frame_pending = false;
         let time = self.start_time.elapsed();
-        for window in self.desktops[self.current_desktop].elements() {
+        for window in self
+            .desktops
+            .iter()
+            .filter(|desktop| desktop.outputs().next().is_some())
+            .flat_map(Space::elements)
+        {
             window.send_frame(&self.output, time, Some(Duration::ZERO), |_, _| {
                 Some(self.output.clone())
             });
