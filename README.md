@@ -78,8 +78,8 @@ WAYLAND_DISPLAY=wayland-1 foot
 
 Directly on a display, Ctrl+Alt+Backspace quits and Ctrl+Alt+F1 to F12 switch
 to another VT. `RUST_LOG` sets the log level per module, for example
-`RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=dark` draws the window frame in
-the dark scheme; without it the frame is light. It is temporary, until the
+`RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame in
+the light scheme; without it the frame is dark. It is temporary, until the
 appearance store exists.
 
 ### First run on a real machine

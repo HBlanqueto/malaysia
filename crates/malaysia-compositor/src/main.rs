@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(fmt::layer())
         .with(filter)
         .init();
-    let dark = std::env::var("MALAYSIA_SCHEME").is_ok_and(|scheme| scheme == "dark");
+    let dark = std::env::var("MALAYSIA_SCHEME").map_or(true, |scheme| scheme != "light");
     let device = std::env::args_os().nth(1).map(PathBuf::from);
     let nested = std::env::var_os("WAYLAND_DISPLAY").is_some();
 

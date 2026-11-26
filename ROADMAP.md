@@ -154,8 +154,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   it (GTK) is not shown.
 - A window whose buffer is rotated or flipped is
   drawn square.
-- The scheme of the frame lines comes from `MALAYSIA_SCHEME` (`dark`, or
-  light by default), read once at start. It is temporary, until the
+- The scheme of the frame lines comes from `MALAYSIA_SCHEME` (`light`, or
+  dark by default), read once at start. It is temporary, until the
   appearance store exists.
 - A click outside an open menu closes the menu and also reaches the window
   under it, without giving that window the focus. KWin keeps that click.
