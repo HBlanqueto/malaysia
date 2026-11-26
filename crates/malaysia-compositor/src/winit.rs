@@ -4,7 +4,7 @@ use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::desktop::{Space, Window};
-use smithay::output::{Mode, Output, PhysicalProperties, Subpixel};
+use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size, Transform};
@@ -51,10 +51,13 @@ impl Winit {
         output.create_global::<State>(display_handle);
 
         loop_handle.insert_source(event_loop, |event, _, state| match event {
-            WinitEvent::Resized { size, .. } => {
-                state
-                    .output
-                    .change_current_state(Some(mode(size)), None, None, None);
+            WinitEvent::Resized { size, scale_factor } => {
+                state.output.change_current_state(
+                    Some(mode(size)),
+                    None,
+                    Some(Scale::Fractional(scale_factor)),
+                    None,
+                );
                 state.needs_redraw = true;
             }
             WinitEvent::Redraw => state.render(),

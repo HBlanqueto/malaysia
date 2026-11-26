@@ -19,7 +19,7 @@ use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::primary_gpu;
 use smithay::desktop::{Space, Window};
 use smithay::input::pointer::{CursorImageAttributes, CursorImageStatus};
-use smithay::output::{Mode, Output, PhysicalProperties};
+use smithay::output::{Mode, Output, PhysicalProperties, Scale};
 use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::drm::control::{Device, ModeTypeFlags, connector};
 use smithay::reexports::input::Libinput;
@@ -28,6 +28,7 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point};
 use smithay::wayland::compositor::with_states;
 
+use crate::scale::integer_scale;
 use crate::state::{Backend, CLEAR_COLOR, Element, State, elements};
 
 const CURSOR_SIZE: i32 = 16;
@@ -86,12 +87,18 @@ impl Drm {
             .or(connector.modes().first())
             .copied()
             .ok_or("connector has no mode")?;
+        let (width_mm, height_mm) = connector.size().unwrap_or((0, 0));
+        let output_mode = Mode::from(mode);
+        let scale = integer_scale((width_mm as i32, height_mm as i32).into(), output_mode.size);
         tracing::info!(
             connector = ?connector.interface(),
             id = connector.interface_id(),
             width = mode.size().0,
             height = mode.size().1,
             refresh = mode.vrefresh(),
+            width_mm,
+            height_mm,
+            scale,
             "mode chosen"
         );
         let crtc = connector
@@ -106,7 +113,6 @@ impl Drm {
             })
             .ok_or("no crtc for the connector")?;
 
-        let (width_mm, height_mm) = connector.size().unwrap_or((0, 0));
         let output = Output::new(
             format!(
                 "{}-{}",
@@ -121,9 +127,13 @@ impl Drm {
                 serial_number: String::new(),
             },
         );
-        let output_mode = Mode::from(mode);
         output.set_preferred(output_mode);
-        output.change_current_state(Some(output_mode), None, None, Some((0, 0).into()));
+        output.change_current_state(
+            Some(output_mode),
+            None,
+            Some(Scale::Integer(scale)),
+            Some((0, 0).into()),
+        );
         output.create_global::<State>(display_handle);
 
         let surface = drm.create_surface(crtc, mode, &[connector.handle()])?;
@@ -228,7 +238,7 @@ impl Drm {
         pointer: Point<f64, Logical>,
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
-        self.push_cursor(cursor, pointer, frame);
+        self.push_cursor(output, cursor, pointer, frame);
         elements(&mut self.renderer, space, output, frame)?;
         let is_empty = self
             .compositor
@@ -243,10 +253,12 @@ impl Drm {
 
     fn push_cursor(
         &mut self,
+        output: &Output,
         cursor: &CursorImageStatus,
         pointer: Point<f64, Logical>,
         frame: &mut Vec<Element>,
     ) {
+        let scale = output.current_scale().fractional_scale();
         match cursor {
             CursorImageStatus::Hidden => {}
             CursorImageStatus::Surface(surface) if surface.alive() => {
@@ -259,20 +271,22 @@ impl Drm {
                         .unwrap()
                         .hotspot
                 });
-                let location = (pointer - hotspot.to_f64()).to_physical(1.0).to_i32_round();
+                let location = (pointer - hotspot.to_f64())
+                    .to_physical(scale)
+                    .to_i32_round();
                 frame.extend(render_elements_from_surface_tree::<_, Element>(
                     &mut self.renderer,
                     surface,
                     location,
-                    1.0,
+                    scale,
                     1.0,
                     Kind::Cursor,
                 ));
             }
             _ => frame.push(Element::Solid(SolidColorRenderElement::from_buffer(
                 &self.cursor_fallback,
-                pointer.to_physical(1.0).to_i32_round(),
-                1.0,
+                pointer.to_physical(scale).to_i32_round(),
+                scale,
                 1.0,
                 Kind::Cursor,
             ))),

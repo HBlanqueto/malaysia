@@ -55,42 +55,57 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          machineConfig =
+            { lib, ... }:
+            {
+              users.users.alice = {
+                isNormalUser = true;
+                uid = 1000;
+              };
+              services.getty.autologinUser = "alice";
+              programs.bash.loginShellInit = ''
+                if [ "$(tty)" = /dev/tty1 ]; then
+                  malaysia-compositor >/tmp/malaysia.log 2>&1; echo $? >/tmp/exit
+                fi
+              '';
+              hardware.graphics.enable = true;
+              security.polkit.enable = true;
+              fonts.enableDefaultPackages = true;
+              environment.systemPackages = [
+                self.packages.${system}.default
+                pkgs.foot
+                pkgs.mousepad
+              ];
+              virtualisation.qemu.options = [
+                "-vga none"
+                "-device virtio-gpu-pci"
+                "-device virtio-mouse-pci"
+              ];
+              virtualisation.memorySize = 2048;
+              virtualisation.useNixStoreImage = true;
+              virtualisation.writableStore = false;
+              virtualisation.sharedDirectories = lib.mkForce { };
+            };
+          hidpiEdid = pkgs.runCommand "hidpi-edid" { } ''
+            mkdir -p $out/lib/firmware/edid
+            ${pkgs.qemu_test}/bin/qemu-edid -x 1600 -y 900 -d 270 -o $out/lib/firmware/edid/hidpi.bin
+          '';
         in
         {
           vm = pkgs.testers.runNixOSTest {
             name = "malaysia-drm";
             enableOCR = true;
-            nodes.machine =
-              { lib, ... }:
-              {
-                users.users.alice = {
-                  isNormalUser = true;
-                  uid = 1000;
-                };
-                services.getty.autologinUser = "alice";
-                programs.bash.loginShellInit = ''
-                  if [ "$(tty)" = /dev/tty1 ]; then
-                    malaysia-compositor >/tmp/malaysia.log 2>&1; echo $? >/tmp/exit
-                  fi
-                '';
-                hardware.graphics.enable = true;
-                security.polkit.enable = true;
-                fonts.enableDefaultPackages = true;
-                environment.systemPackages = [
-                  self.packages.${system}.default
-                  pkgs.foot
-                  pkgs.mousepad
-                ];
-                virtualisation.qemu.options = [
-                  "-vga none"
-                  "-device virtio-gpu-pci"
-                  "-device virtio-mouse-pci"
-                ];
-                virtualisation.memorySize = 2048;
-                virtualisation.useNixStoreImage = true;
-                virtualisation.writableStore = false;
-                virtualisation.sharedDirectories = lib.mkForce { };
-              };
+            nodes.machine = machineConfig;
+            nodes.hidpi = {
+              imports = [ machineConfig ];
+              hardware.display.edid.packages = [ hidpiEdid ];
+              hardware.display.outputs."Virtual-1".edid = "hidpi.bin";
+              boot.initrd.extraFirmwarePaths = [ "edid/hidpi.bin" ];
+              virtualisation.qemu.options = [
+                "-global virtio-gpu-device.xres=1600"
+                "-global virtio-gpu-device.yres=900"
+              ];
+            };
             testScript =
               let
                 typist = pkgs.writeShellScript "typist" ''
@@ -107,9 +122,9 @@
                 import subprocess
                 import time
 
-                def screen(name):
-                    machine.screenshot(name)
-                    ppm = subprocess.run(f"pngtopnm {machine.out_dir}/{name}.png | ppmtoppm", shell=True, capture_output=True, check=True).stdout
+                def screen(name, node=machine):
+                    node.screenshot(name)
+                    ppm = subprocess.run(f"pngtopnm {node.out_dir}/{name}.png | ppmtoppm", shell=True, capture_output=True, check=True).stdout
                     _, size, _, data = ppm.split(b"\n", 3)
                     return int(size.split()[0]), data
 
@@ -121,8 +136,8 @@
                 def white_points(width, data):
                     return [(i // 3 % width, i // 3 // width) for i in range(0, len(data), 3) if data[i:i + 3] == b"\xff\xff\xff"]
 
-                def white(name):
-                    return white_points(*screen(name))
+                def white(name, node=machine):
+                    return white_points(*screen(name, node))
 
                 def has_fallback_cursor(points):
                     lit = set(points)
@@ -200,8 +215,41 @@
                 assert machine.succeed("cat /tmp/exit").strip() == "0"
                 assert machine.succeed("fgconsole").strip() == "1"
                 assert "drm backend path=/dev/dri/card0" in compositor_log
+                assert "scale=1" in compositor_log
                 for line in compositor_log.splitlines():
                     assert "ERROR" not in line, line
+                machine.shutdown()
+
+                try:
+                    hidpi.wait_for_file("/run/user/1000/wayland-1", timeout=600)
+                    hidpi.succeed("grep -q 'mode chosen.*width=1600 height=900.*scale=2' /tmp/malaysia.log")
+                    hidpi.wait_until_succeeds("[ $(grep -c 'New device' /tmp/malaysia.log) -ge $(ls /dev/input/event* | wc -l) ]", timeout=120)
+                    hidpi.send_monitor_command("mouse_move 300 300")
+                    for _ in range(60):
+                        fallback = white("hidpi-cursor-fallback", hidpi)
+                        if fallback and bounds(fallback)[:2] != (0, 0):
+                            break
+                        time.sleep(1)
+                    print("hidpi fallback", bounds(fallback), len(fallback))
+                    assert bounds(fallback)[2:] == (32, 32) and len(fallback) == 1024
+                    hidpi.send_monitor_command("mouse_move 5000 5000")
+                    for _ in range(60):
+                        corner = white("hidpi-corner", hidpi)
+                        if corner and bounds(corner)[:2] == (1598, 898):
+                            break
+                        time.sleep(1)
+                    print("hidpi corner", bounds(corner), len(corner))
+                    assert bounds(corner) == (1598, 898, 2, 2) and len(corner) == 4
+                    hidpi.succeed("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 WAYLAND_DEBUG=1 foot -o font=monospace:size=24 ${typist}' >/tmp/foot.log 2>&1 &")
+                    hidpi.wait_for_file("/tmp/ready", timeout=300)
+                    hidpi.send_chars("malaysia\n")
+                    hidpi.wait_until_succeeds("[ \"$(cat /tmp/typed1)\" = malaysia ]", timeout=120)
+                    hidpi.wait_for_text("malaysia", timeout=300)
+                    hidpi.screenshot("hidpi-typed")
+                    hidpi.succeed("grep -q 'wl_output#[0-9]*\\.scale(2)' /tmp/foot.log")
+                    hidpi.succeed("grep -q 'set_buffer_scale(2)' /tmp/foot.log")
+                finally:
+                    print(hidpi.execute("grep -v 'GL Extensions\\|EGL.*extensions' /tmp/malaysia.log")[1])
               '';
           };
         }

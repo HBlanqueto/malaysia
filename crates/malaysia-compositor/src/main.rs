@@ -1,6 +1,7 @@
 mod drm;
 mod handlers;
 mod input;
+mod scale;
 mod state;
 mod winit;
 

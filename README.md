@@ -5,7 +5,9 @@ Malaysia is a Wayland compositor written in Rust on
 
 It is being rebuilt from its foundation, one dependency at a time. Today it
 draws the windows and the menus of Wayland clients that use `xdg_shell` and
-shared-memory buffers, and gives them a keyboard and a pointer. It runs in two ways:
+shared-memory buffers, and gives them a keyboard and a pointer. A HiDPI
+display gets a scale of 2, 3 or 4, chosen from its physical size and
+resolution. It runs in two ways:
 
 - **Directly on a display.** Started from a TTY by a normal user, it takes its
   session from libseat, finds the GPU through udev, drives the display through
@@ -104,7 +106,9 @@ nix build .#checks.<system>.vm
 The last one boots a NixOS machine, logs a normal user in on a TTY, runs the
 compositor directly on the virtual GPU, types into a terminal, moves the mouse
 and checks the cursor, switches to another VT and back, types again, opens and closes a menu in a
-text editor and quits.
+text editor and quits. A second machine, whose display reports a small
+1600x900 panel, checks that the compositor picks scale 2 and that the cursor
+and a terminal are drawn at it.
 
 On a Mac, `vm.sh` runs all of this in a Linux box that has a virtual display
 and a headless desktop:
