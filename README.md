@@ -17,7 +17,8 @@ It runs in two ways:
 - **Nested.** Started inside a Wayland session, it is a window of that desktop.
 
 [ROADMAP.md](ROADMAP.md) says which step is in progress, what is missing and
-what has not been verified. Nothing has run on real hardware yet.
+what has not been verified. Nested, it has run on a laptop with a real GPU;
+directly on a real display it has not run yet.
 
 ## Design
 

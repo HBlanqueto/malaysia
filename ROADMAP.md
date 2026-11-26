@@ -10,16 +10,17 @@ Last update: 2026-11-25.
 ## Where we are
 
 **Now:** the compositor runs directly on a display and nested in a Wayland
-session, apps show their menus, and a HiDPI display gets a scale, whole or
+session, apps show their menus, a HiDPI display gets a scale, whole or
 fractional, and a BarrierKit app leaves its frame to the compositor. Next is
-layer shell; `linux-dmabuf` waits for a real GPU. Nothing has run on real
-hardware yet.
+layer shell. `linux-dmabuf` waited for a real GPU, which the development
+laptop now has. Nested, the compositor has run on that laptop's GPU; directly
+on a real display it has not run yet.
 
-The display after the last finished step (step 11: on a NixOS machine whose
-display reports a 180x100 mm panel at 1600x900, directly on the display, a
-terminal drawn at a scale of 5/3):
+The display after step 11 (on a NixOS machine whose display reports a
+180x100 mm panel at 1600x900, directly on the display, a terminal drawn at a
+scale of 5/3):
 
-![The display after the last finished step](screen.png)
+![The display after step 11](screen.png)
 
 | Step | What it adds | What can be seen | State |
 |---|---|---|---|
@@ -36,8 +37,8 @@ terminal drawn at a scale of 5/3):
 | review | The whole code read against Smithay's source | fixes for focus, hidden errors and a retried frame | done `afa81d4` |
 | 9 | Popups: `xdg_popup` with its keyboard and pointer grab | a menu, its submenus and a context menu that stays inside the display | done `5c5d116` |
 | 10 | Output scale: 1 to 4, chosen from the display's physical size and mode with mutter's rule; nested, the host's scale | windows, menus and the cursor twice as large on a HiDPI panel | done `17d9fe9` |
-| 11 | Fractional scale: `wp_fractional_scale_v1` and `wp_viewporter`, and mutter's fractional rule (steps of a half, a third and a quarter that divide the mode) | a terminal drawn sharp at 5/3 | done |
-| 12 | `limitless`, the protocol shared with BarrierKit: the `limitless_window_style_v1` global at version 1 | a BarrierKit app leaves its frame and its round corners to the compositor | done |
+| 11 | Fractional scale: `wp_fractional_scale_v1` and `wp_viewporter`, and mutter's fractional rule (steps of a half, a third and a quarter that divide the mode) | a terminal drawn sharp at 5/3 | done `44fba23` |
+| 12 | `limitless`, the protocol shared with BarrierKit: the `limitless_window_style_v1` global at version 1 | a BarrierKit app leaves its frame and its round corners to the compositor, which does not draw them yet | done `da4b026` |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -49,8 +50,8 @@ In the order they will be taken, one at a time:
 1. `linux-dmabuf`: until then every client draws with software rendering, so a
    real machine looks slower than it is. It is written and kept out of the
    branch: it only turns on with a hardware render node, and the test machines
-   have none, so it waits for a real GPU to be checked on. The steps below go
-   ahead meanwhile.
+   have none. The development laptop has one since 2026-11-25, so it can be
+   checked there. The steps below go ahead meanwhile.
 2. Layer shell, which the shell needs to place its surfaces.
 3. `bk` returns, with its first two components: the lock screen and the
    screen capture portal.
@@ -75,10 +76,11 @@ for the nested one. `./vm.sh shot file.png` captures the virtual display.
 With a device argument the compositor runs directly on that device. With no
 argument it runs nested when `WAYLAND_DISPLAY` is set.
 
-The box has no seat, no udev and no real GPU. Steps 7 and 8 are checked in a
-NixOS virtual machine with a full Linux session (`./vm.sh test dir` runs it
-and writes its screenshots to `dir`; it is the flake's `checks.<system>.vm`), and what only real hardware can
-prove is marked here as **not verified on hardware** until someone runs it.
+Steps 7 and 8 need a seat, udev and a GPU, which the box of a Mac lacks. They
+are checked in a NixOS virtual machine with a full Linux session, the flake's
+`checks.<system>.vm` (on a Mac, `./vm.sh test dir` runs it and writes its
+screenshots to `dir`). What only real hardware can prove is marked here as
+**not verified on hardware** until someone runs it.
 
 ## Known gaps
 
@@ -115,17 +117,20 @@ prove is marked here as **not verified on hardware** until someone runs it.
 - The compositor must be started from the active VT; starting it from an
   inactive one is an error.
 - There is no signal handling: when the process is killed, logind or seatd
-  give the VT back.
+  give the VT back, and its `wayland-N` socket file stays behind until the
+  next start takes the name back.
+- A menu whose grab is refused, because its window lost the focus, stays open.
+  `xdg_popup.grab` asks for it to be dismissed.
 
 ## Not verified
 
-- Real hardware: so far the compositor has only run on virtual displays (vkms
-  and QEMU's virtio GPU) with software rendering, and with QEMU's keyboard and
-  mouse. A real GPU driver, a touchpad and several GPUs are untested.
+- Real hardware: nested, the compositor has run on a laptop with an AMD GPU,
+  with clients that draw through `wl_shm`. Directly on a display it has only
+  run on virtual ones (vkms and QEMU's virtio GPU) with software rendering,
+  and with QEMU's keyboard and mouse. A real GPU driver on the direct backend,
+  a touchpad and several GPUs are untested.
 - The hardware cursor plane: on the virtual displays the cursor was always
   drawn into the frame.
-- x86_64: the package and the machine check evaluate but have only been built
-  and run on aarch64.
 - A frame lost while the session is paused, and starting from a VT that is not
   the active one.
 - Scroll, drag and drop and the clipboard.

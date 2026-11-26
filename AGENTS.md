@@ -10,9 +10,10 @@ how both solve it, then build it on Smithay.
 ## Rebuild from zero (in force since 2026-11-25)
 
 The project is being rebuilt from its foundation. The previous code left the
-branch at commit `8bbad9a`; it stays in the history at `fdb3f801` and as a
-read-only reference in `~/src/Remake-Malaysia/legacy/malaysia/`. Read it to
-learn what was solved; never copy a file whole.
+branch at commit `8bbad9a`; it stays in the history at `fdb3f801`
+(`git show fdb3f801:<path>`) and, on the machines that have it, as a read-only
+reference in `~/src/Remake-Malaysia/legacy/malaysia/`. Read it to learn what
+was solved; never copy a file whole.
 
 - One step adds one dependency (or one Smithay feature) and one visible
   result. The flake grows in the same step, with only what that step needs.
@@ -25,7 +26,7 @@ learn what was solved; never copy a file whole.
 - The rules below that name code not yet rebuilt (shell, `bk`, `ctdesign`,
   `config.rs`, i18n) apply when that part returns.
 
-> **Repository:** `bk`, `ctdesign`, `ctappearance` and `infinity-protocol`
+> **Repository:** `bk`, `ctdesign`, `ctappearance` and `limitless`
 > live in [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
 > Edit barrierkit on its `main` and bump the `rev` in `Cargo.toml`.
 
@@ -143,9 +144,10 @@ Applies to decorations, chrome, shadows, blur, borders, themes and shell.
    `freya-edit`, `freya-animation`, `freya-engine`, `freya-clipboard`, `torin`
    and `ragnarok`), **never** `freya` or `freya-winit`, and uses `ctdesign`.
    Grade Animation is a module of the kit on `freya-animation`, with its own
-   spring. Infinity is the private app↔compositor protocol; the compositor
-   implements it (`infinity.rs`). `otto-kit`, `otto-foundations`, `otto-dbus`,
-   `otto-surface-style` and `laye-rs` are not used.
+   spring. `limitless` is the private app↔compositor protocol; the compositor
+   implements it, starting with `window_style.rs`. `otto-kit`,
+   `otto-foundations`, `otto-dbus`, `otto-surface-style` and `laye-rs` are not
+   used.
 
 ## Build and test
 
