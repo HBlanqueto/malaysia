@@ -68,6 +68,60 @@ In the order they will be taken, one at a time:
 The decisions and the new dependencies are in the «Design» section of
 [README.md](README.md). None of it is built yet.
 
+## What macOS does (measured, 2026-11-25)
+
+Measured on macOS 27.2.1, one 2560×1440 display at 180 Hz, with the Dock
+visible (autohide off), through `NSScreen`, `CGWindowList`, the accessibility
+tree and screenshots. Sizes are points. Modes tried: 2560×1440 and 1920×1080
+at scale 1, 1280×720 and 960×540 at scale 2.
+
+- **Menu bar:** 30 in every mode. It is a window of its own, not part of the
+  Dock.
+- **Dock (tile 59):** the Dock is 79 high and 6 above the bottom edge, and the
+  area it reserves is 85, from the same bottom edge, in all modes where it
+  fits. At 960×540 it shrinks to 66 high and reserves 72, and its width is the
+  screen minus 36 each side. With autohide on it reserves nothing. Its pill top
+  edge matches the reserved edge in the pixels.
+- **Windows:** the app decides the first position, not the system. A new window
+  of the same app goes 29 right and 29 down from the previous one, and a
+  Finder window (700×600) and a TextEdit window (603×505) both follow it. After
+  a mode change the first window opened at 316,30, that is, clamped under the
+  menu bar. Why it started at x 316 is not understood.
+- **Dialogs:** a sheet is centered horizontally on its window (Finder's Go to
+  Folder, 460 wide, sits 120 in from a 700 wide window and 102 below its top).
+  The Open panel with no window is centered horizontally and its top is
+  `(screen height − panel height) / 4 + 2`: 250 at 1440 and 160 at 1080 for a
+  panel 448 high. Two points only.
+- **Spaces:** the switch with Control+arrow is a slide of about 126 frames at
+  180 Hz (about 0.7 s) with a fast start and a slow end. This timing is rough:
+  the screen capture also sees other windows change.
+- **Frames:** the display link ticks every 5.556 ms (180 Hz) with a spread of
+  0.03 ms over 539 frames. Screen capture saw 11.1 ms gaps in about a quarter of
+  the frames, and it cannot tell if the compositor or the capture caused them.
+
+Later pass (2026-11-26), with the tables in barrierkit
+`docs/research/macos-measurements-2026-11-26.md`:
+
+- **Scale:** every value is in points. 1920×1080 at scale 1 gives the
+  2560×1440 numbers, and 1280×720 at scale 2 doubles every pixel value.
+- **Window shadow:** a blurred box moved down. The main window has σ 19.5, dy 18
+  and alpha .689 dark or .393 light; any other window has σ 7.5, dy 7 and alpha
+  .431 or .210. Dark is about twice light.
+- **Space switch:** a spring with ω0 24 and ζ 1.73, 64 of gap between Spaces,
+  about 1 s until the last pixel and t90 at about 325 ms. Mission Control is a
+  critically damped spring (ω0 25) of about 260 ms.
+- **Dock:** magnification 59 to 128 in about 115 ms with a radius of influence
+  of 207; auto-hide waits about 250 ms; its glass blur is about 16.
+- **Wallpaper tint:** one colour per window, the average of the wallpaper under
+  the frame, mixed in encoded sRGB with k about .046 (dark window background)
+  and about .045 for blurring materials; light windows are not tinted.
+- **Not understood:** the window open shows no scale animation, and the menu
+  bar ink and Control Center ignore the light scheme.
+
+Not measured: banners and Notification Center, glass at slider 0, the system
+switches (Reduce Transparency, Increase Contrast, Reduce Motion), mouse drag
+and snap, more than one display.
+
 ## How each step is checked
 
 On Linux the checks and `./dev.sh demo` (the nested session with a terminal)
