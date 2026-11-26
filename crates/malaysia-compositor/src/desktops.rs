@@ -49,13 +49,10 @@ pub fn stride(width: i32, scale: f64) -> i32 {
     width + gap(scale)
 }
 
-pub fn gap_x(position: f64, count: usize, width: i32, scale: f64) -> Option<i32> {
-    let next = position.floor() + 1.0;
-    if !(1.0..count as f64).contains(&next) {
-        return None;
-    }
+pub fn gap_x(position: f64, width: i32, scale: f64) -> Option<i32> {
     let gap = gap(scale);
-    let x = desktop_x(next as usize, position, stride(width, scale)) - gap;
+    let next = position.floor() as usize + 1;
+    let x = desktop_x(next, position, stride(width, scale)) - gap;
     (x + gap > 0 && x < width).then_some(x)
 }
 
@@ -251,10 +248,11 @@ mod tests {
     }
 
     #[test]
-    fn the_gap_sits_left_of_the_arriving_desktop_and_is_absent_at_rest() {
-        assert_eq!(gap_x(0.5, 2, 1280, 1.0), Some(1280 + 64 - 672 - 64));
-        assert_eq!(gap_x(0.0, 2, 1280, 1.0), None);
-        assert_eq!(gap_x(1.0, 2, 1280, 1.0), None);
-        assert_eq!(gap_x(0.5, 1, 1280, 1.0), None);
+    fn the_gap_sits_right_of_the_desktop_the_strip_is_on_and_is_absent_at_rest_and_left_of_the_first()
+     {
+        assert_eq!(gap_x(0.5, 1280, 1.0), Some(1280 + 64 - 672 - 64));
+        assert_eq!(gap_x(0.0, 1280, 1.0), None);
+        assert_eq!(gap_x(1.0, 1280, 1.0), None);
+        assert_eq!(gap_x(-0.03, 1280, 1.0), None);
     }
 }

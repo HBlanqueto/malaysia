@@ -75,7 +75,7 @@ pub fn elements(
             );
         }
     }
-    if let Some(x) = gap_x(position, desktops.len(), width, scale) {
+    if let Some(x) = gap_x(position, width, scale) {
         effects.push_gap(
             Rectangle::new((x, 0).into(), (gap(scale), height).into()),
             frame,
