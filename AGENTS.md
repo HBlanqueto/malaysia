@@ -17,9 +17,11 @@ learn what was solved; never copy a file whole.
 - One step adds one dependency (or one Smithay feature) and one visible
   result. The flake grows in the same step, with only what that step needs.
 - A step is done when it passes the checks of «Build and test», is shown
-  working in the box, `ROADMAP.md` and `README.md` say so, and it is pushed.
-- The compositor runs directly on DRM. The box has no seat, udev or real
-  GPU: what needs them is verified on another Linux host before it is pushed.
+  working on the host (on a Mac, in the box of `vm.sh`), `ROADMAP.md` and
+  `README.md` say so, and it is pushed.
+- The compositor runs directly on DRM. On a Mac, the box of `vm.sh` has no
+  seat, udev or real GPU: what needs them is verified on a Linux host before
+  it is pushed.
 - The rules below that name code not yet rebuilt (shell, `bk`, `ctdesign`,
   `config.rs`, i18n) apply when that part returns.
 
@@ -149,9 +151,12 @@ Applies to decorations, chrome, shadows, blur, borders, themes and shell.
 
 On Linux, run the checks on the host with `nix develop -c cargo …` and the
 nested session with `nix develop -c ./dev.sh demo` (it opens a terminal in
-the compositor). `vm.sh` is only for a Mac, which does not build the
-compositor: there everything runs in the podman box of `vm.sh`, aarch64
-Linux with Nix and a virtual KMS display (`vkms`) at `/dev/dri/card0`, and a headless sway with VNC on `vnc://127.0.0.1:5901`. With
+the compositor).
+
+`vm.sh` and its box are only for a Mac, and only when the user asks for it.
+The Mac does not build the compositor: there everything runs in the podman
+box of `vm.sh`, aarch64 Linux with Nix and a virtual KMS display (`vkms`) at
+`/dev/dri/card0`, and a headless sway with VNC on `vnc://127.0.0.1:5901`. With
 the device argument the compositor runs directly on vkms and its screen is
 seen with `./vm.sh shot`; with no argument it runs nested in sway and is seen
 with `grim` in the box or over VNC.
@@ -171,8 +176,8 @@ with `grim` in the box or over VNC.
 
 ## Environment rule
 
-Change nothing outside the repo, the podman machine and containers of `vm.sh`
-and `$XDG_RUNTIME_DIR/malaysia`: sockets, session files or services.
+Change nothing outside the repo, `$XDG_RUNTIME_DIR/malaysia` and, on a Mac,
+the podman machine and containers of `vm.sh`: sockets, session files or services.
 
 - **Sockets:** only the `wayland-N` served by `malaysia-compositor`, by exact
   name. Never `wayland-0` or another process's sockets.
@@ -249,8 +254,8 @@ They are followed to the letter. The shortest diff and the shortest answer win.
 13. **Each dependency pays for its build.** `default-features = false` and
     only the features in use. A crate that gives one function is replaced by
     own code if that builds less.
-14. **It is measured.** A performance change is compared in the box, before
-    and after, or with `cargo build --timings`; if it does not improve, it is
+14. **It is measured.** A performance change is compared on the same
+    machine, before and after, or with `cargo build --timings`; if it does not improve, it is
     reverted.
 
 ### How it applies in malaysia
