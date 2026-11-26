@@ -108,6 +108,7 @@ impl RenderElement<GlesRenderer> for Shadow {
         _opaque_regions: &[Rectangle<i32, Physical>],
         _cache: Option<&UserDataMap>,
     ) -> Result<(), GlesError> {
+        let size = self.shape.bounds.size;
         frame.render_pixel_shader_to(
             &self.program,
             src,
@@ -117,13 +118,7 @@ impl RenderElement<GlesRenderer> for Shadow {
             self.opacity,
             &[
                 Uniform::new("origin", self.origin),
-                Uniform::new(
-                    "bounds",
-                    [
-                        self.shape.bounds.size.w as f32,
-                        self.shape.bounds.size.h as f32,
-                    ],
-                ),
+                Uniform::new("bounds", [size.w as f32, size.h as f32]),
                 Uniform::new("radius", self.shape.radius),
                 Uniform::new("width", self.width),
                 Uniform::new("sigma", self.sigma),

@@ -28,9 +28,8 @@ use smithay::wayland::shell::xdg::{
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 
-use crate::move_grab::MoveGrab;
-use crate::resize_grab::ResizeGrab;
 use crate::state::{ClientState, State};
+use crate::window_grab::{Drag, WindowGrab};
 
 impl CompositorHandler for State {
     fn compositor_state(&mut self) -> &mut CompositorState {
@@ -114,10 +113,10 @@ impl XdgShellHandler for State {
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, serial: Serial) {
         if let Some((start_data, window, initial_location)) = self.grab_start(&surface, serial) {
-            let grab = MoveGrab {
+            let grab = WindowGrab {
                 start_data,
                 window,
-                initial_location,
+                drag: Drag::Move { initial_location },
             };
             let pointer = self.seat.get_pointer().unwrap();
             pointer.set_grab(self, grab, serial, Focus::Clear);
@@ -132,8 +131,13 @@ impl XdgShellHandler for State {
         edges: ResizeEdge,
     ) {
         if let Some((start_data, window, _)) = self.grab_start(&surface, serial)
-            && let Some(grab) = ResizeGrab::new(start_data, window, edges)
+            && let Some(drag) = Drag::resize(&window, edges)
         {
+            let grab = WindowGrab {
+                start_data,
+                window,
+                drag,
+            };
             let pointer = self.seat.get_pointer().unwrap();
             pointer.set_grab(self, grab, serial, Focus::Clear);
         }

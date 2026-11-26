@@ -121,10 +121,13 @@ impl RenderElement<GlesRenderer> for Clipped {
         let texture_size = texture.size().to_f64();
         let dst_per_src_x = dst.size.w as f64 / src.size.w;
         let dst_per_src_y = dst.size.h as f64 / src.size.h;
-        let scale_x = texture_size.w * dst_per_src_x;
-        let scale_y = texture_size.h * dst_per_src_y;
-        let offset_x = (dst.loc.x - self.shape.bounds.loc.x) as f64 - src.loc.x * dst_per_src_x;
-        let offset_y = (dst.loc.y - self.shape.bounds.loc.y) as f64 - src.loc.y * dst_per_src_y;
+        let scale_x = (texture_size.w * dst_per_src_x) as f32;
+        let scale_y = (texture_size.h * dst_per_src_y) as f32;
+        let offset_x =
+            ((dst.loc.x - self.shape.bounds.loc.x) as f64 - src.loc.x * dst_per_src_x) as f32;
+        let offset_y =
+            ((dst.loc.y - self.shape.bounds.loc.y) as f64 - src.loc.y * dst_per_src_y) as f32;
+        let size = self.shape.bounds.size;
         frame.render_texture_from_to(
             texture,
             src,
@@ -135,22 +138,8 @@ impl RenderElement<GlesRenderer> for Clipped {
             self.surface.alpha(),
             Some(&self.program),
             &[
-                Uniform::new(
-                    "frame_from_texture",
-                    [
-                        scale_x as f32,
-                        scale_y as f32,
-                        offset_x as f32,
-                        offset_y as f32,
-                    ],
-                ),
-                Uniform::new(
-                    "frame_size",
-                    [
-                        self.shape.bounds.size.w as f32,
-                        self.shape.bounds.size.h as f32,
-                    ],
-                ),
+                Uniform::new("frame_from_texture", [scale_x, scale_y, offset_x, offset_y]),
+                Uniform::new("frame_size", [size.w as f32, size.h as f32]),
                 Uniform::new("radius", self.shape.radius),
                 Uniform::new("curve", self.shape.curve.bezier),
                 Uniform::new("rise", self.shape.curve.rise),

@@ -12,7 +12,7 @@ and the sources are in barrierkit,
 
 ## What exists
 
-Steps 16 to 20, in `desktops.rs`, `state.rs` and `move_grab.rs`:
+Steps 16 to 20, in `desktops.rs`, `state.rs` and `window_grab.rs`:
 
 - the row is a `Vec<Space<Window>>` and the index of the current one;
 - Control+Left and Right slide between Desktops with macOS's overdamped

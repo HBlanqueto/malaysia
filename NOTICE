@@ -1,8 +1,7 @@
 crates/malaysia-compositor/src/effects/clip.frag, lines 1 to 18 and 25 to 32, comes from
 src/backend/renderer/gles/shaders/implicit/texture.frag of Smithay
 (https://github.com/Smithay/smithay, rev 65aa86fa5236e41775c313408102a5d5c2d1e2ca).
-crates/malaysia-compositor/src/move_grab.rs and
-crates/malaysia-compositor/src/resize_grab.rs, and the checks of
+crates/malaysia-compositor/src/window_grab.rs, and the checks of
 `move_request` and `resize_request` in
 crates/malaysia-compositor/src/handlers.rs, come from
 smallvil/src/grabs/move_grab.rs, smallvil/src/grabs/resize_grab.rs and

@@ -22,20 +22,25 @@ struct Resize {
     last: Option<Serial>,
 }
 
-pub struct ResizeGrab {
-    start_data: GrabStartData<State>,
-    window: Window,
-    direction: Point<i32, Logical>,
-    initial_size: Size<i32, Logical>,
-    size: Size<i32, Logical>,
+pub struct WindowGrab {
+    pub start_data: GrabStartData<State>,
+    pub window: Window,
+    pub drag: Drag,
 }
 
-impl ResizeGrab {
-    pub fn new(
-        start_data: GrabStartData<State>,
-        window: Window,
-        edges: ResizeEdge,
-    ) -> Option<Self> {
+pub enum Drag {
+    Move {
+        initial_location: Point<i32, Logical>,
+    },
+    Resize {
+        direction: Point<i32, Logical>,
+        initial_size: Size<i32, Logical>,
+        size: Size<i32, Logical>,
+    },
+}
+
+impl Drag {
+    pub fn resize(window: &Window, edges: ResizeEdge) -> Option<Self> {
         let direction = Point::from(match edges {
             ResizeEdge::Top => (0, -1),
             ResizeEdge::Bottom => (0, 1),
@@ -56,9 +61,7 @@ impl ResizeGrab {
                 size: initial_size,
                 last: None,
             }));
-        Some(Self {
-            start_data,
-            window,
+        Some(Self::Resize {
             direction,
             initial_size,
             size: initial_size,
@@ -77,16 +80,8 @@ impl State {
         let size = window.geometry().size;
         if size != resize.size {
             let shift = Point::from((
-                if resize.direction.x < 0 {
-                    resize.size.w - size.w
-                } else {
-                    0
-                },
-                if resize.direction.y < 0 {
-                    resize.size.h - size.h
-                } else {
-                    0
-                },
+                resize.direction.x.min(0) * (size.w - resize.size.w),
+                resize.direction.y.min(0) * (size.h - resize.size.h),
             ));
             for desktop in &mut self.desktops {
                 if let Some(location) = desktop.element_location(window) {
@@ -135,7 +130,7 @@ fn resized_length(initial: i32, direction: i32, delta: i32, min: i32, max: i32) 
     (initial + direction * delta).max(min.max(1)).min(max)
 }
 
-impl PointerGrab<State> for ResizeGrab {
+impl PointerGrab<State> for WindowGrab {
     fn motion(
         &mut self,
         data: &mut State,
@@ -144,26 +139,42 @@ impl PointerGrab<State> for ResizeGrab {
         event: &MotionEvent,
     ) {
         handle.motion(data, None, event);
-        let toplevel = self.window.toplevel().unwrap();
-        let (min, max) = with_states(toplevel.wl_surface(), |states| {
-            let mut guard = states.cached_state.get::<SurfaceCachedState>();
-            let cached = guard.current();
-            (cached.min_size, cached.max_size)
-        });
-        let delta: Point<i32, Logical> = (event.location - self.start_data.location).to_i32_round();
-        let size = Size::from((
-            resized_length(self.initial_size.w, self.direction.x, delta.x, min.w, max.w),
-            resized_length(self.initial_size.h, self.direction.y, delta.y, min.h, max.h),
-        ));
-        if size == self.size {
-            return;
+        match &mut self.drag {
+            Drag::Move { initial_location } => {
+                let location =
+                    initial_location.to_f64() + (event.location - self.start_data.location);
+                data.desktops[data.current_desktop]
+                    .relocate_element(&self.window, location.to_i32_round());
+                data.needs_redraw = true;
+            }
+            Drag::Resize {
+                direction,
+                initial_size,
+                size: requested,
+            } => {
+                let toplevel = self.window.toplevel().unwrap();
+                let (min, max) = with_states(toplevel.wl_surface(), |states| {
+                    let mut guard = states.cached_state.get::<SurfaceCachedState>();
+                    let cached = guard.current();
+                    (cached.min_size, cached.max_size)
+                });
+                let delta: Point<i32, Logical> =
+                    (event.location - self.start_data.location).to_i32_round();
+                let size = Size::from((
+                    resized_length(initial_size.w, direction.x, delta.x, min.w, max.w),
+                    resized_length(initial_size.h, direction.y, delta.y, min.h, max.h),
+                ));
+                if size == *requested {
+                    return;
+                }
+                *requested = size;
+                toplevel.with_pending_state(|state| {
+                    state.states.set(xdg_toplevel::State::Resizing);
+                    state.size = Some(size);
+                });
+                send_if_all_acked(toplevel);
+            }
         }
-        self.size = size;
-        toplevel.with_pending_state(|state| {
-            state.states.set(xdg_toplevel::State::Resizing);
-            state.size = Some(size);
-        });
-        send_if_all_acked(toplevel);
     }
 
     fn relative_motion(
@@ -278,20 +289,22 @@ impl PointerGrab<State> for ResizeGrab {
     }
 
     fn unset(&mut self, _data: &mut State) {
-        let toplevel = self.window.toplevel().unwrap();
-        toplevel.with_pending_state(|state| {
-            state.states.unset(xdg_toplevel::State::Resizing);
-        });
-        let last = toplevel.send_pending_configure();
-        let Some(cell) = self.window.user_data().get::<Cell<Option<Resize>>>() else {
-            return;
-        };
-        cell.set(last.and_then(|last| {
-            cell.get().map(|resize| Resize {
-                last: Some(last),
-                ..resize
-            })
-        }));
+        if let Drag::Resize { .. } = self.drag {
+            let toplevel = self.window.toplevel().unwrap();
+            toplevel.with_pending_state(|state| {
+                state.states.unset(xdg_toplevel::State::Resizing);
+            });
+            let last = toplevel.send_pending_configure();
+            let Some(cell) = self.window.user_data().get::<Cell<Option<Resize>>>() else {
+                return;
+            };
+            cell.set(last.and_then(|last| {
+                cell.get().map(|resize| Resize {
+                    last: Some(last),
+                    ..resize
+                })
+            }));
+        }
     }
 }
 

@@ -6,8 +6,8 @@ use smithay::output::Output;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
 use smithay::utils::{IsAlive, SERIAL_COUNTER};
 
-use crate::move_grab::MoveGrab;
 use crate::state::State;
+use crate::window_grab::{Drag, WindowGrab};
 
 #[derive(Debug, PartialEq)]
 pub enum Direction {
@@ -68,10 +68,15 @@ fn suspend(window: &Window, output: &Output, time: Duration) {
     toplevel.with_pending_state(|state| {
         state.states.set(ToplevelState::Suspended);
     });
+    send_changed_state(window);
+    window.send_frame(output, time, Some(Duration::ZERO), |_, _| None);
+}
+
+pub fn send_changed_state(window: &Window) {
+    let toplevel = window.toplevel().unwrap();
     if toplevel.is_initial_configure_sent() {
         toplevel.send_pending_configure();
     }
-    window.send_frame(output, time, Some(Duration::ZERO), |_, _| None);
 }
 
 fn switch_target(
@@ -133,7 +138,8 @@ impl State {
         let pointer = self.seat.get_pointer().unwrap();
         let carried = pointer
             .with_grab(|_, grab| {
-                grab.downcast_ref::<MoveGrab>()
+                grab.downcast_ref::<WindowGrab>()
+                    .filter(|grab| matches!(grab.drag, Drag::Move { .. }))
                     .map(|grab| grab.window.clone())
             })
             .flatten()
@@ -170,9 +176,7 @@ impl State {
                 let _ = PopupManager::dismiss_popup(toplevel.wl_surface(), &popup);
             }
             window.set_activated(false);
-            if toplevel.is_initial_configure_sent() {
-                toplevel.send_pending_configure();
-            }
+            send_changed_state(window);
         }
         if target == self.desktops.len() {
             self.desktops.push(Space::default());
@@ -202,10 +206,7 @@ impl State {
         }
         self.move_pointer(pointer.current_location(), time);
         while self.desktops.len() > self.current_desktop + 1
-            && self.desktops[self.desktops.len() - 1]
-                .elements()
-                .next()
-                .is_none()
+            && self.desktops.last().unwrap().elements().next().is_none()
         {
             self.desktops.pop();
         }

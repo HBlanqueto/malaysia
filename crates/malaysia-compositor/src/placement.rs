@@ -8,10 +8,6 @@ const CENTER_TOP: f64 = ctdesign::WINDOW_CENTER_TOP as f64;
 
 struct Placed;
 
-fn on_display(wanted: i32, start: i32, free: i32, length: i32) -> i32 {
-    wanted.min(start + free - length).max(start)
-}
-
 fn cascaded(previous: i32, start: i32, free: i32, length: i32) -> i32 {
     let next = previous + STEP;
     if next + length > start + free {
@@ -41,11 +37,7 @@ fn location(
             free.loc.y + ((free.size.h - size.h) as f64 * CENTER_TOP) as i32,
         ),
     };
-    (
-        on_display(x, free.loc.x, free.size.w, size.w),
-        on_display(y, free.loc.y, free.size.h, size.h),
-    )
-        .into()
+    Point::from((x, y)).constrain(Rectangle::new(free.loc, free.size - size))
 }
 
 impl State {

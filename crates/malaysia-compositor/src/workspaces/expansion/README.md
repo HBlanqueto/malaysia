@@ -207,7 +207,7 @@ corner, and the layout has nothing to keep. Each step is one visible result.
    tokens, the strip's blur (the first blur of the rebuild), frame callbacks
    for the windows in thumbnails.
 - **E. Drag a window to a Space.** Onto a thumbnail and onto "+", with a
-   pointer grab like `MoveGrab`.
+   pointer grab like `WindowGrab`.
 - **F. Hover ring and Control+arrows while open.**
 - **H. Swipes.** Three fingers up and down for Expansion, sideways for the
    slide, following the fingers. libinput's swipe events are read directly;

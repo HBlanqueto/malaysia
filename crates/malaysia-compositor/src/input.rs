@@ -9,7 +9,7 @@ use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 
-use crate::desktops::Direction;
+use crate::desktops::{Direction, send_changed_state};
 use crate::state::{Backend, State};
 
 pub const REPEAT_DELAY: i32 = 200;
@@ -180,10 +180,7 @@ impl State {
         let desktop = &mut self.desktops[self.current_desktop];
         desktop.raise_element(window, true);
         for window in desktop.elements() {
-            let toplevel = window.toplevel().unwrap();
-            if toplevel.is_initial_configure_sent() {
-                toplevel.send_pending_configure();
-            }
+            send_changed_state(window);
         }
         let surface = window.toplevel().unwrap().wl_surface().clone();
         self.seat
