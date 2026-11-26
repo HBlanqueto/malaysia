@@ -21,7 +21,7 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
 use crate::drm::Drm;
-use crate::effects::{Clipped, Effects, Lines};
+use crate::effects::{Clipped, Effects, Lines, Shadow};
 use crate::winit::Winit;
 
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.1, 0.1, 0.12, 1.0);
@@ -31,6 +31,7 @@ render_elements! {
     Surface=WaylandSurfaceRenderElement<GlesRenderer>,
     Clipped=Clipped,
     Lines=Lines,
+    Shadow=Shadow,
     Solid=SolidColorRenderElement,
 }
 

@@ -1,17 +1,22 @@
 mod clip;
 mod corner;
 mod lines;
+mod shadow;
 
-use smithay::backend::renderer::element::Kind;
+use std::cell::{RefCell, RefMut};
+
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
+use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::{GlesError, GlesPixelProgram, GlesRenderer, GlesTexProgram};
+use smithay::backend::renderer::utils::CommitCounter;
 use smithay::desktop::{PopupManager, Window};
-use smithay::utils::{Logical, Physical, Rectangle};
+use smithay::utils::{Logical, Physical, Rectangle, Size};
 
 pub use clip::Clipped;
 pub use lines::Lines;
+pub use shadow::Shadow;
 
 use crate::state::Element;
 use crate::window_style::corner_radius;
@@ -20,6 +25,7 @@ use corner::Curve;
 pub struct Effects {
     clip: GlesTexProgram,
     lines: GlesPixelProgram,
+    shadow: GlesPixelProgram,
     curve: Curve,
     dark: bool,
 }
@@ -31,11 +37,47 @@ pub struct Shape {
     curve: Curve,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+struct Look {
+    size: Size<i32, Physical>,
+    radius: f32,
+    main: bool,
+}
+
+pub struct Drawn {
+    lines: Id,
+    shadow: Id,
+    commit: CommitCounter,
+    look: Option<Look>,
+}
+
+fn drawn(window: &Window, look: Look) -> RefMut<'_, Drawn> {
+    window.user_data().insert_if_missing(|| {
+        RefCell::new(Drawn {
+            lines: Id::new(),
+            shadow: Id::new(),
+            commit: CommitCounter::default(),
+            look: None,
+        })
+    });
+    let mut drawn = window
+        .user_data()
+        .get::<RefCell<Drawn>>()
+        .unwrap()
+        .borrow_mut();
+    if drawn.look != Some(look) {
+        drawn.look = Some(look);
+        drawn.commit.increment();
+    }
+    drawn
+}
+
 impl Effects {
     pub fn new(renderer: &mut GlesRenderer, dark: bool) -> Result<Effects, GlesError> {
         Ok(Effects {
             clip: clip::compile(renderer)?,
             lines: lines::compile(renderer)?,
+            shadow: shadow::compile(renderer)?,
             curve: Curve::new(ctdesign::CORNER_WINDOW.smoothing),
             dark,
         })
@@ -72,8 +114,16 @@ impl Effects {
         let width = (f64::from(ctdesign::FRAME_LINE_WIDTH) * scale)
             .round()
             .max(1.0) as i32;
-        frame.push(Element::Lines(Lines::new(
+        let drawn = drawn(
             window,
+            Look {
+                size: shape.bounds.size,
+                radius: shape.radius,
+                main,
+            },
+        );
+        frame.push(Element::Lines(Lines::new(
+            &drawn,
             shape,
             width,
             main,
@@ -92,5 +142,14 @@ impl Effects {
             tree.into_iter()
                 .map(|surface| Element::Clipped(Clipped::new(surface, shape, self.clip.clone()))),
         );
+        frame.push(Element::Shadow(Shadow::new(
+            &drawn,
+            shape,
+            width,
+            scale,
+            main,
+            self.dark,
+            self.shadow.clone(),
+        )));
     }
 }

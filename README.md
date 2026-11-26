@@ -9,7 +9,8 @@ shared-memory buffers, and gives them a keyboard and a pointer. A HiDPI
 display gets a scale chosen from its physical size and resolution, whole or
 fractional. It tells BarrierKit apps, through `limitless_window_style_v1`, that
 the compositor frames their windows, and it draws that frame on every window:
-the continuous corner of macOS, an outline outside and an inner line inside.
+the continuous corner of macOS, an outline outside, an inner line inside and
+the macOS shadow, stronger under the main window.
 It runs in two ways:
 
 - **Directly on a display.** Started from a TTY by a normal user, it takes its

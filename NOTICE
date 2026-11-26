@@ -23,3 +23,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+crates/malaysia-compositor/src/effects/shadow.frag and the mirror in
+crates/malaysia-compositor/src/effects/shadow.rs follow the method of Evan
+Wallace's "Fast Rounded Rectangle Shadows"
+(https://madebyevan.com/shaders/fast-rounded-rectangle-shadows/): the error
+function approximation, the blurred row with its curved half width and the
+Gaussian samples along y. The article's code is CC0
+(http://creativecommons.org/publicdomain/zero/1.0/).

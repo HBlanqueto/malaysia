@@ -13,7 +13,8 @@ Last update: 2026-11-26.
 session, apps show their menus, a HiDPI display gets a scale, whole or
 fractional, a BarrierKit app leaves its frame to the compositor, a
 signal stops the compositor cleanly, and every window gets the continuous
-corner of macOS with an outline outside and an inner line inside. Next is
+corner of macOS with an outline outside, an inner line inside and the macOS
+shadow. Next is
 layer shell. `linux-dmabuf` waited for a real GPU, which the development
 laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -44,6 +45,7 @@ scale of 5/3):
 | 13 | Signals: `calloop`'s `signals` feature, so SIGTERM, SIGINT and SIGHUP stop the event loop | `./dev.sh demo` ended with Ctrl-C, or the compositor ended with `kill`, logs the signal and leaves no socket behind | done |
 | review | An audit of the code on the Linux laptop | nested, the compositor stops when its host goes away and releases the keys when the host takes the keyboard; a menu whose grab is refused is closed | done |
 | 14 | `ctdesign`, BarrierKit's design tokens, and the compositor's own effects module | every window cut to the continuous corner of a macOS window, with the outline outside it and the inner line inside it, in light and dark and for the main window and the others; a BarrierKit app gets the corner of its bar (all four bars are 16 in barrierkit's data, so `set_bar` gives the default 16.8 for every bar and changes nothing visible today) | done |
+| 15 | the window shadow from `WINDOW_SHADOW_*` | every window casts the macOS shadow, stronger under the main window | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -107,7 +109,7 @@ Later pass (2026-11-26), with the tables in barrierkit
 - **Scale:** every value is in points. 1920×1080 at scale 1 gives the
   2560×1440 numbers, and 1280×720 at scale 2 doubles every pixel value.
 - **Window shadow:** a blurred box moved down. The main window has σ 19.5, dy 18
-  and alpha .689 dark or .393 light; any other window has σ 7.5, dy 7 and alpha
+  and alpha .689 dark or .393 light; any other window has σ 7.75, dy 7 and alpha
   .431 or .210. Dark is about twice light.
 - **Space switch:** a spring with ω0 24 and ζ 1.73, 64 of gap between Spaces,
   about 1 s until the last pixel and t90 at about 325 ms. Mission Control is a
@@ -145,18 +147,18 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Known gaps
 
-- The window shadow is not drawn. The `ctdesign` shadow tokens are two layers
-  (blur 48 and 12), while macOS measured as one blurred box, so barrierkit
-  changes first.
+- Menus have no shadow.
 - A closing window disappears at once. The close animation needs a snapshot
   of the dead surface and an animation clock, which do not exist yet.
 - Every window is cut to its window geometry, so a client's own shadow outside
   it (GTK) is not shown.
 - A window whose buffer is rotated or flipped is
   drawn square.
-- The scheme of the frame lines comes from `MALAYSIA_SCHEME` (`light`, or
-  dark by default), read once at start. It is temporary, until the
-  appearance store exists.
+- A window narrower or shorter than about twice its corner (about 35 points)
+  casts little or no shadow, and its corners are drawn as a lens.
+- The scheme of the frame lines and of the shadow comes from
+  `MALAYSIA_SCHEME` (`light`, or dark by default), read once at start. It is
+  temporary, until the appearance store exists.
 - A click outside an open menu closes the menu and also reaches the window
   under it, without giving that window the focus. KWin keeps that click.
 - When an app closes its own menu, the keyboard focus returns to the window on
@@ -238,3 +240,11 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   it pays a blended shader pass. Only CPU was measured (about 52.4 to 54.6 ms
   per second, nested, 1280x800, debug build); GPU time on the laptop's panel was
   not.
+- The window shadow (step 15) was checked nested only, in a headless sway at
+  scales 1, 1.25 and 2, light and dark: its right side, bottom and bottom-right
+  corner are within 1/255 of its mirror, and the mirror is within .005 of the
+  four kept macOS profiles. Not checked: the top and left sides on screen
+  (windows open at 0,0), the corner region of the shadow and the spread
+  against a Mac capture, a run directly on a display, and GPU time. Its CPU
+  cost under a translucent terminal scrolling below the main window was
+  about 4 % (108.9 to 113.6 ms per second, debug build); idle did not change.

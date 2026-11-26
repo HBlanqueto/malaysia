@@ -1,15 +1,12 @@
-use std::cell::RefCell;
-
 use smithay::backend::renderer::element::{Element, Id, RenderElement};
 use smithay::backend::renderer::gles::{
     GlesError, GlesFrame, GlesPixelProgram, GlesRenderer, Uniform, UniformName, UniformType,
 };
 use smithay::backend::renderer::utils::CommitCounter;
-use smithay::desktop::Window;
 use smithay::utils::user_data::UserDataMap;
 use smithay::utils::{Buffer, Physical, Point, Rectangle, Scale, Size};
 
-use super::Shape;
+use super::{Drawn, Shape};
 
 pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesPixelProgram, GlesError> {
     renderer.compile_custom_pixel_shader(
@@ -28,19 +25,6 @@ pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesPixelProgram, GlesErro
     )
 }
 
-#[derive(Clone, Copy, PartialEq)]
-struct Look {
-    size: Size<i32, Physical>,
-    radius: f32,
-    main: bool,
-}
-
-struct Drawn {
-    id: Id,
-    commit: CommitCounter,
-    look: Option<Look>,
-}
-
 pub struct Lines {
     id: Id,
     commit: CommitCounter,
@@ -54,7 +38,7 @@ pub struct Lines {
 
 impl Lines {
     pub fn new(
-        window: &Window,
+        drawn: &Drawn,
         shape: Shape,
         width: i32,
         main: bool,
@@ -65,27 +49,6 @@ impl Lines {
             shape.bounds.loc - Point::from((width, width)),
             shape.bounds.size + Size::from((2 * width, 2 * width)),
         );
-        let look = Look {
-            size: area.size,
-            radius: shape.radius,
-            main,
-        };
-        window.user_data().insert_if_missing(|| {
-            RefCell::new(Drawn {
-                id: Id::new(),
-                commit: CommitCounter::default(),
-                look: None,
-            })
-        });
-        let mut drawn = window
-            .user_data()
-            .get::<RefCell<Drawn>>()
-            .unwrap()
-            .borrow_mut();
-        if drawn.look != Some(look) {
-            drawn.look = Some(look);
-            drawn.commit.increment();
-        }
         let lines = if dark {
             ctdesign::FRAME_LINES_DARK
         } else {
@@ -97,7 +60,7 @@ impl Lines {
             (lines.outer_inactive, lines.inner_inactive)
         };
         Lines {
-            id: drawn.id.clone(),
+            id: drawn.lines.clone(),
             commit: drawn.commit,
             area,
             width: width as f32,
