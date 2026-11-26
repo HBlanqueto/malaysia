@@ -65,9 +65,10 @@ The decisions and the new dependencies are in the «Design» section of
 
 ## How each step is checked
 
-Everything is built and run in a Linux box on a Mac (`vm.sh`): Nix, a virtual
-KMS display (`vkms`) for the direct backend and a headless desktop for the
-nested one. `./vm.sh shot file.png` captures the virtual display.
+On Linux the checks and `./dev.sh demo` (the nested session with a terminal)
+run on the host inside `nix develop`. On a Mac, `vm.sh` gives a Linux box: Nix,
+a virtual KMS display (`vkms`) for the direct backend and a headless desktop
+for the nested one. `./vm.sh shot file.png` captures the virtual display.
 
 With a device argument the compositor runs directly on that device. With no
 argument it runs nested when `WAYLAND_DISPLAY` is set.

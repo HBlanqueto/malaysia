@@ -266,6 +266,7 @@
             inputsFrom = [ self.packages.${system}.default ];
             packages = with pkgs; [
               clippy
+              foot
               rustfmt
             ];
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (

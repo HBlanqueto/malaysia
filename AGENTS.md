@@ -147,9 +147,11 @@ Applies to decorations, chrome, shadows, blur, borders, themes and shell.
 
 ## Build and test
 
-The Mac does not build the compositor. Everything runs in the podman box of
-`vm.sh`: aarch64 Linux with Nix and a virtual KMS display (`vkms`) at
-`/dev/dri/card0`, and a headless sway with VNC on `vnc://127.0.0.1:5901`. With
+On Linux, run the checks on the host with `nix develop -c cargo …` and the
+nested session with `nix develop -c ./dev.sh demo` (it opens a terminal in
+the compositor). `vm.sh` is only for a Mac, which does not build the
+compositor: there everything runs in the podman box of `vm.sh`, aarch64
+Linux with Nix and a virtual KMS display (`vkms`) at `/dev/dri/card0`, and a headless sway with VNC on `vnc://127.0.0.1:5901`. With
 the device argument the compositor runs directly on vkms and its screen is
 seen with `./vm.sh shot`; with no argument it runs nested in sway and is seen
 with `grim` in the box or over VNC.

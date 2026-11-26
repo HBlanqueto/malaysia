@@ -63,6 +63,9 @@ The compositor logs the backend it chose and the name of its Wayland socket,
 normally `wayland-1`. It starts no program: clients reach it through that
 name.
 
+`nix develop -c ./dev.sh demo` builds, starts the nested compositor and opens
+a terminal (`foot`) in it. Closing the window or pressing Ctrl-C ends it.
+
 ```sh
 WAYLAND_DISPLAY=wayland-1 foot
 ```
