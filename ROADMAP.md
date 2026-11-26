@@ -15,8 +15,8 @@ fractional, a BarrierKit app leaves its frame to the compositor, a
 signal stops the compositor cleanly, and every window gets the continuous
 corner of macOS with an outline outside, an inner line inside and the macOS
 shadow, Ctrl+Left and Ctrl+Right slide between Desktops, and a window is
-dragged by its own title bar. Next is carrying a dragged window to the next
-Desktop. `linux-dmabuf` waited for a real GPU, which the development
+dragged by its own title bar and carried along to the next Desktop. Next is
+cascade placement. `linux-dmabuf` waited for a real GPU, which the development
 laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -50,7 +50,8 @@ scale of 5/3):
 | 16 | Desktops: one `Space` per Desktop | Ctrl+Right on the last Desktop with windows opens an empty one, Ctrl+Left and Ctrl+Right move between them, and an empty last Desktop goes away when left | done `5837b11` |
 | 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a black band of 64 between them, and a second key press mid-slide carries on from where the strip is | done `174f353` |
 | 18 | `suspended` for the windows of a hidden Desktop | a client on a hidden Desktop is told it is suspended when the slide ends, gets its pending frame callbacks once, and is told it is shown again at the switch back | done `8b5cf44` |
-| 19 | Interactive move: `xdg_toplevel.move` and a pointer grab | a window dragged by its own title bar | done |
+| 19 | Interactive move: `xdg_toplevel.move` and a pointer grab | a window dragged by its own title bar | done `bbbedb9` |
+| 20 | A dragged window goes along to the next Desktop | holding a window by its title bar and pressing Ctrl+Left or Ctrl+Right takes it to that Desktop, still under the pointer | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -60,14 +61,12 @@ and nested in another session.
 In the order they will be taken, one at a time. On 2026-11-26 the user asked to
 take the macOS window model first, so these come before the rest:
 
-1. A dragged window carried to the next Desktop with Ctrl+Left and
-   Ctrl+Right.
-2. Cascade placement: a new window goes 29 right and 29 down from the previous
+1. Cascade placement: a new window goes 29 right and 29 down from the previous
    one, as measured; where the first window goes is still to be measured.
-3. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
+2. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
    with a spring of ω0 45 and ζ 1.38, as measured; the margin of tiled windows
    is still to be measured.
-4. Interactive resize: `xdg_toplevel.resize`.
+3. Interactive resize: `xdg_toplevel.resize`.
 
 Then:
 
@@ -225,12 +224,17 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - Desktops are created by the key, because there is no Mission Control. An
   empty Desktop in the middle stays and an empty last one is dropped when it
   is left; macOS keeps both.
-- A pointer grab (a held button, an open menu, a drag) ends at the switch,
-  and every popup of the Desktop left is closed.
+- A pointer grab (a held button, an open menu) ends at the switch,
+  and every popup of the windows left behind is closed.
 - Every new window opens on the current Desktop and takes the focus, also a
   dialog or a window of an app on a hidden one.
-- A window can be dragged, but not to another Desktop: Ctrl+Left or
-  Ctrl+Right mid-drag ends the drag and the window stays on its Desktop.
+- A dragged window goes to another Desktop only with Ctrl+Left or Ctrl+Right:
+  there is no drag to the display edge, no Mission Control and no «Assign To».
+  That Ctrl+arrow carries a dragged window is reported by macOS users, not
+  documented by Apple and not measured. Ctrl+Right does nothing while the
+  only window of the last Desktop is dragged.
+- A dragged window released mid-slide stays still until the strip rests; a
+  second key press before that makes it jump into its Desktop.
 - Only the app starts a move, from its own title bar: there is no interactive
   resize, no move with a modifier and a drag, no touch or tablet drag, and no snapping to
   the edges or tiling.
@@ -265,6 +269,11 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - Desktops (step 16): nested, and directly on the virtual display of the
   machine check, which switches to an empty Desktop and back. Not checked: a
   drag at the switch, a Qt app.
+- A dragged window carried to the next Desktop (step 20): nested only, at
+  scale 1, with `foot`. Not checked: directly on a display, a Qt app.
+- The carried window gets `wl_surface.leave` at the key press and
+  `wl_surface.enter` right after, because it is taken out of one Desktop and
+  put on the other.
 - The slide between Desktops (step 17): nested at scale 1, on the laptop, and
   the machine check, which waits for the strip to rest. Not checked: the
   slide on a real GPU directly on a display, a fractional scale, and a VT

@@ -6,6 +6,7 @@ use smithay::output::Output;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
 use smithay::utils::{IsAlive, SERIAL_COUNTER};
 
+use crate::move_grab::MoveGrab;
 use crate::state::State;
 
 #[derive(Debug, PartialEq)]
@@ -16,8 +17,10 @@ pub enum Direction {
 
 pub struct Slide {
     from: f64,
+    pub position: f64,
     velocity: f64,
     started: Duration,
+    pub carried: Option<Window>,
 }
 
 const OMEGA: f64 = ctdesign::DESKTOP_SWITCH_OMEGA as f64;
@@ -109,12 +112,13 @@ impl State {
         let scale = self.output.current_scale().fractional_scale();
         let target = self.current_desktop as f64;
         if !rests(position - target, velocity, f64::from(stride(width, scale))) {
-            self.strip_position = position;
+            if let Some(slide) = &mut self.slide {
+                slide.position = position;
+            }
             self.needs_redraw = true;
             return;
         }
         self.slide = None;
-        self.strip_position = target;
         for (index, desktop) in self.desktops.iter_mut().enumerate() {
             if index != self.current_desktop && desktop.outputs().next().is_some() {
                 for window in desktop.elements() {
@@ -126,8 +130,22 @@ impl State {
     }
 
     pub fn switch_desktop(&mut self, direction: Direction, time: InputTime) {
+        let pointer = self.seat.get_pointer().unwrap();
+        let carried = pointer
+            .with_grab(|_, grab| {
+                grab.downcast_ref::<MoveGrab>()
+                    .map(|grab| grab.window.clone())
+            })
+            .flatten()
+            .and_then(|window| {
+                let location = self.desktops[self.current_desktop].element_location(&window)?;
+                Some((window, location))
+            });
+        let carried_window = carried.as_ref().map(|(window, _)| window);
         let last = self.desktops.len() - 1;
-        let last_has_windows = self.desktops[last].elements().next().is_some();
+        let last_has_windows = self.desktops[last]
+            .elements()
+            .any(|window| Some(window) != carried_window);
         let Some(target) = switch_target(direction, self.current_desktop, last, last_has_windows)
         else {
             return;
@@ -136,11 +154,15 @@ impl State {
         let (from, velocity) = self.strip(now);
         self.slide = Some(Slide {
             from,
+            position: from,
             velocity,
             started: now,
+            carried: carried_window.cloned(),
         });
-        let pointer = self.seat.get_pointer().unwrap();
-        pointer.unset_grab(self, SERIAL_COUNTER.next_serial(), time);
+        match &carried {
+            Some((window, _)) => self.desktops[self.current_desktop].unmap_elem(window),
+            None => pointer.unset_grab(self, SERIAL_COUNTER.next_serial(), time),
+        }
         let serial = SERIAL_COUNTER.next_serial();
         for window in self.desktops[self.current_desktop].elements() {
             let toplevel = window.toplevel().unwrap();
@@ -156,6 +178,9 @@ impl State {
             self.desktops.push(Space::default());
         }
         self.desktops[target].map_output(&self.output, (0, 0));
+        if let Some((window, location)) = carried {
+            self.desktops[target].map_element(window, location, true);
+        }
         for window in self.desktops[target].elements() {
             window.toplevel().unwrap().with_pending_state(|state| {
                 state.states.unset(ToplevelState::Suspended);

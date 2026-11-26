@@ -120,7 +120,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         desktops: vec![space],
         current_desktop: 0,
         slide: None,
-        strip_position: 0.0,
         popups: PopupManager::default(),
         needs_redraw: true,
         frame_pending: false,

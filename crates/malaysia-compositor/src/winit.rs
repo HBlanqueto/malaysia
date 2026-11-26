@@ -11,6 +11,7 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size, Transform};
 use smithay::wayland::fractional_scale::with_fractional_scale;
 
+use crate::desktops::Slide;
 use crate::effects::Effects;
 use crate::state::{CLEAR_COLOR, Element, State, elements};
 
@@ -119,7 +120,7 @@ impl Winit {
         &mut self,
         desktops: &[Space<Window>],
         current: usize,
-        position: f64,
+        slide: Option<&Slide>,
         output: &Output,
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
@@ -129,7 +130,7 @@ impl Winit {
             &self.effects,
             desktops,
             current,
-            position,
+            slide,
             output,
             frame,
         );

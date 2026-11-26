@@ -42,10 +42,12 @@ pub fn elements(
     effects: &Effects,
     desktops: &[Space<Window>],
     current: usize,
-    position: f64,
+    slide: Option<&Slide>,
     output: &Output,
     frame: &mut Vec<Element>,
 ) {
+    let position = slide.map_or(current as f64, |slide| slide.position);
+    let carried = slide.and_then(|slide| slide.carried.as_ref());
     let scale = output.current_scale().fractional_scale();
     let width = output.current_mode().map_or(0, |mode| mode.size.w);
     let height = output.current_mode().map_or(0, |mode| mode.size.h);
@@ -55,11 +57,15 @@ pub fn elements(
         .enumerate()
         .filter(|(index, _)| *index != current);
     for (index, desktop) in iter::once((current, &desktops[current])).chain(others) {
-        let x = desktop_x(index, position, stride);
-        if x.abs() >= width || desktop.outputs().next().is_none() {
+        if desktop.outputs().next().is_none() {
             continue;
         }
+        let strip_x = desktop_x(index, position, stride);
         for (order, window) in desktop.elements().rev().enumerate() {
+            let x = if Some(window) == carried { 0 } else { strip_x };
+            if x.abs() >= width {
+                continue;
+            }
             let Some(geometry) = desktop.element_geometry(window) else {
                 continue;
             };
@@ -98,7 +104,6 @@ pub struct State {
     pub desktops: Vec<Space<Window>>,
     pub current_desktop: usize,
     pub slide: Option<Slide>,
-    pub strip_position: f64,
     pub popups: PopupManager,
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
@@ -151,7 +156,7 @@ impl State {
                 drm.render(
                     &self.desktops,
                     self.current_desktop,
-                    self.strip_position,
+                    self.slide.as_ref(),
                     &self.output,
                     &mut self.frame_elements,
                 )
@@ -159,7 +164,7 @@ impl State {
             Backend::Winit(winit) => winit.render(
                 &self.desktops,
                 self.current_desktop,
-                self.strip_position,
+                self.slide.as_ref(),
                 &self.output,
                 &mut self.frame_elements,
             ),

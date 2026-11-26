@@ -28,6 +28,7 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point};
 use smithay::wayland::compositor::with_states;
 
+use crate::desktops::Slide;
 use crate::effects::Effects;
 use crate::scale::output_scale;
 use crate::state::{Backend, CLEAR_COLOR, Element, State, elements};
@@ -239,7 +240,7 @@ impl Drm {
         &mut self,
         desktops: &[Space<Window>],
         current: usize,
-        position: f64,
+        slide: Option<&Slide>,
         output: &Output,
         frame: &mut Vec<Element>,
     ) -> Result<bool, Box<dyn Error>> {
@@ -248,7 +249,7 @@ impl Drm {
             &self.effects,
             desktops,
             current,
-            position,
+            slide,
             output,
             frame,
         );

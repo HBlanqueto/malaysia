@@ -81,7 +81,8 @@ Directly on a display, Ctrl+Alt+Backspace quits and Ctrl+Alt+F1 to F12 switch
 to another VT. In both ways Ctrl+Right on the last Desktop with windows
 opens an empty one, and Ctrl+Left and Ctrl+Right slide between Desktops
 with macOS's spring, a black band of 64 between them. A window is dragged
-by its own title bar.
+by its own title bar, and Ctrl+Left or Ctrl+Right while it is held takes it
+along to that Desktop.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
 shadow in the light scheme; without it they are dark. It is temporary, until
