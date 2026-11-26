@@ -21,10 +21,10 @@ use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
-use crate::desktops::{Slide, desktop_x, gap, gap_x, stride};
 use crate::drm::Drm;
 use crate::effects::{Clipped, Effects, Lines, Shadow};
 use crate::winit::Winit;
+use crate::workspaces::desktops::{Slide, desktop_x, gap, gap_x, stride};
 
 render_elements! {
     pub Element<=GlesRenderer>;

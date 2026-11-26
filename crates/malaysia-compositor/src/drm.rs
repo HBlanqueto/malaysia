@@ -27,10 +27,10 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point};
 use smithay::wayland::compositor::with_states;
 
-use crate::desktops::Slide;
 use crate::effects::Effects;
 use crate::scale::output_scale;
 use crate::state::{Backend, Element, State, elements};
+use crate::workspaces::desktops::Slide;
 
 type Compositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;

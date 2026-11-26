@@ -9,8 +9,8 @@ use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 
-use crate::desktops::{Direction, send_changed_state};
 use crate::state::{Backend, State};
+use crate::workspaces::desktops::{Direction, send_changed_state};
 
 pub const REPEAT_DELAY: i32 = 200;
 pub const REPEAT_RATE: i32 = 25;

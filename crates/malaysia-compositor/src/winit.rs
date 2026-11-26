@@ -11,9 +11,9 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size, Transform};
 use smithay::wayland::fractional_scale::with_fractional_scale;
 
-use crate::desktops::Slide;
 use crate::effects::Effects;
 use crate::state::{Element, State, elements};
+use crate::workspaces::desktops::Slide;
 
 pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,

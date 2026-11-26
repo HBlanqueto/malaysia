@@ -1,4 +1,3 @@
-mod desktops;
 mod drm;
 mod effects;
 mod handlers;
@@ -9,6 +8,7 @@ mod state;
 mod window_grab;
 mod window_style;
 mod winit;
+mod workspaces;
 
 use std::path::PathBuf;
 use std::sync::Arc;

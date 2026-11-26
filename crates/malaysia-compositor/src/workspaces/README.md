@@ -4,7 +4,8 @@ This folder is for the row of workspaces: the Desktops, the full-screen
 Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
-This file is a proposal. None of it is built: the folder holds no code yet.
+This file is a proposal. None of it is built: the only code in the folder is
+`desktops.rs`, the Desktops as they are today.
 It was written on 2026-11-26 on a Mac, which cannot build the compositor, so
 that the session on Linux can check it and build from it. The measured tables
 and the sources are in barrierkit,
@@ -82,9 +83,7 @@ only for an app that was just launched, on its first Desktop.
   transition reads. A sideways swipe cannot set it as it is: `State.slide` is
   `None` at rest and `advance_slide` writes the position on every frame, so
   the swipe step adds a state for the fingers.
-- **`desktops.rs` moves into this folder** in step A, the first step here
-  that changes it. It was not moved from the Mac: the move could not be
-  compiled there, and it would have crossed the work in progress on Linux.
+- **`desktops.rs` is in this folder** since 2026-11-26.
 
 ## Full screen
 
@@ -171,7 +170,7 @@ steps A and B need none. Each is one visible result.
 
 | Step | What it adds | What can be seen | Needs |
 |---|---|---|---|
-| A | Full screen from a client's request: `desktops.rs` moves here; `fullscreen_request` and `unfullscreen_request`, the entry with its saved frame, placement at first commit, `wm_capabilities` with Fullscreen only | `foot --fullscreen`, or mpv with F, fills the display on a Space of its own right of its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | nothing new |
+| A | Full screen from a client's request: `fullscreen_request` and `unfullscreen_request`, the entry with its saved frame, placement at first commit, `wm_capabilities` with Fullscreen only | `foot --fullscreen`, or mpv with F, fills the display on a Space of its own right of its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | nothing new |
 | B | A key for the same: Control+Super+F | any window goes full screen and back | A |
 | C | Expansion on a key | Control+Up spreads the windows; a click picks one | cascade placement; `spring.rs` |
 | D | Expansion's strip | live thumbnails of every Space, "+" and close | C; the first blur |
