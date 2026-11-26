@@ -50,8 +50,9 @@ impl CompositorHandler for State {
         while let Some(parent) = get_parent(&root) {
             root = parent;
         }
-        if let Some(window) = self.window_for_surface(&root) {
+        if let Some(window) = self.window_for_surface(&root).cloned() {
             window.on_commit();
+            self.place_new_window(&window);
             let toplevel = window.toplevel().unwrap();
             if !toplevel.is_initial_configure_sent() {
                 toplevel.send_configure();

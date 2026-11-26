@@ -15,8 +15,8 @@ fractional, a BarrierKit app leaves its frame to the compositor, a
 signal stops the compositor cleanly, and every window gets the continuous
 corner of macOS with an outline outside, an inner line inside and the macOS
 shadow, Ctrl+Left and Ctrl+Right slide between Desktops, and a window is
-dragged by its own title bar and carried along to the next Desktop. Next is
-cascade placement. `linux-dmabuf` waited for a real GPU, which the development
+dragged by its own title bar and carried along to the next Desktop, and a new
+window opens in a cascade. Next is interactive resize. `linux-dmabuf` waited for a real GPU, which the development
 laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
 
@@ -51,7 +51,8 @@ scale of 5/3):
 | 17 | The slide between Desktops: an animation clock and macOS's spring from `DESKTOP_SWITCH_*` | the Desktops slide past with a fast start and a slow end, a black band of 64 between them, and a second key press mid-slide carries on from where the strip is | done `174f353` |
 | 18 | `suspended` for the windows of a hidden Desktop | a client on a hidden Desktop is told it is suspended when the slide ends, gets its pending frame callbacks once, and is told it is shown again at the switch back | done `8b5cf44` |
 | 19 | Interactive move: `xdg_toplevel.move` and a pointer grab | a window dragged by its own title bar | done `bbbedb9` |
-| 20 | A dragged window goes along to the next Desktop | holding a window by its title bar and pressing Ctrl+Left or Ctrl+Right takes it to that Desktop, still under the pointer | done |
+| 20 | A dragged window goes along to the next Desktop | holding a window by its title bar and pressing Ctrl+Left or Ctrl+Right takes it to that Desktop, still under the pointer | done `ca36aeb` |
+| 21 | Cascade placement: `WINDOW_CASCADE_STEP` and `WINDOW_CENTER_TOP` | the first window of a Desktop opens centred with a quarter of the free height above it, each next one 29 right and 29 down from the one in front, and a dialog over its parent | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -61,12 +62,10 @@ and nested in another session.
 In the order they will be taken, one at a time. On 2026-11-26 the user asked to
 take the macOS window model first, so these come before the rest:
 
-1. Cascade placement: a new window goes 29 right and 29 down from the previous
-   one, as measured; where the first window goes is still to be measured.
+1. Interactive resize: `xdg_toplevel.resize`.
 2. The tiling shortcuts: Fill, Center, the halves and Return to Previous Size,
    with a spring of ω0 45 and ζ 1.38, as measured; the margin of tiled windows
    is still to be measured.
-3. Interactive resize: `xdg_toplevel.resize`.
 
 Then:
 
@@ -216,7 +215,16 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   under it, without giving that window the focus. KWin keeps that click.
 - When an app closes its own menu, the keyboard focus returns to the window on
   the next key or pointer event, not at once.
-- Every window opens at the top left corner, over the others.
+- Placement: macOS cascades per app; here the cascade is per Desktop, for any
+  client. Where the cascade starts again is not measured on macOS; ours starts
+  each axis again on its own. The first window's quarter of free height comes
+  from two points of the Open panel; where macOS opens the first document
+  window is not understood. A window keeps its place when it is unmapped and
+  mapped again or changes size. There are no reserved areas yet, so the free
+  area is the whole display.
+- A dialog is centred on its parent when the parent is on the same Desktop and
+  already placed; otherwise it joins the cascade. Checked with a test client,
+  not with a GTK or Qt dialog.
 - The scale follows mutter's rule and cannot be set by hand. A 13.3 inch
   2560x1600 panel and a 14 inch 2880x1800 panel get 5/3 (KWin would give 2,
   niri 1.75), a 16 inch 2560x1600 panel 4/3, a 27 inch 4K monitor 1.5. A
@@ -267,7 +275,6 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   snapping to the edges or tiling.
 - A request to resize, maximize or minimize is not answered: the window stays
   as it is, and a Qt title bar then shows its restore button.
-- A dialog opens at the top left corner, not over its parent.
 - With a Qt app Smithay logs `surface missing from known popups` each time a
   menu closes. The menus work; the cause is not looked into.
 - A window can be dragged until only the point held is left on the display.
@@ -298,6 +305,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Cascade placement (step 21): nested, at scales 1 and 1.25, and the machine
+  check. Not checked: a dialog of a real toolkit.
 - Desktops (step 16): nested, and directly on the virtual display of the
   machine check, which switches to an empty Desktop and back.
 - A dragged window carried to the next Desktop (step 20): nested only, at

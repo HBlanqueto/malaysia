@@ -85,6 +85,9 @@ opens an empty one, and Ctrl+Left and Ctrl+Right slide between Desktops
 with macOS's spring, a black band of 64 between them. A window is dragged
 by its own title bar, and Ctrl+Left or Ctrl+Right while it is held takes it
 along to that Desktop.
+The first window of a Desktop opens centred, a quarter of the free height
+above it; each next one opens 29 right and 29 down from the one in front,
+and a dialog opens over its parent.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
 shadow in the light scheme; without it they are dark. It is temporary, until

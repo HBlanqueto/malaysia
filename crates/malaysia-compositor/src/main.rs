@@ -4,6 +4,7 @@ mod effects;
 mod handlers;
 mod input;
 mod move_grab;
+mod placement;
 mod scale;
 mod state;
 mod window_style;
