@@ -86,7 +86,8 @@ by its own title bar, and Ctrl+Left or Ctrl+Right while it is held takes it
 along to that Desktop.
 The first window of a Desktop opens centred, a quarter of the free height
 above it; each next one opens 29 right and 29 down from the one in front,
-and a dialog opens over its parent.
+and a dialog opens over its parent. A new window is told the size of the
+display (`configure_bounds`), so GTK 4 and Qt 6 apps open within it.
 A window is resized by dragging its own edges and corners.
 Ctrl+Super with F fills the display with the focused window, with C centres
 it, with an arrow puts it in that half, and with R returns it to the frame it

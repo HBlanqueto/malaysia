@@ -88,6 +88,8 @@ impl XdgShellHandler for State {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
+        let bounds = self.output_geometry().map(|output| output.size);
+        surface.with_pending_state(|state| state.bounds = bounds);
         let window = Window::new_wayland_window(surface);
         self.desktops[self.current_desktop].map_element(window.clone(), (0, 0), false);
         if !self.expansion.open {

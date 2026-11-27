@@ -322,7 +322,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   and every popup of the windows left behind is closed.
 - Every new window opens on the current Desktop and takes the focus, also a
   dialog or a window of an app on a hidden one, except over a full-screen
-  Space (below).
+  Space (below). It is told the display's size as its bounds, as mutter and
+  KWin tell the work area; there is no panel yet to leave out, the bounds
+  are not sent again when the display changes, and GTK 3 does not read
+  them.
 - A window held by its title bar goes to another Desktop with Ctrl+Left or
   Ctrl+Right, and in Expansion a window is dragged onto the thumbnail of
   another Desktop; there is no drag to the display edge and no «Assign To». That Ctrl+arrow carries a dragged window is reported by macOS
