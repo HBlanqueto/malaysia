@@ -22,7 +22,8 @@ It runs in two ways:
 what has not been verified. The proposal for full screen, Expansion
 (malaysia's Mission Control) and Split View, of which only Expansion on a key,
 its strip, the drag of a window to a Space, the hover ring, Ctrl+arrows
-inside Expansion, the motion of its windows and its text are built, is in
+inside Expansion, the motion of its windows, its text and the blur of its
+strip are built, is in
 [crates/malaysia-compositor/src/workspaces](crates/malaysia-compositor/src/workspaces/README.md). Nested, it has run on a laptop with a real GPU;
 directly on a real display it has not run yet.
 
@@ -96,7 +97,7 @@ had before it was tiled; Super stands in for macOS's fn.
 Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
 one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
 top then names the Desktops; when the pointer enters it, it grows and shows
-every Desktop live over its name. A click on one goes there, "+" adds a Desktop and the
+every Desktop live over its name. The strip blurs what is behind it. A click on one goes there, "+" adds a Desktop and the
 close button of a thumbnail removes one. A window dragged onto the thumbnail
 of another Desktop moves there, one dropped on "+" gets a new Desktop, and
 one released anywhere else returns to its slot. The window under the pointer gets a ring in

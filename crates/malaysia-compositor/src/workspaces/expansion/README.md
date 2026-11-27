@@ -50,7 +50,8 @@ own text and "reported" is the press; the measurements give the source.
    grown), so growing the strip computes the layout again. From rest the
    spring of 16 is half way at 105 ms and at 90 % at 243 ms; macOS, counted
    from the first changed frame, shows 92 and about 230.
-5. **Strip material:** blur σ 27.5 with a gray of 44 at alpha .41 (dark), a
+5. **Strip material:** blur σ 27.5 that sees only the strip, saturation 1.6,
+   a gray of 46 at alpha .40 over it and a cap of 169 (dark), a
    line of alpha .224 on its last row and a soft shadow of 48 below.
 6. **Hover:** a window under the pointer gets a ring 4 wide in the accent
    colour, at once, with no fade, and its title in a capsule at its centre.
@@ -219,8 +220,11 @@ corner, and the layout has nothing to keep. Each step is one visible result.
    From this step Desktops are no longer added by Control+Right or dropped
    when left empty: the "+" owns them, as on macOS. Adds the `SPACES_*`
    tokens and frame callbacks for the windows in thumbnails. The strip's
-   blur, the first blur of the rebuild, is a step of its own after the
-   wallpaper.
+   blur, the first blur of the rebuild, was built after it, before there is
+   a wallpaper: the strip is one element that Smithay lets read the frame
+   behind it (`effects/backdrop.rs`), halved three times, blurred across
+   and down with the weights kept inside the strip, and drawn with the
+   saturation, the veil and the cap.
 - **E. Drag a window to a Space (built).** A window dragged onto the
    thumbnail of another Desktop moves there. It is plain state in
    `Expansion` with a movement threshold, not a pointer grab. A drop on "+"

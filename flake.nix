@@ -221,6 +221,7 @@
                     time.sleep(2)
                     width, data = screen("strip")
                     height = len(data) // 3 // width
+                    assert data[:3] == bytes([33, 33, 39]), f"the strip is not the blurred Desktop under its veil: {list(data[:3])}"
                     point_at(width // 2, 20)
                     point_at(width - 27, 77)
                     click()

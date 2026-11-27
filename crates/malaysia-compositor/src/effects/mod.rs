@@ -1,3 +1,4 @@
+mod backdrop;
 mod badge;
 mod clip;
 mod corner;
@@ -19,6 +20,7 @@ use smithay::backend::renderer::utils::CommitCounter;
 use smithay::desktop::{PopupManager, Window};
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 
+pub use backdrop::Backdrop;
 pub use badge::Badge;
 pub use clip::{Clipped, round_edges};
 pub use lines::Lines;
@@ -43,6 +45,7 @@ pub struct Effects {
     lines: GlesPixelProgram,
     shadow: GlesPixelProgram,
     badge: GlesPixelProgram,
+    backdrop: Option<backdrop::Programs>,
     curve: Curve,
     gap: Id,
     capsule: Id,
@@ -114,6 +117,7 @@ impl Effects {
             lines: lines::compile(renderer)?,
             shadow: shadow::compile(renderer)?,
             badge: badge::compile(renderer)?,
+            backdrop: backdrop::compile(renderer)?,
             curve: Curve::new(ctdesign::CORNER_WINDOW.smoothing),
             gap: Id::new(),
             capsule: Id::new(),

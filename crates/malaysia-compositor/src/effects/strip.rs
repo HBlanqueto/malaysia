@@ -12,7 +12,7 @@ use smithay::desktop::Window;
 use smithay::utils::{Physical, Point, Rectangle, Size};
 
 use super::label::centred;
-use super::{Badge, Clipped, Effects, Lines, Placement, Shadow, pixels, shadow, solid};
+use super::{Backdrop, Badge, Clipped, Effects, Lines, Placement, Shadow, pixels, shadow, solid};
 use crate::state::Element;
 use crate::workspaces::desktops::MAX_DESKTOPS;
 
@@ -209,7 +209,15 @@ impl Effects {
             ),
             ctdesign::SPACES_STRIP_LINE,
         ));
-        frame.push(solid(&self.strip.bar, strip, ctdesign::SPACES_STRIP_TINT));
+        frame.push(match &self.backdrop {
+            Some(programs) => Element::Backdrop(Backdrop::new(
+                self.strip.bar.clone(),
+                strip,
+                scale,
+                programs.clone(),
+            )),
+            None => solid(&self.strip.bar, strip, ctdesign::SPACES_STRIP_TINT),
+        });
         let wider = Rectangle::new(
             strip.loc - Point::from((strip.size.w, 0)),
             (3 * strip.size.w, strip.size.h).into(),

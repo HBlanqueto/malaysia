@@ -24,7 +24,7 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
 use crate::drm::Drm;
-use crate::effects::{Badge, Clipped, Effects, Lines, Placement, Shadow, round_edges};
+use crate::effects::{Backdrop, Badge, Clipped, Effects, Lines, Placement, Shadow, round_edges};
 use crate::winit::Winit;
 use crate::workspaces::desktops::{Slide, desktop_x, gap, gap_x, stride};
 use crate::workspaces::expansion::Expansion;
@@ -41,6 +41,7 @@ render_elements! {
     Shadow=Shadow,
     Solid=SolidColorRenderElement,
     Badge=Badge,
+    Backdrop=Backdrop,
     Text=CropRenderElement<TextureRenderElement<GlesTexture>>,
 }
 

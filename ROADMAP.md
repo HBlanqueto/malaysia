@@ -26,7 +26,9 @@ the accent colour, and Ctrl+Left and Ctrl+Right slide the spread windows to
 the next Desktop while the strip stays, and the windows of Expansion move
 to their slots with its spring whenever the arrangement changes, and the
 strip names every Desktop and the window under the pointer shows its
-title. Next is the blur under Expansion's strip; the proposal is in
+title, and the strip is a material that blurs what is behind it. Of
+Expansion only the swipes are left, which need a real touchpad. Next is
+full screen; the proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -72,6 +74,7 @@ scale of 5/3):
 | 27 | The hover ring, and Ctrl+arrows inside Expansion | the window under the pointer gets a ring in the accent colour, and Ctrl+Left and Ctrl+Right slide the spread windows to the next Desktop while the strip stays | done |
 | 28 | Nothing jumps in Expansion | a window released from a drag returns to its slot, the windows left move to their new slots, and closing during Ctrl+arrows shrinks both Desktops back, all with Expansion's spring; a window dropped on "+" gets a new Desktop | done |
 | 29 | Text in Expansion, with `cosmic-text` | the strip names every Desktop, in its cell and under its thumbnail, and the window under the pointer shows its title in a capsule at its centre | done |
+| 30 | The blur under Expansion's strip | the strip is macOS's material: what is behind it is blurred, its colour raised, a veil over it; the black band between Desktops passes under it soft | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -364,11 +367,17 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   frames.
 - Ctrl+Up, Ctrl+Down and Escape no longer reach apps while Expansion is open,
   and Ctrl+Up never does.
-- Expansion has no title, no swipe and no hot corner.
-- Expansion's strip has no blur. Over the flat Desktop background its tint
-  gives what the blur would; a window under it, which happens only while
-  Expansion opens or the strip grows, shows sharp. A dragged window is drawn
-  above the strip.
+- Expansion has no swipe and no hot corner.
+- Expansion's strip blurs what is behind it, but until there is a wallpaper
+  almost nothing is: the Desktop background is flat, the windows leave the
+  top before the strip covers it, and only the black band between Desktops
+  and the shadows of windows pass under it. A dragged window is drawn above
+  the strip. The blur works on a copy an eighth of the size, read back from
+  the frame with a blit, which needs OpenGL ES 3: without it the strip is
+  the flat veil. With Expansion open, twenty Ctrl+arrow slides cost the
+  compositor 2.5 s of processor instead of 1.8 in a debug build, nested;
+  with nothing moving behind the strip it costs nothing. Only the dark
+  material is measured.
 - The names in the strip are "Desktop" and a number, in English: the
   rebuild has no translations yet. Their sizes, 14 in the cell and 12 under
   the thumbnail, come from the width of macOS's ink only. The font is
@@ -406,7 +415,7 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   by the slot at rest. A Desktop still sliding out as Expansion opens, or an
   arrow pressed while the strip grows, can show slots of its last Expansion.
   During that slide the black band
-  between Desktops shows through the strip, and a Desktop left before the
+  between Desktops passes blurred under the strip, and a Desktop left before the
   strip grew slides out under it.
 - The hover ring is drawn with its window: under the shadows of the windows
   above and of the strip, and through the strip while Expansion opens.
@@ -434,6 +443,12 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- The blur under the strip (step 30): nested, at scales 1 and 5/3, where
+  the band between Desktops was seen blurred, and the machine check, which
+  finds the strip's colour over the flat background on the virtual GPU.
+  Not checked: directly on a real GPU, a window or a wallpaper behind the
+  strip, and which way up the copy is on the DRM backend, which a flat
+  background cannot show.
 - Text in Expansion (step 29): nested, at scales 1 and 5/3, with `foot`,
   with a right-to-left title and with no fonts, and the machine check,
   which finds a name under the second thumbnail. Not checked: directly on a
