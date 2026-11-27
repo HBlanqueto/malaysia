@@ -18,7 +18,7 @@ use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::{GlesError, GlesPixelProgram, GlesRenderer, GlesTexProgram};
 use smithay::backend::renderer::utils::CommitCounter;
 use smithay::desktop::{PopupManager, Window};
-use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
+use smithay::utils::{FrameExtents, Logical, Physical, Point, Rectangle, Size};
 
 pub use backdrop::Backdrop;
 pub use badge::Badge;
@@ -265,10 +265,12 @@ impl Effects {
             None => {}
         }
         if ringed {
+            let offset = pixels(f64::from(ctdesign::EXPANSION_HOVER_RING_OFFSET), scale);
+            let ring = shape.bounds + FrameExtents::new(offset, offset, offset, offset);
             frame.push(Element::Lines(Lines::new(
                 self.strip.hover_ring.clone(),
                 CommitCounter::default(),
-                shape,
+                self.shape(ring, shape.radius + offset as f32),
                 pixels(f64::from(ctdesign::EXPANSION_HOVER_RING_WIDTH), scale),
                 self.strip.ring_color,
                 ctdesign::Rgba::TRANSPARENT,

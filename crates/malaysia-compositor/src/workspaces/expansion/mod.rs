@@ -11,27 +11,38 @@ use smithay::reexports::wayland_server::Resource;
 use smithay::utils::{FrameExtents, IsAlive, Logical, Point, Rectangle, SERIAL_COUNTER, Size};
 
 use crate::effects::{app_id, with_text};
-use crate::spring::{Motion, advance_motion};
+use crate::spring::{Motion, advance_motion, sample_motion};
 use crate::state::State;
 use crate::workspaces::desktops::{Direction, move_window, send_changed_state};
 use crate::workspaces::full_screen::is_full_screen;
 use layout::{arrange, grid, preview};
-use strip::{Hit, Strip};
+use strip::{EXPANDED_HEIGHT, Hit, Strip};
 
 const OMEGA: f64 = ctdesign::EXPANSION_OMEGA as f64;
 const DAMPING: f64 = ctdesign::EXPANSION_DAMPING as f64;
 const DRAG_THRESHOLD: f64 = ctdesign::DRAG.threshold as f64;
+const DRAG_FLOOR_SCALE: f64 = ctdesign::EXPANSION_DRAG_FLOOR_SCALE as f64;
+const STRIP_ENTRY: (f64, f64) = (
+    ctdesign::SPACES_STRIP_ENTRY_OMEGA as f64,
+    ctdesign::SPACES_STRIP_ENTRY_DAMPING as f64,
+);
+const STRIP_EXIT: (f64, f64) = (
+    ctdesign::SPACES_STRIP_EXIT_OMEGA as f64,
+    ctdesign::SPACES_STRIP_EXIT_DAMPING as f64,
+);
 
 #[derive(Default)]
 pub struct Expansion {
     pub open: bool,
     pub pressed: bool,
     pub drag_origin: Option<Point<f64, Logical>>,
-    pub dragged: Option<(Window, Point<f64, Logical>)>,
+    pub dragged: Option<Dragged>,
     pub strip: Strip,
     pub desktop: usize,
-    progress: f64,
+    pub progress: f64,
     motion: Option<Motion>,
+    strip_in: f64,
+    strip_motion: Option<Motion>,
     pub held: bool,
     unsettled: f64,
     settle: Option<Motion>,
@@ -45,6 +56,19 @@ pub struct Expansion {
     preview: Option<Motion>,
     previewing: f64,
     pub app: Option<Window>,
+}
+
+pub struct Dragged {
+    pub window: Window,
+    grip: Point<f64, Logical>,
+    start_y: f64,
+    start_scale: f64,
+    pub split: Option<(usize, Direction, f64)>,
+}
+
+fn held_scale(y: f64, start_y: f64, start_scale: f64) -> f64 {
+    let risen = ((start_y - y) / (start_y - EXPANDED_HEIGHT).max(f64::EPSILON)).clamp(0.0, 1.0);
+    start_scale + (DRAG_FLOOR_SCALE - start_scale) * risen
 }
 
 struct Slot {
@@ -132,11 +156,14 @@ impl Expansion {
     }
 
     fn preview_at(&self, now: Duration) -> (f64, f64) {
-        self.preview
-            .as_ref()
-            .map_or((self.previewing, 0.0), |motion| {
-                motion.at(OMEGA, DAMPING, f64::from(self.enlarged), now)
-            })
+        sample_motion(
+            &self.preview,
+            OMEGA,
+            DAMPING,
+            self.previewing,
+            f64::from(self.enlarged),
+            now,
+        )
     }
 
     fn clear_preview(&mut self) {
@@ -159,11 +186,47 @@ impl Expansion {
     }
 
     pub fn at_rest(&self) -> bool {
-        !self.held && self.motion.is_none() && self.settle.is_none() && self.strip.at_rest()
+        !self.held
+            && self.motion.is_none()
+            && self.strip_motion.is_none()
+            && self.settle.is_none()
+            && self.strip.at_rest()
     }
 
     pub fn strip_top(&self) -> Option<f64> {
-        (self.progress > 0.0).then(|| (self.progress - 1.0) * self.strip.height())
+        (self.strip_in > 0.0).then(|| (self.strip_in - 1.0) * self.strip.height())
+    }
+
+    fn strip_spring(&self) -> (f64, f64) {
+        if self.open { STRIP_ENTRY } else { STRIP_EXIT }
+    }
+
+    fn strip_at(&self, now: Duration) -> (f64, f64) {
+        let (omega, damping) = self.strip_spring();
+        sample_motion(
+            &self.strip_motion,
+            omega,
+            damping,
+            self.strip_in,
+            f64::from(self.open),
+            now,
+        )
+    }
+
+    pub fn held_drawn(
+        &self,
+        dragged: &Dragged,
+        size: Size<i32, Logical>,
+        pointer: Point<f64, Logical>,
+    ) -> (Point<f64, Logical>, f64) {
+        let scale = if self.app.is_some() {
+            dragged.start_scale
+        } else {
+            held_scale(pointer.y, dragged.start_y, dragged.start_scale)
+        };
+        let size = size.to_f64().upscale(scale);
+        let grip = Point::from((dragged.grip.x * size.w, dragged.grip.y * size.h));
+        (pointer - grip, scale)
     }
 
     pub fn window_at<'a>(
@@ -185,9 +248,14 @@ impl Expansion {
     }
 
     pub fn at(&self, now: Duration) -> (f64, f64) {
-        self.motion.as_ref().map_or((self.progress, 0.0), |motion| {
-            motion.at(OMEGA, DAMPING, f64::from(self.open), now)
-        })
+        sample_motion(
+            &self.motion,
+            OMEGA,
+            DAMPING,
+            self.progress,
+            f64::from(self.open),
+            now,
+        )
     }
 
     fn unsettle(&mut self, desktops: &[Space<Window>], now: Duration) {
@@ -201,11 +269,7 @@ impl Expansion {
                 .set((off.upscale(self.unsettled), scale_off * self.unsettled));
         }
         self.unsettled = 1.0;
-        self.settle = Some(Motion {
-            from: 1.0,
-            velocity: 0.0,
-            started: now,
-        });
+        self.settle = Some(Motion::new(1.0, 0.0, now));
     }
 
     fn settle_from(
@@ -256,6 +320,18 @@ impl State {
             }
         }
         let target = f64::from(expansion.open);
+        let (omega, damping) = expansion.strip_spring();
+        if let Some(strip_in) = advance_motion(
+            &mut expansion.strip_motion,
+            omega,
+            damping,
+            target,
+            now,
+            longest_side,
+        ) {
+            expansion.strip_in = strip_in;
+            self.needs_redraw |= expansion.strip_motion.is_some();
+        }
         let Some(progress) = advance_motion(
             &mut expansion.motion,
             OMEGA,
@@ -272,6 +348,8 @@ impl State {
         } else if !expansion.open {
             expansion.openings += 1;
             expansion.strip = Strip::default();
+            expansion.strip_in = 0.0;
+            expansion.strip_motion = None;
             expansion.app = None;
             if self.slide.is_none() {
                 self.suspend_hidden_desktops(now);
@@ -282,19 +360,19 @@ impl State {
     fn aim_expansion(&mut self, open: bool) {
         let now = self.start_time.elapsed();
         let (from, velocity) = self.expansion.at(now);
+        let (strip_from, strip_velocity) = self.expansion.strip_at(now);
         self.expansion.open = open;
         self.expansion.held = false;
-        self.expansion.motion = Some(Motion {
-            from,
-            velocity,
-            started: now,
-        });
+        self.expansion.motion = Some(Motion::new(from, velocity, now));
+        self.expansion.strip_motion = Some(Motion::new(strip_from, strip_velocity, now));
         self.needs_redraw = true;
     }
 
     pub fn hold_expansion(&mut self, progress: f64) {
         self.expansion.progress = progress;
         self.expansion.motion = None;
+        self.expansion.strip_in = progress;
+        self.expansion.strip_motion = None;
         self.expansion.held = true;
         self.needs_redraw = true;
     }
@@ -305,7 +383,11 @@ impl State {
         } else {
             self.close_expansion(None, time);
         }
-        if let Some(motion) = &mut self.expansion.motion {
+        let expansion = &mut self.expansion;
+        for motion in [&mut expansion.motion, &mut expansion.strip_motion]
+            .into_iter()
+            .flatten()
+        {
             motion.velocity = velocity;
         }
     }
@@ -353,11 +435,33 @@ impl State {
         self.expansion.drag_origin = None;
         match self.strip_hit(origin) {
             None => {
-                self.expansion.dragged = self
+                let Some((window, top_left)) = self
                     .expansion
                     .window_at(&self.desktops, origin)
                     .filter(|(window, _)| !is_full_screen(window))
-                    .map(|(window, top_left)| (window.clone(), origin - top_left));
+                    .map(|(window, top_left)| (window.clone(), top_left))
+                else {
+                    return;
+                };
+                if self.expansion.app.is_none() && !self.expansion.strip.grown {
+                    self.expansion.strip.grow(self.start_time.elapsed());
+                    self.wake_desktops();
+                    self.rearrange_expansion();
+                }
+                let start_scale = window
+                    .user_data()
+                    .get::<Slot>()
+                    .filter(|slot| slot.opening.get() == self.expansion.openings)
+                    .map_or(1.0, |slot| slot.loc.get().1);
+                let size = window.geometry().size.to_f64().upscale(start_scale);
+                let grip = location - top_left;
+                self.expansion.dragged = Some(Dragged {
+                    window,
+                    grip: Point::from((grip.x / size.w, grip.y / size.h)),
+                    start_y: location.y,
+                    start_scale,
+                    split: None,
+                });
             }
             Some(Hit::Thumbnail(index)) => {
                 if let Some((point, output)) = self.on_strip(origin) {
@@ -371,8 +475,45 @@ impl State {
         }
     }
 
+    fn split_target(
+        &self,
+        window: &Window,
+        location: Point<f64, Logical>,
+    ) -> Option<(usize, Direction, f64)> {
+        if !window.alive() {
+            return None;
+        }
+        let (point, output) = self.on_strip(location)?;
+        let strip = &self.expansion.strip;
+        if point.y >= strip.height() {
+            return None;
+        }
+        let count = self.desktops.len();
+        let (index, thumbnail) = (0..count)
+            .filter(|&index| !self.is_desktop(index))
+            .map(|index| (index, strip.thumbnail(index, count, output)))
+            .find(|(_, thumbnail)| {
+                (thumbnail.loc.x..thumbnail.loc.x + thumbnail.size.w).contains(&point.x)
+            })?;
+        let side = if point.x < thumbnail.loc.x + thumbnail.size.w / 2.0 {
+            Direction::Left
+        } else {
+            Direction::Right
+        };
+        let [(_, _, left), (_, _, right)] = self.joined_tiles(window, index, side)?;
+        Some((index, side, f64::from(left) / f64::from(left + right)))
+    }
+
     pub fn hover_expansion(&mut self, location: Point<f64, Logical>) {
         self.drag_in_expansion(location);
+        let split = self
+            .expansion
+            .dragged
+            .as_ref()
+            .and_then(|dragged| self.split_target(&dragged.window, location));
+        if let Some(dragged) = &mut self.expansion.dragged {
+            dragged.split = split;
+        }
         self.needs_redraw = true;
         let Some((point, output)) = self.on_strip(location) else {
             return;
@@ -488,11 +629,7 @@ impl State {
             expansion.preview_target = target;
             expansion.enlarged = true;
         }
-        expansion.preview = Some(Motion {
-            from,
-            velocity,
-            started: now,
-        });
+        expansion.preview = Some(Motion::new(from, velocity, now));
         self.needs_redraw = true;
     }
 
@@ -512,8 +649,8 @@ impl State {
             return;
         }
         let hit = self.strip_hit(location);
-        if let Some((window, grip)) = self.expansion.dragged.take() {
-            self.drop_window(window, location - grip, hit);
+        if let Some(dragged) = self.expansion.dragged.take() {
+            self.drop_window(dragged, location, hit);
             self.hover_expansion(location);
             self.needs_redraw = true;
             return;
@@ -544,50 +681,39 @@ impl State {
         }
     }
 
-    fn drop_window(&mut self, window: Window, top_left: Point<f64, Logical>, hit: Option<Hit>) {
+    fn drop_window(&mut self, dragged: Dragged, location: Point<f64, Logical>, hit: Option<Hit>) {
+        let window = &dragged.window;
         if !window.alive() {
             return;
         }
-        let target = match hit {
-            Some(Hit::Thumbnail(index))
-                if index != self.expansion.desktop && self.is_desktop(index) =>
-            {
-                Some(index)
-            }
-            Some(Hit::Thumbnail(index)) if !self.is_desktop(index) => {
-                let location = self.seat.get_pointer().unwrap().current_location();
-                if let Some((point, output)) = self.on_strip(location) {
-                    let thumbnail =
-                        self.expansion
-                            .strip
-                            .thumbnail(index, self.desktops.len(), output);
-                    let side = if point.x < thumbnail.loc.x + thumbnail.size.w / 2.0 {
-                        Direction::Left
-                    } else {
-                        Direction::Right
-                    };
-                    self.split_with(&window, index, side);
+        let target = if let Some((index, side, _)) = self.split_target(window, location) {
+            self.split_with(window, index, side);
+            None
+        } else {
+            match hit {
+                Some(Hit::Thumbnail(index))
+                    if index != self.expansion.desktop && self.is_desktop(index) =>
+                {
+                    Some(index)
                 }
-                None
+                Some(Hit::Add) => self.add_desktop(),
+                _ => None,
             }
-            Some(Hit::Add) => self.add_desktop(),
-            _ => None,
         };
         let origin = self.expansion.desktop;
         if let Some(target) = target {
             window.set_activated(false);
-            send_changed_state(&window);
+            send_changed_state(window);
             let [from, to] = self.desktops.get_disjoint_mut([origin, target]).unwrap();
-            move_window(&window, from, to);
+            move_window(window, from, to);
             self.rearrange_expansion();
-        } else if let Some(frame) = self.desktops[origin].element_geometry(&window)
+        } else if let Some(frame) = self.desktops[origin].element_geometry(window)
             && let Some(slot) = window.user_data().get::<Slot>()
         {
-            let scale = self.expansion.drawn(&window, frame).1;
+            let drawn = self.expansion.held_drawn(&dragged, frame.size, location);
             self.expansion
                 .unsettle(&self.desktops, self.start_time.elapsed());
-            self.expansion
-                .settle_from(slot, frame.loc.to_f64(), (top_left, scale));
+            self.expansion.settle_from(slot, frame.loc.to_f64(), drawn);
         }
     }
 
@@ -648,5 +774,31 @@ impl State {
             }
         }
         self.needs_redraw = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_held_window_shrinks_linearly_with_the_pointers_rise_to_the_floor_at_the_strips_bottom_and_never_past_its_start_scale()
+     {
+        let floor = 2400.0 * DRAG_FLOOR_SCALE;
+        for (start_y, y, width) in [
+            (840.0, 1200.0, 1020.0),
+            (840.0, 840.0, 1020.0),
+            (840.0, 800.0, 972.0),
+            (840.0, 600.0, 728.0),
+            (840.0, 400.0, 486.0),
+            (840.0, 200.0, 242.0),
+            (840.0, EXPANDED_HEIGHT, floor),
+            (840.0, -10.0, floor),
+            (EXPANDED_HEIGHT - 20.0, EXPANDED_HEIGHT - 40.0, floor),
+            (EXPANDED_HEIGHT - 20.0, EXPANDED_HEIGHT - 10.0, 1020.0),
+        ] {
+            let drawn = 2400.0 * held_scale(y, start_y, 1020.0 / 2400.0);
+            assert!((drawn - width).abs() < 1.5, "{start_y} {y} {drawn}");
+        }
     }
 }

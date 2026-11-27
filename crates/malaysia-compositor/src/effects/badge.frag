@@ -2,6 +2,7 @@ precision highp float;
 
 varying vec2 v_coords;
 uniform vec2 size;
+uniform float alpha;
 uniform float radius;
 uniform vec4 fill;
 uniform vec4 cross_color;
@@ -23,5 +24,5 @@ void main() {
     vec2 position = floor(v_coords * size) + 0.5;
     vec2 point = position - size * 0.5;
     float crossed = max(arm(point, normalize(vec2(1.0, 1.0))), arm(point, normalize(vec2(1.0, -1.0))));
-    gl_FragColor = mix(fill, cross_color, crossed) * coverage(min(position, size - position), radius);
+    gl_FragColor = mix(fill, cross_color, crossed) * coverage(min(position, size - position), radius) * alpha;
 }

@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use smithay::utils::{Logical, Point, Rectangle, Size};
 
-use crate::spring::{Motion, advance_motion};
+use crate::spring::{Motion, advance_motion, sample_motion};
 use crate::workspaces::desktops::moved_index;
 
 const OMEGA: f64 = ctdesign::SPACES_STRIP_EXPAND_OMEGA as f64;
 const DAMPING: f64 = ctdesign::SPACES_STRIP_EXPAND_DAMPING as f64;
 const HEIGHT: f64 = ctdesign::SPACES_STRIP_HEIGHT as f64;
-const EXPANDED_HEIGHT: f64 = ctdesign::SPACES_STRIP_EXPANDED_HEIGHT as f64;
+pub(super) const EXPANDED_HEIGHT: f64 = ctdesign::SPACES_STRIP_EXPANDED_HEIGHT as f64;
 const THUMBNAIL_HEIGHT: f64 = ctdesign::SPACES_THUMBNAIL_HEIGHT as f64;
 const THUMBNAIL_TOP: f64 = ctdesign::SPACES_THUMBNAIL_TOP as f64;
 const THUMBNAIL_GAP: f64 = ctdesign::SPACES_THUMBNAIL_GAP as f64;
@@ -52,11 +52,7 @@ impl Opening {
         Opening {
             stage,
             value: from,
-            motion: Some(Motion {
-                from,
-                velocity: 0.0,
-                started: now,
-            }),
+            motion: Some(Motion::new(from, 0.0, now)),
             wanted,
         }
     }
@@ -65,15 +61,16 @@ impl Opening {
         if self.wanted == wanted {
             return;
         }
-        let (from, velocity) = self.motion.as_ref().map_or((self.value, 0.0), |motion| {
-            motion.at(OMEGA, DAMPING, f64::from(self.wanted), now)
-        });
+        let (from, velocity) = sample_motion(
+            &self.motion,
+            OMEGA,
+            DAMPING,
+            self.value,
+            f64::from(self.wanted),
+            now,
+        );
         self.wanted = wanted;
-        self.motion = Some(Motion {
-            from,
-            velocity,
-            started: now,
-        });
+        self.motion = Some(Motion::new(from, velocity, now));
     }
 }
 
@@ -91,11 +88,7 @@ impl Strip {
             return;
         }
         self.grown = true;
-        self.motion = Some(Motion {
-            from: self.growth,
-            velocity: 0.0,
-            started: now,
-        });
+        self.motion = Some(Motion::new(self.growth, 0.0, now));
     }
 
     pub fn advance(&mut self, now: Duration, longer_side: f64) -> bool {

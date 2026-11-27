@@ -6,7 +6,7 @@ use smithay::output::Output;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
 use smithay::utils::{IsAlive, SERIAL_COUNTER, Serial};
 
-use crate::spring::{Motion, rests};
+use crate::spring::{Motion, rests, sample_motion};
 use crate::state::State;
 use crate::window_grab::{Drag, WindowGrab};
 
@@ -14,6 +14,15 @@ use crate::window_grab::{Drag, WindowGrab};
 pub enum Direction {
     Left,
     Right,
+}
+
+impl Direction {
+    pub fn left_right<T>(self, this: T, other: T) -> (T, T) {
+        match self {
+            Direction::Left => (this, other),
+            Direction::Right => (other, this),
+        }
+    }
 }
 
 pub struct Slide {
@@ -31,11 +40,7 @@ impl Slide {
         vacated: Option<usize>,
     ) -> Slide {
         Slide {
-            motion: Some(Motion {
-                from,
-                velocity,
-                started: now,
-            }),
+            motion: Some(Motion::new(from, velocity, now)),
             position: from,
             carried,
             vacated,
@@ -125,12 +130,7 @@ impl State {
     pub fn strip(&self, now: Duration) -> (f64, f64) {
         let target = self.current_desktop as f64;
         self.slide.as_ref().map_or((target, 0.0), |slide| {
-            slide
-                .motion
-                .as_ref()
-                .map_or((slide.position, 0.0), |motion| {
-                    motion.at(OMEGA, DAMPING, target, now)
-                })
+            sample_motion(&slide.motion, OMEGA, DAMPING, slide.position, target, now)
         })
     }
 
@@ -157,11 +157,7 @@ impl State {
         let from = self.strip(now).0;
         self.go_to_desktop(target, time);
         if let Some(slide) = &mut self.slide {
-            slide.motion = Some(Motion {
-                from,
-                velocity,
-                started: now,
-            });
+            slide.motion = Some(Motion::new(from, velocity, now));
         }
     }
 

@@ -81,17 +81,17 @@ pub fn elements(
     let width = output.current_mode().map_or(0, |mode| mode.size.w);
     let height = output.current_mode().map_or(0, |mode| mode.size.h);
     let stride = stride(width, scale);
-    let dragged = expansion.dragged.as_ref().map(|(window, _)| window);
-    if let Some((window, grip)) = &expansion.dragged
-        && let Some(geometry) = desktops[expansion.desktop].element_geometry(window)
+    let dragged = expansion.dragged.as_ref().map(|dragged| &dragged.window);
+    if let Some(drag) = &expansion.dragged
+        && let Some(geometry) = desktops[expansion.desktop].element_geometry(&drag.window)
     {
-        let factor = expansion.drawn(window, geometry).1;
-        let main = desktops[current].elements().next_back() == Some(window);
+        let (top_left, factor) = expansion.held_drawn(drag, geometry.size, pointer);
+        let main = desktops[current].elements().next_back() == Some(&drag.window);
         effects.push_window(
             renderer,
-            window,
+            &drag.window,
             Placement {
-                geometry: Rectangle::new((pointer - *grip).to_i32_round(), geometry.size),
+                geometry: Rectangle::new(top_left.to_i32_round(), geometry.size),
                 desktop_offset: (desktop_x(expansion.desktop, position, stride), 0).into(),
                 expansion: factor,
                 ringed: false,
@@ -135,14 +135,15 @@ pub fn elements(
         let strip_x = desktop_x(slot, position, stride);
         if !no_windows_shown
             && expansion.app.is_none()
-            && expansion.strip_top().is_some()
+            && expansion.open
             && strip_x.abs() < width
             && desktop.elements().next().is_none()
             && let Some(geometry) = desktop.output_geometry(output)
         {
             let mut area = round_edges(expansion.area(geometry).to_physical(scale));
             area.loc.x += strip_x;
-            effects.push_no_windows(renderer, area, scale, frame);
+            let opacity = expansion.progress.clamp(0.0, 1.0) as f32;
+            effects.push_no_windows(renderer, area, opacity, scale, frame);
             no_windows_shown = true;
         }
         let in_front = previewed.filter(|_| index == expansion.desktop);
@@ -197,7 +198,7 @@ pub fn elements(
                 frame,
             );
         }
-        if expansion.strip_top().is_none()
+        if expansion.progress <= 0.0
             && strip_x.abs() < width
             && full_screen_window(desktop).is_some()
         {
@@ -215,7 +216,7 @@ pub fn elements(
         }
     }
     if let Some(vacated) = vacated
-        && expansion.strip_top().is_none()
+        && expansion.progress <= 0.0
     {
         let area = Rectangle::new(
             (desktop_x(vacated, position, stride), 0).into(),
@@ -257,9 +258,19 @@ fn push_strip(
     });
     effects.push_strip_controls(ring, close, scale, frame);
     let is_desktop = |index: usize| full_screen_window(&row.desktops[index]).is_none();
+    let dragged = row.expansion.dragged.as_ref();
+    let split_at = |index: usize| {
+        dragged
+            .and_then(|dragged| dragged.split)
+            .filter(|(at, ..)| *at == index)
+    };
     let cells = (0..count).map(|index| {
         let entry = &row.desktops[index];
-        let name = split_windows(entry)
+        let joined = split_at(index).and_then(|(_, side, _)| {
+            Some(side.left_right(&dragged?.window, full_screen_window(entry)?))
+        });
+        let name = joined
+            .or_else(|| split_windows(entry))
             .map(|(left, right)| {
                 Name::Split(
                     left.toplevel().unwrap().wl_surface(),
@@ -287,7 +298,19 @@ fn push_strip(
             let thumbnail = placed(index);
             let factor = thumbnail.size.h / output.h;
             let whole = on_screen(thumbnail);
-            let Some(clip) = whole.intersection(bar) else {
+            let mut shown = whole;
+            if let Some((_, side, left)) = split_at(index) {
+                let left_width = (f64::from(whole.size.w) * left).round() as i32;
+                let left_share = Rectangle::new(whole.loc, (left_width, whole.size.h).into());
+                let right_share = Rectangle::new(
+                    whole.loc + Point::from((left_width, 0)),
+                    (whole.size.w - left_width, whole.size.h).into(),
+                );
+                let placeholder;
+                (placeholder, shown) = side.left_right(left_share, right_share);
+                effects.push_split_placeholder(placeholder, bar, scale, frame);
+            }
+            let Some(clip) = shown.intersection(bar) else {
                 continue;
             };
             for window in desktop.elements().rev() {
@@ -310,7 +333,8 @@ fn push_strip(
         .and_then(|preview| on_screen(preview).intersection(bar));
     let add = (add_centre(strip.growth, output) + shift).to_physical(scale);
     let pill = (!strip.grown).then(|| on_screen(pill(row.current, count, output)));
-    effects.push_strip_bar(bar, add, preview, pill, scale, frame);
+    effects.push_strip_marks(add, preview, pill, scale, frame);
+    effects.push_strip_bar(bar, row.expansion.open, scale, frame);
 }
 
 pub enum Backend {

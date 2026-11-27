@@ -147,11 +147,12 @@ fn width_limits(window: &Window) -> (i32, i32) {
 fn split_tiles<'a>(
     left_window: &'a Window,
     right_window: &'a Window,
+    wanted: i32,
     output: Size<i32, Logical>,
 ) -> Option<[(&'a Window, Direction, i32); 2]> {
     let (left, right) = split_widths(
         output.w,
-        (output.w - ctdesign::SPLIT_DIVIDER_WIDTH) / 2,
+        wanted,
         width_limits(left_window),
         width_limits(right_window),
     )?;
@@ -338,13 +339,13 @@ impl State {
         let (Some(front), Some(other)) = (live.next().cloned(), live.next().cloned()) else {
             return;
         };
-        let (left_window, right_window) = match side {
-            Direction::Left => (front, other),
-            Direction::Right => (other, front),
-        };
-        let Some(tiles) = split_tiles(&left_window, &right_window, output.size).filter(|_| {
-            self.is_desktop(self.current_desktop) && self.desktops.len() < MAX_DESKTOPS
-        }) else {
+        let (left_window, right_window) = side.left_right(front, other);
+        let halves = (output.size.w - ctdesign::SPLIT_DIVIDER_WIDTH) / 2;
+        let Some(tiles) =
+            split_tiles(&left_window, &right_window, halves, output.size).filter(|_| {
+                self.is_desktop(self.current_desktop) && self.desktops.len() < MAX_DESKTOPS
+            })
+        else {
             return;
         };
         for (window, side, width) in tiles {
@@ -353,21 +354,29 @@ impl State {
         }
     }
 
-    pub fn split_with(&self, window: &Window, entry: usize, side: Direction) {
+    pub fn joined_tiles<'a>(
+        &'a self,
+        window: &'a Window,
+        entry: usize,
+        side: Direction,
+    ) -> Option<[(&'a Window, Direction, i32); 2]> {
         let space = &self.desktops[entry];
-        let Some(output) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
-            return;
-        };
-        let Some(full) = full_screen_window(space).filter(|_| {
+        let output = self.desktops[self.current_desktop].output_geometry(&self.output)?;
+        let full = full_screen_window(space).filter(|_| {
             space.elements().count() == 1 && window.toplevel().unwrap().parent().is_none()
-        }) else {
-            return;
-        };
-        let (left_window, right_window) = match side {
-            Direction::Left => (window, full),
-            Direction::Right => (full, window),
-        };
-        let Some(tiles) = split_tiles(left_window, right_window, output.size) else {
+        })?;
+        let width = window.geometry().size.w;
+        let (left_window, right_window) = side.left_right(window, full);
+        let (wanted, _) =
+            side.left_right(width, output.size.w - ctdesign::SPLIT_DIVIDER_WIDTH - width);
+        split_tiles(left_window, right_window, wanted, output.size)
+    }
+
+    pub fn split_with(&self, window: &Window, entry: usize, side: Direction) {
+        let (Some(output), Some(tiles)) = (
+            self.desktops[self.current_desktop].output_geometry(&self.output),
+            self.joined_tiles(window, entry, side),
+        ) else {
             return;
         };
         self.cancel_splits();
@@ -517,7 +526,7 @@ impl State {
 
     fn grow(&mut self, window: &Window, from: Option<Rectangle<f64, Logical>>) {
         if let Some(from) = from
-            && self.expansion.strip_top().is_none()
+            && self.expansion.progress <= 0.0
             && self.desktops[self.current_desktop]
                 .element_location(window)
                 .is_some()
@@ -525,11 +534,7 @@ impl State {
             self.growth = Some(Growth {
                 window: window.clone(),
                 from,
-                motion: Some(Motion {
-                    from: 0.0,
-                    velocity: 0.0,
-                    started: self.start_time.elapsed(),
-                }),
+                motion: Some(Motion::new(0.0, 0.0, self.start_time.elapsed())),
                 progress: 0.0,
             });
         }

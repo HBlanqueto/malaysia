@@ -7,6 +7,14 @@ pub struct Motion {
 }
 
 impl Motion {
+    pub fn new(from: f64, velocity: f64, started: Duration) -> Motion {
+        Motion {
+            from,
+            velocity,
+            started,
+        }
+    }
+
     pub fn at(&self, omega: f64, damping: f64, target: f64, now: Duration) -> (f64, f64) {
         let seconds = now.saturating_sub(self.started).as_secs_f64();
         let (offset, velocity) = spring(omega, damping, self.from - target, self.velocity, seconds);
@@ -29,6 +37,19 @@ pub fn spring(omega: f64, damping: f64, offset: f64, velocity: f64, seconds: f64
         offset * even + (velocity + decay * offset) * odd,
         velocity * even - (decay * velocity + omega * omega * offset) * odd,
     )
+}
+
+pub fn sample_motion(
+    motion: &Option<Motion>,
+    omega: f64,
+    damping: f64,
+    resting: f64,
+    target: f64,
+    now: Duration,
+) -> (f64, f64) {
+    motion.as_ref().map_or((resting, 0.0), |motion| {
+        motion.at(omega, damping, target, now)
+    })
 }
 
 pub fn rests(omega: f64, offset: f64, velocity: f64, stride: f64) -> bool {

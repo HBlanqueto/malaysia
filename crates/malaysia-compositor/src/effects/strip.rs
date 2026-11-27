@@ -28,6 +28,8 @@ pub struct Chrome {
     pub ring_color: Rgba,
     close: Id,
     backdrops: [Id; MAX_DESKTOPS + 1],
+    placeholder: Id,
+    placeholder_plus: [Id; 2],
 }
 
 impl Chrome {
@@ -43,6 +45,8 @@ impl Chrome {
             ring_color: ctdesign::ACCENTS[0].colors(dark, false).ring,
             close: Id::new(),
             backdrops: std::array::from_fn(|_| Id::new()),
+            placeholder: Id::new(),
+            placeholder_plus: [Id::new(), Id::new()],
         }
     }
 }
@@ -168,7 +172,7 @@ impl Effects {
             if grown {
                 location.y = cell.loc.y + cell.size.h + gap;
             }
-            frame.extend(text.element(location, bar, scale));
+            frame.extend(text.element(location, bar, 1.0, scale));
         }
     }
 
@@ -193,9 +197,36 @@ impl Effects {
         )));
     }
 
-    pub fn push_strip_bar(
+    pub fn push_split_placeholder(
         &self,
-        strip: Rectangle<i32, Physical>,
+        share: Rectangle<i32, Physical>,
+        clip: Rectangle<i32, Physical>,
+        scale: f64,
+        frame: &mut Vec<Element>,
+    ) {
+        let mut push_clipped = |id: &Id, area: Rectangle<i32, Physical>, color: Rgba| {
+            if let Some(area) = area.intersection(clip) {
+                frame.push(solid(id, area, color));
+            }
+        };
+        let centre = share.loc.to_f64() + share.size.to_f64().downscale(2.0).to_point();
+        for (id, bar) in self
+            .strip
+            .placeholder_plus
+            .iter()
+            .zip(plus_bars(centre, scale))
+        {
+            push_clipped(id, bar, ctdesign::SPACES_SPLIT_PLACEHOLDER_PLUS);
+        }
+        push_clipped(
+            &self.strip.placeholder,
+            share,
+            ctdesign::SPACES_SPLIT_PLACEHOLDER,
+        );
+    }
+
+    pub fn push_strip_marks(
+        &self,
         add: Point<f64, Physical>,
         preview: Option<Rectangle<i32, Physical>>,
         pill: Option<Rectangle<i32, Physical>>,
@@ -220,15 +251,26 @@ impl Effects {
                 self.badge.clone(),
             )));
         }
+    }
+
+    pub fn push_strip_bar(
+        &self,
+        strip: Rectangle<i32, Physical>,
+        open: bool,
+        scale: f64,
+        frame: &mut Vec<Element>,
+    ) {
         let line = pixels(f64::from(ctdesign::FRAME_LINE_WIDTH), scale);
-        frame.push(solid(
-            &self.strip.line,
-            Rectangle::new(
-                strip.loc + Point::from((0, strip.size.h)),
-                (strip.size.w, line).into(),
-            ),
-            ctdesign::SPACES_STRIP_LINE,
-        ));
+        if open {
+            frame.push(solid(
+                &self.strip.line,
+                Rectangle::new(
+                    strip.loc + Point::from((0, strip.size.h)),
+                    (strip.size.w, line).into(),
+                ),
+                ctdesign::SPACES_STRIP_LINE,
+            ));
+        }
         frame.push(match &self.backdrop {
             Some(programs) => Element::Backdrop(Backdrop::new(
                 self.strip.bar.clone(),
@@ -238,6 +280,9 @@ impl Effects {
             )),
             None => solid(&self.strip.bar, strip, ctdesign::SPACES_STRIP_TINT),
         });
+        if !open {
+            return;
+        }
         let wider = Rectangle::new(
             strip.loc - Point::from((strip.size.w, 0)),
             (3 * strip.size.w, strip.size.h + line).into(),

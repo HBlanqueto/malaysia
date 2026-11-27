@@ -51,13 +51,18 @@ own text and "reported" is the press; the measurements give the source.
    closes. The window area starts 40 below the strip (about 38 once it has
    grown), so growing the strip computes the layout again. From rest the
    spring of 16 is half way at 105 ms and at 90 % at 243 ms; macOS, counted
-   from the first changed frame, shows 92 and about 230.
+   from the first changed frame, shows 92 and about 230. The strip comes in
+   as one piece on its own spring (ω0 31, ζ 1.15) and leaves on another
+   (ω0 23, ζ .88), its line and shadow gone on the first frame of a close.
 5. **Strip material:** blur σ 27.5 that sees only the strip, saturation 1.6,
    a gray of 46 at alpha .40 over it and a cap of 169 (dark), a
    black line of alpha .224 on the first row below it and a soft shadow of
    48 below that.
 6. **Hover:** a window under the pointer gets a ring 4 wide in the accent
-   colour, at once, with no fade, and its title in a capsule at its centre.
+   colour, 3 outside it and concentric, at once, with no fade, and its title
+   in a capsule at its centre. A held window grows the strip at once and
+   shrinks with the pointer's rise to .074 at the strip's bottom edge; over a
+   full-screen thumbnail the thumbnail shows the Split View the drop makes.
 7. **Pick:** releasing the button on a window raises it at the first frame and
    every window returns with the same spring. Releasing it on the background
    closes Expansion (documented). A click on a Space makes it current and

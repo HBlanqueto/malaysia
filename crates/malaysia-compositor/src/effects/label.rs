@@ -302,13 +302,14 @@ impl Text {
         &self,
         location: Point<i32, Physical>,
         clip: Rectangle<i32, Physical>,
+        opacity: f32,
         scale: f64,
     ) -> Option<Element> {
         let source = Rectangle::from_size(Size::from((self.pixels.w, self.pixels.h)).to_f64());
         let texture = TextureRenderElement::from_texture_buffer(
             location.to_f64(),
             &self.texture,
-            None,
+            Some(opacity),
             Some(source),
             Some(self.size),
             Kind::Unspecified,
@@ -326,7 +327,7 @@ impl Effects {
         scale: f64,
         frame: &mut Vec<Element>,
     ) {
-        self.push_capsule(&self.capsule, window, scale, frame, |labels, limit| {
+        self.push_capsule(&self.capsule, window, 1.0, scale, frame, |labels, limit| {
             labels.fonts.title(
                 &mut labels.title,
                 renderer,
@@ -366,32 +367,41 @@ impl Effects {
             bounds.loc.x + (bounds.size.w - text.pixels.w) / 2,
             bounds.loc.y + bounds.size.h + gap,
         ));
-        frame.extend(text.element(location, Rectangle::new(location, text.pixels), scale));
+        frame.extend(text.element(location, Rectangle::new(location, text.pixels), 1.0, scale));
     }
 
     pub fn push_no_windows(
         &self,
         renderer: &mut GlesRenderer,
         area: Rectangle<i32, Physical>,
+        opacity: f32,
         scale: f64,
         frame: &mut Vec<Element>,
     ) {
-        self.push_capsule(&self.no_windows, area, scale, frame, |labels, limit| {
-            labels.fonts.refresh(
-                &mut labels.empty,
-                renderer,
-                ctdesign::EXPANSION_TITLE_FONT,
-                ctdesign::EXPANSION_TITLE_COLOR,
-                limit,
-                scale,
-            )
-        });
+        self.push_capsule(
+            &self.no_windows,
+            area,
+            opacity,
+            scale,
+            frame,
+            |labels, limit| {
+                labels.fonts.refresh(
+                    &mut labels.empty,
+                    renderer,
+                    ctdesign::EXPANSION_TITLE_FONT,
+                    ctdesign::EXPANSION_TITLE_COLOR,
+                    limit,
+                    scale,
+                )
+            },
+        );
     }
 
     fn push_capsule(
         &self,
         id: &Id,
         area: Rectangle<i32, Physical>,
+        opacity: f32,
         scale: f64,
         frame: &mut Vec<Element>,
         text: impl FnOnce(&mut Labels, i32) -> Option<&Text>,
@@ -408,8 +418,8 @@ impl Effects {
         let height = pixels(f64::from(ctdesign::EXPANSION_TITLE_HEIGHT), scale);
         let size = Size::from(((text.pixels.w + 2 * padding).min(area.size.w), height));
         let capsule = Rectangle::new(centred(size, area), size);
-        frame.extend(text.element(centred(text.pixels, capsule), area, scale));
-        frame.push(Element::Badge(Badge::new(
+        frame.extend(text.element(centred(text.pixels, capsule), area, opacity, scale));
+        let mut badge = Badge::new(
             id.clone(),
             self.shape(capsule, height as f32 / 2.0),
             ctdesign::EXPANSION_TITLE_FILL.premultiplied(),
@@ -417,7 +427,9 @@ impl Effects {
             0.0,
             0.0,
             self.badge.clone(),
-        )));
+        );
+        badge.opacity = opacity;
+        frame.push(Element::Badge(badge));
     }
 }
 

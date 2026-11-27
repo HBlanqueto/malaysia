@@ -31,6 +31,10 @@ impl<const N: usize> Element for Shaded<N> {
     fn geometry(&self, _scale: Scale<f64>) -> Rectangle<i32, Physical> {
         self.area
     }
+
+    fn alpha(&self) -> f32 {
+        self.opacity
+    }
 }
 
 impl<const N: usize> RenderElement<GlesRenderer> for Shaded<N> {

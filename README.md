@@ -122,8 +122,10 @@ Inside Expansion, Alt+click on a thumbnail or Ctrl with a digit goes to that
 Desktop and stays; near "+" a new Desktop peeks in from the right edge and a
 click slides it into the row, after the last Desktop and before the
 full-screen Spaces; a
-thumbnail dragged along the strip changes the order; a window dropped on
-the half of a full-screen thumbnail makes a Split View with it; Space
+thumbnail dragged along the strip changes the order; a held window grows
+the strip and shrinks as it nears it, and over a full-screen thumbnail the
+thumbnail shows the Split View that dropping it there makes, on the
+pointer's side, the window keeping its own width; Space
 enlarges the window under the pointer and Space again returns it; an empty
 Desktop says "No Available Windows". Ctrl+Down, with Expansion closed,
 spreads only the windows of the app in front, with their titles below
