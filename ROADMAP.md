@@ -266,8 +266,11 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - A window narrower or shorter than 3.5 times its corner gets Figma's shorter
   tails, a circle at twice; macOS is not measured there.
 - The scheme of the frame lines and of the shadow comes from
-  `MALAYSIA_SCHEME` (`light`, or dark by default), read once at start. It is
-  temporary, until the appearance store exists.
+  `MALAYSIA_SCHEME` (`light`, or dark by default), read once at start, and
+  Reduce Motion from `MALAYSIA_MOTION=reduced`, under which every spring
+  lands on its target at once, as gnome-shell's `adjustAnimationTime` does
+  with animations off; macOS fades instead, which is not built. Both are
+  temporary, until the appearance store reads `org.freedesktop.appearance`.
 - A click outside an open menu closes the menu and also reaches the window
   under it, without giving that window the focus. KWin keeps that click.
 - When an app closes its own menu, the keyboard focus returns to the window on
@@ -408,7 +411,7 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - The gap between Desktops is a black band from `DESKTOP_GAP_COLOR`. Its colour
   was observed on macOS, not sampled. With no wallpaper yet the Desktops show
   the clear colour, so the band has little contrast.
-- The slide has no Reduce Motion and no touchpad gesture.
+- The slide has no touchpad gesture.
 - A slide redraws the whole display on every refresh for about 1.1 s, though
   after 0.6 s the strip moves under 18 pixels. Nested, in a debug build, one
   slide costs 49 to 78 ms of CPU against 4 ms for the instant switch.
@@ -593,6 +596,11 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   scale, so it loses a few pixels of height the first time its state changes.
 
 ## Not verified
+
+- Reduce Motion: nested at scale 1, Expansion opening and closing and a
+  window going full screen are at their end on the first frame. A swipe's
+  release, a drop's flight and the strip under it are covered only by the
+  checks.
 
 - The fixes after the review against barrierkit's Mission Control: the
   way back to the Desktop of origin and a new window over a full-screen

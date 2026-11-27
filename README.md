@@ -105,8 +105,11 @@ makes them equal; when one leaves or closes, the other stays full screen
 alone.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
-shadow in the light scheme; without it they are dark. It is temporary, until
-the appearance store exists.
+shadow in the light scheme; without it they are dark. `MALAYSIA_MOTION=reduced`
+is Reduce Motion: every animation lands at once, as GNOME and KWin do with
+animations off, while swipes still follow the fingers. Both are temporary,
+until the appearance store exists and reads the portal's `color-scheme` and
+`reduced-motion`.
 
 ### First run on a real machine
 
@@ -189,7 +192,7 @@ Progress, against the measures of macOS in BarrierKit's
   «Assign To».
 - **Missing:** the hot corner, the Mission Control key, the four-finger and
   pinch gestures, Spaces ordered by recent use, Show Desktop, Option to show
-  every close button, Reduce Motion, several displays, and the shadow and
+  every close button, several displays, and the shadow and
   corners of the windows in the strip's thumbnails.
 
 ## Check
