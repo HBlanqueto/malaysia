@@ -129,6 +129,11 @@ What it needs:
   refused and logged.
 - `XKB_DEFAULT_LAYOUT`, for a keyboard that is not US, for example
   `XKB_DEFAULT_LAYOUT=es`.
+- Adwaita Sans, the desktop's font (`adwaita-fonts` in nixpkgs). The
+  compositor asks for it by name and draws with another sans font when it is
+  missing. To give it to the apps too, make it the system's default sans
+  font, on NixOS with
+  `fonts.fontconfig.defaultFonts.sansSerif = [ "Adwaita Sans" ];`.
 
 Clients draw with software rendering for now.
 

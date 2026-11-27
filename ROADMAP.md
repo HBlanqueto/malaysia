@@ -399,8 +399,14 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - The names in the strip are "Desktop" and a number, in English: the
   rebuild has no translations yet. Their sizes, 14 in the cell and 12 under
   the thumbnail, come from the width of macOS's ink only. The font is
-  BarrierKit's, Adwaita Sans, and another sans font when it is missing (the
-  machine check draws DejaVu Sans); with no font at all there is no text.
+  the desktop's, Adwaita Sans, which the compositor asks for by name;
+  another sans font is used when it is missing, and with no font at all
+  there is no text. Nothing makes it the default of the apps yet: the
+  compositor starts no session, so an app draws the sans font of the
+  system's fontconfig. The machine check does not install Adwaita Sans: GTK
+  then draws the text editor with it, and the check, which reads that
+  editor's menu and text by OCR, no longer finds them. The check's
+  compositor draws its names with DejaVu Sans.
   The names in the cells go at once when the strip starts to grow, and the
   thumbnails and their names appear at their final place as it grows; the
   hand-over is not measured.
