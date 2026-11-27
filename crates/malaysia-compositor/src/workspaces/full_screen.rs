@@ -83,6 +83,18 @@ impl State {
         }
     }
 
+    pub fn toggle_full_screen(&mut self) {
+        let Some(window) = self.top_window() else {
+            return;
+        };
+        let toplevel = window.toplevel().unwrap();
+        if is_full_screen(&window) {
+            self.request_leave_full_screen(toplevel);
+        } else {
+            self.request_full_screen(toplevel);
+        }
+    }
+
     pub fn request_leave_full_screen(&mut self, toplevel: &ToplevelSurface) {
         let saved = self
             .window_for_surface(toplevel.wl_surface())

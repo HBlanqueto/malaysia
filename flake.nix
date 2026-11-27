@@ -224,7 +224,7 @@
                     time.sleep(3)
                     _, data = screen("full-screen")
                     assert data[:3] != bytes([25, 25, 31]), "the editor does not fill the display"
-                    machine.send_key("f11")
+                    machine.send_key("ctrl-alt-f")
                     time.sleep(3)
                     _, data = screen("left-full-screen")
                     assert data[:3] == bytes([25, 25, 31]), "the editor did not leave full screen"

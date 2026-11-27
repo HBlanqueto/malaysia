@@ -25,6 +25,7 @@ enum KeyAction {
     RestoreTiled,
     OpenExpansion,
     CloseExpansion,
+    ToggleFullScreen,
 }
 
 fn key_action(
@@ -34,6 +35,7 @@ fn key_action(
 ) -> Option<KeyAction> {
     let control_only = modifiers.ctrl && !modifiers.alt && !modifiers.shift && !modifiers.logo;
     let control_super = modifiers.ctrl && modifiers.logo && !modifiers.alt && !modifiers.shift;
+    let control_alt = modifiers.ctrl && modifiers.alt && !modifiers.shift && !modifiers.logo;
     match keysym.raw() {
         vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 => Some(
             KeyAction::SwitchVt((vt - keysyms::KEY_XF86Switch_VT_1 + 1) as i32),
@@ -48,6 +50,7 @@ fn key_action(
         _ if expansion_open => None,
         keysyms::KEY_Up if control_only => Some(KeyAction::OpenExpansion),
         keysyms::KEY_f | keysyms::KEY_F if control_super => Some(KeyAction::Tile(Tile::Fill)),
+        keysyms::KEY_f | keysyms::KEY_F if control_alt => Some(KeyAction::ToggleFullScreen),
         keysyms::KEY_c | keysyms::KEY_C if control_super => Some(KeyAction::Tile(Tile::Center)),
         keysyms::KEY_Left if control_super => Some(KeyAction::Tile(Tile::Left)),
         keysyms::KEY_Right if control_super => Some(KeyAction::Tile(Tile::Right)),
@@ -117,6 +120,7 @@ impl State {
                     Some(KeyAction::RestoreTiled) => self.restore_tiled(),
                     Some(KeyAction::OpenExpansion) => self.open_expansion(event.time()),
                     Some(KeyAction::CloseExpansion) => self.close_expansion(None, event.time()),
+                    Some(KeyAction::ToggleFullScreen) => self.toggle_full_screen(),
                     None => {}
                 }
             }
@@ -308,6 +312,15 @@ mod tests {
         let action = |keysym| key_action(&ctrl_super, Keysym::new(keysym), false);
         assert_eq!(action(keysyms::KEY_f), Some(KeyAction::Tile(Tile::Fill)));
         assert_eq!(action(keysyms::KEY_F), Some(KeyAction::Tile(Tile::Fill)));
+        let ctrl_alt = ModifiersState {
+            ctrl: true,
+            alt: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            key_action(&ctrl_alt, Keysym::new(keysyms::KEY_f), false),
+            Some(KeyAction::ToggleFullScreen)
+        );
         assert_eq!(action(keysyms::KEY_C), Some(KeyAction::Tile(Tile::Center)));
         assert_eq!(action(keysyms::KEY_R), Some(KeyAction::RestoreTiled));
         assert_eq!(action(keysyms::KEY_Left), Some(KeyAction::Tile(Tile::Left)));

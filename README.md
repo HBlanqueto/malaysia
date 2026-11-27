@@ -93,7 +93,8 @@ Ctrl+Super with F fills the display with the focused window, with C centres
 it, with an arrow puts it in that half, and with R returns it to the frame it
 had before it was tiled; Super stands in for macOS's fn.
 A window that asks for full screen (`foot --fullscreen`, or the app's own
-key) fills the display on a Space of its own, right after its Desktop in the
+key, or Ctrl+Alt+F for the window in front) fills the display on a Space of
+its own, right after its Desktop in the
 row, and returns to its frame when it leaves.
 `malaysia-expansion`, a second program of the package, opens Expansion or
 closes it, as Ctrl+Up does, through the private protocol

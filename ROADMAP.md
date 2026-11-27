@@ -29,8 +29,9 @@ strip names every Desktop and the window under the pointer shows its
 title, and the strip is a material that blurs what is behind it. Of
 Expansion only the swipes are left, which need a real touchpad. A window
 that asks for full screen gets a Space of its own in the row, and
-`malaysia-expansion` opens or closes Expansion for a launcher. Next is a key
-for it and its transition; the proposal is in
+`malaysia-expansion` opens or closes Expansion for a launcher, and Ctrl+Alt+F
+sends the window in front to full screen and back. Next is the transition
+of full screen; the proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -79,6 +80,7 @@ scale of 5/3):
 | 30 | The blur under Expansion's strip | the strip is macOS's material: what is behind it is blurred, its colour raised, a veil over it; the black band between Desktops passes under it soft | done |
 | 31 | Full screen from a client's request | `foot --fullscreen`, or an app's own full-screen key, fills the display on a Space of its own right after its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | done |
 | 32 | Expansion from a launcher | `malaysia-expansion` opens Expansion, or closes it, through the private protocol `limitless_expansion_v1`; the package installs it with a desktop entry named Expansion, for the launcher and the Dock to come | done |
+| 33 | A key for full screen | Ctrl+Alt+F sends the window in front to full screen and back, as macOS's Control+Command+F; the app is not told the key | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -317,8 +319,14 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - The compositor tells clients it only does full screen, so an app that
   follows `wm_capabilities` hides its maximize and minimize buttons. A
   request to maximize is answered with a configure that changes nothing.
-- Full screen has no key of the compositor (step B: Ctrl+Super+F is already
-  Fill) and no transition (step G): entering slides the row to the new
+- Full screen is Ctrl+Alt+F: Alt sits where Command does on a Mac keyboard,
+  and Ctrl+Super+F is already Fill, Super standing in for fn. It acts on the
+  window in front of the current entry, and does nothing while Expansion
+  is open. It takes Ctrl+Alt+F from the apps (Emacs's forward-sexp), and on
+  a layout without a latin f, as Ctrl+Super+F, it does nothing. A browser
+  sent to full screen by it hides its toolbar too:
+  Wayland has one full-screen state, where macOS keeps the toolbar.
+  Full screen has no transition (step G): entering slides the row to the new
   Space with the window already at its full size, and leaving shows the
   Desktop at once. A window that opens while a full-screen Space is current
   opens in that Space, above the full-screen window, whatever its client;
@@ -480,6 +488,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- The key for full screen (step 33): nested, at scales 1 and 5/3, with
+  `foot`, and the machine check. Not checked: directly on a display.
 - Expansion from a launcher (step 32): nested, and the machine check, which
   runs `malaysia-expansion` twice and validates its desktop entry. Not
   checked: directly on a display, from a real launcher.

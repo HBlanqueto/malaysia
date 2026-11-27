@@ -5,7 +5,7 @@ Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
 This file is a proposal. Of its steps only A, full screen from a client's
-request, in `full_screen.rs`, C, Expansion on a key, D, its
+request, in `full_screen.rs`, B, its key, C, Expansion on a key, D, its
 strip, E, the drag of a window to a Space, F, the hover ring and
 Control+arrows while Expansion is open, and I, its text, are built, in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
 Desktops as they are today.
@@ -203,7 +203,7 @@ them, and steps A and B need none. Each is one visible result.
 | Step | What it adds | What can be seen | Needs |
 |---|---|---|---|
 | A | Full screen from a client's request (built): `fullscreen_request` and `unfullscreen_request`, the entry with its saved frame, placement at first commit, `wm_capabilities` with Fullscreen only | `foot --fullscreen`, or mpv with F, fills the display on a Space of its own right of its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | nothing new |
-| B | A key for the same: Control+Super+F | any window goes full screen and back | A |
+| B | A key for the same: Control+Alt+F (built) | any window goes full screen and back | A |
 | C | Expansion on a key (built) | Control+Up spreads the windows; a click picks one | cascade placement (done); `spring.rs` (exists) |
 | D | Expansion's strip (built) | live thumbnails of every Space, "+" and close | C |
 | E | Drag a window to a Space in Expansion (built) | windows move between Desktops | D |
@@ -234,9 +234,10 @@ hardware plane, which also needs `linux-dmabuf`.
   it; Wayland has one state for both. The proposal accepts the difference.
 - **Where these steps go** against `linux-dmabuf`, layer shell and `bk` in
   the roadmap. The table above only fixes their order among themselves.
-- **Control+Super+F is proposed here for full screen (step B) and is already
-  Fill in the tiling shortcuts of step 23** (Ctrl+Super stands in for
-  macOS's fn+Control there). One of the two needs another key before step B.
+- **Control+Alt+F was taken for full screen (step B)**, because Control+Super+F
+  is already Fill in the tiling shortcuts of step 23 (Ctrl+Super stands in
+  for macOS's fn+Control there) and Alt sits where Command does on a Mac
+  keyboard. Another key is a one-line change in `input.rs`.
 - **Wallpaper before Expansion's strip?** Without one, the thumbnail of an
   empty Desktop is an empty rectangle.
 
