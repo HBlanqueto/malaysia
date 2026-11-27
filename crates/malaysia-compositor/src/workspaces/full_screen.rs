@@ -98,7 +98,7 @@ pub fn split_windows(entry: &Space<Window>) -> Option<(&Window, &Window)> {
     tile(Direction::Left).zip(tile(Direction::Right))
 }
 
-fn waiting(window: &Window) -> bool {
+pub fn waiting(window: &Window) -> bool {
     side(window).is_some() && !is_full_screen(window)
 }
 

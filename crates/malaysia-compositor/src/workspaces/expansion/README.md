@@ -63,6 +63,9 @@ own text and "reported" is the press; the measurements give the source.
    in a capsule at its centre. A held window grows the strip at once and
    shrinks with the pointer's rise to .074 at the strip's bottom edge; over a
    full-screen thumbnail the thumbnail shows the Split View the drop makes.
+   A released window flies on its own spring (ω0 17, ζ 1) to its slot, to
+   its miniature in a Desktop's thumbnail or into that placeholder, and the
+   change is made when it lands.
 7. **Pick:** releasing the button on a window raises it at the first frame and
    every window returns with the same spring. Releasing it on the background
    closes Expansion (documented). A click on a Space makes it current and

@@ -5,6 +5,7 @@ uniform vec2 size;
 uniform float alpha;
 uniform float radius;
 uniform vec4 fill;
+uniform vec4 fill_right;
 uniform vec4 cross_color;
 uniform float cross_reach;
 uniform float cross_width;
@@ -24,5 +25,5 @@ void main() {
     vec2 position = floor(v_coords * size) + 0.5;
     vec2 point = position - size * 0.5;
     float crossed = max(arm(point, normalize(vec2(1.0, 1.0))), arm(point, normalize(vec2(1.0, -1.0))));
-    gl_FragColor = mix(fill, cross_color, crossed) * coverage(min(position, size - position), radius) * alpha;
+    gl_FragColor = mix(mix(fill, fill_right, position.x / size.x), cross_color, crossed) * coverage(min(position, size - position), radius) * alpha;
 }

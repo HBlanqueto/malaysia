@@ -154,7 +154,7 @@ impl Effects {
     pub fn push_desktop_names<'a>(
         &self,
         renderer: &mut GlesRenderer,
-        cells: impl Iterator<Item = (Rectangle<i32, Physical>, Name<'a>)>,
+        cells: impl Iterator<Item = (usize, Rectangle<i32, Physical>, Name<'a>, f32)>,
         grown: bool,
         bar: Rectangle<i32, Physical>,
         scale: f64,
@@ -163,16 +163,16 @@ impl Effects {
         let gap = pixels(f64::from(ctdesign::SPACES_LABEL_GAP), scale);
         let inset = pixels(f64::from(ctdesign::SPACES_LABEL_PILL_RADIUS), scale);
         let mut labels = self.labels.borrow_mut();
-        for (index, (cell, name)) in cells.enumerate() {
+        for (slot, cell, name, opacity) in cells {
             let limit = cell.size.w - 2 * inset;
-            let Some(text) = labels.desktop_name(renderer, index, name, grown, limit, scale) else {
+            let Some(text) = labels.desktop_name(renderer, slot, name, grown, limit, scale) else {
                 continue;
             };
             let mut location = centred(text.pixels, cell);
             if grown {
                 location.y = cell.loc.y + cell.size.h + gap;
             }
-            frame.extend(text.element(location, bar, 1.0, scale));
+            frame.extend(text.element(location, bar, opacity, scale));
         }
     }
 
@@ -204,11 +204,6 @@ impl Effects {
         scale: f64,
         frame: &mut Vec<Element>,
     ) {
-        let mut push_clipped = |id: &Id, area: Rectangle<i32, Physical>, color: Rgba| {
-            if let Some(area) = area.intersection(clip) {
-                frame.push(solid(id, area, color));
-            }
-        };
         let centre = share.loc.to_f64() + share.size.to_f64().downscale(2.0).to_point();
         for (id, bar) in self
             .strip
@@ -216,13 +211,24 @@ impl Effects {
             .iter()
             .zip(plus_bars(centre, scale))
         {
-            push_clipped(id, bar, ctdesign::SPACES_SPLIT_PLACEHOLDER_PLUS);
+            if let Some(bar) = bar.intersection(clip) {
+                frame.push(solid(id, bar, ctdesign::SPACES_SPLIT_PLACEHOLDER_PLUS));
+            }
         }
-        push_clipped(
-            &self.strip.placeholder,
-            share,
-            ctdesign::SPACES_SPLIT_PLACEHOLDER,
+        let Some(share) = share.intersection(clip) else {
+            return;
+        };
+        let mut placeholder = Badge::new(
+            self.strip.placeholder.clone(),
+            self.shape(share, 0.0),
+            ctdesign::SPACES_SPLIT_PLACEHOLDER_LEFT.premultiplied(),
+            Rgba::TRANSPARENT.premultiplied(),
+            0.0,
+            0.0,
+            self.badge.clone(),
         );
+        placeholder.fade_to(ctdesign::SPACES_SPLIT_PLACEHOLDER_RIGHT.premultiplied());
+        frame.push(Element::Badge(placeholder));
     }
 
     pub fn push_strip_marks(

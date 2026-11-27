@@ -315,6 +315,38 @@ pub fn thumbnail_factor(output: Size<f64, Logical>) -> f64 {
     THUMBNAIL_HEIGHT / output.h
 }
 
+pub fn split_shares(
+    thumbnail: Rectangle<f64, Logical>,
+    left: f64,
+) -> (Rectangle<f64, Logical>, Rectangle<f64, Logical>) {
+    let left_width = thumbnail.size.w * left;
+    (
+        Rectangle::new(thumbnail.loc, Size::from((left_width, thumbnail.size.h))),
+        Rectangle::new(
+            thumbnail.loc + Point::from((left_width, 0.0)),
+            Size::from((thumbnail.size.w - left_width, thumbnail.size.h)),
+        ),
+    )
+}
+
+pub fn miniature(
+    thumbnail: Rectangle<f64, Logical>,
+    frame: Point<f64, Logical>,
+    output: Size<f64, Logical>,
+) -> (Point<f64, Logical>, f64) {
+    let factor = thumbnail.size.h / output.h;
+    (thumbnail.loc + frame.upscale(factor), factor)
+}
+
+pub fn fitted(
+    share: Rectangle<f64, Logical>,
+    size: Size<f64, Logical>,
+) -> (Point<f64, Logical>, f64) {
+    let scale = share.size.w / size.w.max(f64::EPSILON);
+    let top = share.loc.y + (share.size.h - size.h * scale) / 2.0;
+    (Point::from((share.loc.x, top)), scale)
+}
+
 pub fn pill(current: usize, count: usize, output: Size<f64, Logical>) -> Rectangle<f64, Logical> {
     let left = (output.w - count as f64 * LABEL_CELL) / 2.0 + current as f64 * LABEL_CELL;
     Rectangle::new(
@@ -569,6 +601,27 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_window_lands_on_its_miniature_and_a_split_share_holds_it_whole_centred_down_its_height() {
+        let thumbnail = Rectangle::new(Point::from((1104.0, 29.0)), Size::from((160.0, 90.0)));
+        assert_eq!(
+            miniature(thumbnail, Point::from((320.0, 160.0)), display()),
+            (Point::from((1124.0, 39.0)), 1.0 / 16.0)
+        );
+        let (left, right) = split_shares(thumbnail, 0.25);
+        assert_eq!(
+            (left, right),
+            (
+                Rectangle::new(Point::from((1104.0, 29.0)), Size::from((40.0, 90.0))),
+                Rectangle::new(Point::from((1144.0, 29.0)), Size::from((120.0, 90.0)))
+            )
+        );
+        assert_eq!(
+            fitted(right, Size::from((1200.0, 600.0))),
+            (Point::from((1144.0, 44.0)), 0.1)
+        );
     }
 
     #[test]

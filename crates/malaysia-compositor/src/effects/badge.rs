@@ -16,6 +16,7 @@ pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesPixelProgram, GlesErro
         &[
             UniformName::new("radius", UniformType::_1f),
             UniformName::new("fill", UniformType::_4f),
+            UniformName::new("fill_right", UniformType::_4f),
             UniformName::new("cross_color", UniformType::_4f),
             UniformName::new("cross_reach", UniformType::_1f),
             UniformName::new("cross_width", UniformType::_1f),
@@ -25,7 +26,9 @@ pub fn compile(renderer: &mut GlesRenderer) -> Result<GlesPixelProgram, GlesErro
     )
 }
 
-pub type Badge = Shaded<7>;
+pub type Badge = Shaded<8>;
+
+const FILL_RIGHT: usize = 7;
 
 impl Badge {
     pub fn new(
@@ -51,7 +54,12 @@ impl Badge {
                 Uniform::new("cross_width", cross_width),
                 Uniform::new("curve", shape.curve.bezier),
                 Uniform::new("rise", shape.curve.rise),
+                Uniform::new("fill_right", fill),
             ],
         }
+    }
+
+    pub fn fade_to(&mut self, fill_right: [f32; 4]) {
+        self.uniforms[FILL_RIGHT] = Uniform::new("fill_right", fill_right);
     }
 }

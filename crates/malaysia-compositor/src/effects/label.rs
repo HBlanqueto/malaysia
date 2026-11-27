@@ -53,7 +53,7 @@ struct Fonts {
 
 pub struct Labels {
     fonts: Fonts,
-    names: [[Label; MAX_DESKTOPS]; 2],
+    names: [[Label; MAX_DESKTOPS + 1]; 2],
     title: Label,
     empty: Label,
 }

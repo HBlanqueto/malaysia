@@ -29,9 +29,9 @@ use crate::effects::{
     Backdrop, Badge, Clipped, Effects, Lines, Name, Placement, Shadow, Title, round_edges,
 };
 use crate::winit::Winit;
-use crate::workspaces::desktops::{Slide, desktop_x, gap, gap_x, stride};
-use crate::workspaces::expansion::strip::{Hit, add_centre, close_centre, pill};
-use crate::workspaces::expansion::{Expansion, of_app};
+use crate::workspaces::desktops::{MAX_DESKTOPS, Slide, desktop_x, gap, gap_x, stride};
+use crate::workspaces::expansion::strip::{Hit, add_centre, close_centre, pill, split_shares};
+use crate::workspaces::expansion::{Expansion, Lifted, of_app};
 use crate::workspaces::full_screen::{
     Growth, cover, desktop_number, divider, full_screen_window, split_windows,
 };
@@ -81,18 +81,27 @@ pub fn elements(
     let width = output.current_mode().map_or(0, |mode| mode.size.w);
     let height = output.current_mode().map_or(0, |mode| mode.size.h);
     let stride = stride(width, scale);
-    let dragged = expansion.dragged.as_ref().map(|dragged| &dragged.window);
-    if let Some(drag) = &expansion.dragged
-        && let Some(geometry) = desktops[expansion.desktop].element_geometry(&drag.window)
+    let output_geometry = desktops[current].output_geometry(output);
+    let lifted = output_geometry
+        .and_then(|geometry| expansion.lifted(desktops, geometry.size.to_f64(), pointer));
+    if let Some(Lifted {
+        window,
+        entry,
+        frame: geometry,
+        drawn: (top_left, factor),
+    }) = lifted
     {
-        let (top_left, factor) = expansion.held_drawn(drag, geometry.size, pointer);
-        let main = desktops[current].elements().next_back() == Some(&drag.window);
+        let main = desktops[current].elements().next_back() == Some(window);
         effects.push_window(
             renderer,
-            &drag.window,
+            window,
             Placement {
                 geometry: Rectangle::new(top_left.to_i32_round(), geometry.size),
-                desktop_offset: (desktop_x(expansion.desktop, position, stride), 0).into(),
+                desktop_offset: (
+                    entry.map_or(0, |entry| desktop_x(entry, position, stride)),
+                    0,
+                )
+                    .into(),
                 expansion: factor,
                 ringed: false,
                 title: None,
@@ -102,11 +111,9 @@ pub fn elements(
             frame,
         );
     }
-    if let (Some(top), Some(geometry), None) = (
-        expansion.strip_top(),
-        desktops[current].output_geometry(output),
-        &expansion.app,
-    ) {
+    if let (Some(top), Some(geometry), None) =
+        (expansion.strip_top(), output_geometry, &expansion.app)
+    {
         push_strip(
             renderer,
             effects,
@@ -117,10 +124,15 @@ pub fn elements(
             frame,
         );
     }
-    let hovered = (expansion.open && slide.is_none() && dragged.is_none())
-        .then(|| expansion.window_at(desktops, pointer))
-        .flatten()
-        .map(|(window, _)| window);
+    let lifted = lifted.map(|lifted| lifted.window);
+    let hovered = (expansion.open
+        && expansion.progress >= 1.0
+        && slide.is_none()
+        && expansion.dragged.is_none()
+        && !expansion.flying())
+    .then(|| expansion.window_at(desktops, pointer))
+    .flatten()
+    .map(|(window, _)| window);
     let previewed = expansion.previewed.as_ref();
     let mut no_windows_shown = false;
     let others = desktops
@@ -154,7 +166,7 @@ pub fn elements(
                 .filter(|window| Some(*window) != in_front),
         );
         for window in windows {
-            if Some(window) == dragged || !of_app(window, expansion.app.as_ref()) {
+            if Some(window) == lifted || !of_app(window, expansion.app.as_ref()) {
                 continue;
             }
             let grown = growth.filter(|growth| growth.window == *window);
@@ -232,6 +244,13 @@ pub fn elements(
     }
 }
 
+fn split_name<'a>(left: &'a Window, right: &'a Window) -> Name<'a> {
+    Name::Split(
+        left.toplevel().unwrap().wl_surface(),
+        right.toplevel().unwrap().wl_surface(),
+    )
+}
+
 fn push_strip(
     renderer: &mut GlesRenderer,
     effects: &Effects,
@@ -258,38 +277,51 @@ fn push_strip(
     });
     effects.push_strip_controls(ring, close, scale, frame);
     let is_desktop = |index: usize| full_screen_window(&row.desktops[index]).is_none();
-    let dragged = row.expansion.dragged.as_ref();
-    let split_at = |index: usize| {
-        dragged
-            .and_then(|dragged| dragged.split)
-            .filter(|(at, ..)| *at == index)
+    let split_preview = row.expansion.split_preview(row.desktops);
+    let split_at = |index: usize| split_preview.filter(|(at, ..)| *at == index);
+    let cell = |index: usize| {
+        on_screen(if strip.grown {
+            placed(index)
+        } else {
+            pill(index, count, output)
+        })
     };
+    let ghost = row.expansion.ghost.as_ref().and_then(|ghost| {
+        let index = row
+            .desktops
+            .iter()
+            .position(|entry| full_screen_window(entry) == Some(&ghost.app))?;
+        let (left, right) = ghost.side.left_right(&ghost.window, &ghost.app);
+        Some((
+            MAX_DESKTOPS,
+            cell(index),
+            split_name(left, right),
+            ghost.opacity as f32,
+        ))
+    });
     let cells = (0..count).map(|index| {
         let entry = &row.desktops[index];
-        let joined = split_at(index).and_then(|(_, side, _)| {
-            Some(side.left_right(&dragged?.window, full_screen_window(entry)?))
+        let joined = split_at(index).and_then(|(_, window, side, _)| {
+            Some(side.left_right(window, full_screen_window(entry)?))
         });
         let name = joined
             .or_else(|| split_windows(entry))
-            .map(|(left, right)| {
-                Name::Split(
-                    left.toplevel().unwrap().wl_surface(),
-                    right.toplevel().unwrap().wl_surface(),
-                )
-            })
+            .map(|(left, right)| split_name(left, right))
             .or_else(|| {
                 full_screen_window(entry)
                     .map(|window| Name::App(window.toplevel().unwrap().wl_surface()))
             })
             .unwrap_or_else(|| Name::Desktop(desktop_number(index, is_desktop)));
-        let cell = on_screen(if strip.grown {
-            placed(index)
-        } else {
-            pill(index, count, output)
-        });
-        (cell, name)
+        (index, cell(index), name, 1.0)
     });
-    effects.push_desktop_names(renderer, cells, strip.grown, bar, scale, frame);
+    effects.push_desktop_names(
+        renderer,
+        ghost.into_iter().chain(cells),
+        strip.grown,
+        bar,
+        scale,
+        frame,
+    );
     if strip.grown {
         let moving = strip.moving.map(|(from, _)| from);
         let others = (0..count).filter(|&index| Some(index) != moving);
@@ -299,16 +331,11 @@ fn push_strip(
             let factor = thumbnail.size.h / output.h;
             let whole = on_screen(thumbnail);
             let mut shown = whole;
-            if let Some((_, side, left)) = split_at(index) {
-                let left_width = (f64::from(whole.size.w) * left).round() as i32;
-                let left_share = Rectangle::new(whole.loc, (left_width, whole.size.h).into());
-                let right_share = Rectangle::new(
-                    whole.loc + Point::from((left_width, 0)),
-                    (whole.size.w - left_width, whole.size.h).into(),
-                );
-                let placeholder;
-                (placeholder, shown) = side.left_right(left_share, right_share);
-                effects.push_split_placeholder(placeholder, bar, scale, frame);
+            if let Some((_, _, side, left)) = split_at(index) {
+                let (left_share, right_share) = split_shares(thumbnail, left);
+                let (placeholder, rest) = side.left_right(left_share, right_share);
+                shown = on_screen(rest);
+                effects.push_split_placeholder(on_screen(placeholder), bar, scale, frame);
             }
             let Some(clip) = shown.intersection(bar) else {
                 continue;

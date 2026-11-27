@@ -199,7 +199,8 @@ by a drag onto the thumbnail in Mission Control; the first step here uses a
 key, and the drag comes with Expansion's strip. Held over that thumbnail,
 the window splits it at once into the Split View the drop makes, keeping
 its own width as its tile, with a placeholder and a "+" on the pointer's
-side.
+side; dropped, it flies into the placeholder and the Split View is made
+when it lands.
 
 ## Steps
 

@@ -5,7 +5,7 @@ or one Smithay feature and one result that can be seen. A step is done when it
 passes `cargo fmt`, `cargo clippy -D warnings` and its run check, and is pushed
 to `the-culling-branch`.
 
-Last update: 2026-11-26.
+Last update: 2026-11-27.
 
 ## Where we are
 
@@ -37,7 +37,8 @@ and Ctrl+digit switch inside it, a new Desktop opens as a preview by "+" and
 goes before the full-screen Spaces, thumbnails are reordered and take a
 dropped window into a Split View, Space enlarges a window, Ctrl+Down shows
 the windows of one app, and an empty Desktop says so, and a held window
-shrinks toward the strip and previews the Split View it would make. The row of workspaces of the proposal is
+shrinks toward the strip and previews the Split View it would make, and a
+released window flies to where it lands. The row of workspaces of the proposal is
 built; what is left of it is in «Known gaps». The proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
@@ -94,6 +95,7 @@ scale of 5/3):
 | 37 | Three-finger swipes | on a touchpad, three fingers up open Expansion and down close it, sideways slide to the next entry of the row, all following the fingers and handing their speed to the springs on release | done |
 | 38 | The rest of Expansion | Alt+click on a thumbnail switches and stays; Ctrl+digit goes to that Desktop; near "+" a new Desktop peeks in at the right edge and slides into the row on a click, after the last Desktop and before the full-screen Spaces; thumbnails are reordered by dragging, and a removed one closes up the row; a window dropped on a full-screen thumbnail makes a Split View; Space enlarges the window under the pointer; Ctrl+Down shows the windows of the front app (App Exposé); an empty Desktop says "No Available Windows" | done |
 | 39 | Expansion as measured on macOS's third and fourth passes | a held window grows the strip at once and shrinks with the pointer's rise to .074 at the strip's edge; over a full-screen thumbnail the thumbnail shows the Split View the drop makes, the held window keeping its own width; the hover ring sits 3 outside the window; the empty Desktop's capsule fades in with the windows; the strip slides on its own spring and drops its line and shadow when Expansion closes | done |
+| 40 | Expansion's drop as measured | a released window flies on its own spring back to its slot, to its miniature in the thumbnail of the Desktop it was dropped on, or into the placeholder of a full-screen Space, and changes Desktop when it lands; the strip enters 21 ms after the windows; the joined name fades out when the held window leaves a full-screen thumbnail; the placeholder is macOS's gradient; no ring while Expansion opens | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -476,10 +478,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   about .81 for four 1200×800 windows, their titles kept inside the area; other counts, and how macOS hides
   the other apps, are not measured. The key is taken from apps, as Ctrl+Up
   is. Ctrl+arrows, digits and swipes sideways do nothing in it.
-- The strip slides in on its own spring (ω0 31, ζ 1.15) and out on another
-  (ω0 23, ζ .88), as measured, but starts on the windows' frame, where macOS
-  starts it 14 to 28 ms later. Its line and shadow go on the first frame of a
-  close.
+- The strip slides in on its own spring (ω0 31, ζ 1.15), 21 ms after the
+  windows start (macOS: 14 to 28), and out on another (ω0 23, ζ .88), with
+  them, as measured. Its line and shadow go on the first frame of a close.
 - The ring of the current thumbnail and the hover ring are BarrierKit's
   accent, not macOS's blue.
   The cross of the close button is not measured. The close button shows 1 s
@@ -506,9 +507,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   thumbnail slides the row there as Expansion closes; macOS closes into it
   with no slide (measured with low confidence).
 - The hover ring is 4 wide at every window scale and 3 outside the window,
-  concentric with it, as measured. It shows while windows move at its rest
-  width, where macOS shows nothing while the pointer is still and a scaled
-  ring while it moves. Nested, it stays when the pointer leaves the host's window.
+  concentric with it, as measured. It does not show while Expansion opens
+  or while a released window flies; when other windows move to new slots it
+  shows at its rest width, where macOS shows nothing while the pointer is
+  still and a scaled ring while it moves. Nested, it stays when the pointer leaves the host's window.
 - Ctrl+Left, Ctrl+Right, Ctrl+digit and Alt+click are ignored while a
   window is dragged in Expansion; digits are read by key position, so
   every layout uses its top row. A click during their slide picks
@@ -528,15 +530,18 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   was not measured on, nor with windows of another shape than the display.
   It is drawn above the strip and its ring, without the strip's
   shadow on it. A Desktop's thumbnail is not highlighted, as on macOS, and the close
-  button hides during a drag. A window released anywhere but another
-  Desktop's thumbnail or "+" returns to its slot, and the windows left move
-  to their new slots, with the spring of Expansion's opening, where macOS's
-  is slower (ω0 16 to 17, two runs). A window on its way back is drawn in its
-  stacking order, so it can pass under another one, and a change that
-  starts while windows still move restarts their spring from rest.
-  Expansion stays open after a drop. The window lands at its old
-  frame, on top of the other Desktop, at once, where macOS flies it into the
-  thumbnail (one run). Escape mid-drag closes
+  button hides during a drag. A released window flies on its own spring
+  (ω0 17, ζ 1; macOS: 16 to 17), above the strip: back to its slot when
+  released anywhere but a thumbnail or "+", or to its miniature in the
+  thumbnail of the Desktop it was dropped on, where it lands at its old
+  frame, on top. It changes Desktop when it lands, within half a point of
+  the miniature (about 370 ms nested; macOS about 430, one run), so its old
+  miniature stays until then and leaves in one frame, where macOS takes
+  three. The windows left then move to their new slots with the spring of
+  Expansion's opening, and a change that starts while windows still move
+  restarts their spring from rest. A click, a new drag or a close during a
+  flight lands the window at once. While a window flies it is still hit at
+  its slot. Expansion stays open after a drop. Escape mid-drag closes
   Expansion. The window stays in its own thumbnail during the drag.
 - Split View is made by its key, where the window in front takes the half
   of the arrow and the next window below it on the same Desktop, not a
@@ -545,10 +550,15 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   the pointer, where Expansion stays open. The dropped window keeps its own
   width as its tile, as macOS did in one run. While it is held there the
   thumbnail shows that Split View: the app cropped to its share, a gray
-  placeholder with a white "+" in the other (one gray, the middle of
-  macOS's gradient) and both names; leaving restores it at once, with no
-  fade of the joined name; macOS also makes it from the green button's menu. A dropped
-  window that never answers leaves the full-screen one at half width
+  placeholder with a white "+" in the other (macOS's gradient, 70, 70, 86
+  to 78, 78, 99) and both names; leaving restores it at once, and the joined
+  name fades out over the returned one, falling by e every 60 ms (macOS: one
+  run). Dropped there, the window flies into the placeholder at one scale,
+  fitted to its width and centred, where macOS stretches it to the
+  placeholder's shape, and waits there until both clients have taken their
+  tiles; then the thumbnail is the live Space. macOS also makes it from the green button's menu. A dropped
+  window that never answers stays in the placeholder until the next click,
+  drag or close, and leaves the full-screen one at half width
   until the next Split View is made or the dropped one closes. Each window is told it is tiled on all four
   edges, with its tile's size, and not full screen; a client that keeps
   another width, as `foot` rounding to its cells, moves the gap off 12.
@@ -575,6 +585,14 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Expansion's drop (step 40): nested at scales 1 and 5/3 with `foot` and
+  `hello` (the return against ω0 17 and against 25, the flight to a
+  Desktop's miniature with the old miniature kept until it lands, the flight
+  into the placeholder, the strip 21 to 24 ms behind the windows, the
+  gradient's two ends, the joined name's fade, no ring while opening, the
+  full-screen client killed during a flight, Escape during a flight), and
+  the machine check. Not checked: directly on a display, against a
+  high-speed capture, a client that never takes its tile.
 - Expansion as measured (step 39): nested at scale 1 with `foot` and
   `hello` (the strip growing at the drag's start, the held window's height
   against the linear rule within 2 pixels, the floor, the preview on each
