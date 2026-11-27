@@ -103,37 +103,6 @@ full-screen Space and the window below it on the other, a black divider
 between them; dragging the divider resizes both, and a double-click on it
 makes them equal; when one leaves or closes, the other stays full screen
 alone.
-`malaysia-expansion`, a second program of the package, opens Expansion or
-closes it, as Ctrl+Up does, through the private protocol
-`limitless_expansion_v1`; the package installs it with a desktop entry,
-Expansion, and its icon, for the launcher and the Dock to come.
-Directly on a display, three fingers on a touchpad up open Expansion and
-down close it, and sideways slide to the next entry of the row, following
-the fingers.
-Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
-one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
-top then names the Desktops, a name too long for its cell ending in an
-ellipsis; when the pointer enters it, it grows and shows
-every Desktop live over its name. The strip blurs what is behind it. A click on one goes there, "+" adds a Desktop and the
-close button of a thumbnail removes one. A window dragged onto the thumbnail
-of another Desktop moves there, one dropped on "+" gets a new Desktop, and
-one released anywhere else returns to its slot. The window under the pointer gets a ring in
-the accent colour and its title in a capsule, and Ctrl+Left and Ctrl+Right slide the spread windows to
-the next Desktop while the strip stays.
-Inside Expansion, Alt+click on a thumbnail or Ctrl with a digit goes to that
-Desktop and stays; near "+" a new Desktop peeks in from the right edge and a
-click slides it into the row, after the last Desktop and before the
-full-screen Spaces; a
-thumbnail dragged along the strip changes the order; a held window grows
-the strip and shrinks as it nears it, and over a full-screen thumbnail the
-thumbnail shows the Split View that dropping it there makes, on the
-pointer's side, the window keeping its own width; a released window flies
-back to its slot, or into the thumbnail it was dropped on, and changes
-Desktop when it lands; Space
-enlarges the window under the pointer and Space again returns it; an empty
-Desktop says "No Available Windows". Ctrl+Down, with Expansion closed,
-spreads only the windows of the app in front, with their titles below
-them (App Exposé), and Ctrl+Down, Ctrl+Up or Escape ends it.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
 shadow in the light scheme; without it they are dark. It is temporary, until
@@ -166,6 +135,62 @@ What it needs:
   `fonts.fontconfig.defaultFonts.sansSerif = [ "Adwaita Sans" ];`.
 
 Clients draw with software rendering for now.
+
+## Expansion
+
+<img src="data/icons/hicolor/scalable/apps/org.malaysia.Expansion.svg" width="64" alt="Expansion's icon">
+
+Expansion is malaysia's Mission Control. Its desktop entry names this icon,
+`org.malaysia.Expansion`, which the launcher and the Dock will show when they
+exist.
+
+Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
+one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
+top then names the Desktops, a name too long for its cell ending in an
+ellipsis; when the pointer enters it, it grows and shows
+every Desktop live over its name. The strip blurs what is behind it. A click on one goes there, "+" adds a Desktop and the
+close button of a thumbnail removes one. A window dragged onto the thumbnail
+of another Desktop moves there, one dropped on "+" gets a new Desktop, and
+one released anywhere else returns to its slot. The window under the pointer gets a ring in
+the accent colour and its title in a capsule, and Ctrl+Left and Ctrl+Right slide the spread windows to
+the next Desktop while the strip stays.
+Inside Expansion, Alt+click on a thumbnail or Ctrl with a digit goes to that
+Desktop and stays; near "+" a new Desktop peeks in from the right edge and a
+click slides it into the row, after the last Desktop and before the
+full-screen Spaces; a
+thumbnail dragged along the strip changes the order; a held window grows
+the strip and shrinks as it nears it, and over a full-screen thumbnail the
+thumbnail shows the Split View that dropping it there makes, on the
+pointer's side, the window keeping its own width; a released window flies
+back to its slot, or into the thumbnail it was dropped on, and changes
+Desktop when it lands; Space
+enlarges the window under the pointer and Space again returns it; an empty
+Desktop says "No Available Windows". Ctrl+Down, with Expansion closed,
+spreads only the windows of the app in front, with their titles below
+them (App Exposé), and Ctrl+Down, Ctrl+Up or Escape ends it.
+
+`malaysia-expansion`, a second program of the package, opens Expansion or
+closes it, as Ctrl+Up does, through the private protocol
+`limitless_expansion_v1`; the package installs it with a desktop entry,
+Expansion, and the icon above.
+Directly on a display, three fingers on a touchpad up open Expansion and
+down close it, and sideways slide to the next entry of the row, following
+the fingers.
+
+Progress, against the measures of macOS in BarrierKit's
+[Mission Control research](https://github.com/HBlanqueto/barrierkit/blob/main/docs/research/macos-mission-control-2026-11-26.md):
+
+- **Built:** the spread of the windows and its layout, the strip of Desktops
+  and Spaces, dragging windows and thumbnails, the Split View preview, App
+  Exposé, full-screen Spaces and Split View, the swipes and the private
+  protocol.
+- **Waits for the shell:** the menu bar and the Dock inside Expansion and in
+  full screen, the bars that slide in at the top of a full-screen Space and
+  «Assign To».
+- **Missing:** the hot corner, the Mission Control key, the four-finger and
+  pinch gestures, Spaces ordered by recent use, Show Desktop, Option to show
+  every close button, Reduce Motion, several displays, and the shadow and
+  corners of the windows in the strip's thumbnails.
 
 ## Check
 
