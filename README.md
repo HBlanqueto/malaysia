@@ -95,6 +95,10 @@ had before it was tiled; Super stands in for macOS's fn.
 A window that asks for full screen (`foot --fullscreen`, or the app's own
 key) fills the display on a Space of its own, right after its Desktop in the
 row, and returns to its frame when it leaves.
+`malaysia-expansion`, a second program of the package, opens Expansion or
+closes it, as Ctrl+Up does, through the private protocol
+`limitless_expansion_v1`; the package installs it with a desktop entry,
+Expansion, for the launcher and the Dock to come.
 Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
 one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
 top then names the Desktops; when the pointer enters it, it grows and shows

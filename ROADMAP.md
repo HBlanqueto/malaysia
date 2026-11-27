@@ -28,7 +28,8 @@ to their slots with its spring whenever the arrangement changes, and the
 strip names every Desktop and the window under the pointer shows its
 title, and the strip is a material that blurs what is behind it. Of
 Expansion only the swipes are left, which need a real touchpad. A window
-that asks for full screen gets a Space of its own in the row. Next is a key
+that asks for full screen gets a Space of its own in the row, and
+`malaysia-expansion` opens or closes Expansion for a launcher. Next is a key
 for it and its transition; the proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
@@ -77,6 +78,7 @@ scale of 5/3):
 | 29 | Text in Expansion, with `cosmic-text` | the strip names every Desktop, in its cell and under its thumbnail, and the window under the pointer shows its title in a capsule at its centre | done |
 | 30 | The blur under Expansion's strip | the strip is macOS's material: what is behind it is blurred, its colour raised, a veil over it; the black band between Desktops passes under it soft | done |
 | 31 | Full screen from a client's request | `foot --fullscreen`, or an app's own full-screen key, fills the display on a Space of its own right after its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | done |
+| 32 | Expansion from a launcher | `malaysia-expansion` opens Expansion, or closes it, through the private protocol `limitless_expansion_v1`; the package installs it with a desktop entry named Expansion, for the launcher and the Dock to come | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -228,6 +230,17 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Known gaps
 
+- Any client may open or close Expansion through `limitless_expansion_v1`;
+  on macOS only the Dock opens Mission Control. Limiting it to the shell
+  needs `security-context-v1`, which Smithay has at the pinned rev, about 25
+  lines, and it only tells sandboxed apps apart.
+- Nothing exports `XDG_CURRENT_DESKTOP`, because the compositor starts no
+  session, so the desktop entry of `malaysia-expansion`, shown only in
+  `X-Malaysia`, shows in no menu yet. `desktop-file-validate` refuses a bare
+  `Malaysia`, which is not a registered desktop name: the session must
+  export `X-Malaysia`, or the name be registered with freedesktop.org. The
+  entry has no icon, and the tool prints why it fails when the compositor
+  does not offer the protocol.
 - Menus have no shadow.
 - A closing window disappears at once. The close animation needs a snapshot
   of the dead surface, which does not exist yet.
@@ -467,6 +480,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Expansion from a launcher (step 32): nested, and the machine check, which
+  runs `malaysia-expansion` twice and validates its desktop entry. Not
+  checked: directly on a display, from a real launcher.
 - Full screen from a client's request (step 31): nested, at scales 1 and
   5/3, with `foot` (its key, `--fullscreen`, `kill -9` in both cases, the
   strip, a second window in the Space), and the machine check, where the

@@ -1,5 +1,6 @@
 mod drm;
 mod effects;
+mod expansion_toggle;
 mod handlers;
 mod input;
 mod placement;
@@ -16,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
+use limitless::server::expansion::limitless_expansion_v1::limitless_expansion_v1::LimitlessExpansionV1;
 use limitless::server::style::limitless_window_style_v1::limitless_window_style_v1::LimitlessWindowStyleV1;
 use smithay::desktop::{PopupManager, Space};
 use smithay::input::pointer::CursorImageStatus;
@@ -34,6 +36,7 @@ use smithay::wayland::viewporter::ViewporterState;
 use tracing_subscriber::{filter::Targets, fmt, prelude::*};
 
 use crate::drm::Drm;
+use crate::expansion_toggle::ExpansionToggle;
 use crate::input::{REPEAT_DELAY, REPEAT_RATE};
 use crate::state::{Backend, ClientState, State};
 use crate::window_style::WindowStyle;
@@ -108,6 +111,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ViewporterState::new::<State>(&display_handle);
     display_handle
         .create_global::<State, LimitlessWindowStyleV1, _>(window_style::VERSION, WindowStyle);
+    display_handle.create_global::<State, LimitlessExpansionV1, _>(
+        expansion_toggle::VERSION,
+        ExpansionToggle,
+    );
 
     let mut state = State {
         compositor_state: CompositorState::new::<State>(&display_handle),

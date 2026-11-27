@@ -232,7 +232,7 @@ checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 [[package]]
 name = "ctdesign"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=c6931cdfe1fb44b4bd58ea6eaf88d1917927d24d#c6931cdfe1fb44b4bd58ea6eaf88d1917927d24d"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=75452013f141cf2b44154a422b601ed7f7b7a0fe#75452013f141cf2b44154a422b601ed7f7b7a0fe"
 dependencies = [
  "serde_json",
 ]
@@ -729,10 +729,11 @@ dependencies = [
 [[package]]
 name = "limitless"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=c6931cdfe1fb44b4bd58ea6eaf88d1917927d24d#c6931cdfe1fb44b4bd58ea6eaf88d1917927d24d"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=75452013f141cf2b44154a422b601ed7f7b7a0fe#75452013f141cf2b44154a422b601ed7f7b7a0fe"
 dependencies = [
  "bitflags",
  "wayland-backend",
+ "wayland-client",
  "wayland-scanner",
  "wayland-server",
 ]
@@ -778,6 +779,7 @@ dependencies = [
  "smithay",
  "tracing",
  "tracing-subscriber",
+ "wayland-client",
 ]
 
 [[package]]

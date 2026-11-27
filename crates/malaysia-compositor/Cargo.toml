@@ -3,6 +3,7 @@ name = "malaysia-compositor"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+default-run = "malaysia-compositor"
 
 [dependencies]
 calloop.workspace = true
@@ -12,3 +13,4 @@ limitless.workspace = true
 smithay.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+wayland-client = "0.31.15"
