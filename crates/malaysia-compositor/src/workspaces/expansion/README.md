@@ -224,7 +224,10 @@ corner, and the layout has nothing to keep. Each step is one visible result.
 - **E. Drag a window to a Space (built).** A window dragged onto the
    thumbnail of another Desktop moves there. It is plain state in
    `Expansion` with a movement threshold, not a pointer grab. A drop on "+"
-   is not built.
+   gives the window a new Desktop. A window released anywhere else, and the
+   windows left when the arrangement changes, move to their slots with
+   Expansion's spring: each slot keeps how far its window is drawn from it,
+   and one value from 1 to 0 scales that distance.
 - **F. Hover ring and Control+arrows while open (built).** The ring has no
    state: it is drawn on the window under the pointer when the frame is
    built. Control+Left and Control+Right are ignored while a window is

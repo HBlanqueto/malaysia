@@ -35,6 +35,22 @@ pub fn rests(omega: f64, offset: f64, velocity: f64, stride: f64) -> bool {
     offset.abs().max(velocity.abs() / omega) * stride < 0.5
 }
 
+pub fn advance_motion(
+    motion: &mut Option<Motion>,
+    omega: f64,
+    damping: f64,
+    target: f64,
+    now: Duration,
+    stride: f64,
+) -> Option<f64> {
+    let (value, velocity) = motion.as_ref()?.at(omega, damping, target, now);
+    if rests(omega, value - target, velocity, stride) {
+        *motion = None;
+        return Some(target);
+    }
+    Some(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use smithay::utils::{Logical, Point, Rectangle, Size};
 
-use crate::spring::{Motion, rests};
+use crate::spring::{Motion, advance_motion};
 
 const OMEGA: f64 = ctdesign::SPACES_STRIP_EXPAND_OMEGA as f64;
 const DAMPING: f64 = ctdesign::SPACES_STRIP_EXPAND_DAMPING as f64;
@@ -49,18 +49,12 @@ impl Strip {
     }
 
     pub fn advance(&mut self, now: Duration, longer_side: f64) -> bool {
-        let Some(motion) = &self.motion else {
+        let Some(growth) = advance_motion(&mut self.motion, OMEGA, DAMPING, 1.0, now, longer_side)
+        else {
             return false;
         };
-        let (growth, velocity) = motion.at(OMEGA, DAMPING, 1.0, now);
-        if rests(OMEGA, growth - 1.0, velocity, longer_side) {
-            self.growth = 1.0;
-            self.motion = None;
-            false
-        } else {
-            self.growth = growth;
-            true
-        }
+        self.growth = growth;
+        self.motion.is_some()
     }
 
     pub fn height(&self) -> f64 {

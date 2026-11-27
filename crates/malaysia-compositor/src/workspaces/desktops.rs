@@ -166,15 +166,16 @@ impl State {
         }
     }
 
-    pub fn add_desktop(&mut self) {
+    pub fn add_desktop(&mut self) -> Option<usize> {
         if self.desktops.len() == MAX_DESKTOPS {
-            return;
+            return None;
         }
         let mut desktop = Space::default();
         if self.expansion.strip.grown {
             desktop.map_output(&self.output, (0, 0));
         }
         self.desktops.push(desktop);
+        Some(self.desktops.len() - 1)
     }
 
     pub fn remove_desktop(&mut self, index: usize) {

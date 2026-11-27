@@ -23,7 +23,8 @@ that shows every Desktop live, adds one with "+" and removes one with its
 close button, a window spread there is dragged onto the thumbnail of
 another Desktop and moves there, the window under the pointer gets a ring in
 the accent colour, and Ctrl+Left and Ctrl+Right slide the spread windows to
-the next Desktop while the strip stays. Next is text in Expansion, the names
+the next Desktop while the strip stays, and the windows of Expansion move
+to their slots with its spring whenever the arrangement changes. Next is text in Expansion, the names
 in the strip and the title of a hovered window, step I of
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
@@ -68,6 +69,7 @@ scale of 5/3):
 | 25 | Expansion's strip: thumbnails of every Space, "+" and close | with Expansion open a bar slides in at the top; the pointer makes it grow and show every Desktop live; a click on one goes there, "+" adds a Desktop and the close button of a thumbnail removes one | done `dc70f98` |
 | 26 | Drag a window to a Space in Expansion | a window spread in Expansion, dragged onto the thumbnail of another Desktop, moves there | done `1d0bd89` |
 | 27 | The hover ring, and Ctrl+arrows inside Expansion | the window under the pointer gets a ring in the accent colour, and Ctrl+Left and Ctrl+Right slide the spread windows to the next Desktop while the strip stays | done |
+| 28 | Nothing jumps in Expansion | a window released from a drag returns to its slot, the windows left move to their new slots, and closing during Ctrl+arrows shrinks both Desktops back, all with Expansion's spring; a window dropped on "+" gets a new Desktop | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -390,8 +392,7 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   Expansion, and there is no Control+digit. A click during their slide picks
   by the slot at rest. A Desktop still sliding out as Expansion opens, or an
   arrow pressed while the strip grows, can show slots of its last Expansion.
-  Closing Expansion while Ctrl+Left or Ctrl+Right still slide shows the
-  Desktop being left at full size at once. During that slide the black band
+  During that slide the black band
   between Desktops shows through the strip, and a Desktop left before the
   strip grew slides out under it.
 - The hover ring is drawn with its window: under the shadows of the windows
@@ -401,11 +402,14 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   axis. The dragged window keeps its slot's scale and does not shrink near
   the strip. It is drawn above the strip and its ring, without the strip's
   shadow on it. The target is not highlighted and the close
-  button hides during a drag. A drop anywhere but another Desktop's thumbnail
-  makes the window jump back to its slot, and the windows left re-arrange
-  with a jump. Expansion stays open after a drop. The window lands at its old
-  frame, on top of the other Desktop. A drop on "+" does nothing (macOS, by
-  press reports, makes a Desktop for the window). Escape mid-drag closes
+  button hides during a drag. A window released anywhere but another
+  Desktop's thumbnail or "+" returns to its slot, and the windows left move
+  to their new slots, with the spring of Expansion's opening: macOS's own
+  motion there is not measured. A window on its way back is drawn in its
+  stacking order, so it can pass under another one, and a change that
+  starts while windows still move restarts their spring from rest.
+  Expansion stays open after a drop. The window lands at its old
+  frame, on top of the other Desktop. Escape mid-drag closes
   Expansion. The window stays in its own thumbnail during the drag.
 - There is no drop onto a full-screen Space (Split View) and no reordering of
   thumbnails.
@@ -417,6 +421,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- The motion of the windows in Expansion after a drop, a close or a new
+  window, and the drop on "+" (step 28): nested only, at scales 1 and 5/3,
+  with `foot`. Not checked: directly on a display.
 - The hover ring and Ctrl+arrows inside Expansion (step 27): nested only, at
   scales 1 and 5/3, with `foot`. Not checked: directly on a display.
 - Dragging a window to a Space in Expansion (step 26): nested only, at scales

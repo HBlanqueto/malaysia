@@ -129,11 +129,7 @@ pub fn elements(
                 continue;
             };
             let main = index == current && order == 0;
-            let (loc, factor) = if expansion.open || index == expansion.desktop {
-                expansion.drawn(window, geometry)
-            } else {
-                (geometry.loc.to_f64(), 1.0)
-            };
+            let (loc, factor) = expansion.drawn(window, geometry);
             effects.push_window(
                 renderer,
                 window,
