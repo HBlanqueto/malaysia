@@ -29,7 +29,6 @@ pub use shadow::Shadow;
 
 use crate::state::Element;
 use crate::window_style::corner_radius;
-use crate::workspaces::full_screen::is_full_screen;
 use corner::Curve;
 use label::Labels;
 use strip::Chrome;
@@ -40,6 +39,7 @@ pub struct Placement {
     pub expansion: f64,
     pub ringed: bool,
     pub title: Option<Title>,
+    pub square: bool,
 }
 
 pub enum Title {
@@ -210,6 +210,7 @@ impl Effects {
             expansion,
             ringed,
             title,
+            square,
         } = placement;
         let surface = window.toplevel().unwrap().wl_surface();
         let location = (geometry.loc - window.geometry().loc).to_physical_precise_round(scale)
@@ -229,12 +230,7 @@ impl Effects {
         let mut bounds: Rectangle<i32, Physical> = geometry.to_physical_precise_round(scale);
         bounds.loc += desktop_offset;
         bounds.size = bounds.size.to_f64().upscale(expansion).to_i32_round();
-        let full_screen = is_full_screen(window);
-        let radius = if full_screen {
-            0.0
-        } else {
-            corner_radius(surface)
-        };
+        let radius = if square { 0.0 } else { corner_radius(surface) };
         let shape = self.shape(bounds, radius * (scale * expansion) as f32);
         let width = pixels(f64::from(ctdesign::FRAME_LINE_WIDTH), scale);
         let drawn = drawn(
@@ -277,7 +273,7 @@ impl Effects {
                 self.lines.clone(),
             )));
         }
-        if !full_screen {
+        if !square {
             frame.push(Element::Lines(Lines::new(
                 drawn.lines.clone(),
                 drawn.commit,
@@ -305,7 +301,7 @@ impl Effects {
                 program: self.clip.clone(),
             })
         }));
-        if full_screen {
+        if square {
             return;
         }
         let shadow_scale = scale * expansion;

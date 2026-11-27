@@ -345,9 +345,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   two frames, and cropped to it; there is no snapshot of the old one and no
   cross-fade. All four edges follow one spring, where macOS's left and top
   edges lead a little, and the row's slide back is the Desktop switch spring
-  where macOS's is near a bezier of 380 ms. On entering, the corners go
-  square and the shadow goes at the first frame; macOS keeps the shadow
-  while the window grows. Leaving starts from the whole display even for a
+  where macOS's is near a bezier of 380 ms. While it grows the window
+  keeps its corners, its frame lines and its shadow, as on macOS, and goes
+  square when it fills the display; macOS also keeps the old title bar,
+  which here has no snapshot to come from. Leaving starts from the whole display even for a
   window smaller than it. Only the transition of the current entry is
   animated, and Ctrl+Left or Ctrl+Right during the slide back makes the
   black place left by the Space disappear at once. A window that opens while a full-screen Space is current

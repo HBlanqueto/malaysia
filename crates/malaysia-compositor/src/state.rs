@@ -33,7 +33,7 @@ use crate::workspaces::desktops::{MAX_DESKTOPS, Slide, desktop_x, gap, gap_x, st
 use crate::workspaces::expansion::strip::{Hit, add_centre, close_centre, pill, split_shares};
 use crate::workspaces::expansion::{Expansion, Lifted, of_app};
 use crate::workspaces::full_screen::{
-    Growth, cover, desktop_number, divider, full_screen_window, split_windows,
+    Growth, cover, desktop_number, divider, full_screen_window, is_full_screen, split_windows,
 };
 use crate::workspaces::swipe::Swipe;
 
@@ -105,6 +105,7 @@ pub fn elements(
                 expansion: factor,
                 ringed: false,
                 title: None,
+                square: is_full_screen(window),
             },
             scale,
             main,
@@ -204,6 +205,7 @@ pub fn elements(
                     } else {
                         (Some(window) == hovered && still).then_some(Title::Centred)
                     },
+                    square: is_full_screen(window) && grown.is_none(),
                 },
                 scale,
                 main,
@@ -348,6 +350,7 @@ fn push_strip(
                         expansion: factor,
                         ringed: false,
                         title: None,
+                        square: false,
                     };
                     effects.push_thumbnail(renderer, window, placement, clip, scale, frame);
                 }
