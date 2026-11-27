@@ -84,6 +84,7 @@ impl Winit {
                             })
                         });
                     }
+                    state.rearrange_expansion();
                     state.needs_redraw = true;
                 }
                 WinitEvent::Redraw => state.render(),

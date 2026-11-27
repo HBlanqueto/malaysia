@@ -225,9 +225,9 @@ impl Drm {
     }
 
     fn activate(&mut self) -> Result<(), Box<dyn Error>> {
-        self.libinput
-            .resume()
-            .map_err(|()| "libinput resume failed")?;
+        if self.libinput.resume().is_err() {
+            tracing::error!("libinput resume failed");
+        }
         self.device.activate(false)?;
         self.compositor.reset_state()?;
         if let Err(error) = self.compositor.frame_submitted() {

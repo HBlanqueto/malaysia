@@ -5,7 +5,7 @@ use smithay::backend::input::InputTime;
 use smithay::desktop::{Space, Window};
 use smithay::input::pointer::{Focus, GrabStartData};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
-use smithay::utils::{IsAlive, Logical, Point, Rectangle, Serial, Size};
+use smithay::utils::{IsAlive, Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 use smithay::wayland::shell::xdg::ToplevelSurface;
 
 use crate::placement::placed;
@@ -641,7 +641,10 @@ impl State {
         for window in windows {
             self.place_in_space(window, index);
         }
-        self.show_desktop(index, InputTime::now());
+        let time = InputTime::now();
+        let pointer = self.seat.get_pointer().unwrap();
+        pointer.unset_grab(self, SERIAL_COUNTER.next_serial(), time);
+        self.show_desktop(index, time);
         self.rearrange_expansion();
     }
 

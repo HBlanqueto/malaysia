@@ -24,14 +24,22 @@ impl Motion {
 
 pub fn spring(omega: f64, damping: f64, offset: f64, velocity: f64, seconds: f64) -> (f64, f64) {
     let decay = damping * omega;
-    let spread = omega * (damping * damping - 1.0).sqrt();
-    let slow = ((spread - decay) * seconds).exp();
-    let fast = ((-spread - decay) * seconds).exp();
-    let even = (slow + fast) / 2.0;
-    let odd = if spread == 0.0 {
-        seconds * slow
+    let (even, odd) = if damping < 1.0 {
+        let fade = (-decay * seconds).exp();
+        let frequency = omega * (1.0 - damping * damping).sqrt();
+        let angle = frequency * seconds;
+        (fade * angle.cos(), fade * angle.sin() / frequency)
     } else {
-        (slow - fast) / (2.0 * spread)
+        let spread = omega * (damping * damping - 1.0).sqrt();
+        let slow = ((spread - decay) * seconds).exp();
+        let fast = ((-spread - decay) * seconds).exp();
+        let even = (slow + fast) / 2.0;
+        let odd = if spread == 0.0 {
+            seconds * slow
+        } else {
+            (slow - fast) / (2.0 * spread)
+        };
+        (even, odd)
     };
     (
         offset * even + (velocity + decay * offset) * odd,
@@ -81,7 +89,7 @@ mod tests {
 
     #[test]
     fn a_spring_restarted_from_its_own_state_follows_the_same_curve() {
-        for damping in [DAMPING, 1.0] {
+        for damping in [DAMPING, 1.0, ctdesign::SPACES_STRIP_EXIT_DAMPING as f64] {
             let (offset, velocity) = spring(OMEGA, damping, 1.0, 0.0, 0.1);
             let (restarted, restarted_velocity) = spring(OMEGA, damping, offset, velocity, 0.2);
             let (continued, continued_velocity) = spring(OMEGA, damping, 1.0, 0.0, 0.3);

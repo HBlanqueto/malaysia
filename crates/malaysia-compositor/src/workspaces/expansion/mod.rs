@@ -390,7 +390,7 @@ impl Expansion {
         &self,
         desktops: &'a [Space<Window>],
         location: Point<f64, Logical>,
-    ) -> Option<(&'a Window, Point<f64, Logical>)> {
+    ) -> Option<(&'a Window, Point<f64, Logical>, f64)> {
         let desktop = &desktops[self.desktop];
         let previewed = self.previewed.as_ref();
         laid_out(desktop, self.app.as_ref())
@@ -400,7 +400,7 @@ impl Expansion {
                 let (loc, factor) = self.drawn(window, frame);
                 Rectangle::new(loc, frame.size.to_f64().upscale(factor))
                     .contains(location)
-                    .then_some((window, loc))
+                    .then_some((window, loc, factor))
             })
     }
 
@@ -544,6 +544,11 @@ impl State {
         let Some(flight) = &mut self.expansion.flight else {
             return;
         };
+        if stride.is_none() && !matches!(flight.landing, Landing::Slot) {
+            flight.landing = Landing::Slot;
+            self.needs_redraw = true;
+            return;
+        }
         let flown = stride.and_then(|stride| {
             advance_motion(
                 &mut flight.motion,
@@ -718,11 +723,11 @@ impl State {
         self.land_flight();
         match self.strip_hit(origin) {
             None => {
-                let Some((window, top_left)) = self
+                let Some((window, top_left, factor)) = self
                     .expansion
                     .window_at(&self.desktops, origin)
-                    .filter(|(window, _)| !is_full_screen(window))
-                    .map(|(window, top_left)| (window.clone(), top_left))
+                    .filter(|(window, ..)| !is_full_screen(window))
+                    .map(|(window, top_left, factor)| (window.clone(), top_left, factor))
                 else {
                     return;
                 };
@@ -735,7 +740,7 @@ impl State {
                     .expansion
                     .slot_of(&window)
                     .map_or(1.0, |slot| slot.loc.get().1);
-                let size = window.geometry().size.to_f64().upscale(start_scale);
+                let size = window.geometry().size.to_f64().upscale(factor);
                 let grip = location - top_left;
                 self.expansion.dragged = Some(Dragged {
                     window,
@@ -762,9 +767,6 @@ impl State {
         window: &Window,
         location: Point<f64, Logical>,
     ) -> Option<(usize, Direction, f64)> {
-        if !window.alive() {
-            return None;
-        }
         let (point, output) = self.on_strip(location)?;
         let strip = &self.expansion.strip;
         if point.y >= strip.height() {
@@ -787,6 +789,9 @@ impl State {
     }
 
     pub fn hover_expansion(&mut self, location: Point<f64, Logical>) {
+        self.expansion
+            .dragged
+            .take_if(|dragged| !dragged.window.alive());
         self.drag_in_expansion(location);
         let now = self.start_time.elapsed();
         let split = self
@@ -868,9 +873,18 @@ impl State {
     }
 
     pub fn close_expansion(&mut self, picked: Option<Window>, time: InputTime) {
+        let location = self.seat.get_pointer().unwrap().current_location();
+        if let Some(flight) = self
+            .expansion
+            .dragged
+            .take()
+            .and_then(|dragged| self.take_off(dragged, location))
+        {
+            self.expansion.flight = Some(flight);
+        }
         self.land_flight();
         self.expansion.ghost = None;
-        self.expansion.dragged = None;
+        self.expansion.pressed = false;
         self.expansion.drag_origin = None;
         self.expansion.strip.moving = None;
         self.expansion.clear_preview();
@@ -879,7 +893,6 @@ impl State {
         if let Some(window) = focused {
             self.focus_window(&window, SERIAL_COUNTER.next_serial());
         }
-        let location = self.seat.get_pointer().unwrap().current_location();
         self.move_pointer(location, time);
     }
 
@@ -903,7 +916,7 @@ impl State {
             };
             let Some((window, frame, slot)) = expansion
                 .window_at(&self.desktops, location)
-                .and_then(|(window, _)| {
+                .and_then(|(window, ..)| {
                     let frame = desktop.element_geometry(window)?;
                     let slot = expansion.slot_of(window)?;
                     Some((window, frame, slot))
@@ -972,22 +985,31 @@ impl State {
             None => self.close_expansion(
                 self.expansion
                     .window_at(&self.desktops, location)
-                    .map(|(window, _)| window.clone()),
+                    .map(|(window, ..)| window.clone()),
                 time,
             ),
         }
     }
 
+    fn take_off(&self, dragged: Dragged, location: Point<f64, Logical>) -> Option<Flight> {
+        let frame = self.desktops[self.expansion.desktop]
+            .element_geometry(&dragged.window)
+            .filter(|_| dragged.window.alive())?;
+        Some(Flight {
+            from: self.expansion.held_drawn(&dragged, frame.size, location),
+            window: dragged.window,
+            landing: Landing::Slot,
+            flown: 0.0,
+            motion: Some(Motion::new(0.0, 0.0, self.start_time.elapsed())),
+        })
+    }
+
     fn drop_window(&mut self, dragged: Dragged, location: Point<f64, Logical>, hit: Option<Hit>) {
-        let window = &dragged.window;
-        let Some(frame) = self.desktops[self.expansion.desktop]
-            .element_geometry(window)
-            .filter(|_| window.alive())
-        else {
+        let Some(mut flight) = self.take_off(dragged, location) else {
             return;
         };
-        let from = self.expansion.held_drawn(&dragged, frame.size, location);
-        let landing = if let Some((index, side, left)) = self.split_target(window, location) {
+        let landing = if let Some((index, side, left)) = self.split_target(&flight.window, location)
+        {
             Landing::Split(self.desktops[index].id(), side, left)
         } else {
             match hit {
@@ -1002,13 +1024,8 @@ impl State {
                 _ => Landing::Slot,
             }
         };
-        self.expansion.flight = Some(Flight {
-            window: dragged.window,
-            from,
-            landing,
-            flown: 0.0,
-            motion: Some(Motion::new(0.0, 0.0, self.start_time.elapsed())),
-        });
+        flight.landing = landing;
+        self.expansion.flight = Some(flight);
     }
 
     pub fn arrange_expansion(&mut self) {

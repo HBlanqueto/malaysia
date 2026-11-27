@@ -189,6 +189,7 @@ impl State {
                 let state = event.state();
                 let expansion_open = self.expansion.open;
                 if state == ButtonState::Pressed && !expansion_open && !pointer.is_grabbed() {
+                    self.move_pointer(pointer.current_location(), event.time());
                     match self.desktops[self.current_desktop]
                         .element_under(pointer.current_location())
                         .map(|(window, _)| window.clone())

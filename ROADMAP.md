@@ -543,7 +543,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   restarts their spring from rest. A click, a new drag or a close during a
   flight lands the window at once. While a window flies it is still hit at
   its slot. Expansion stays open after a drop. Escape mid-drag closes
-  Expansion. The window stays in its own thumbnail during the drag.
+  Expansion, and the held window returns from under the pointer with the
+  others. The window stays in its own thumbnail during the drag.
 - Split View is made by its key, where the window in front takes the half
   of the arrow and the next window below it on the same Desktop, not a
   dialog, the other, or by dropping a window in Expansion anywhere in the
@@ -578,7 +579,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   macOS's is not measured. After a reorder a window leaving full screen
   goes to the nearest Desktop on its left, which may not be the one it
   came from.
-- A resize of the display while Expansion is open keeps the old slots.
+- A resize of the nested window while Expansion is open jumps to the new
+  slots, as a new layout does.
 - A slot can pass the margin of Expansion's area by 2 at the sides and 3 at
   the top and bottom, which is the slack of the fit.
 - `foot` snaps to its cell grid at its first configure after a fractional
@@ -586,6 +588,13 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- The fixes after step 40: the strip's exit spring (ζ 0.88, out in about
+  210 ms and back on a quick reopen) was checked nested at scales 1 and
+  5/3, the grip of a previewed window and Escape mid-drag at scale 1. A
+  click on a window mapped under a still pointer, a window that dies
+  while held, a flight whose Space closes, a resize of the nested window
+  in Expansion, a full-screen Space opened during a move and libinput
+  failing on a VT return are covered only by the tests and the checks.
 - Expansion's drop (step 40): nested at scales 1 and 5/3 with `foot` and
   `hello` (the return against ω0 17 and against 25, the flight to a
   Desktop's miniature with the old miniature kept until it lands, the flight

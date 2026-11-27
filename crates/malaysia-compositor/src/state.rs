@@ -132,7 +132,7 @@ pub fn elements(
         && !expansion.flying())
     .then(|| expansion.window_at(desktops, pointer))
     .flatten()
-    .map(|(window, _)| window);
+    .map(|(window, ..)| window);
     let previewed = expansion.previewed.as_ref();
     let mut no_windows_shown = false;
     let others = desktops
