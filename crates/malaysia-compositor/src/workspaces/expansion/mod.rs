@@ -217,6 +217,7 @@ impl State {
         let pointer = self.seat.get_pointer().unwrap();
         let serial = SERIAL_COUNTER.next_serial();
         pointer.unset_grab(self, serial, time);
+        self.growth = None;
         self.dismiss_popups();
         let keyboard = self.seat.get_keyboard().unwrap();
         keyboard.set_focus(self, None, serial);

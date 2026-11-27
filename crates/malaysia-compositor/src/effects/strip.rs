@@ -27,7 +27,7 @@ pub struct Chrome {
     pub hover_ring: Id,
     pub ring_color: Rgba,
     close: Id,
-    backdrops: [Id; MAX_DESKTOPS],
+    backdrops: [Id; MAX_DESKTOPS + 1],
 }
 
 impl Chrome {

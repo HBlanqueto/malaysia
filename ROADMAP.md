@@ -30,8 +30,8 @@ title, and the strip is a material that blurs what is behind it. Of
 Expansion only the swipes are left, which need a real touchpad. A window
 that asks for full screen gets a Space of its own in the row, and
 `malaysia-expansion` opens or closes Expansion for a launcher, and Ctrl+Alt+F
-sends the window in front to full screen and back. Next is the transition
-of full screen; the proposal is in
+sends the window in front to full screen and back, growing in place while
+the row slides. Next is Split View; the proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -81,6 +81,7 @@ scale of 5/3):
 | 31 | Full screen from a client's request | `foot --fullscreen`, or an app's own full-screen key, fills the display on a Space of its own right after its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | done |
 | 32 | Expansion from a launcher | `malaysia-expansion` opens Expansion, or closes it, through the private protocol `limitless_expansion_v1`; the package installs it with a desktop entry named Expansion, for the launcher and the Dock to come | done |
 | 33 | A key for full screen | Ctrl+Alt+F sends the window in front to full screen and back, as macOS's Control+Command+F; the app is not told the key | done |
+| 34 | The full-screen transition | a window going full screen grows in place from its frame to the display while the row slides to its Space, and shrinks back to its frame while the row slides back, with macOS's spring | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -326,9 +327,17 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   a layout without a latin f, as Ctrl+Super+F, it does nothing. A browser
   sent to full screen by it hides its toolbar too:
   Wayland has one full-screen state, where macOS keeps the toolbar.
-  Full screen has no transition (step G): entering slides the row to the new
-  Space with the window already at its full size, and leaving shows the
-  Desktop at once. A window that opens while a full-screen Space is current
+  The transition starts when the client commits its new size, so its new
+  buffer is the one scaled: uniformly, to cover the rectangle between the
+  two frames, and cropped to it; there is no snapshot of the old one and no
+  cross-fade. All four edges follow one spring, where macOS's left and top
+  edges lead a little, and the row's slide back is the Desktop switch spring
+  where macOS's is near a bezier of 380 ms. On entering, the corners go
+  square and the shadow goes at the first frame; macOS keeps the shadow
+  while the window grows. Leaving starts from the whole display even for a
+  window smaller than it. Only the transition of the current entry is
+  animated, and Ctrl+Left or Ctrl+Right during the slide back makes the
+  black place left by the Space disappear at once. A window that opens while a full-screen Space is current
   opens in that Space, above the full-screen window, whatever its client;
   macOS sends the windows of other apps to a Desktop. A dragged window can
   be carried into a full-screen Space with Ctrl+arrows. All of them go to
@@ -488,6 +497,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- The full-screen transition (step 34): nested, at scales 1 and 5/3, with
+  `foot`, where the window's box was followed over time, and the machine
+  check. Not checked: directly on a display, where its smoothness can only
+  be judged.
 - The key for full screen (step 33): nested, at scales 1 and 5/3, with
   `foot`, and the machine check. Not checked: directly on a display.
 - Expansion from a launcher (step 32): nested, and the machine check, which

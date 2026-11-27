@@ -95,7 +95,8 @@ had before it was tiled; Super stands in for macOS's fn.
 A window that asks for full screen (`foot --fullscreen`, or the app's own
 key, or Ctrl+Alt+F for the window in front) fills the display on a Space of
 its own, right after its Desktop in the
-row, and returns to its frame when it leaves.
+row, growing in place while the row slides, and shrinks back to its frame
+when it leaves.
 `malaysia-expansion`, a second program of the package, opens Expansion or
 closes it, as Ctrl+Up does, through the private protocol
 `limitless_expansion_v1`; the package installs it with a desktop entry,

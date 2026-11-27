@@ -5,7 +5,7 @@ Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
 This file is a proposal. Of its steps only A, full screen from a client's
-request, in `full_screen.rs`, B, its key, C, Expansion on a key, D, its
+request, in `full_screen.rs`, B, its key, G, its transition, C, Expansion on a key, D, its
 strip, E, the drag of a window to a Space, F, the hover ring and
 Control+arrows while Expansion is open, and I, its text, are built, in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
 Desktops as they are today.
@@ -173,8 +173,9 @@ Step A as built differs from the text above in these points:
 - a window that opens while a full-screen Space is current opens in that
   Space, whatever its client, and all of them go to the nearest Desktop when
   the full-screen window leaves or closes;
-- leaving shows the Desktop at once, with no slide. Step G is the transition
-  both ways.
+- step G, built, starts the transition at the commit and scales the new
+  buffer, uniformly to cover the rectangle and cropped to it; leaving slides
+  the row back from the place the Space had, which is drawn black.
 
 ## Split View
 
@@ -208,7 +209,7 @@ them, and steps A and B need none. Each is one visible result.
 | D | Expansion's strip (built) | live thumbnails of every Space, "+" and close | C |
 | E | Drag a window to a Space in Expansion (built) | windows move between Desktops | D |
 | F | The hover ring, and Control+arrows while Expansion is open (built) | a ring on the window under the pointer; the window area slides to the next Desktop | C |
-| G | The full-screen transition | the window grows while the row slides | A, `spring.rs` |
+| G | The full-screen transition (built) | the window grows while the row slides | A, `spring.rs` |
 | H | Swipes with three fingers | Expansion and the slide follow the fingers | C; a real touchpad |
 | I | Text with `cosmic-text` (built) | names in the strip, the title of a hovered window | D |
 | J | Split View with a key | two windows side by side in one Space | A |

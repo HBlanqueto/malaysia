@@ -33,7 +33,7 @@ use crate::workspaces::expansion::Expansion;
 use crate::workspaces::expansion::strip::{
     add_centre, close_centre, pill, thumbnail, thumbnail_factor,
 };
-use crate::workspaces::full_screen::{desktop_number, full_screen_window};
+use crate::workspaces::full_screen::{Growth, cover, desktop_number, full_screen_window};
 
 render_elements! {
     pub Element<=GlesRenderer>;
@@ -52,6 +52,7 @@ pub struct Row<'a> {
     pub desktops: &'a [Space<Window>],
     pub current: usize,
     pub slide: Option<&'a Slide>,
+    pub growth: Option<&'a Growth>,
     pub expansion: &'a Expansion,
     pub pointer: Point<f64, Logical>,
 }
@@ -67,11 +68,13 @@ pub fn elements(
         desktops,
         current,
         slide,
+        growth,
         expansion,
         pointer,
     } = row;
     let position = slide.map_or(current as f64, |slide| slide.position);
     let carried = slide.and_then(|slide| slide.carried.as_ref());
+    let vacated = slide.and_then(|slide| slide.vacated);
     let scale = output.current_scale().fractional_scale();
     let width = output.current_mode().map_or(0, |mode| mode.size.w);
     let height = output.current_mode().map_or(0, |mode| mode.size.h);
@@ -123,12 +126,18 @@ pub fn elements(
         if desktop.outputs().next().is_none() {
             continue;
         }
-        let strip_x = desktop_x(index, position, stride);
+        let slot = index + usize::from(vacated.is_some_and(|vacated| index >= vacated));
+        let strip_x = desktop_x(slot, position, stride);
         for (order, window) in desktop.elements().rev().enumerate() {
             if Some(window) == dragged {
                 continue;
             }
-            let x = if Some(window) == carried { 0 } else { strip_x };
+            let grown = growth.filter(|growth| growth.window == *window);
+            let x = if Some(window) == carried || grown.is_some() {
+                0
+            } else {
+                strip_x
+            };
             if x.abs() >= width {
                 continue;
             }
@@ -136,12 +145,18 @@ pub fn elements(
                 continue;
             };
             let main = index == current && order == 0;
-            let (loc, factor) = expansion.drawn(window, geometry);
+            let (geometry, factor) = match grown {
+                Some(growth) => cover(growth.drawn(geometry.to_f64()), geometry.size),
+                None => {
+                    let (loc, factor) = expansion.drawn(window, geometry);
+                    (Rectangle::new(loc.to_i32_round(), geometry.size), factor)
+                }
+            };
             effects.push_window(
                 renderer,
                 window,
                 Placement {
-                    geometry: Rectangle::new(loc.to_i32_round(), geometry.size),
+                    geometry,
                     desktop_offset: (x, 0).into(),
                     expansion: factor,
                     ringed: Some(window) == hovered,
@@ -159,6 +174,15 @@ pub fn elements(
             let area = Rectangle::new((strip_x, 0).into(), (width, height).into());
             effects.push_backdrop(index, area, true, frame);
         }
+    }
+    if let Some(vacated) = vacated
+        && expansion.strip_top().is_none()
+    {
+        let area = Rectangle::new(
+            (desktop_x(vacated, position, stride), 0).into(),
+            (width, height).into(),
+        );
+        effects.push_backdrop(desktops.len(), area, true, frame);
     }
     if let Some(x) = gap_x(position, width, scale) {
         effects.push_gap(
@@ -246,6 +270,7 @@ pub struct State {
     pub desktops: Vec<Space<Window>>,
     pub current_desktop: usize,
     pub slide: Option<Slide>,
+    pub growth: Option<Growth>,
     pub expansion: Expansion,
     pub popups: PopupManager,
     pub compositor_state: CompositorState,
@@ -287,6 +312,7 @@ impl State {
         self.needs_redraw = false;
         let now = self.start_time.elapsed();
         self.advance_slide(now);
+        self.advance_growth(now);
         self.advance_expansion(now);
         self.frame_pending = true;
         let pointer = self.seat.get_pointer().unwrap().current_location();
@@ -294,6 +320,7 @@ impl State {
             desktops: &self.desktops,
             current: self.current_desktop,
             slide: self.slide.as_ref(),
+            growth: self.growth.as_ref(),
             expansion: &self.expansion,
             pointer,
         };

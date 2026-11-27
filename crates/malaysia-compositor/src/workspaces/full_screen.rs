@@ -1,14 +1,59 @@
 use std::cell::Cell;
+use std::time::Duration;
 
 use smithay::backend::input::InputTime;
 use smithay::desktop::{Space, Window};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
-use smithay::utils::{Logical, Point, Rectangle};
+use smithay::utils::{Logical, Point, Rectangle, Size};
 use smithay::wayland::shell::xdg::ToplevelSurface;
 
 use crate::placement::placed;
+use crate::spring::{Motion, advance_motion};
 use crate::state::State;
-use crate::workspaces::desktops::{MAX_DESKTOPS, move_window};
+use crate::workspaces::desktops::{MAX_DESKTOPS, Slide, move_window};
+
+const OMEGA: f64 = ctdesign::FULL_SCREEN_OMEGA as f64;
+const DAMPING: f64 = ctdesign::FULL_SCREEN_DAMPING as f64;
+
+pub struct Growth {
+    pub window: Window,
+    from: Rectangle<f64, Logical>,
+    motion: Option<Motion>,
+    progress: f64,
+}
+
+impl Growth {
+    pub fn drawn(&self, to: Rectangle<f64, Logical>) -> Rectangle<f64, Logical> {
+        mixed(self.from, to, self.progress)
+    }
+}
+
+fn mixed(
+    from: Rectangle<f64, Logical>,
+    to: Rectangle<f64, Logical>,
+    progress: f64,
+) -> Rectangle<f64, Logical> {
+    let mix = |from: f64, to: f64| from + (to - from) * progress;
+    Rectangle::new(
+        (mix(from.loc.x, to.loc.x), mix(from.loc.y, to.loc.y)).into(),
+        (mix(from.size.w, to.size.w), mix(from.size.h, to.size.h)).into(),
+    )
+}
+
+pub fn cover(
+    drawn: Rectangle<f64, Logical>,
+    buffer: Size<i32, Logical>,
+) -> (Rectangle<i32, Logical>, f64) {
+    let buffer = buffer.to_f64();
+    let factor = (drawn.size.w / buffer.w).max(drawn.size.h / buffer.h);
+    (
+        Rectangle::new(
+            drawn.loc.to_i32_round(),
+            drawn.size.downscale(factor).to_i32_round(),
+        ),
+        factor,
+    )
+}
 
 #[derive(Default)]
 struct FullScreen {
@@ -128,11 +173,70 @@ impl State {
         }
     }
 
+    fn growth_from(&self, window: &Window) -> Option<Rectangle<f64, Logical>> {
+        self.growth
+            .as_ref()
+            .filter(|growth| growth.window == *window)
+            .zip(
+                self.desktops
+                    .iter()
+                    .find_map(|entry| entry.element_geometry(window)),
+            )
+            .map(|(growth, geometry)| growth.drawn(geometry.to_f64()))
+    }
+
+    fn grow(&mut self, window: &Window, from: Option<Rectangle<f64, Logical>>) {
+        if let Some(from) = from
+            && self.expansion.strip_top().is_none()
+            && self.desktops[self.current_desktop]
+                .element_location(window)
+                .is_some()
+        {
+            self.growth = Some(Growth {
+                window: window.clone(),
+                from,
+                motion: Some(Motion {
+                    from: 0.0,
+                    velocity: 0.0,
+                    started: self.start_time.elapsed(),
+                }),
+                progress: 0.0,
+            });
+        }
+    }
+
+    pub fn advance_growth(&mut self, now: Duration) {
+        let Some(growth) = &mut self.growth else {
+            return;
+        };
+        let longest_side = f64::from(
+            self.output
+                .current_mode()
+                .map_or(0, |mode| mode.size.w.max(mode.size.h)),
+        );
+        if let Some(progress) =
+            advance_motion(&mut growth.motion, OMEGA, DAMPING, 1.0, now, longest_side)
+        {
+            growth.progress = progress;
+            self.needs_redraw |= growth.motion.is_some();
+        }
+        if growth.motion.is_none() && self.slide.is_none() {
+            self.growth = None;
+        }
+    }
+
     fn enter_full_screen(&mut self, window: &Window, own: usize) {
         if self.desktops.len() == MAX_DESKTOPS {
             self.request_leave_full_screen(window.toplevel().unwrap());
             return;
         }
+        let from = self.growth_from(window).or_else(|| {
+            marker(window)
+                .frame
+                .get()
+                .filter(|_| own == self.current_desktop)
+                .map(Rectangle::to_f64)
+        });
         marker(window).entered.set(true);
         let mut entry = Space::default();
         move_window(window, &mut self.desktops[own], &mut entry);
@@ -146,6 +250,7 @@ impl State {
         self.expansion.strip.hovered = None;
         self.centre_full_screen(window, index);
         self.show_desktop(index, InputTime::now());
+        self.grow(window, from);
         self.rearrange_expansion();
     }
 
@@ -159,6 +264,17 @@ impl State {
     }
 
     fn leave_full_screen(&mut self, window: &Window, own: usize) {
+        let was_current = own == self.current_desktop;
+        let from = self
+            .growth_from(window)
+            .or_else(|| {
+                self.desktops[own]
+                    .output_geometry(&self.output)
+                    .map(Rectangle::to_f64)
+            })
+            .filter(|_| was_current);
+        let now = self.start_time.elapsed();
+        let row = self.strip(now);
         marker(window).entered.set(false);
         let toplevel = window.toplevel().unwrap();
         toplevel.with_pending_state(|state| state.size = None);
@@ -166,9 +282,15 @@ impl State {
             self.desktops[own].relocate_element(window, frame.loc);
         }
         self.remove_entry(own);
+        if was_current && self.current_desktop + 1 == own {
+            self.slide = Some(Slide::new(row, now, None, Some(own)));
+        }
+        self.grow(window, from);
     }
 
     pub fn forget_full_screen(&mut self, toplevel: &ToplevelSurface) {
+        self.growth
+            .take_if(|growth| growth.window.toplevel() == Some(toplevel));
         let Some((index, window)) = self.desktops.iter().enumerate().find_map(|(index, entry)| {
             full_screen_window(entry)
                 .filter(|window| window.toplevel() == Some(toplevel))
@@ -186,6 +308,24 @@ mod tests {
     use super::*;
 
     const ROW: [bool; 5] = [true, false, true, false, false];
+
+    #[test]
+    fn a_growing_window_covers_the_rectangle_mixed_between_its_ends_keeping_its_aspect() {
+        let frame = Rectangle::new((100.0, 50.0).into(), (800.0, 600.0).into());
+        let display = Rectangle::from_size((1280.0, 800.0).into());
+        assert_eq!(
+            cover(mixed(frame, display, 0.0), (1280, 800).into()),
+            (Rectangle::new((100, 50).into(), (1067, 800).into()), 0.75)
+        );
+        assert_eq!(
+            cover(mixed(frame, display, 0.5), (1280, 800).into()),
+            (Rectangle::new((50, 25).into(), (1189, 800).into()), 0.875)
+        );
+        assert_eq!(
+            cover(mixed(frame, display, 1.0), (1280, 800).into()),
+            (display.to_i32_round(), 1.0)
+        );
+    }
 
     #[test]
     fn the_nearest_desktop_is_looked_for_left_first_then_right_and_never_is_the_entry_itself() {

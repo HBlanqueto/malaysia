@@ -20,6 +20,27 @@ pub struct Slide {
     motion: Motion,
     pub position: f64,
     pub carried: Option<Window>,
+    pub vacated: Option<usize>,
+}
+
+impl Slide {
+    pub fn new(
+        (from, velocity): (f64, f64),
+        now: Duration,
+        carried: Option<Window>,
+        vacated: Option<usize>,
+    ) -> Slide {
+        Slide {
+            motion: Motion {
+                from,
+                velocity,
+                started: now,
+            },
+            position: from,
+            carried,
+            vacated,
+        }
+    }
 }
 
 const OMEGA: f64 = ctdesign::DESKTOP_SWITCH_OMEGA as f64;
@@ -89,7 +110,7 @@ fn wake(desktop: &mut Space<Window>, output: &Output) {
 }
 
 impl State {
-    fn strip(&self, now: Duration) -> (f64, f64) {
+    pub fn strip(&self, now: Duration) -> (f64, f64) {
         let target = self.current_desktop as f64;
         self.slide.as_ref().map_or((target, 0.0), |slide| {
             slide.motion.at(OMEGA, DAMPING, target, now)
@@ -234,16 +255,13 @@ impl State {
                 Some((window, location))
             });
         let now = self.start_time.elapsed();
-        let (from, velocity) = self.strip(now);
-        self.slide = Some(Slide {
-            motion: Motion {
-                from,
-                velocity,
-                started: now,
-            },
-            position: from,
-            carried: carried.as_ref().map(|(window, _)| window.clone()),
-        });
+        self.slide = Some(Slide::new(
+            self.strip(now),
+            now,
+            carried.as_ref().map(|(window, _)| window.clone()),
+            None,
+        ));
+        self.growth = None;
         match &carried {
             Some((window, _)) => self.desktops[self.current_desktop].unmap_elem(window),
             None => pointer.unset_grab(self, SERIAL_COUNTER.next_serial(), time),
