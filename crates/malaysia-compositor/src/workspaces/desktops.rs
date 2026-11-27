@@ -99,6 +99,18 @@ fn after_removal(removed: usize, index: usize) -> usize {
     index - usize::from(index > removed)
 }
 
+pub fn after_insertion(at: usize, index: usize) -> usize {
+    index + usize::from(index >= at)
+}
+
+pub fn moved_index(index: usize, from: usize, to: usize) -> usize {
+    if index == from {
+        to
+    } else {
+        after_insertion(to, after_removal(from, index))
+    }
+}
+
 fn wake(desktop: &mut Space<Window>, output: &Output) {
     desktop.map_output(output, (0, 0));
     for window in desktop.elements() {
@@ -215,37 +227,52 @@ impl State {
 
     pub fn switch_desktop(&mut self, direction: Direction, time: InputTime) {
         let last = self.desktops.len() - 1;
-        if self.expansion.dragged.is_none()
-            && let Some(target) = switch_target(direction, self.current_desktop, last)
-        {
+        if let Some(target) = switch_target(direction, self.current_desktop, last) {
             self.go_to_desktop(target, time);
         }
     }
 
     pub fn go_to_desktop(&mut self, target: usize, time: InputTime) {
-        if target != self.current_desktop {
+        if target != self.current_desktop && self.expansion.dragged.is_none() {
             self.show_desktop(target, time);
             self.rearrange_expansion();
         }
     }
 
     pub fn add_desktop(&mut self) -> Option<usize> {
-        if self.desktops.len() == MAX_DESKTOPS {
-            return None;
-        }
+        let index = self.new_desktop_index()?;
         let mut desktop = Space::default();
         if self.expansion.strip.grown {
             desktop.map_output(&self.output, (0, 0));
         }
-        self.desktops.push(desktop);
-        Some(self.desktops.len() - 1)
+        self.desktops.insert(index, desktop);
+        self.reindex(|other| after_insertion(index, other));
+        self.expansion.strip.dock(index, self.start_time.elapsed());
+        Some(index)
+    }
+
+    pub fn reindex(&mut self, index_after: impl Fn(usize) -> usize) {
+        self.current_desktop = index_after(self.current_desktop);
+        self.expansion.desktop = index_after(self.expansion.desktop);
+        self.slide = None;
+        self.expansion.strip.hovered = None;
+        self.expansion.strip.moving = None;
+    }
+
+    pub fn move_entry(&mut self, from: usize, to: usize) {
+        if from < to {
+            self.desktops[from..=to].rotate_left(1);
+        } else {
+            self.desktops[to..=from].rotate_right(1);
+        }
+        self.reindex(|index| moved_index(index, from, to));
+        self.rearrange_expansion();
     }
 
     pub fn remove_entry(&mut self, index: usize) {
         let Some(heir) = self.heir(index) else {
             return;
         };
-        let was_current = index == self.current_desktop;
         let mut removed = self.desktops.remove(index);
         let heir = after_removal(index, heir);
         loop {
@@ -254,13 +281,16 @@ impl State {
             };
             move_window(&window, &mut removed, &mut self.desktops[heir]);
         }
-        self.current_desktop = if was_current {
-            heir
-        } else {
-            after_removal(index, self.current_desktop)
-        };
-        self.slide = None;
-        self.expansion.strip.hovered = None;
+        self.reindex(|other| {
+            if other == index {
+                heir
+            } else {
+                after_removal(index, other)
+            }
+        });
+        self.expansion
+            .strip
+            .remove(index, self.start_time.elapsed());
         wake(&mut self.desktops[self.current_desktop], &self.output);
         if heir == self.current_desktop && !self.expansion.open {
             self.focus_top_window(SERIAL_COUNTER.next_serial());
@@ -358,6 +388,27 @@ mod tests {
         assert_eq!(after_removal(0, 2), 1);
         assert_eq!(after_removal(3, 2), 2);
         assert_eq!(after_removal(1, 1), 1);
+    }
+
+    #[test]
+    fn inserting_an_entry_moves_the_index_at_it_and_after_it_up_one() {
+        assert_eq!(after_insertion(2, 1), 1);
+        assert_eq!(after_insertion(2, 2), 3);
+        assert_eq!(after_insertion(0, 3), 4);
+    }
+
+    #[test]
+    fn moving_an_entry_shifts_only_the_indexes_between_its_ends() {
+        assert_eq!(moved_index(1, 1, 3), 3);
+        assert_eq!(moved_index(2, 1, 3), 1);
+        assert_eq!(moved_index(3, 1, 3), 2);
+        assert_eq!(moved_index(0, 1, 3), 0);
+        assert_eq!(moved_index(4, 1, 3), 4);
+        assert_eq!(moved_index(3, 3, 1), 1);
+        assert_eq!(moved_index(1, 3, 1), 2);
+        assert_eq!(moved_index(2, 3, 1), 3);
+        assert_eq!(moved_index(4, 3, 1), 4);
+        assert_eq!(moved_index(2, 2, 2), 2);
     }
 
     fn first_millisecond_at_or_below(fraction: f64) -> u32 {

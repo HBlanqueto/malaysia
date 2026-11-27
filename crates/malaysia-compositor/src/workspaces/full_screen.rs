@@ -13,7 +13,7 @@ use crate::spring::{Motion, advance_motion};
 use crate::state::State;
 use crate::tiling::{fits, size_limits};
 use crate::window_grab::{Drag, WindowGrab, send_if_all_acked};
-use crate::workspaces::desktops::{Direction, MAX_DESKTOPS, Slide, move_window};
+use crate::workspaces::desktops::{Direction, MAX_DESKTOPS, Slide, after_insertion, move_window};
 
 const OMEGA: f64 = ctdesign::FULL_SCREEN_OMEGA as f64;
 const DAMPING: f64 = ctdesign::FULL_SCREEN_DAMPING as f64;
@@ -144,6 +144,27 @@ fn width_limits(window: &Window) -> (i32, i32) {
     (min.w, max.w)
 }
 
+fn split_tiles<'a>(
+    left_window: &'a Window,
+    right_window: &'a Window,
+    output: Size<i32, Logical>,
+) -> Option<[(&'a Window, Direction, i32); 2]> {
+    let (left, right) = split_widths(
+        output.w,
+        (output.w - ctdesign::SPLIT_DIVIDER_WIDTH) / 2,
+        width_limits(left_window),
+        width_limits(right_window),
+    )?;
+    let tiles = [
+        (left_window, Direction::Left, left),
+        (right_window, Direction::Right, right),
+    ];
+    tiles
+        .iter()
+        .all(|(window, _, width)| fits(window, (*width, output.h).into()))
+        .then_some(tiles)
+}
+
 pub fn divider(
     entry: &Space<Window>,
     output: Rectangle<i32, Logical>,
@@ -189,13 +210,49 @@ pub fn nearest_desktop(
         .find(|&other| is_desktop(other))
 }
 
+pub fn new_desktop_slot(count: usize, is_desktop: impl Fn(usize) -> bool) -> usize {
+    (0..count)
+        .rfind(|&index| is_desktop(index))
+        .map_or(0, |last| last + 1)
+}
+
 pub fn desktop_number(index: usize, is_desktop: impl Fn(usize) -> bool) -> usize {
     (0..index).filter(|&other| is_desktop(other)).count() + 1
+}
+
+pub fn nth_desktop(
+    number: usize,
+    count: usize,
+    is_desktop: impl Fn(usize) -> bool,
+) -> Option<usize> {
+    (0..count)
+        .filter(|&index| is_desktop(index))
+        .nth(number.checked_sub(1)?)
 }
 
 fn abandon_split(window: &Window) {
     marker(window).side.set(None);
     send_back(window.toplevel().unwrap(), marker(window).frame.get());
+}
+
+fn tile(window: &Window, side: Direction, width: i32, height: i32) {
+    marker(window).side.set(Some(side));
+    let toplevel = window.toplevel().unwrap();
+    toplevel.with_pending_state(|state| {
+        state.states.unset(ToplevelState::Fullscreen);
+        for tiled in TILED {
+            state.states.set(tiled);
+        }
+        state.size = Some((width, height).into());
+    });
+    if toplevel.is_initial_configure_sent() {
+        toplevel.send_configure();
+    }
+}
+
+fn drop_target(entry: &Space<Window>) -> Option<&Window> {
+    full_screen_window(entry)
+        .filter(|window| side(window).is_some() && split_windows(entry).is_none())
 }
 
 fn committed(toplevel: &ToplevelSurface, wanted: ToplevelState) -> bool {
@@ -209,6 +266,11 @@ impl State {
 
     pub fn heir(&self, index: usize) -> Option<usize> {
         nearest_desktop(index, self.desktops.len(), |other| self.is_desktop(other))
+    }
+
+    pub fn new_desktop_index(&self) -> Option<usize> {
+        let count = self.desktops.len();
+        (count < MAX_DESKTOPS).then(|| new_desktop_slot(count, |index| self.is_desktop(index)))
     }
 
     pub fn request_full_screen(&mut self, toplevel: &ToplevelSurface) {
@@ -254,6 +316,10 @@ impl State {
             abandon_split(window);
             cancelled = true;
         }
+        for target in self.desktops.iter().filter_map(drop_target) {
+            self.promote(target);
+            cancelled = true;
+        }
         cancelled
     }
 
@@ -276,39 +342,38 @@ impl State {
             Direction::Left => (front, other),
             Direction::Right => (other, front),
         };
-        let Some((left, right)) = split_widths(
-            output.size.w,
-            (output.size.w - ctdesign::SPLIT_DIVIDER_WIDTH) / 2,
-            width_limits(&left_window),
-            width_limits(&right_window),
-        )
-        .filter(|_| self.is_desktop(self.current_desktop) && self.desktops.len() < MAX_DESKTOPS) else {
+        let Some(tiles) = split_tiles(&left_window, &right_window, output.size).filter(|_| {
+            self.is_desktop(self.current_desktop) && self.desktops.len() < MAX_DESKTOPS
+        }) else {
             return;
         };
-        let tiles = [
-            (left_window, Direction::Left, left),
-            (right_window, Direction::Right, right),
-        ];
-        if !tiles
-            .iter()
-            .all(|(window, _, width)| fits(window, (*width, output.size.h).into()))
-        {
-            return;
-        }
         for (window, side, width) in tiles {
-            self.remember_frame(&window);
-            marker(&window).side.set(Some(side));
-            let toplevel = window.toplevel().unwrap();
-            toplevel.with_pending_state(|state| {
-                state.states.unset(ToplevelState::Fullscreen);
-                for tiled in TILED {
-                    state.states.set(tiled);
-                }
-                state.size = Some((width, output.size.h).into());
-            });
-            if toplevel.is_initial_configure_sent() {
-                toplevel.send_configure();
-            }
+            self.remember_frame(window);
+            tile(window, side, width, output.size.h);
+        }
+    }
+
+    pub fn split_with(&self, window: &Window, entry: usize, side: Direction) {
+        let space = &self.desktops[entry];
+        let Some(output) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
+            return;
+        };
+        let Some(full) = full_screen_window(space).filter(|_| {
+            space.elements().count() == 1 && window.toplevel().unwrap().parent().is_none()
+        }) else {
+            return;
+        };
+        let (left_window, right_window) = match side {
+            Direction::Left => (window, full),
+            Direction::Right => (full, window),
+        };
+        let Some(tiles) = split_tiles(left_window, right_window, output.size) else {
+            return;
+        };
+        self.cancel_splits();
+        self.remember_frame(window);
+        for (window, side, width) in tiles {
+            tile(window, side, width, output.size.h);
         }
     }
 
@@ -423,15 +488,15 @@ impl State {
         let toplevel = window.toplevel().unwrap();
         let full_screen = committed(toplevel, ToplevelState::Fullscreen);
         let tiled = committed(toplevel, ToplevelState::TiledLeft);
-        if full_screen {
-            marker(window).side.set(None);
-        }
         match (is_full_screen(window), side(window)) {
             (false, None) if full_screen => self.enter_full_screen(window, own),
             (false, Some(_)) if tiled => self.join_split(window, own),
             (true, _) if full_screen || tiled => {
                 self.place_in_space(window, own);
                 send_if_all_acked(toplevel);
+                if tiled && drop_target(&self.desktops[own]).is_some() {
+                    self.join_drop(own);
+                }
             }
             (true, _) => self.leave_full_screen(window, own),
             _ => {}
@@ -508,7 +573,14 @@ impl State {
 
     fn join_split(&mut self, window: &Window, own: usize) {
         let Some(partner) = waiting_partner(&self.desktops[own], window).cloned() else {
-            abandon_split(window);
+            match self
+                .desktops
+                .iter()
+                .position(|entry| drop_target(entry).is_some())
+            {
+                Some(target) => self.join_drop(target),
+                None => abandon_split(window),
+            }
             return;
         };
         if !committed(partner.toplevel().unwrap(), ToplevelState::TiledLeft) {
@@ -529,6 +601,27 @@ impl State {
         self.open_space(&pair, own);
     }
 
+    fn join_drop(&mut self, target: usize) {
+        let Some((own, window)) = self.desktops.iter().enumerate().find_map(|(own, entry)| {
+            entry
+                .elements()
+                .find(|window| waiting(window))
+                .map(|window| (own, window.clone()))
+        }) else {
+            return;
+        };
+        let tiled =
+            |window: &Window| committed(window.toplevel().unwrap(), ToplevelState::TiledLeft);
+        if !tiled(&window) || !drop_target(&self.desktops[target]).is_some_and(tiled) {
+            return;
+        }
+        marker(&window).entered.set(true);
+        let [from, to] = self.desktops.get_disjoint_mut([own, target]).unwrap();
+        move_window(&window, from, to);
+        self.place_in_space(&window, target);
+        self.rearrange_expansion();
+    }
+
     fn open_space(&mut self, windows: &[Window], own: usize) {
         let mut entry = Space::default();
         for window in windows {
@@ -537,12 +630,9 @@ impl State {
         }
         let index = own + 1;
         self.desktops.insert(index, entry);
-        if self.current_desktop >= index {
-            self.current_desktop += 1;
-        }
-        self.slide = None;
+        self.reindex(|other| after_insertion(index, other));
         self.expansion.dragged = None;
-        self.expansion.strip.hovered = None;
+        self.expansion.strip.opening = None;
         for window in windows {
             self.place_in_space(window, index);
         }
@@ -564,6 +654,7 @@ impl State {
     }
 
     fn promote(&self, partner: &Window) {
+        marker(partner).side.set(None);
         let Some(output) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
             return;
         };
@@ -630,6 +721,9 @@ impl State {
         if let Some(frame) = marker(window).frame.get() {
             self.desktops[own].relocate_element(window, frame.loc);
         }
+        if marker(window).side.take().is_some() {
+            self.cancel_splits();
+        }
         self.remove_entry(own);
         if was_current && self.current_desktop + 1 == own {
             self.slide = Some(Slide::new(row, now, None, Some(own)));
@@ -657,7 +751,12 @@ impl State {
         self.desktops[index].unmap_elem(&window);
         match full_screen_window(&self.desktops[index]).cloned() {
             Some(partner) => self.promote(&partner),
-            None => self.remove_entry(index),
+            None => {
+                self.remove_entry(index);
+                if side(&window).is_some() {
+                    self.cancel_splits();
+                }
+            }
         }
     }
 }
@@ -728,5 +827,27 @@ mod tests {
         let is_desktop = |index: usize| ROW[index];
         assert_eq!(desktop_number(0, is_desktop), 1);
         assert_eq!(desktop_number(2, is_desktop), 2);
+    }
+
+    #[test]
+    fn a_new_desktop_goes_right_after_the_last_desktop_leaving_the_spaces_after_it_behind() {
+        assert_eq!(new_desktop_slot(5, |index: usize| ROW[index]), 3);
+        assert_eq!(new_desktop_slot(1, |_| true), 1);
+        assert_eq!(new_desktop_slot(2, |index: usize| index == 0), 1);
+    }
+
+    #[test]
+    fn the_desktop_with_a_number_is_the_entry_that_number_names_and_spaces_have_none() {
+        let is_desktop = |index: usize| ROW[index];
+        assert_eq!(nth_desktop(1, 5, is_desktop), Some(0));
+        assert_eq!(nth_desktop(2, 5, is_desktop), Some(2));
+        assert_eq!(nth_desktop(3, 5, is_desktop), None);
+        assert_eq!(nth_desktop(0, 5, is_desktop), None);
+        for index in [0, 2] {
+            assert_eq!(
+                nth_desktop(desktop_number(index, is_desktop), 5, is_desktop),
+                Some(index)
+            );
+        }
     }
 }

@@ -13,6 +13,9 @@ const LOWEST_SCALE: f64 = 0.05;
 const LONE_INSET: f64 = 17.0;
 const LONE_HEIGHT_CAP_INSET: f64 = 41.0;
 const SAME_CENTRE: f64 = 1e-9;
+const GRID_GAP: f64 = ctdesign::EXPANSION_GRID_GAP as f64;
+const CAPTION_HEIGHT: f64 =
+    ctdesign::EXPANSION_TITLE_FONT.line_height as f64 + ctdesign::SPACES_LABEL_GAP as f64;
 
 pub fn arrange(
     area: Rectangle<f64, Logical>,
@@ -52,7 +55,7 @@ fn arrange_lone(
         .min(area.size.w / frame.size.w)
         .min((area.size.h - LONE_HEIGHT_CAP_INSET) / frame.size.h);
     let size = frame.size.upscale(scale);
-    let centre = frame.loc + (frame.size / 2.0).to_point();
+    let centre = centre(frame);
     let x = clamp_centre(centre.x, size.w, area.loc.x, area.loc.x + area.size.w);
     let y = clamp_centre(
         centre.y,
@@ -68,6 +71,61 @@ fn arrange_lone(
     scale
 }
 
+pub fn grid(
+    area: Rectangle<f64, Logical>,
+    frames: &[Rectangle<f64, Logical>],
+    slots: &mut Vec<Rectangle<f64, Logical>>,
+) -> f64 {
+    slots.clear();
+    let count = frames.len();
+    if count == 0 {
+        return 1.0;
+    }
+    let columns = (count as f64).sqrt().ceil() as usize;
+    let rows = count.div_ceil(columns);
+    let cell_w = (area.size.w - GRID_GAP * (columns - 1) as f64) / columns as f64;
+    let cell_h = (area.size.h - GRID_GAP * (rows - 1) as f64) / rows as f64;
+    let window_h = cell_h - CAPTION_HEIGHT;
+    let scale = frames.iter().fold(1f64, |scale, frame| {
+        scale
+            .min(cell_w / frame.size.w)
+            .min(window_h / frame.size.h)
+    });
+    slots.extend(frames.iter().enumerate().map(|(place, frame)| {
+        let cell = count - 1 - place;
+        let (row, column) = (cell / columns, cell % columns);
+        let in_row = columns.min(count - row * columns);
+        let row_w = in_row as f64 * cell_w + (in_row - 1) as f64 * GRID_GAP;
+        let left = area.loc.x + (area.size.w - row_w) / 2.0 + column as f64 * (cell_w + GRID_GAP);
+        let top = area.loc.y + row as f64 * (cell_h + GRID_GAP);
+        let size = frame.size.upscale(scale);
+        Rectangle::new(
+            (
+                left + (cell_w - size.w) / 2.0,
+                top + (window_h - size.h) / 2.0,
+            )
+                .into(),
+            size,
+        )
+    }));
+    scale
+}
+
+pub fn preview(
+    area: Rectangle<f64, Logical>,
+    frame: Rectangle<f64, Logical>,
+    slot: Rectangle<f64, Logical>,
+) -> (Point<f64, Logical>, f64) {
+    let scale = 1f64
+        .min(area.size.w / frame.size.w)
+        .min(area.size.h / frame.size.h);
+    let size = frame.size.upscale(scale);
+    let centre = centre(slot);
+    let x = clamp_centre(centre.x, size.w, area.loc.x, area.loc.x + area.size.w);
+    let y = clamp_centre(centre.y, size.h, area.loc.y, area.loc.y + area.size.h);
+    (Point::from((x, y)) - (size / 2.0).to_point(), scale)
+}
+
 fn settle(
     area: Rectangle<f64, Logical>,
     frames: &[Rectangle<f64, Logical>],
@@ -81,7 +139,7 @@ fn settle(
     centres.clear();
     centres.extend(frames.iter().enumerate().map(|(place, frame)| {
         let tie = place as f64 * TIE_PER_STACKING_PLACE;
-        let centre = frame.loc + (frame.size / 2.0).to_point();
+        let centre = centre(*frame);
         let x = clamp_centre(centre.x, frame.size.w * scale, area.loc.x, right);
         let y = clamp_centre(centre.y, frame.size.h * scale, area.loc.y, bottom);
         Rectangle::new((x + tie, y + tie).into(), frame.size)
@@ -152,6 +210,10 @@ fn settle(
     (settled, scale)
 }
 
+fn centre(rectangle: Rectangle<f64, Logical>) -> Point<f64, Logical> {
+    rectangle.loc + (rectangle.size / 2.0).to_point()
+}
+
 fn needed(reach: f64, distance: f64, unit: f64) -> f64 {
     (reach + TARGET_GAP - distance.abs()) / unit.abs()
 }
@@ -168,6 +230,7 @@ fn clamp_centre(centre: f64, length: f64, low: f64, high: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use smithay::utils::Size;
 
     type Row = (&'static str, &'static [([f64; 4], [f64; 4])]);
 
@@ -296,10 +359,6 @@ mod tests {
             })
             .map(f64::abs)
             .fold(0.0, f64::max)
-    }
-
-    fn centre(rectangle: Rectangle<f64, Logical>) -> Point<f64, Logical> {
-        rectangle.loc + (rectangle.size / 2.0).to_point()
     }
 
     fn moves(arranged: &Arranged) -> (Point<f64, Logical>, Point<f64, Logical>) {
@@ -431,5 +490,69 @@ mod tests {
                 &same,
             );
         }
+    }
+
+    const APP_AREA: [f64; 4] = [20.0, 40.0, 2520.0, 1385.0];
+
+    fn gridded(count: usize, size: [f64; 2]) -> (Vec<Rectangle<f64, Logical>>, f64) {
+        let frames = vec![rectangle([300.0, 200.0, size[0], size[1]]); count];
+        let mut slots = Vec::new();
+        let scale = grid(rectangle(APP_AREA), &frames, &mut slots);
+        (slots, scale)
+    }
+
+    #[test]
+    fn four_windows_of_an_app_fill_a_two_by_two_grid_at_one_scale_never_above_one_with_the_front_one_top_left_and_their_captions_inside()
+     {
+        let (slots, scale) = gridded(4, [1200.0, 800.0]);
+        assert!(scale < 1.0);
+        assert!(
+            slots
+                .iter()
+                .all(|slot| slot.size == Size::from((1200.0, 800.0)).upscale(scale))
+        );
+        let [bottom_right, bottom_left, top_right, top_left] = [0, 1, 2, 3].map(|n| slots[n].loc);
+        assert!(top_left.x < top_right.x && top_left.y == top_right.y);
+        assert!(top_left.x == bottom_left.x && top_left.y < bottom_left.y);
+        assert_eq!(bottom_right, Point::from((top_right.x, bottom_left.y)));
+        let area = rectangle(APP_AREA);
+        let bottom = slots[0].loc.y + slots[0].size.h;
+        assert!((bottom + CAPTION_HEIGHT - (area.loc.y + area.size.h)).abs() < 1e-9);
+        assert_eq!(gridded(4, [300.0, 200.0]).1, 1.0);
+    }
+
+    #[test]
+    fn five_windows_take_three_columns_and_the_last_row_is_centred() {
+        let (slots, _) = gridded(5, [1200.0, 800.0]);
+        let top = slots[4].loc.y;
+        assert_eq!(slots.iter().filter(|slot| slot.loc.y == top).count(), 3);
+        let area = rectangle(APP_AREA);
+        let middle = area.loc.x + area.size.w / 2.0;
+        let (left, right) = (slots[1], slots[0]);
+        assert!(left.loc.y > top && left.loc.y == right.loc.y);
+        let row_centre = (left.loc.x + right.loc.x + right.size.w) / 2.0;
+        assert!((row_centre - middle).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_preview_never_grows_past_scale_one_and_stays_inside_the_area() {
+        let area = rectangle(APP_AREA);
+        let inside = |(loc, scale): (Point<f64, Logical>, f64), frame: Rectangle<f64, Logical>| {
+            let size = frame.size.upscale(scale);
+            scale <= 1.0
+                && loc.x >= area.loc.x
+                && loc.y >= area.loc.y
+                && loc.x + size.w <= area.loc.x + area.size.w + 1e-9
+                && loc.y + size.h <= area.loc.y + area.size.h + 1e-9
+        };
+        let small = rectangle([0.0, 0.0, 600.0, 400.0]);
+        let corner = rectangle([2400.0, 1300.0, 120.0, 80.0]);
+        let preview_small = preview(area, small, corner);
+        assert_eq!(preview_small.1, 1.0);
+        assert!(inside(preview_small, small));
+        let huge = rectangle([0.0, 0.0, 3000.0, 2000.0]);
+        let preview_huge = preview(area, huge, rectangle([100.0, 100.0, 300.0, 200.0]));
+        assert!(preview_huge.1 < 1.0);
+        assert!(inside(preview_huge, huge));
     }
 }

@@ -17,21 +17,27 @@ use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 use crate::state::{Backend, State};
 use crate::tiling::Tile;
 use crate::workspaces::desktops::{Direction, send_changed_state};
+use crate::workspaces::full_screen::nth_desktop;
 use crate::workspaces::swipe::{self, Swipe};
 
 pub const REPEAT_DELAY: i32 = 200;
 pub const REPEAT_RATE: i32 = 25;
 const SWIPE_FINGERS: u32 = 3;
+const KEYCODE_1: u32 = 10;
+const KEYCODE_0: u32 = 19;
 
 #[derive(Debug, PartialEq)]
 enum KeyAction {
     Quit,
     SwitchVt(i32),
     SwitchDesktop(Direction),
+    GoToDesktop(usize),
     Tile(Tile),
     RestoreTiled,
     OpenExpansion,
     CloseExpansion,
+    Preview,
+    OpenAppExpose,
     ToggleFullScreen,
     Split(Direction),
 }
@@ -39,11 +45,13 @@ enum KeyAction {
 fn key_action(
     modifiers: &ModifiersState,
     keysym: Keysym,
+    keycode: u32,
     expansion_open: bool,
 ) -> Option<KeyAction> {
     let control_only = modifiers.ctrl && !modifiers.alt && !modifiers.shift && !modifiers.logo;
     let control_super = modifiers.ctrl && modifiers.logo && !modifiers.alt && !modifiers.shift;
     let control_alt = modifiers.ctrl && modifiers.alt && !modifiers.shift && !modifiers.logo;
+    let unmodified = !modifiers.ctrl && !modifiers.alt && !modifiers.shift && !modifiers.logo;
     match keysym.raw() {
         vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 => Some(
             KeyAction::SwitchVt((vt - keysyms::KEY_XF86Switch_VT_1 + 1) as i32),
@@ -55,8 +63,13 @@ fn key_action(
         keysyms::KEY_Escape if expansion_open => Some(KeyAction::CloseExpansion),
         keysyms::KEY_Left if control_only => Some(KeyAction::SwitchDesktop(Direction::Left)),
         keysyms::KEY_Right if control_only => Some(KeyAction::SwitchDesktop(Direction::Right)),
+        _ if control_only && expansion_open && (KEYCODE_1..=KEYCODE_0).contains(&keycode) => {
+            Some(KeyAction::GoToDesktop((keycode - KEYCODE_1 + 1) as usize))
+        }
+        keysyms::KEY_space if unmodified && expansion_open => Some(KeyAction::Preview),
         _ if expansion_open => None,
         keysyms::KEY_Up if control_only => Some(KeyAction::OpenExpansion),
+        keysyms::KEY_Down if control_only => Some(KeyAction::OpenAppExpose),
         keysyms::KEY_f | keysyms::KEY_F if control_super => Some(KeyAction::Tile(Tile::Fill)),
         keysyms::KEY_f | keysyms::KEY_F if control_alt => Some(KeyAction::ToggleFullScreen),
         keysyms::KEY_Left if control_alt => Some(KeyAction::Split(Direction::Left)),
@@ -102,8 +115,12 @@ impl State {
                                     None => FilterResult::Forward,
                                 };
                             }
-                            match key_action(modifiers, handle.modified_sym(), state.expansion.open)
-                            {
+                            match key_action(
+                                modifiers,
+                                handle.modified_sym(),
+                                keycode.raw(),
+                                state.expansion.open,
+                            ) {
                                 Some(action) => {
                                     state.suppressed_keys.push(keycode);
                                     FilterResult::Intercept(Some(action))
@@ -126,13 +143,28 @@ impl State {
                             drm.change_vt(vt);
                         }
                     }
+                    Some(KeyAction::SwitchDesktop(_) | KeyAction::GoToDesktop(_))
+                        if self.expansion.app.is_some() => {}
                     Some(KeyAction::SwitchDesktop(direction)) => {
                         self.switch_desktop(direction, event.time())
                     }
+                    Some(KeyAction::GoToDesktop(number)) => {
+                        if let Some(index) =
+                            nth_desktop(number, self.desktops.len(), |index| self.is_desktop(index))
+                        {
+                            self.go_to_desktop(index, event.time());
+                        }
+                    }
                     Some(KeyAction::Tile(tile)) => self.tile(tile),
                     Some(KeyAction::RestoreTiled) => self.restore_tiled(),
-                    Some(KeyAction::OpenExpansion) => self.open_expansion(event.time()),
+                    Some(KeyAction::OpenExpansion) => self.open_expansion(None, event.time()),
                     Some(KeyAction::CloseExpansion) => self.close_expansion(None, event.time()),
+                    Some(KeyAction::Preview) => self.toggle_preview(),
+                    Some(KeyAction::OpenAppExpose) => {
+                        if let Some(window) = self.top_window() {
+                            self.open_expansion(Some(window), event.time());
+                        }
+                    }
                     Some(KeyAction::ToggleFullScreen) => self.toggle_full_screen(),
                     Some(KeyAction::Split(side)) => self.request_split(side),
                     None => {}
@@ -186,6 +218,7 @@ impl State {
                     let picking =
                         expansion_open && state == ButtonState::Released && self.expansion.pressed;
                     self.expansion.pressed = expansion_open && state == ButtonState::Pressed;
+                    self.needs_redraw |= expansion_open;
                     self.expansion.drag_origin =
                         self.expansion.pressed.then(|| pointer.current_location());
                     if picking {
@@ -257,7 +290,7 @@ impl State {
         let now = self.start_time.elapsed();
         let (progress, cancel, last) = match axis {
             swipe::Axis::Vertical if along > 0.0 && !self.expansion.open => {
-                self.open_expansion(time);
+                self.open_expansion(None, time);
                 (self.expansion.at(now).0, 0.0, 1.0)
             }
             swipe::Axis::Vertical if along < 0.0 && self.expansion.open => {
@@ -265,6 +298,7 @@ impl State {
             }
             swipe::Axis::Horizontal
                 if self.expansion.dragged.is_none()
+                    && self.expansion.app.is_none()
                     && !self.seat.get_pointer().unwrap().is_grabbed() =>
             {
                 self.wake_desktops();
@@ -375,11 +409,11 @@ mod tests {
         };
         let backspace = Keysym::new(keysyms::KEY_BackSpace);
         assert_eq!(
-            key_action(&ctrl_alt, backspace, false),
+            key_action(&ctrl_alt, backspace, 0, false),
             Some(KeyAction::Quit)
         );
         assert_eq!(
-            key_action(&ModifiersState::default(), backspace, false),
+            key_action(&ModifiersState::default(), backspace, 0, false),
             None
         );
     }
@@ -397,15 +431,15 @@ mod tests {
         let left = Keysym::new(keysyms::KEY_Left);
         let right = Keysym::new(keysyms::KEY_Right);
         assert_eq!(
-            key_action(&ctrl, left, false),
+            key_action(&ctrl, left, 0, false),
             Some(KeyAction::SwitchDesktop(Direction::Left))
         );
         assert_eq!(
-            key_action(&ctrl, right, false),
+            key_action(&ctrl, right, 0, false),
             Some(KeyAction::SwitchDesktop(Direction::Right))
         );
-        assert_eq!(key_action(&ctrl_shift, left, false), None);
-        assert_eq!(key_action(&ctrl_shift, right, false), None);
+        assert_eq!(key_action(&ctrl_shift, left, 0, false), None);
+        assert_eq!(key_action(&ctrl_shift, right, 0, false), None);
     }
 
     #[test]
@@ -415,7 +449,7 @@ mod tests {
             logo: true,
             ..Default::default()
         };
-        let action = |keysym| key_action(&ctrl_super, Keysym::new(keysym), false);
+        let action = |keysym| key_action(&ctrl_super, Keysym::new(keysym), 0, false);
         assert_eq!(action(keysyms::KEY_f), Some(KeyAction::Tile(Tile::Fill)));
         assert_eq!(action(keysyms::KEY_F), Some(KeyAction::Tile(Tile::Fill)));
         let ctrl_alt = ModifiersState {
@@ -424,7 +458,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            key_action(&ctrl_alt, Keysym::new(keysyms::KEY_f), false),
+            key_action(&ctrl_alt, Keysym::new(keysyms::KEY_f), 0, false),
             Some(KeyAction::ToggleFullScreen)
         );
         assert_eq!(action(keysyms::KEY_C), Some(KeyAction::Tile(Tile::Center)));
@@ -438,6 +472,7 @@ mod tests {
             key_action(
                 &ModifiersState::default(),
                 Keysym::new(keysyms::KEY_f),
+                0,
                 false
             ),
             None
@@ -456,26 +491,100 @@ mod tests {
         let down = Keysym::new(keysyms::KEY_Down);
         let escape = Keysym::new(keysyms::KEY_Escape);
         let left = Keysym::new(keysyms::KEY_Left);
-        assert_eq!(key_action(&ctrl, up, false), Some(KeyAction::OpenExpansion));
-        assert_eq!(key_action(&ctrl, up, true), Some(KeyAction::CloseExpansion));
         assert_eq!(
-            key_action(&ctrl, down, true),
+            key_action(&ctrl, up, 0, false),
+            Some(KeyAction::OpenExpansion)
+        );
+        assert_eq!(
+            key_action(&ctrl, up, 0, true),
             Some(KeyAction::CloseExpansion)
         );
         assert_eq!(
-            key_action(&ModifiersState::default(), escape, true),
+            key_action(&ctrl, down, 0, true),
             Some(KeyAction::CloseExpansion)
         );
-        assert_eq!(key_action(&ctrl, down, false), None);
-        assert_eq!(key_action(&ModifiersState::default(), escape, false), None);
         assert_eq!(
-            key_action(&ctrl_super, up, false),
+            key_action(&ModifiersState::default(), escape, 0, true),
+            Some(KeyAction::CloseExpansion)
+        );
+        assert_eq!(
+            key_action(&ModifiersState::default(), escape, 0, false),
+            None
+        );
+        assert_eq!(
+            key_action(&ctrl_super, up, 0, false),
             Some(KeyAction::Tile(Tile::Top))
         );
-        assert_eq!(key_action(&ctrl_super, up, true), None);
+        assert_eq!(key_action(&ctrl_super, up, 0, true), None);
         assert_eq!(
-            key_action(&ctrl, left, true),
+            key_action(&ctrl, left, 0, true),
             Some(KeyAction::SwitchDesktop(Direction::Left))
+        );
+    }
+
+    #[test]
+    fn ctrl_and_a_digit_row_key_while_expansion_is_open_go_to_that_desktop_whatever_the_layout_and_zero_is_the_tenth()
+     {
+        let ctrl = ModifiersState {
+            ctrl: true,
+            ..Default::default()
+        };
+        let ctrl_shift = ModifiersState {
+            shift: true,
+            ..ctrl
+        };
+        let one = Keysym::new(keysyms::KEY_1);
+        let ampersand = Keysym::new(keysyms::KEY_ampersand);
+        let zero = Keysym::new(keysyms::KEY_0);
+        assert_eq!(
+            key_action(&ctrl, one, 10, true),
+            Some(KeyAction::GoToDesktop(1))
+        );
+        assert_eq!(
+            key_action(&ctrl, ampersand, 10, true),
+            Some(KeyAction::GoToDesktop(1))
+        );
+        assert_eq!(
+            key_action(&ctrl, zero, 19, true),
+            Some(KeyAction::GoToDesktop(10))
+        );
+        assert_eq!(key_action(&ctrl, one, 10, false), None);
+        assert_eq!(key_action(&ctrl_shift, one, 10, true), None);
+        assert_eq!(key_action(&ModifiersState::default(), one, 10, true), None);
+    }
+
+    #[test]
+    fn space_alone_previews_only_while_expansion_is_open() {
+        let space = Keysym::new(keysyms::KEY_space);
+        let ctrl = ModifiersState {
+            ctrl: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            key_action(&ModifiersState::default(), space, 0, true),
+            Some(KeyAction::Preview)
+        );
+        assert_eq!(
+            key_action(&ModifiersState::default(), space, 0, false),
+            None
+        );
+        assert_eq!(key_action(&ctrl, space, 0, true), None);
+    }
+
+    #[test]
+    fn ctrl_down_opens_app_expose_only_while_expansion_is_closed() {
+        let ctrl = ModifiersState {
+            ctrl: true,
+            ..Default::default()
+        };
+        let down = Keysym::new(keysyms::KEY_Down);
+        assert_eq!(
+            key_action(&ctrl, down, 0, false),
+            Some(KeyAction::OpenAppExpose)
+        );
+        assert_eq!(
+            key_action(&ctrl, down, 0, true),
+            Some(KeyAction::CloseExpansion)
         );
     }
 
@@ -483,13 +592,19 @@ mod tests {
     fn xf86_switch_vt_n_switches_to_vt_n() {
         let modifiers = ModifiersState::default();
         assert_eq!(
-            key_action(&modifiers, Keysym::new(keysyms::KEY_XF86Switch_VT_1), false),
+            key_action(
+                &modifiers,
+                Keysym::new(keysyms::KEY_XF86Switch_VT_1),
+                0,
+                false
+            ),
             Some(KeyAction::SwitchVt(1))
         );
         assert_eq!(
             key_action(
                 &modifiers,
                 Keysym::new(keysyms::KEY_XF86Switch_VT_12),
+                0,
                 false
             ),
             Some(KeyAction::SwitchVt(12))

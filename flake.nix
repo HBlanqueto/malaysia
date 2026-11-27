@@ -384,6 +384,13 @@
                     left = round(width / 2 + 16)
                     under_second_thumbnail = [3 * (y * width + x) for y in range(120, 146) for x in range(left, left + 90 * width // height)]
                     assert any(min(data[i:i + 3]) >= 200 for i in under_second_thumbnail), "no name under the second thumbnail"
+                    machine.send_key("ctrl-2")
+                    time.sleep(3)
+                    _, data = screen("no-windows")
+                    capsule = [3 * (y * width + x) for y in range(height * 7 // 20, height * 3 // 4) for x in range(width // 2 - 150, width // 2 + 150)]
+                    assert sum(abs(data[i] - 105) <= 3 and abs(data[i + 2] - 108) <= 3 for i in capsule) > 500, "no capsule on the empty Desktop"
+                    machine.send_key("ctrl-1")
+                    machine.wait_for_text("zebra", timeout=300)
                     point_at(round(width / 2 + 16 + 45 * width / height), 74)
                     click()
                     for _ in range(60):

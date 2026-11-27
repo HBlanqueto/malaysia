@@ -23,7 +23,7 @@ use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 pub use backdrop::Backdrop;
 pub use badge::Badge;
 pub use clip::{Clipped, round_edges};
-pub use label::Name;
+pub use label::{Name, app_id, with_text};
 pub use lines::Lines;
 pub use shadow::Shadow;
 
@@ -39,7 +39,12 @@ pub struct Placement {
     pub desktop_offset: Point<i32, Physical>,
     pub expansion: f64,
     pub ringed: bool,
-    pub titled: bool,
+    pub title: Option<Title>,
+}
+
+pub enum Title {
+    Centred,
+    Below,
 }
 
 pub struct Effects {
@@ -51,6 +56,7 @@ pub struct Effects {
     curve: Curve,
     gap: Id,
     capsule: Id,
+    no_windows: Id,
     split_handle: Id,
     strip: Chrome,
     labels: RefCell<Labels>,
@@ -124,6 +130,7 @@ impl Effects {
             curve: Curve::new(ctdesign::CORNER_WINDOW.smoothing),
             gap: Id::new(),
             capsule: Id::new(),
+            no_windows: Id::new(),
             split_handle: Id::new(),
             strip: Chrome::new(dark),
             labels: RefCell::new(Labels::new()),
@@ -202,7 +209,7 @@ impl Effects {
             desktop_offset,
             expansion,
             ringed,
-            titled,
+            title,
         } = placement;
         let surface = window.toplevel().unwrap().wl_surface();
         let location = (geometry.loc - window.geometry().loc).to_physical_precise_round(scale)
@@ -252,8 +259,10 @@ impl Effects {
                 self.shadow_scheme.inactive,
             )
         };
-        if titled {
-            self.push_title(renderer, surface, shape.bounds, scale, frame);
+        match title {
+            Some(Title::Centred) => self.push_title(renderer, surface, shape.bounds, scale, frame),
+            Some(Title::Below) => self.push_caption(renderer, window, shape.bounds, scale, frame),
+            None => {}
         }
         if ringed {
             frame.push(Element::Lines(Lines::new(

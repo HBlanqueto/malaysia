@@ -54,7 +54,8 @@ own text and "reported" is the press; the measurements give the source.
    from the first changed frame, shows 92 and about 230.
 5. **Strip material:** blur σ 27.5 that sees only the strip, saturation 1.6,
    a gray of 46 at alpha .40 over it and a cap of 169 (dark), a
-   line of alpha .224 on its last row and a soft shadow of 48 below.
+   black line of alpha .224 on the first row below it and a soft shadow of
+   48 below that.
 6. **Hover:** a window under the pointer gets a ring 4 wide in the accent
    colour, at once, with no fade, and its title in a capsule at its centre.
 7. **Pick:** releasing the button on a window raises it at the first frame and
@@ -249,8 +250,20 @@ corner, and the layout has nothing to keep. Each step is one visible result.
 - **I. Text (built).** The names in the strip and the title capsule. Adds
    `cosmic-text`. One texture per label, made when its text, its width
    limit or the scale changes, at physical pixels. The fonts load on a
-   thread at startup. The "No Available Windows" pill waits for its
-   measurement.
+   thread at startup.
+- **J. The rest (built).** Alt+click on a thumbnail and Control+digit go to
+   a Desktop through the same function as Control+arrows and stay. A new
+   Desktop goes after the last Desktop; near "+" its thumbnail shows half
+   at the right edge, and a click slides it into the row while the others
+   recentre on the strip's spring, as macOS measured; a removed one
+   vanishes and the others close up the same way. A thumbnail dragged along the
+   strip reorders the row, and every stored index follows. A window
+   dropped on the half of a full-screen thumbnail joins it in a Split View
+   once both have answered. Space enlarges the window under the pointer.
+   App Exposé is Expansion with one app's windows in a grid and their
+   titles below, without the strip. An empty Desktop shows "No Available
+   Windows" in the title's capsule. Only adding and removing a Desktop
+   were measured on macOS.
 
 How each is proved:
 
@@ -270,9 +283,8 @@ How each is proved:
 - No Dock, so no Dock slide, and the bottom margin of the area is a guess: 99
   above the bottom edge, where it was measured with a Dock of tile 59.
 - No menu bar for the strip to replace.
-- Not planned here: grouping by application, the Space bar preview, App
-  Exposé, Show Desktop, hot corners, more than one display, reordering
-  Spaces, "rearrange by most recent use", Reduce Motion.
+- Not planned here: grouping by application, Show Desktop, hot corners,
+  more than one display, "rearrange by most recent use", Reduce Motion.
 
 ## Not measured
 

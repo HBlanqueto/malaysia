@@ -26,14 +26,12 @@ use smithay::wayland::shm::ShmState;
 
 use crate::drm::Drm;
 use crate::effects::{
-    Backdrop, Badge, Clipped, Effects, Lines, Name, Placement, Shadow, round_edges,
+    Backdrop, Badge, Clipped, Effects, Lines, Name, Placement, Shadow, Title, round_edges,
 };
 use crate::winit::Winit;
 use crate::workspaces::desktops::{Slide, desktop_x, gap, gap_x, stride};
-use crate::workspaces::expansion::Expansion;
-use crate::workspaces::expansion::strip::{
-    add_centre, close_centre, pill, thumbnail, thumbnail_factor,
-};
+use crate::workspaces::expansion::strip::{Hit, add_centre, close_centre, pill};
+use crate::workspaces::expansion::{Expansion, of_app};
 use crate::workspaces::full_screen::{
     Growth, cover, desktop_number, divider, full_screen_window, split_windows,
 };
@@ -97,16 +95,17 @@ pub fn elements(
                 desktop_offset: (desktop_x(expansion.desktop, position, stride), 0).into(),
                 expansion: factor,
                 ringed: false,
-                titled: false,
+                title: None,
             },
             scale,
             main,
             frame,
         );
     }
-    if let (Some(top), Some(geometry)) = (
+    if let (Some(top), Some(geometry), None) = (
         expansion.strip_top(),
         desktops[current].output_geometry(output),
+        &expansion.app,
     ) {
         push_strip(
             renderer,
@@ -122,6 +121,8 @@ pub fn elements(
         .then(|| expansion.window_at(desktops, pointer))
         .flatten()
         .map(|(window, _)| window);
+    let previewed = expansion.previewed.as_ref();
+    let mut no_windows_shown = false;
     let others = desktops
         .iter()
         .enumerate()
@@ -132,8 +133,27 @@ pub fn elements(
         }
         let slot = index + usize::from(vacated.is_some_and(|vacated| index >= vacated));
         let strip_x = desktop_x(slot, position, stride);
-        for (order, window) in desktop.elements().rev().enumerate() {
-            if Some(window) == dragged {
+        if !no_windows_shown
+            && expansion.app.is_none()
+            && expansion.strip_top().is_some()
+            && strip_x.abs() < width
+            && desktop.elements().next().is_none()
+            && let Some(geometry) = desktop.output_geometry(output)
+        {
+            let mut area = round_edges(expansion.area(geometry).to_physical(scale));
+            area.loc.x += strip_x;
+            effects.push_no_windows(renderer, area, scale, frame);
+            no_windows_shown = true;
+        }
+        let in_front = previewed.filter(|_| index == expansion.desktop);
+        let windows = in_front.into_iter().chain(
+            desktop
+                .elements()
+                .rev()
+                .filter(|window| Some(*window) != in_front),
+        );
+        for window in windows {
+            if Some(window) == dragged || !of_app(window, expansion.app.as_ref()) {
                 continue;
             }
             let grown = growth.filter(|growth| growth.window == *window);
@@ -148,7 +168,7 @@ pub fn elements(
             let Some(geometry) = desktop.element_geometry(window) else {
                 continue;
             };
-            let main = index == current && order == 0;
+            let main = index == current && desktop.elements().next_back() == Some(window);
             let (geometry, factor) = match grown {
                 Some(growth) => cover(growth.drawn(geometry.to_f64()), geometry.size),
                 None => {
@@ -156,6 +176,8 @@ pub fn elements(
                     (Rectangle::new(loc.to_i32_round(), geometry.size), factor)
                 }
             };
+            let moving = expansion.preview_moving(window);
+            let still = expansion.at_rest() && !moving;
             effects.push_window(
                 renderer,
                 window,
@@ -163,8 +185,12 @@ pub fn elements(
                     geometry,
                     desktop_offset: (x, 0).into(),
                     expansion: factor,
-                    ringed: Some(window) == hovered,
-                    titled: Some(window) == hovered && expansion.at_rest(),
+                    ringed: Some(window) == hovered && !moving,
+                    title: if expansion.app.is_some() {
+                        still.then_some(Title::Below)
+                    } else {
+                        (Some(window) == hovered && still).then_some(Title::Centred)
+                    },
                 },
                 scale,
                 main,
@@ -221,11 +247,14 @@ fn push_strip(
         round_edges(Rectangle::new(rectangle.loc + shift, rectangle.size).to_physical(scale))
     };
     let bar = on_screen(Rectangle::from_size(Size::from((output.w, strip.height()))));
-    let ring = (strip.grown && strip.motion.is_none())
-        .then(|| on_screen(thumbnail(row.current, count, output)));
-    let close = strip
-        .hovered
-        .map(|index| (close_centre(thumbnail(index, count, output)) + shift).to_physical(scale));
+    let placed = |index: usize| strip.placed(index, count, output, row.pointer.x);
+    let ring = (strip.grown && strip.motion.is_none()).then(|| on_screen(placed(row.current)));
+    let close = strip.close().map(|index| {
+        let pressed = row.expansion.pressed
+            && strip.hit(row.pointer - shift, count, output) == Some(Hit::Close(index));
+        let centre = close_centre(strip.thumbnail(index, count, output)) + shift;
+        (centre.to_physical(scale), pressed)
+    });
     effects.push_strip_controls(ring, close, scale, frame);
     let is_desktop = |index: usize| full_screen_window(&row.desktops[index]).is_none();
     let cells = (0..count).map(|index| {
@@ -243,7 +272,7 @@ fn push_strip(
             })
             .unwrap_or_else(|| Name::Desktop(desktop_number(index, is_desktop)));
         let cell = on_screen(if strip.grown {
-            thumbnail(index, count, output)
+            placed(index)
         } else {
             pill(index, count, output)
         });
@@ -251,9 +280,13 @@ fn push_strip(
     });
     effects.push_desktop_names(renderer, cells, strip.grown, bar, scale, frame);
     if strip.grown {
-        let factor = thumbnail_factor(output);
-        for (index, desktop) in row.desktops.iter().enumerate() {
-            let whole = on_screen(thumbnail(index, count, output));
+        let moving = strip.moving.map(|(from, _)| from);
+        let others = (0..count).filter(|&index| Some(index) != moving);
+        for index in moving.into_iter().chain(others) {
+            let desktop = &row.desktops[index];
+            let thumbnail = placed(index);
+            let factor = thumbnail.size.h / output.h;
+            let whole = on_screen(thumbnail);
             let Some(clip) = whole.intersection(bar) else {
                 continue;
             };
@@ -264,7 +297,7 @@ fn push_strip(
                         desktop_offset: whole.loc,
                         expansion: factor,
                         ringed: false,
-                        titled: false,
+                        title: None,
                     };
                     effects.push_thumbnail(renderer, window, placement, clip, scale, frame);
                 }
@@ -272,9 +305,12 @@ fn push_strip(
             effects.push_backdrop(index, clip, !is_desktop(index), frame);
         }
     }
+    let preview = strip
+        .preview(output)
+        .and_then(|preview| on_screen(preview).intersection(bar));
     let add = (add_centre(strip.growth, output) + shift).to_physical(scale);
     let pill = (!strip.grown).then(|| on_screen(pill(row.current, count, output)));
-    effects.push_strip_bar(bar, add, pill, scale, frame);
+    effects.push_strip_bar(bar, add, preview, pill, scale, frame);
 }
 
 pub enum Backend {

@@ -118,6 +118,16 @@ of another Desktop moves there, one dropped on "+" gets a new Desktop, and
 one released anywhere else returns to its slot. The window under the pointer gets a ring in
 the accent colour and its title in a capsule, and Ctrl+Left and Ctrl+Right slide the spread windows to
 the next Desktop while the strip stays.
+Inside Expansion, Alt+click on a thumbnail or Ctrl with a digit goes to that
+Desktop and stays; near "+" a new Desktop peeks in from the right edge and a
+click slides it into the row, after the last Desktop and before the
+full-screen Spaces; a
+thumbnail dragged along the strip changes the order; a window dropped on
+the half of a full-screen thumbnail makes a Split View with it; Space
+enlarges the window under the pointer and Space again returns it; an empty
+Desktop says "No Available Windows". Ctrl+Down, with Expansion closed,
+spreads only the windows of the app in front, with their titles below
+them (App Exposé), and Ctrl+Down, Ctrl+Up or Escape ends it.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
 shadow in the light scheme; without it they are dark. It is temporary, until
@@ -165,7 +175,8 @@ compositor directly on the virtual GPU, types into a terminal, moves the mouse
 and checks the cursor, switches to another VT and back, types again, opens and closes a menu in a
 text editor, sends it to full screen and back, makes a Split View and drags
 its divider, opens Expansion by request and with three fingers on a virtual
-touchpad, goes to a second Desktop by its thumbnail and by a swipe, and
+touchpad, adds a Desktop and finds the "No Available Windows" capsule there
+after Ctrl+2, goes to that Desktop by its thumbnail and by a swipe, and
 quits. A second machine, whose display reports a small
 1600x900 panel, checks that the compositor picks a scale of 5/3 and that the
 cursor and a terminal are drawn at it.

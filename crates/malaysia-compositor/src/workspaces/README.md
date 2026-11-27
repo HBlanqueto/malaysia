@@ -64,9 +64,10 @@ The proposal keeps the `Vec` and gives each entry one more field:
   closes and the close button of Expansion all use it.
 
 No identifier per Desktop is needed. A full-screen Space is inserted right
-after the current entry, and its window returns to the nearest Desktop,
-looking left first and then right. As long as the row is not reordered that
-is the Desktop it came from, as on macOS.
+after the current entry, a new Desktop right after the last Desktop, and a
+full-screen window returns to the nearest Desktop, looking left first and
+then right. As long as the row is not reordered in Expansion that is the
+Desktop it came from, as on macOS.
 
 Two rules of step 16 ended when Expansion's strip brought the "+" (step D):
 Control+Right no longer adds a Desktop, and an empty Desktop is no longer

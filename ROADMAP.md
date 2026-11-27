@@ -26,14 +26,17 @@ the accent colour, and Ctrl+Left and Ctrl+Right slide the spread windows to
 the next Desktop while the strip stays, and the windows of Expansion move
 to their slots with its spring whenever the arrangement changes, and the
 strip names every Desktop and the window under the pointer shows its
-title, and the strip is a material that blurs what is behind it. Of
-Expansion only the swipes are left, which need a real touchpad. A window
+title, and the strip is a material that blurs what is behind it. A window
 that asks for full screen gets a Space of its own in the row, and
 `malaysia-expansion` opens or closes Expansion for a launcher, and Ctrl+Alt+F
 sends the window in front to full screen and back, growing in place while
 the row slides, and Ctrl+Alt+Left or Right puts two windows side by side in
 a Split View whose divider is dragged, and three fingers on a touchpad
-open Expansion and slide the row. The row of workspaces of the proposal is
+open Expansion and slide the row, and the rest of Expansion is built: Alt+click
+and Ctrl+digit switch inside it, a new Desktop opens as a preview by "+" and
+goes before the full-screen Spaces, thumbnails are reordered and take a
+dropped window into a Split View, Space enlarges a window, Ctrl+Down shows
+the windows of one app, and an empty Desktop says so. The row of workspaces of the proposal is
 built; what is left of it is in «Known gaps». The proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
@@ -88,6 +91,7 @@ scale of 5/3):
 | 35 | Split View with a key | Ctrl+Alt+Left or Right puts the window in front on that half of a full-screen Space and the window below it on the other, with a black divider of 12; when one leaves or closes, the other stays full screen alone | done |
 | 36 | The divider of Split View | dragging the divider resizes both tiles, a tile stops at 87, a double-click makes the halves equal, and a handle on it shows which side is active | done |
 | 37 | Three-finger swipes | on a touchpad, three fingers up open Expansion and down close it, sideways slide to the next entry of the row, all following the fingers and handing their speed to the springs on release | done |
+| 38 | The rest of Expansion | Alt+click on a thumbnail switches and stays; Ctrl+digit goes to that Desktop; near "+" a new Desktop peeks in at the right edge and slides into the row on a click, after the last Desktop and before the full-screen Spaces; thumbnails are reordered by dragging, and a removed one closes up the row; a window dropped on a full-screen thumbnail makes a Split View; Space enlarges the window under the pointer; Ctrl+Down shows the windows of the front app (App Exposé); an empty Desktop says "No Available Windows" | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -454,14 +458,28 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   Expansion moves, with no fade. Its capsule is a flat gray 244 at alpha
   .365, which gives the one pixel measured over yellow; macOS draws a light
   material there. A title wider than its window ends in an ellipsis. An
-  empty Desktop shows no "No Available Windows" pill: its look is not
-  measured.
+  empty Desktop shows "No Available Windows", in English, in the same
+  capsule, as only one capsule a frame: sliding between two empty Desktops
+  shows it on the current one. macOS's look for it is not measured.
+- Space enlarges the window under the pointer to at most its own size inside
+  the area, with Expansion's spring, and Space again returns it; picking an
+  enlarged window snaps it back to its slot first. The size and motion of
+  macOS's preview are not measured.
+- Ctrl+Down, with Expansion closed, shows the windows of the front window's
+  app on the current Desktop, matched by `app_id` (by client when it has
+  none), in a grid of ⌈√n⌉ columns 40 apart with the last row centred, at
+  one scale up to 1, each with its title in white below it, and no strip.
+  macOS measured four windows in a 2×2 grid at .768, where this gives
+  about .81 for four 1200×800 windows, their titles kept inside the area; other counts, and how macOS hides
+  the other apps, are not measured. The key is taken from apps, as Ctrl+Up
+  is. Ctrl+arrows, digits and swipes sideways do nothing in it.
 - The strip slides with Expansion's spring, half way at 67 ms, where macOS
   measured 47 to 58 on entry.
 - The ring of the current thumbnail and the hover ring are BarrierKit's
   accent, not macOS's blue.
-  The cross of the close button and the colour of the strip's last line are
-  not measured.
+  The cross of the close button is not measured. The close button shows 1 s
+  after the pointer enters a thumbnail and dims while pressed, as measured.
+  The black line under the strip is on the first row below it.
 - Thumbnails have no shadow and no frame lines.
 - More Spaces than fit run off both sides of the strip's row.
 - Every client draws at full rate while the thumbnails show.
@@ -470,12 +488,24 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   opens, until the pointer moves.
 - The windows of a removed Desktop land above the heir's, and the top one
   takes the focus at close.
-- Adding or removing a Space is not animated.
+- Adding and removing a Desktop move the row on the strip's spring, as
+  measured: a new thumbnail slides in from the right edge at full size
+  while the others recentre, and a removed one vanishes at once while the
+  others close up. Before the click, with the strip grown and the pointer
+  within 80 of the right edge, the new Desktop's thumbnail shows half,
+  centred on the edge, and the row stays; that preview, its reach and its
+  motion are guesses, as macOS's is not measured, and only the last
+  Desktop's removal was. A Space removed by its client while a new Desktop
+  docks or peeks makes the row jump for a frame. A new Desktop goes after the last Desktop and
+  before the full-screen Spaces after it. A plain click on another
+  Desktop's thumbnail closes Expansion into it with no slide (measured
+  with low confidence).
 - The hover ring is 4 wide at every window scale (macOS was measured at .93
   only), starts at the window's edge over its outer line, and shows while
   windows move. Nested, it stays when the pointer leaves the host's window.
-- Ctrl+Left and Ctrl+Right are ignored while a window is dragged in
-  Expansion, and there is no Control+digit. A click during their slide picks
+- Ctrl+Left, Ctrl+Right, Ctrl+digit and Alt+click are ignored while a
+  window is dragged in Expansion; digits are read by key position, so
+  every layout uses its top row. A click during their slide picks
   by the slot at rest. A Desktop still sliding out as Expansion opens, or an
   arrow pressed while the strip grows, can show slots of its last Expansion.
   During that slide the black band
@@ -497,10 +527,13 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   Expansion stays open after a drop. The window lands at its old
   frame, on top of the other Desktop. Escape mid-drag closes
   Expansion. The window stays in its own thumbnail during the drag.
-- Split View is made only by its key: the window in front takes the half
+- Split View is made by its key, where the window in front takes the half
   of the arrow and the next window below it on the same Desktop, not a
-  dialog, the other; macOS makes it from the green button's menu or by a
-  drag in Mission Control. Each window is told it is tiled on all four
+  dialog, the other, or by dropping a window in Expansion on the thumbnail
+  of a full-screen Space, on the half under the pointer, where Expansion
+  stays open; macOS also makes it from the green button's menu. A dropped
+  window that never answers leaves the full-screen one at half width
+  until the next Split View is made or the dropped one closes. Each window is told it is tiled on all four
   edges, with its tile's size, and not full screen; a client that keeps
   another width, as `foot` rounding to its cells, moves the gap off 12.
   While one of the two has not answered, the other waits at its own
@@ -513,8 +546,11 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   kept in pixels, so a change of the display's mode keeps it. A
   double-click on another Split View's divider at the same place within
   the interval also counts.
-- There is no drop onto a full-screen Space (Split View) and no reordering of
-  thumbnails.
+- Thumbnails are reordered by dragging them, Desktops and full-screen
+  Spaces alike; the others snap to their new place with no motion, which
+  macOS's is not measured. After a reorder a window leaving full screen
+  goes to the nearest Desktop on its left, which may not be the one it
+  came from.
 - A resize of the display while Expansion is open keeps the old slots.
 - A slot can pass the margin of Expansion's area by 2 at the sides and 3 at
   the top and bottom, which is the slack of the fit.
@@ -523,6 +559,14 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- The rest of Expansion (step 38): nested, at scales 1 and 5/3, with
+  `foot` (Alt+click, Ctrl+1, the preview by "+" growing, withdrawing and
+  docking, a new Desktop before a full-screen Space, a reorder, a drop
+  into a Split View, Space, App Exposé with two apps, the empty Desktop's
+  capsule), and the machine check, where Ctrl+2 shows that capsule on the
+  new Desktop and Ctrl+1 returns. Not checked: directly on a display, a
+  non-US layout, GTK 4 and Qt in a dropped Split View, a dropped client
+  that never answers.
 - Three-finger swipes (step 37): only in the machine check, with a virtual
   touchpad made with uinput, which swipes up, down, right and left, and by
   the tests of the tracker. Not checked: a real touchpad, its feel, and a

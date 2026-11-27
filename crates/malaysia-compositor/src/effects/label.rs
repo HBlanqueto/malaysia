@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fmt::Write;
 use std::thread::{self, JoinHandle};
 
@@ -7,10 +8,11 @@ use cosmic_text::{
 };
 use ctdesign::{Font, Rgba};
 use smithay::backend::allocator::Fourcc;
-use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
 use smithay::backend::renderer::element::utils::CropRenderElement;
+use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+use smithay::desktop::Window;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use smithay::wayland::compositor::with_states;
@@ -22,6 +24,7 @@ use crate::workspaces::desktops::MAX_DESKTOPS;
 
 const DESKTOP: &str = "Desktop";
 const JOINED: &str = " and ";
+const NO_WINDOWS: &str = "No Available Windows";
 
 pub enum Name<'a> {
     Desktop(usize),
@@ -52,6 +55,7 @@ pub struct Labels {
     fonts: Fonts,
     names: [[Label; MAX_DESKTOPS]; 2],
     title: Label,
+    empty: Label,
 }
 
 fn fit(pixels: i32, scale: f64) -> (i32, i32) {
@@ -71,7 +75,7 @@ fn names_pair(text: &str, left: &str, right: &str) -> bool {
         == Some(right)
 }
 
-fn with_text<T>(
+pub fn with_text<T>(
     surface: &WlSurface,
     pick: fn(&XdgToplevelSurfaceRoleAttributes) -> Option<&str>,
     then: impl FnOnce(&str) -> T,
@@ -98,6 +102,10 @@ fn copy_text(
             label.made_for = None;
         }
     })
+}
+
+pub fn app_id(data: &XdgToplevelSurfaceRoleAttributes) -> Option<&str> {
+    data.app_id.as_deref()
 }
 
 fn app_name(data: &XdgToplevelSurfaceRoleAttributes) -> Option<&str> {
@@ -206,6 +214,26 @@ impl Fonts {
         }
         label.drawn.as_ref()
     }
+
+    fn title<'a>(
+        &mut self,
+        label: &'a mut Label,
+        renderer: &mut GlesRenderer,
+        surface: &WlSurface,
+        color: Rgba,
+        limit: i32,
+        scale: f64,
+    ) -> Option<&'a Text> {
+        copy_text(label, surface, |data| data.title.as_deref())?;
+        self.refresh(
+            label,
+            renderer,
+            ctdesign::EXPANSION_TITLE_FONT,
+            color,
+            limit,
+            scale,
+        )
+    }
 }
 
 impl Labels {
@@ -218,6 +246,10 @@ impl Labels {
             },
             names: Default::default(),
             title: Label::default(),
+            empty: Label {
+                text: NO_WINDOWS.to_owned(),
+                ..Label::default()
+            },
         }
     }
 
@@ -263,24 +295,6 @@ impl Labels {
             scale,
         )
     }
-
-    fn title(
-        &mut self,
-        renderer: &mut GlesRenderer,
-        surface: &WlSurface,
-        limit: i32,
-        scale: f64,
-    ) -> Option<&Text> {
-        copy_text(&mut self.title, surface, |data| data.title.as_deref())?;
-        self.fonts.refresh(
-            &mut self.title,
-            renderer,
-            ctdesign::EXPANSION_TITLE_FONT,
-            ctdesign::EXPANSION_TITLE_COLOR,
-            limit,
-            scale,
-        )
-    }
 }
 
 impl Text {
@@ -312,21 +326,91 @@ impl Effects {
         scale: f64,
         frame: &mut Vec<Element>,
     ) {
+        self.push_capsule(&self.capsule, window, scale, frame, |labels, limit| {
+            labels.fonts.title(
+                &mut labels.title,
+                renderer,
+                surface,
+                ctdesign::EXPANSION_TITLE_COLOR,
+                limit,
+                scale,
+            )
+        });
+    }
+
+    pub fn push_caption(
+        &self,
+        renderer: &mut GlesRenderer,
+        window: &Window,
+        bounds: Rectangle<i32, Physical>,
+        scale: f64,
+        frame: &mut Vec<Element>,
+    ) {
+        let mut caption = window
+            .user_data()
+            .get_or_insert(|| RefCell::new(Label::default()))
+            .borrow_mut();
+        let mut labels = self.labels.borrow_mut();
+        let Some(text) = labels.fonts.title(
+            &mut caption,
+            renderer,
+            window.toplevel().unwrap().wl_surface(),
+            ctdesign::EXPANSION_CAPTION_COLOR,
+            bounds.size.w,
+            scale,
+        ) else {
+            return;
+        };
+        let gap = pixels(f64::from(ctdesign::SPACES_LABEL_GAP), scale);
+        let location = Point::from((
+            bounds.loc.x + (bounds.size.w - text.pixels.w) / 2,
+            bounds.loc.y + bounds.size.h + gap,
+        ));
+        frame.extend(text.element(location, Rectangle::new(location, text.pixels), scale));
+    }
+
+    pub fn push_no_windows(
+        &self,
+        renderer: &mut GlesRenderer,
+        area: Rectangle<i32, Physical>,
+        scale: f64,
+        frame: &mut Vec<Element>,
+    ) {
+        self.push_capsule(&self.no_windows, area, scale, frame, |labels, limit| {
+            labels.fonts.refresh(
+                &mut labels.empty,
+                renderer,
+                ctdesign::EXPANSION_TITLE_FONT,
+                ctdesign::EXPANSION_TITLE_COLOR,
+                limit,
+                scale,
+            )
+        });
+    }
+
+    fn push_capsule(
+        &self,
+        id: &Id,
+        area: Rectangle<i32, Physical>,
+        scale: f64,
+        frame: &mut Vec<Element>,
+        text: impl FnOnce(&mut Labels, i32) -> Option<&Text>,
+    ) {
         let padding = pixels(f64::from(ctdesign::EXPANSION_TITLE_PADDING), scale);
-        let limit = window.size.w - 2 * padding;
+        let limit = area.size.w - 2 * padding;
         if limit <= 0 {
             return;
         }
         let mut labels = self.labels.borrow_mut();
-        let Some(text) = labels.title(renderer, surface, limit, scale) else {
+        let Some(text) = text(&mut labels, limit) else {
             return;
         };
         let height = pixels(f64::from(ctdesign::EXPANSION_TITLE_HEIGHT), scale);
-        let size = Size::from(((text.pixels.w + 2 * padding).min(window.size.w), height));
-        let capsule = Rectangle::new(centred(size, window), size);
-        frame.extend(text.element(centred(text.pixels, capsule), window, scale));
+        let size = Size::from(((text.pixels.w + 2 * padding).min(area.size.w), height));
+        let capsule = Rectangle::new(centred(size, area), size);
+        frame.extend(text.element(centred(text.pixels, capsule), area, scale));
         frame.push(Element::Badge(Badge::new(
-            self.capsule.clone(),
+            id.clone(),
             self.shape(capsule, height as f32 / 2.0),
             ctdesign::EXPANSION_TITLE_FILL.premultiplied(),
             Rgba::TRANSPARENT.premultiplied(),

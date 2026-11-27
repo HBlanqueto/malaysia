@@ -64,11 +64,16 @@ impl Effects {
     pub fn push_strip_controls(
         &self,
         ring: Option<Rectangle<i32, Physical>>,
-        close: Option<Point<f64, Physical>>,
+        close: Option<(Point<f64, Physical>, bool)>,
         scale: f64,
         frame: &mut Vec<Element>,
     ) {
-        if let Some(centre) = close {
+        if let Some((centre, pressed)) = close {
+            let color = if pressed {
+                ctdesign::SPACES_CLOSE_PRESSED_COLOR
+            } else {
+                ctdesign::SPACES_CLOSE_COLOR
+            };
             let size = pixels(f64::from(ctdesign::SPACES_CLOSE_SIZE), scale);
             let half = f64::from(size) / 2.0;
             let bounds = Rectangle::new(
@@ -78,7 +83,7 @@ impl Effects {
             frame.push(Element::Badge(Badge::new(
                 self.strip.close.clone(),
                 self.shape(bounds, half as f32),
-                ctdesign::SPACES_CLOSE_COLOR.premultiplied(),
+                color.premultiplied(),
                 ctdesign::SPACES_CLOSE_CROSS_COLOR.premultiplied(),
                 ctdesign::SPACES_CLOSE_CROSS_SIZE as f32 * scale as f32 * FRAC_1_SQRT_2,
                 ctdesign::SPACES_CLOSE_CROSS_STROKE * scale as f32,
@@ -192,12 +197,16 @@ impl Effects {
         &self,
         strip: Rectangle<i32, Physical>,
         add: Point<f64, Physical>,
+        preview: Option<Rectangle<i32, Physical>>,
         pill: Option<Rectangle<i32, Physical>>,
         scale: f64,
         frame: &mut Vec<Element>,
     ) {
         for (id, bar) in self.strip.add.iter().zip(plus_bars(add, scale)) {
             frame.push(solid(id, bar, ctdesign::SPACES_ADD_COLOR));
+        }
+        if let Some(preview) = preview {
+            self.push_backdrop(MAX_DESKTOPS, preview, false, frame);
         }
         if let Some(pill) = pill {
             let lift = ctdesign::SPACES_LABEL_PILL_LIFT;
@@ -215,7 +224,7 @@ impl Effects {
         frame.push(solid(
             &self.strip.line,
             Rectangle::new(
-                strip.loc + Point::from((0, strip.size.h - line)),
+                strip.loc + Point::from((0, strip.size.h)),
                 (strip.size.w, line).into(),
             ),
             ctdesign::SPACES_STRIP_LINE,
@@ -231,7 +240,7 @@ impl Effects {
         });
         let wider = Rectangle::new(
             strip.loc - Point::from((strip.size.w, 0)),
-            (3 * strip.size.w, strip.size.h).into(),
+            (3 * strip.size.w, strip.size.h + line).into(),
         );
         frame.push(Element::Shadow(Shadow::new(
             self.strip.shadow.clone(),

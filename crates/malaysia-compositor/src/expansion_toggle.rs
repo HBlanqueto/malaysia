@@ -39,7 +39,7 @@ impl Dispatch2<LimitlessExpansionV1, State> for ExpansionToggle {
             if state.expansion.open {
                 state.close_expansion(None, InputTime::now());
             } else {
-                state.open_expansion(InputTime::now());
+                state.open_expansion(None, InputTime::now());
             }
         }
     }
