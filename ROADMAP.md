@@ -31,7 +31,8 @@ Expansion only the swipes are left, which need a real touchpad. A window
 that asks for full screen gets a Space of its own in the row, and
 `malaysia-expansion` opens or closes Expansion for a launcher, and Ctrl+Alt+F
 sends the window in front to full screen and back, growing in place while
-the row slides. Next is Split View; the proposal is in
+the row slides, and Ctrl+Alt+Left or Right puts two windows side by side in
+a Split View. Next is dragging its divider; the proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -82,6 +83,7 @@ scale of 5/3):
 | 32 | Expansion from a launcher | `malaysia-expansion` opens Expansion, or closes it, through the private protocol `limitless_expansion_v1`; the package installs it with a desktop entry named Expansion, for the launcher and the Dock to come | done |
 | 33 | A key for full screen | Ctrl+Alt+F sends the window in front to full screen and back, as macOS's Control+Command+F; the app is not told the key | done |
 | 34 | The full-screen transition | a window going full screen grows in place from its frame to the display while the row slides to its Space, and shrinks back to its frame while the row slides back, with macOS's spring | done |
+| 35 | Split View with a key | Ctrl+Alt+Left or Right puts the window in front on that half of a full-screen Space and the window below it on the other, with a black divider of 12; when one leaves or closes, the other stays full screen alone | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -487,6 +489,17 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   Expansion stays open after a drop. The window lands at its old
   frame, on top of the other Desktop. Escape mid-drag closes
   Expansion. The window stays in its own thumbnail during the drag.
+- Split View is made only by its key: the window in front takes the half
+  of the arrow and the next window below it on the same Desktop, not a
+  dialog, the other; macOS makes it from the green button's menu or by a
+  drag in Mission Control. Each window is told it is tiled on all four
+  edges, with its tile's size, and not full screen; a client that keeps
+  another width, as `foot` rounding to its cells, moves the gap off 12.
+  While one of the two has not answered, the other waits at its own
+  place; the key pressed again then sends both back. The strip names the
+  Space with both `app_id`s joined by "and", in English. A tile that would
+  be narrower than 87, or a window that does not fit its tile, makes the
+  key do nothing. The divider has no handle and cannot be dragged yet.
 - There is no drop onto a full-screen Space (Split View) and no reordering of
   thumbnails.
 - A resize of the display while Expansion is open keeps the old slots.
@@ -497,6 +510,11 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Split View with a key (step 35): nested, at scales 1 and 5/3, with
+  `foot` (the tiles, the divider, the strip's name, leaving, closing, a
+  partner that never answers, three windows), and the machine check with
+  a terminal and the text editor. Not checked: directly on a display, a
+  GTK 4 or Qt app in a tile.
 - The full-screen transition (step 34): nested, at scales 1 and 5/3, with
   `foot`, where the window's box was followed over time, and the machine
   check. Not checked: directly on a display, where its smoothness can only

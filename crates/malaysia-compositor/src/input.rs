@@ -26,6 +26,7 @@ enum KeyAction {
     OpenExpansion,
     CloseExpansion,
     ToggleFullScreen,
+    Split(Direction),
 }
 
 fn key_action(
@@ -51,6 +52,8 @@ fn key_action(
         keysyms::KEY_Up if control_only => Some(KeyAction::OpenExpansion),
         keysyms::KEY_f | keysyms::KEY_F if control_super => Some(KeyAction::Tile(Tile::Fill)),
         keysyms::KEY_f | keysyms::KEY_F if control_alt => Some(KeyAction::ToggleFullScreen),
+        keysyms::KEY_Left if control_alt => Some(KeyAction::Split(Direction::Left)),
+        keysyms::KEY_Right if control_alt => Some(KeyAction::Split(Direction::Right)),
         keysyms::KEY_c | keysyms::KEY_C if control_super => Some(KeyAction::Tile(Tile::Center)),
         keysyms::KEY_Left if control_super => Some(KeyAction::Tile(Tile::Left)),
         keysyms::KEY_Right if control_super => Some(KeyAction::Tile(Tile::Right)),
@@ -121,6 +124,7 @@ impl State {
                     Some(KeyAction::OpenExpansion) => self.open_expansion(event.time()),
                     Some(KeyAction::CloseExpansion) => self.close_expansion(None, event.time()),
                     Some(KeyAction::ToggleFullScreen) => self.toggle_full_screen(),
+                    Some(KeyAction::Split(side)) => self.request_split(side),
                     None => {}
                 }
             }

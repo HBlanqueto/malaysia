@@ -238,6 +238,23 @@
                     time.sleep(2)
                     _, data = screen("expansion-closed-by-request")
                     assert data[:3] == bytes([25, 25, 31]), "malaysia-expansion did not close Expansion"
+                    machine.send_key("ctrl-alt-right")
+                    time.sleep(3)
+                    width, data = screen("split-view")
+                    height = len(data) // 3 // width
+                    middle = 3 * (height // 2 * width + width // 2)
+                    assert data[middle:middle + 3] == bytes([0, 0, 0]), "no black divider in the middle of a Split View"
+                    point_at(width // 4, height // 2)
+                    click()
+                    time.sleep(1)
+                    machine.send_key("ctrl-alt-f")
+                    time.sleep(3)
+                    machine.send_key("ctrl-right")
+                    time.sleep(2)
+                    machine.send_key("ctrl-alt-f")
+                    time.sleep(3)
+                    _, data = screen("split-view-left")
+                    assert data[:3] == bytes([25, 25, 31]), "Split View did not end"
                     machine.send_key("ctrl-up")
                     time.sleep(2)
                     width, data = screen("strip")

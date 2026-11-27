@@ -10,7 +10,7 @@ use crate::spring::{Motion, rests};
 use crate::state::State;
 use crate::window_grab::{Drag, WindowGrab};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Direction {
     Left,
     Right,

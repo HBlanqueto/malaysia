@@ -33,7 +33,9 @@ use crate::workspaces::expansion::Expansion;
 use crate::workspaces::expansion::strip::{
     add_centre, close_centre, pill, thumbnail, thumbnail_factor,
 };
-use crate::workspaces::full_screen::{Growth, cover, desktop_number, full_screen_window};
+use crate::workspaces::full_screen::{
+    Growth, cover, desktop_number, full_screen_window, split_windows,
+};
 
 render_elements! {
     pub Element<=GlesRenderer>;
@@ -216,10 +218,19 @@ fn push_strip(
     effects.push_strip_controls(ring, close, scale, frame);
     let is_desktop = |index: usize| full_screen_window(&row.desktops[index]).is_none();
     let cells = (0..count).map(|index| {
-        let name = match full_screen_window(&row.desktops[index]) {
-            Some(window) => Name::App(window.toplevel().unwrap().wl_surface()),
-            None => Name::Desktop(desktop_number(index, is_desktop)),
-        };
+        let entry = &row.desktops[index];
+        let name = split_windows(entry)
+            .map(|(left, right)| {
+                Name::Split(
+                    left.toplevel().unwrap().wl_surface(),
+                    right.toplevel().unwrap().wl_surface(),
+                )
+            })
+            .or_else(|| {
+                full_screen_window(entry)
+                    .map(|window| Name::App(window.toplevel().unwrap().wl_surface()))
+            })
+            .unwrap_or_else(|| Name::Desktop(desktop_number(index, is_desktop)));
         let cell = on_screen(if strip.grown {
             thumbnail(index, count, output)
         } else {

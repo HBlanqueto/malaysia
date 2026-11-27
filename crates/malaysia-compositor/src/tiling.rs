@@ -60,6 +60,15 @@ fn within_limits(
     within(size.w, min.w, max.w) && within(size.h, min.h, max.h)
 }
 
+pub fn fits(window: &Window, size: Size<i32, Logical>) -> bool {
+    let (min, max) = with_states(window.toplevel().unwrap().wl_surface(), |states| {
+        let mut guard = states.cached_state.get::<SurfaceCachedState>();
+        let cached = guard.current();
+        (cached.min_size, cached.max_size)
+    });
+    within_limits(size, min, max)
+}
+
 impl State {
     pub fn tile(&mut self, tile: Tile) {
         let Some((window, frame)) = self.tiling_target() else {
@@ -69,12 +78,7 @@ impl State {
             return;
         };
         let target = tiled_frame(free, frame.size, tile);
-        let (min, max) = with_states(window.toplevel().unwrap().wl_surface(), |states| {
-            let mut guard = states.cached_state.get::<SurfaceCachedState>();
-            let cached = guard.current();
-            (cached.min_size, cached.max_size)
-        });
-        if !within_limits(target.size, min, max) {
+        if !fits(&window, target.size) {
             return;
         }
         if tile != Tile::Center {

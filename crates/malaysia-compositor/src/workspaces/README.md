@@ -5,7 +5,8 @@ Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
 This file is a proposal. Of its steps only A, full screen from a client's
-request, in `full_screen.rs`, B, its key, G, its transition, C, Expansion on a key, D, its
+request, in `full_screen.rs`, B, its key, G, its transition, J, Split View
+with a key, C, Expansion on a key, D, its
 strip, E, the drag of a window to a Space, F, the hover ring and
 Control+arrows while Expansion is open, and I, its text, are built, in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
 Desktops as they are today.
@@ -212,7 +213,7 @@ them, and steps A and B need none. Each is one visible result.
 | G | The full-screen transition (built) | the window grows while the row slides | A, `spring.rs` |
 | H | Swipes with three fingers | Expansion and the slide follow the fingers | C; a real touchpad |
 | I | Text with `cosmic-text` (built) | names in the strip, the title of a hovered window | D |
-| J | Split View with a key | two windows side by side in one Space | A |
+| J | Split View with a key: Control+Alt+Left or Right (built) | two windows side by side in one Space | A |
 | K | The divider | dragging it resizes both windows | J |
 
 Steps C, D, E, F, H and I are described in

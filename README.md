@@ -97,6 +97,9 @@ key, or Ctrl+Alt+F for the window in front) fills the display on a Space of
 its own, right after its Desktop in the
 row, growing in place while the row slides, and shrinks back to its frame
 when it leaves.
+Ctrl+Alt+Left or Right puts the window in front on that half of a
+full-screen Space and the window below it on the other, a black divider
+between them; when one leaves or closes, the other stays full screen alone.
 `malaysia-expansion`, a second program of the package, opens Expansion or
 closes it, as Ctrl+Up does, through the private protocol
 `limitless_expansion_v1`; the package installs it with a desktop entry,

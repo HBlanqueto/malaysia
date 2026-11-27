@@ -21,10 +21,12 @@ use crate::state::Element;
 use crate::workspaces::desktops::MAX_DESKTOPS;
 
 const DESKTOP: &str = "Desktop";
+const JOINED: &str = " and ";
 
 pub enum Name<'a> {
     Desktop(usize),
     App(&'a WlSurface),
+    Split(&'a WlSurface, &'a WlSurface),
 }
 
 pub struct Text {
@@ -63,25 +65,46 @@ fn names_desktop(text: &str, number: usize) -> bool {
         == Some(number)
 }
 
-fn copy_text(
-    label: &mut Label,
+fn names_pair(text: &str, left: &str, right: &str) -> bool {
+    text.strip_prefix(left)
+        .and_then(|rest| rest.strip_prefix(JOINED))
+        == Some(right)
+}
+
+fn with_text<T>(
     surface: &WlSurface,
     pick: fn(&XdgToplevelSurfaceRoleAttributes) -> Option<&str>,
-) -> Option<()> {
+    then: impl FnOnce(&str) -> T,
+) -> Option<T> {
     with_states(surface, |states| {
         let data = states
             .data_map
             .get::<XdgToplevelSurfaceData>()?
             .lock()
             .unwrap();
-        let text = pick(&data).filter(|text| !text.is_empty())?;
+        pick(&data).filter(|text| !text.is_empty()).map(then)
+    })
+}
+
+fn copy_text(
+    label: &mut Label,
+    surface: &WlSurface,
+    pick: fn(&XdgToplevelSurfaceRoleAttributes) -> Option<&str>,
+) -> Option<()> {
+    with_text(surface, pick, |text| {
         if label.text != text {
             label.text.clear();
             label.text.push_str(text);
             label.made_for = None;
         }
-        Some(())
     })
+}
+
+fn app_name(data: &XdgToplevelSurfaceRoleAttributes) -> Option<&str> {
+    data.app_id
+        .as_deref()
+        .filter(|app_id| !app_id.is_empty())
+        .or(data.title.as_deref())
 }
 
 pub fn centred(size: Size<i32, Physical>, area: Rectangle<i32, Physical>) -> Point<i32, Physical> {
@@ -219,12 +242,16 @@ impl Labels {
                 label.made_for = None;
             }
             Name::Desktop(_) => {}
-            Name::App(surface) => copy_text(label, surface, |data| {
-                data.app_id
-                    .as_deref()
-                    .filter(|app_id| !app_id.is_empty())
-                    .or(data.title.as_deref())
-            })?,
+            Name::App(surface) => copy_text(label, surface, app_name)?,
+            Name::Split(left, right) => with_text(left, app_name, |left| {
+                with_text(right, app_name, |right| {
+                    if !names_pair(&label.text, left, right) {
+                        label.text.clear();
+                        let _ = write!(label.text, "{left}{JOINED}{right}");
+                        label.made_for = None;
+                    }
+                })
+            })??,
         }
         self.fonts.refresh(
             label,
