@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c1c21"/>
+      <stop offset="1" stop-color="#050506"/>
+    </linearGradient>
+    <linearGradient id="window" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f4f6"/>
+      <stop offset="0.16" stop-color="#f4f4f6"/>
+      <stop offset="0.16" stop-color="#dcdce0"/>
+      <stop offset="1" stop-color="#cfcfd4"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4cc96a"/>
+      <stop offset="1" stop-color="#28a046"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b93f5"/>
+      <stop offset="1" stop-color="#2f6fe4"/>
+    </linearGradient>
+    <linearGradient id="purple" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ab82ec"/>
+      <stop offset="1" stop-color="#8e5bd8"/>
+    </linearGradient>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <path fill="url(#bg)" d="M0 739L0 285C0 135 112 0 285 0L739 0C912 0 1024 135 1024 285L1024 739C1024 889 912 1024 739 1024L285 1024C112 1024 0 889 0 739Z"/>
+  <g filter="url(#lift)">
+    <rect x="148" y="196" width="432" height="268" rx="30" fill="url(#window)"/>
+    <rect x="640" y="296" width="248" height="396" rx="30" fill="url(#window)"/>
+    <rect x="192" y="540" width="388" height="270" rx="30" fill="url(#window)"/>
+  </g>
+  <g filter="url(#lift)">
+    <rect x="304" y="404" width="120" height="120" rx="32" fill="url(#green)"/>
+    <rect x="704" y="632" width="120" height="120" rx="32" fill="url(#purple)"/>
+    <rect x="326" y="750" width="120" height="120" rx="32" fill="url(#blue)"/>
+  </g>
+</svg>
