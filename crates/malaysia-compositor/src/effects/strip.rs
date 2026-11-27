@@ -22,7 +22,8 @@ pub struct Chrome {
     pill: Id,
     add: [Id; 2],
     ring: Id,
-    ring_color: Rgba,
+    pub hover_ring: Id,
+    pub ring_color: Rgba,
     close: Id,
     backdrops: [Id; MAX_DESKTOPS],
 }
@@ -36,6 +37,7 @@ impl Chrome {
             pill: Id::new(),
             add: [Id::new(), Id::new()],
             ring: Id::new(),
+            hover_ring: Id::new(),
             ring_color: ctdesign::ACCENTS[0].colors(dark, false).ring,
             close: Id::new(),
             backdrops: std::array::from_fn(|_| Id::new()),
@@ -112,6 +114,7 @@ impl Effects {
             geometry,
             desktop_offset,
             expansion,
+            ..
         } = placement;
         let surface = window.toplevel().unwrap().wl_surface();
         let location = (geometry.loc - window.geometry().loc).to_physical_precise_round(scale)

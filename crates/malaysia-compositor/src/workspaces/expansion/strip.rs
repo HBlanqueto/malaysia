@@ -112,7 +112,7 @@ impl Strip {
         count: usize,
         output: Size<f64, Logical>,
         now: Duration,
-    ) -> bool {
+    ) {
         let entered = !self.grown && point.y < self.height();
         if entered {
             self.grow(now);
@@ -121,9 +121,7 @@ impl Strip {
             Some(Hit::Close(index) | Hit::Thumbnail(index)) if count > 1 => Some(index),
             _ => None,
         };
-        let hover_changed = hovered != self.hovered;
         self.hovered = hovered;
-        entered || hover_changed
     }
 }
 
@@ -241,19 +239,19 @@ mod tests {
     #[test]
     fn the_pointer_entering_the_strip_grows_it_and_it_stays_grown() {
         let mut strip = Strip::default();
-        assert!(!strip.hover(Point::from((1280.0, 60.0)), 1, display(), Duration::ZERO));
+        strip.hover(Point::from((1280.0, 60.0)), 1, display(), Duration::ZERO);
         assert!(!strip.grown);
-        assert!(strip.hover(Point::from((1280.0, 39.0)), 1, display(), Duration::ZERO));
+        strip.hover(Point::from((1280.0, 39.0)), 1, display(), Duration::ZERO);
         assert!(strip.grown);
         assert_eq!(strip.hovered, None);
         while strip.advance(Duration::from_secs(1), LONGER_SIDE) {}
         assert_eq!(strip.height(), 146.0);
-        assert!(!strip.hover(
+        strip.hover(
             Point::from((1280.0, 600.0)),
             1,
             display(),
-            Duration::from_secs(2)
-        ));
+            Duration::from_secs(2),
+        );
         assert!(strip.grown && strip.hovered.is_none());
         assert!(!strip.advance(Duration::from_secs(3), LONGER_SIDE));
         assert_eq!(strip.target_height(), 146);

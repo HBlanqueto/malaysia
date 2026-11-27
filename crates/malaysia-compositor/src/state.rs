@@ -83,6 +83,7 @@ pub fn elements(
                 geometry: Rectangle::new((pointer - *grip).to_i32_round(), geometry.size),
                 desktop_offset: (desktop_x(expansion.desktop, position, stride), 0).into(),
                 expansion: factor,
+                ringed: false,
             },
             scale,
             main,
@@ -103,6 +104,10 @@ pub fn elements(
             frame,
         );
     }
+    let hovered = (expansion.open && slide.is_none() && dragged.is_none())
+        .then(|| expansion.window_at(desktops, pointer))
+        .flatten()
+        .map(|(window, _)| window);
     let others = desktops
         .iter()
         .enumerate()
@@ -124,7 +129,7 @@ pub fn elements(
                 continue;
             };
             let main = index == current && order == 0;
-            let (loc, factor) = if index == expansion.desktop {
+            let (loc, factor) = if expansion.open || index == expansion.desktop {
                 expansion.drawn(window, geometry)
             } else {
                 (geometry.loc.to_f64(), 1.0)
@@ -136,6 +141,7 @@ pub fn elements(
                     geometry: Rectangle::new(loc.to_i32_round(), geometry.size),
                     desktop_offset: (x, 0).into(),
                     expansion: factor,
+                    ringed: Some(window) == hovered,
                 },
                 scale,
                 main,
@@ -186,6 +192,7 @@ fn push_strip(
                         geometry,
                         desktop_offset: whole.loc,
                         expansion: factor,
+                        ringed: false,
                     };
                     effects.push_thumbnail(renderer, window, placement, clip, scale, frame);
                 }

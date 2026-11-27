@@ -4,8 +4,9 @@ Expansion is malaysia's Mission Control: the windows of the current Desktop
 shrink into one layer with no overlap, a strip at the top lists the Desktops
 and the full-screen Spaces, and the user picks a window or a Space.
 
-This file is a proposal. Steps C, Expansion on a key, D, the strip, and E,
-the drag of a window to a Space, are built, in `mod.rs`, `layout.rs` and `strip.rs` of this folder and in
+This file is a proposal. Steps C, Expansion on a key, D, the strip, E,
+the drag of a window to a Space, and F, the hover ring and Control+arrows,
+are built, in `mod.rs`, `layout.rs` and `strip.rs` of this folder and in
 `effects/strip.rs` and `effects/badge.rs`; none of the rest is. It was written on 2026-11-26 on
 a Mac, which cannot build the compositor, from measurements of macOS 27.2.1 and
 from reading gnome-shell, KWin, niri and Smithay at the pinned rev. The row of
@@ -139,8 +140,10 @@ spring type; its slide is Expansion's progress `p`.
 
 The layout is a pure function from the area and the window rectangles to the
 slots. It runs when Expansion opens, when a window is mapped, unmapped or
-changes size, and when the strip grows. Its result is kept in a `Vec` that is
-cleared and filled again, never allocated per frame.
+changes size, when the strip grows and when Control+arrows reach another
+Desktop. Its result is kept in a `Vec` that is cleared and filled again,
+never allocated per frame. Each window keeps its slot with the scale it was
+arranged with, so the Desktop left by Control+arrows slides out spread.
 
 ## Drawing
 
@@ -222,7 +225,10 @@ corner, and the layout has nothing to keep. Each step is one visible result.
    thumbnail of another Desktop moves there. It is plain state in
    `Expansion` with a movement threshold, not a pointer grab. A drop on "+"
    is not built.
-- **F. Hover ring and Control+arrows while open.**
+- **F. Hover ring and Control+arrows while open (built).** The ring has no
+   state: it is drawn on the window under the pointer when the frame is
+   built. Control+Left and Control+Right are ignored while a window is
+   dragged.
 - **H. Swipes.** Three fingers up and down for Expansion, sideways for the
    slide, following the fingers. libinput's swipe events are read directly;
    the winit backend reports pinch and hold but no swipe, so this is checked

@@ -5,7 +5,8 @@ Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
 This file is a proposal. Of its steps only C, Expansion on a key, D, its
-strip, and E, the drag of a window to a Space, are built, in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
+strip, E, the drag of a window to a Space, and F, the hover ring and
+Control+arrows while Expansion is open, are built, in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
 Desktops as they are today.
 It was written on 2026-11-26 on a Mac, which cannot build the compositor, so
 that the session on Linux can check it and build from it. The measured tables
@@ -37,7 +38,10 @@ Steps 16 to 23, in `desktops.rs`, `state.rs`, `placement.rs`, `window_grab.rs`,
   click on one goes there, "+" adds a Desktop and the close button of a
   thumbnail removes one (step D, step 25 of the roadmap);
 - a window spread in Expansion is dragged onto the thumbnail of another
-  Desktop and moves there (step E, step 26 of the roadmap).
+  Desktop and moves there (step E, step 26 of the roadmap);
+- the window under the pointer in Expansion gets a ring, and Control+Left and
+  Control+Right slide the spread windows to the next Desktop (step F, step 27
+  of the roadmap).
 
 ## The row
 
@@ -187,7 +191,7 @@ them, and steps A and B need none. Each is one visible result.
 | C | Expansion on a key (built) | Control+Up spreads the windows; a click picks one | cascade placement (done); `spring.rs` (exists) |
 | D | Expansion's strip (built) | live thumbnails of every Space, "+" and close | C |
 | E | Drag a window to a Space in Expansion (built) | windows move between Desktops | D |
-| F | The hover ring, and Control+arrows while Expansion is open | a ring on the window under the pointer; the window area slides to the next Desktop | C |
+| F | The hover ring, and Control+arrows while Expansion is open (built) | a ring on the window under the pointer; the window area slides to the next Desktop | C |
 | G | The full-screen transition | the window grows while the row slides | A, `spring.rs` |
 | H | Swipes with three fingers | Expansion and the slide follow the fingers | C; a real touchpad |
 | I | Text with `cosmic-text` | names in the strip, the title of a hovered window | D |

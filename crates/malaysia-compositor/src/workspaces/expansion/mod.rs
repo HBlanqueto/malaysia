@@ -28,16 +28,14 @@ pub struct Expansion {
     pub desktop: usize,
     progress: f64,
     motion: Option<Motion>,
-    scale: f64,
-    scale_before_growth: f64,
     frames: Vec<Rectangle<f64, Logical>>,
     slots: Vec<Rectangle<f64, Logical>>,
     pushes: Vec<(Point<f64, Logical>, u32)>,
 }
 
 struct Slot {
-    loc: Cell<Point<f64, Logical>>,
-    before_growth: Cell<Point<f64, Logical>>,
+    loc: Cell<(Point<f64, Logical>, f64)>,
+    before_growth: Cell<(Point<f64, Logical>, f64)>,
 }
 
 fn area(output: Rectangle<i32, Logical>, strip_height: i32) -> Rectangle<f64, Logical> {
@@ -71,9 +69,10 @@ impl Expansion {
             return (own, 1.0);
         };
         let growth = self.strip.growth;
-        let before = slot.before_growth.get();
-        let loc = before + (slot.loc.get() - before).upscale(growth);
-        let scale = self.scale_before_growth + (self.scale - self.scale_before_growth) * growth;
+        let (before, scale_before) = slot.before_growth.get();
+        let (loc, scale) = slot.loc.get();
+        let loc = before + (loc - before).upscale(growth);
+        let scale = scale_before + (scale - scale_before) * growth;
         (
             own + (loc - own).upscale(self.progress),
             1.0 + (scale - 1.0) * self.progress,
@@ -82,6 +81,21 @@ impl Expansion {
 
     pub fn strip_top(&self) -> Option<f64> {
         (self.progress > 0.0).then(|| (self.progress - 1.0) * self.strip.height())
+    }
+
+    pub fn window_at<'a>(
+        &self,
+        desktops: &'a [Space<Window>],
+        location: Point<f64, Logical>,
+    ) -> Option<(&'a Window, Point<f64, Logical>)> {
+        laid_out(&desktops[self.desktop])
+            .rev()
+            .find_map(|(window, frame)| {
+                let (loc, factor) = self.drawn(window, frame);
+                Rectangle::new(loc, frame.size.to_f64().upscale(factor))
+                    .contains(location)
+                    .then_some((window, loc))
+            })
     }
 
     fn at(&self, now: Duration) -> (f64, f64) {
@@ -170,26 +184,23 @@ impl State {
         self.expansion.drag_origin = None;
         if self.strip_hit(origin).is_none() {
             self.expansion.dragged = self
-                .window_at(origin)
-                .map(|(window, top_left)| (window, origin - top_left));
+                .expansion
+                .window_at(&self.desktops, origin)
+                .map(|(window, top_left)| (window.clone(), origin - top_left));
         }
     }
 
     pub fn hover_expansion(&mut self, location: Point<f64, Logical>) {
         self.drag_in_expansion(location);
-        self.needs_redraw |= self.expansion.dragged.is_some();
+        self.needs_redraw = true;
         let Some((point, output)) = self.on_strip(location) else {
             return;
         };
         let was_grown = self.expansion.strip.grown;
         let now = self.start_time.elapsed();
-        if self
-            .expansion
+        self.expansion
             .strip
-            .hover(point, self.desktops.len(), output, now)
-        {
-            self.needs_redraw = true;
-        }
+            .hover(point, self.desktops.len(), output, now);
         if self.expansion.dragged.is_some() {
             self.expansion.strip.hovered = None;
         }
@@ -242,7 +253,12 @@ impl State {
                 self.needs_redraw = true;
             }
             Some(Hit::Bar) => {}
-            None => self.close_expansion(self.window_at(location).map(|(window, _)| window), time),
+            None => self.close_expansion(
+                self.expansion
+                    .window_at(&self.desktops, location)
+                    .map(|(window, _)| window.clone()),
+                time,
+            ),
         }
     }
 
@@ -259,17 +275,6 @@ impl State {
         let [from, to] = self.desktops.get_disjoint_mut([origin, target]).unwrap();
         move_window(&window, from, to);
         self.rearrange_expansion();
-    }
-
-    fn window_at(&self, location: Point<f64, Logical>) -> Option<(Window, Point<f64, Logical>)> {
-        laid_out(&self.desktops[self.expansion.desktop])
-            .rev()
-            .find_map(|(window, frame)| {
-                let (loc, factor) = self.expansion.drawn(window, frame);
-                Rectangle::new(loc, frame.size.to_f64().upscale(factor))
-                    .contains(location)
-                    .then(|| (window.clone(), loc))
-            })
     }
 
     pub fn arrange_expansion(&mut self) {
@@ -292,24 +297,21 @@ impl State {
         expansion
             .frames
             .extend(laid_out(desktop).map(|(_, frame)| frame.to_f64()));
-        expansion.scale = arrange(
+        let scale = arrange(
             area(output, expansion.strip.target_height()),
             &expansion.frames,
             &mut expansion.slots,
             &mut expansion.pushes,
         );
         let before_growth = !expansion.strip.grown;
-        if before_growth {
-            expansion.scale_before_growth = expansion.scale;
-        }
         for ((window, _), slot) in laid_out(desktop).zip(&expansion.slots) {
             let kept = window.user_data().get_or_insert(|| Slot {
-                loc: Cell::new(slot.loc),
-                before_growth: Cell::new(slot.loc),
+                loc: Cell::new((slot.loc, scale)),
+                before_growth: Cell::new((slot.loc, scale)),
             });
-            kept.loc.set(slot.loc);
+            kept.loc.set((slot.loc, scale));
             if before_growth {
-                kept.before_growth.set(slot.loc);
+                kept.before_growth.set((slot.loc, scale));
             }
         }
         self.needs_redraw = true;

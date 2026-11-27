@@ -43,10 +43,10 @@ fn key_action(
             Some(KeyAction::CloseExpansion)
         }
         keysyms::KEY_Escape if expansion_open => Some(KeyAction::CloseExpansion),
-        _ if expansion_open => None,
-        keysyms::KEY_Up if control_only => Some(KeyAction::OpenExpansion),
         keysyms::KEY_Left if control_only => Some(KeyAction::SwitchDesktop(Direction::Left)),
         keysyms::KEY_Right if control_only => Some(KeyAction::SwitchDesktop(Direction::Right)),
+        _ if expansion_open => None,
+        keysyms::KEY_Up if control_only => Some(KeyAction::OpenExpansion),
         keysyms::KEY_f | keysyms::KEY_F if control_super => Some(KeyAction::Tile(Tile::Fill)),
         keysyms::KEY_c | keysyms::KEY_C if control_super => Some(KeyAction::Tile(Tile::Center)),
         keysyms::KEY_Left if control_super => Some(KeyAction::Tile(Tile::Left)),
@@ -326,7 +326,7 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_up_opens_expansion_and_while_open_ctrl_up_ctrl_down_and_escape_close_it_and_desktop_and_tiling_keys_do_nothing()
+    fn ctrl_up_opens_expansion_and_while_open_ctrl_up_ctrl_down_and_escape_close_it_ctrl_left_switches_desktop_and_tiling_keys_do_nothing()
      {
         let ctrl = ModifiersState {
             ctrl: true,
@@ -354,7 +354,10 @@ mod tests {
             Some(KeyAction::Tile(Tile::Top))
         );
         assert_eq!(key_action(&ctrl_super, up, true), None);
-        assert_eq!(key_action(&ctrl, left, true), None);
+        assert_eq!(
+            key_action(&ctrl, left, true),
+            Some(KeyAction::SwitchDesktop(Direction::Left))
+        );
     }
 
     #[test]

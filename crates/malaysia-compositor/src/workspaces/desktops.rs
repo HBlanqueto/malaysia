@@ -158,8 +158,11 @@ impl State {
 
     pub fn switch_desktop(&mut self, direction: Direction, time: InputTime) {
         let last = self.desktops.len() - 1;
-        if let Some(target) = switch_target(direction, self.current_desktop, last) {
+        if self.expansion.dragged.is_none()
+            && let Some(target) = switch_target(direction, self.current_desktop, last)
+        {
             self.show_desktop(target, time);
+            self.rearrange_expansion();
         }
     }
 
@@ -244,6 +247,9 @@ impl State {
                     .unwrap()
                     .set_focus(self, None, serial),
             }
+        }
+        for window in self.desktops[target].elements() {
+            send_changed_state(window);
         }
         self.move_pointer(pointer.current_location(), time);
         self.needs_redraw = true;

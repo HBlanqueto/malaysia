@@ -32,6 +32,7 @@ pub struct Placement {
     pub geometry: Rectangle<i32, Logical>,
     pub desktop_offset: Point<i32, Physical>,
     pub expansion: f64,
+    pub ringed: bool,
 }
 
 pub struct Effects {
@@ -152,6 +153,7 @@ impl Effects {
             geometry,
             desktop_offset,
             expansion,
+            ringed,
         } = placement;
         let surface = window.toplevel().unwrap().wl_surface();
         let location = (geometry.loc - window.geometry().loc).to_physical_precise_round(scale)
@@ -195,6 +197,17 @@ impl Effects {
                 self.shadow_scheme.inactive,
             )
         };
+        if ringed {
+            frame.push(Element::Lines(Lines::new(
+                self.strip.hover_ring.clone(),
+                CommitCounter::default(),
+                shape,
+                pixels(f64::from(ctdesign::EXPANSION_HOVER_RING_WIDTH), scale),
+                self.strip.ring_color,
+                ctdesign::Rgba::TRANSPARENT,
+                self.lines.clone(),
+            )));
+        }
         frame.push(Element::Lines(Lines::new(
             drawn.lines.clone(),
             drawn.commit,
