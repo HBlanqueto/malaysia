@@ -3,14 +3,16 @@ use std::time::Duration;
 
 use smithay::backend::input::InputTime;
 use smithay::desktop::{Space, Window};
+use smithay::input::pointer::{Focus, GrabStartData};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
-use smithay::utils::{IsAlive, Logical, Point, Rectangle, Size};
+use smithay::utils::{IsAlive, Logical, Point, Rectangle, Serial, Size};
 use smithay::wayland::shell::xdg::ToplevelSurface;
 
 use crate::placement::placed;
 use crate::spring::{Motion, advance_motion};
 use crate::state::State;
-use crate::tiling::fits;
+use crate::tiling::{fits, size_limits};
+use crate::window_grab::{Drag, WindowGrab, send_if_all_acked};
 use crate::workspaces::desktops::{Direction, MAX_DESKTOPS, Slide, move_window};
 
 const OMEGA: f64 = ctdesign::FULL_SCREEN_OMEGA as f64;
@@ -109,6 +111,7 @@ fn waiting_partner<'a>(entry: &'a Space<Window>, window: &Window) -> Option<&'a 
 fn send_back(toplevel: &ToplevelSurface, saved: Option<Rectangle<i32, Logical>>) {
     toplevel.with_pending_state(|state| {
         state.states.unset(ToplevelState::Fullscreen);
+        state.states.unset(ToplevelState::Resizing);
         for tiled in TILED {
             state.states.unset(tiled);
         }
@@ -119,10 +122,56 @@ fn send_back(toplevel: &ToplevelSurface, saved: Option<Rectangle<i32, Logical>>)
     }
 }
 
-fn split_widths(width: i32) -> Option<(i32, i32)> {
-    let left = (width - ctdesign::SPLIT_DIVIDER_WIDTH) / 2;
-    (left >= ctdesign::SPLIT_MIN_TILE)
-        .then_some((left, width - ctdesign::SPLIT_DIVIDER_WIDTH - left))
+fn split_widths(
+    width: i32,
+    wanted: i32,
+    left: (i32, i32),
+    right: (i32, i32),
+) -> Option<(i32, i32)> {
+    let room = width - ctdesign::SPLIT_DIVIDER_WIDTH;
+    let widest = |max: i32| if max == 0 { i32::MAX } else { max };
+    let narrowest = |min: i32| min.max(ctdesign::SPLIT_MIN_TILE);
+    let lowest = narrowest(left.0).max(room - widest(right.1));
+    let highest = widest(left.1).min(room - narrowest(right.0));
+    (lowest <= highest).then(|| {
+        let left = wanted.clamp(lowest, highest);
+        (left, room - left)
+    })
+}
+
+fn width_limits(window: &Window) -> (i32, i32) {
+    let (min, max) = size_limits(window);
+    (min.w, max.w)
+}
+
+pub fn divider(
+    entry: &Space<Window>,
+    output: Rectangle<i32, Logical>,
+) -> Option<(&Window, Rectangle<i32, Logical>)> {
+    let (left, right) = split_windows(entry)?;
+    let left_tile = entry.element_geometry(left)?;
+    let x = left_tile.loc.x + left_tile.size.w;
+    let right_x = entry.element_geometry(right)?.loc.x;
+    Some((
+        left,
+        Rectangle::new(
+            (x, output.loc.y).into(),
+            ((right_x - x).max(0), output.size.h).into(),
+        ),
+    ))
+}
+
+fn double_click(
+    last: Option<(InputTime, Point<f64, Logical>)>,
+    time: InputTime,
+    location: Point<f64, Logical>,
+) -> bool {
+    let rule = ctdesign::TITLEBAR_DOUBLE_CLICK;
+    last.is_some_and(|(last_time, last_location)| {
+        let moved = location - last_location;
+        time.millis().wrapping_sub(last_time.millis()) <= rule.interval_ms
+            && moved.x.hypot(moved.y) <= rule.slop
+    })
 }
 
 pub fn full_screen_window(entry: &Space<Window>) -> Option<&Window> {
@@ -223,21 +272,23 @@ impl State {
         let (Some(front), Some(other)) = (live.next().cloned(), live.next().cloned()) else {
             return;
         };
-        let Some((left, right)) = split_widths(output.size.w).filter(|_| {
-            self.is_desktop(self.current_desktop) && self.desktops.len() < MAX_DESKTOPS
-        }) else {
+        let (left_window, right_window) = match side {
+            Direction::Left => (front, other),
+            Direction::Right => (other, front),
+        };
+        let Some((left, right)) = split_widths(
+            output.size.w,
+            (output.size.w - ctdesign::SPLIT_DIVIDER_WIDTH) / 2,
+            width_limits(&left_window),
+            width_limits(&right_window),
+        )
+        .filter(|_| self.is_desktop(self.current_desktop) && self.desktops.len() < MAX_DESKTOPS) else {
             return;
         };
-        let tiles = match side {
-            Direction::Left => [
-                (front, Direction::Left, left),
-                (other, Direction::Right, right),
-            ],
-            Direction::Right => [
-                (front, Direction::Right, right),
-                (other, Direction::Left, left),
-            ],
-        };
+        let tiles = [
+            (left_window, Direction::Left, left),
+            (right_window, Direction::Right, right),
+        ];
         if !tiles
             .iter()
             .all(|(window, _, width)| fits(window, (*width, output.size.h).into()))
@@ -258,6 +309,82 @@ impl State {
             if toplevel.is_initial_configure_sent() {
                 toplevel.send_configure();
             }
+        }
+    }
+
+    pub fn press_divider(&mut self, button: u32, time: InputTime, serial: Serial) {
+        let pointer = self.seat.get_pointer().unwrap();
+        let location = pointer.current_location();
+        let current = &self.desktops[self.current_desktop];
+        let Some(output) = current.output_geometry(&self.output) else {
+            return;
+        };
+        let Some((left, _)) =
+            divider(current, output).filter(|(_, area)| area.to_f64().contains(location))
+        else {
+            return;
+        };
+        let left = left.clone();
+        if double_click(self.divider_press.take(), time, location) {
+            self.resize_split(
+                &left,
+                (output.size.w - ctdesign::SPLIT_DIVIDER_WIDTH) / 2,
+                false,
+            );
+            return;
+        }
+        self.divider_press = Some((time, location));
+        let initial_width = left
+            .toplevel()
+            .unwrap()
+            .with_pending_state(|state| state.size)
+            .map_or(left.geometry().size.w, |size| size.w);
+        let grab = WindowGrab {
+            start_data: GrabStartData {
+                focus: None,
+                button,
+                location,
+            },
+            window: left,
+            drag: Drag::Divider {
+                initial_width,
+                width: initial_width,
+            },
+        };
+        pointer.set_grab(self, grab, serial, Focus::Clear);
+    }
+
+    pub fn resize_split(&self, left: &Window, wanted: i32, resizing: bool) {
+        let Some(output) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
+            return;
+        };
+        let Some((left, right)) = self
+            .desktops
+            .iter()
+            .filter_map(split_windows)
+            .find(|(tile, _)| *tile == left)
+        else {
+            return;
+        };
+        let Some((left_width, right_width)) = split_widths(
+            output.size.w,
+            wanted,
+            width_limits(left),
+            width_limits(right),
+        ) else {
+            return;
+        };
+        for (window, width) in [(left, left_width), (right, right_width)] {
+            let toplevel = window.toplevel().unwrap();
+            toplevel.with_pending_state(|state| {
+                if resizing {
+                    state.states.set(ToplevelState::Resizing);
+                } else {
+                    state.states.unset(ToplevelState::Resizing);
+                }
+                state.size = Some((width, output.size.h).into());
+            });
+            send_if_all_acked(toplevel);
         }
     }
 
@@ -302,7 +429,10 @@ impl State {
         match (is_full_screen(window), side(window)) {
             (false, None) if full_screen => self.enter_full_screen(window, own),
             (false, Some(_)) if tiled => self.join_split(window, own),
-            (true, _) if full_screen || tiled => self.place_in_space(window, own),
+            (true, _) if full_screen || tiled => {
+                self.place_in_space(window, own);
+                send_if_all_acked(toplevel);
+            }
             (true, _) => self.leave_full_screen(window, own),
             _ => {}
         }
@@ -440,6 +570,7 @@ impl State {
         let toplevel = partner.toplevel().unwrap();
         toplevel.with_pending_state(|state| {
             state.states.set(ToplevelState::Fullscreen);
+            state.states.unset(ToplevelState::Resizing);
             for tiled in TILED {
                 state.states.unset(tiled);
             }
@@ -556,16 +687,31 @@ mod tests {
     }
 
     #[test]
-    fn the_left_tile_takes_half_of_what_the_divider_leaves_and_neither_tile_is_narrower_than_the_minimum()
+    fn the_tiles_share_what_the_divider_leaves_and_neither_is_narrower_than_the_minimum_or_its_window_allows_nor_wider_than_its_maximum()
      {
         let divider = ctdesign::SPLIT_DIVIDER_WIDTH;
         let minimum = ctdesign::SPLIT_MIN_TILE;
-        assert_eq!(split_widths(1281), Some((634, 635)));
+        let free = (0, 0);
+        assert_eq!(split_widths(2560, 1474, free, free), Some((1474, 1074)));
         assert_eq!(
-            split_widths(2 * minimum + divider),
+            split_widths(2560, -50, free, free),
+            Some((minimum, 2560 - divider - minimum))
+        );
+        assert_eq!(
+            split_widths(2560, 5000, free, free),
+            Some((2560 - divider - minimum, minimum))
+        );
+        assert_eq!(split_widths(2560, 100, (300, 0), free), Some((300, 2248)));
+        assert_eq!(
+            split_widths(2560, 1274, free, (0, 1000)),
+            Some((1548, 1000))
+        );
+        assert_eq!(split_widths(2560, 1274, (2000, 0), (600, 0)), None);
+        assert_eq!(
+            split_widths(2 * minimum + divider, 0, free, free),
             Some((minimum, minimum))
         );
-        assert_eq!(split_widths(2 * minimum + divider - 1), None);
+        assert_eq!(split_widths(2 * minimum + divider - 1, 0, free, free), None);
     }
 
     #[test]

@@ -242,8 +242,16 @@
                     time.sleep(3)
                     width, data = screen("split-view")
                     height = len(data) // 3 // width
-                    middle = 3 * (height // 2 * width + width // 2)
+                    middle = 3 * (height // 4 * width + width // 2)
                     assert data[middle:middle + 3] == bytes([0, 0, 0]), "no black divider in the middle of a Split View"
+                    point_at(width // 2, height // 4)
+                    machine.send_monitor_command("mouse_button 1")
+                    point_at(width // 2 + 200, height // 4)
+                    machine.send_monitor_command("mouse_button 0")
+                    time.sleep(2)
+                    _, data = screen("split-view-dragged")
+                    moved = 3 * (height // 4 * width + width // 2 + 200)
+                    assert data[moved:moved + 3] == bytes([0, 0, 0]), "the divider did not follow the drag"
                     point_at(width // 4, height // 2)
                     click()
                     time.sleep(1)

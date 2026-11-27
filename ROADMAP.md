@@ -32,7 +32,8 @@ that asks for full screen gets a Space of its own in the row, and
 `malaysia-expansion` opens or closes Expansion for a launcher, and Ctrl+Alt+F
 sends the window in front to full screen and back, growing in place while
 the row slides, and Ctrl+Alt+Left or Right puts two windows side by side in
-a Split View. Next is dragging its divider; the proposal is in
+a Split View whose divider is dragged. Of the row of workspaces only the
+three-finger swipes are left; the proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -84,6 +85,7 @@ scale of 5/3):
 | 33 | A key for full screen | Ctrl+Alt+F sends the window in front to full screen and back, as macOS's Control+Command+F; the app is not told the key | done |
 | 34 | The full-screen transition | a window going full screen grows in place from its frame to the display while the row slides to its Space, and shrinks back to its frame while the row slides back, with macOS's spring | done |
 | 35 | Split View with a key | Ctrl+Alt+Left or Right puts the window in front on that half of a full-screen Space and the window below it on the other, with a black divider of 12; when one leaves or closes, the other stays full screen alone | done |
+| 36 | The divider of Split View | dragging the divider resizes both tiles, a tile stops at 87, a double-click makes the halves equal, and a handle on it shows which side is active | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -499,7 +501,12 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   place; the key pressed again then sends both back. The strip names the
   Space with both `app_id`s joined by "and", in English. A tile that would
   be narrower than 87, or a window that does not fit its tile, makes the
-  key do nothing. The divider has no handle and cannot be dragged yet.
+  key do nothing. A window whose smallest width does not leave half the
+  display gets a wider tile. The divider is dragged with no snapping and
+  shows no resize cursor, as there is no cursor shape yet; its width is
+  kept in pixels, so a change of the display's mode keeps it. A
+  double-click on another Split View's divider at the same place within
+  the interval also counts.
 - There is no drop onto a full-screen Space (Split View) and no reordering of
   thumbnails.
 - A resize of the display while Expansion is open keeps the old slots.
@@ -510,6 +517,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- The divider of Split View (step 36): nested, at scales 1 and 5/3, with
+  `foot` (a drag, the stop at 87, the double-click, the handle's two
+  colours, a press inside a tile), and the machine check, which drags it.
+  Not checked: directly on a display.
 - Split View with a key (step 35): nested, at scales 1 and 5/3, with
   `foot` (the tiles, the divider, the strip's name, leaving, closing, a
   partner that never answers, three windows), and the machine check with

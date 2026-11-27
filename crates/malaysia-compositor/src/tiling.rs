@@ -60,12 +60,16 @@ fn within_limits(
     within(size.w, min.w, max.w) && within(size.h, min.h, max.h)
 }
 
-pub fn fits(window: &Window, size: Size<i32, Logical>) -> bool {
-    let (min, max) = with_states(window.toplevel().unwrap().wl_surface(), |states| {
+pub fn size_limits(window: &Window) -> (Size<i32, Logical>, Size<i32, Logical>) {
+    with_states(window.toplevel().unwrap().wl_surface(), |states| {
         let mut guard = states.cached_state.get::<SurfaceCachedState>();
         let cached = guard.current();
         (cached.min_size, cached.max_size)
-    });
+    })
+}
+
+pub fn fits(window: &Window, size: Size<i32, Logical>) -> bool {
+    let (min, max) = size_limits(window);
     within_limits(size, min, max)
 }
 

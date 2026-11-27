@@ -136,6 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         current_desktop: 0,
         slide: None,
         growth: None,
+        divider_press: None,
         expansion: Expansion::default(),
         popups: PopupManager::default(),
         needs_redraw: true,

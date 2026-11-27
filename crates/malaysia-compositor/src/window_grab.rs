@@ -11,9 +11,10 @@ use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::{se
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Serial, Size};
 use smithay::wayland::compositor::with_states;
-use smithay::wayland::shell::xdg::{SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData};
+use smithay::wayland::shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData};
 
 use crate::state::State;
+use crate::tiling::size_limits;
 
 #[derive(Clone, Copy)]
 struct Resize {
@@ -36,6 +37,10 @@ pub enum Drag {
         direction: Point<i32, Logical>,
         initial_size: Size<i32, Logical>,
         size: Size<i32, Logical>,
+    },
+    Divider {
+        initial_width: i32,
+        width: i32,
     },
 }
 
@@ -113,7 +118,7 @@ pub fn acked(toplevel: &ToplevelSurface, serial: Serial) -> bool {
     })
 }
 
-fn send_if_all_acked(toplevel: &ToplevelSurface) {
+pub fn send_if_all_acked(toplevel: &ToplevelSurface) {
     let all_acked = with_states(toplevel.wl_surface(), |states| {
         states
             .data_map
@@ -160,11 +165,7 @@ impl PointerGrab<State> for WindowGrab {
                 size: requested,
             } => {
                 let toplevel = self.window.toplevel().unwrap();
-                let (min, max) = with_states(toplevel.wl_surface(), |states| {
-                    let mut guard = states.cached_state.get::<SurfaceCachedState>();
-                    let cached = guard.current();
-                    (cached.min_size, cached.max_size)
-                });
+                let (min, max) = size_limits(&self.window);
                 let delta: Point<i32, Logical> =
                     (event.location - self.start_data.location).to_i32_round();
                 let size = Size::from((
@@ -180,6 +181,14 @@ impl PointerGrab<State> for WindowGrab {
                     state.size = Some(size);
                 });
                 send_if_all_acked(toplevel);
+            }
+            Drag::Divider {
+                initial_width,
+                width,
+            } => {
+                *width =
+                    *initial_width + (event.location.x - self.start_data.location.x).round() as i32;
+                data.resize_split(&self.window, *width, true);
             }
         }
     }
@@ -295,7 +304,10 @@ impl PointerGrab<State> for WindowGrab {
         &self.start_data
     }
 
-    fn unset(&mut self, _data: &mut State) {
+    fn unset(&mut self, data: &mut State) {
+        if let Drag::Divider { width, .. } = self.drag {
+            data.resize_split(&self.window, width, false);
+        }
         if let Drag::Resize { .. } = self.drag {
             let toplevel = self.window.toplevel().unwrap();
             toplevel.with_pending_state(|state| {

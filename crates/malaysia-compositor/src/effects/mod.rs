@@ -51,6 +51,7 @@ pub struct Effects {
     curve: Curve,
     gap: Id,
     capsule: Id,
+    split_handle: Id,
     strip: Chrome,
     labels: RefCell<Labels>,
     lines_scheme: ctdesign::FrameLines,
@@ -123,6 +124,7 @@ impl Effects {
             curve: Curve::new(ctdesign::CORNER_WINDOW.smoothing),
             gap: Id::new(),
             capsule: Id::new(),
+            split_handle: Id::new(),
             strip: Chrome::new(dark),
             labels: RefCell::new(Labels::new()),
             lines_scheme: if dark {
@@ -151,6 +153,39 @@ impl Effects {
 
     pub fn push_gap(&self, geometry: Rectangle<i32, Physical>, frame: &mut Vec<Element>) {
         frame.push(solid(&self.gap, geometry, ctdesign::DESKTOP_GAP_COLOR));
+    }
+
+    pub fn push_split_handle(
+        &self,
+        divider: Rectangle<f64, Physical>,
+        active: bool,
+        scale: f64,
+        frame: &mut Vec<Element>,
+    ) {
+        let size = Size::from((
+            pixels(f64::from(ctdesign::SPLIT_HANDLE_WIDTH), scale),
+            pixels(f64::from(ctdesign::SPLIT_HANDLE_HEIGHT), scale),
+        ));
+        let corner = divider.loc + (divider.size - size.to_f64()).downscale(2.0).to_point();
+        let color = if active {
+            ctdesign::SPLIT_HANDLE_ACTIVE
+        } else {
+            ctdesign::SPLIT_HANDLE_INACTIVE
+        };
+        let mut handle = Badge::new(
+            self.split_handle.clone(),
+            self.shape(
+                Rectangle::new(corner.to_i32_round(), size),
+                size.w as f32 / 2.0,
+            ),
+            color.premultiplied(),
+            ctdesign::Rgba::TRANSPARENT.premultiplied(),
+            0.0,
+            0.0,
+            self.badge.clone(),
+        );
+        handle.commit = usize::from(active).into();
+        frame.push(Element::Badge(handle));
     }
 
     pub fn push_window(

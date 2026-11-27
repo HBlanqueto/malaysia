@@ -150,14 +150,17 @@ impl State {
                 let serial = SERIAL_COUNTER.next_serial();
                 let state = event.state();
                 let expansion_open = self.expansion.open;
-                if state == ButtonState::Pressed
-                    && !expansion_open
-                    && !pointer.is_grabbed()
-                    && let Some((window, _)) = self.desktops[self.current_desktop]
+                if state == ButtonState::Pressed && !expansion_open && !pointer.is_grabbed() {
+                    match self.desktops[self.current_desktop]
                         .element_under(pointer.current_location())
-                {
-                    let window = window.clone();
-                    self.focus_window(&window, serial);
+                        .map(|(window, _)| window.clone())
+                    {
+                        Some(window) => self.focus_window(&window, serial),
+                        None if event.button() == Some(MouseButton::Left) => {
+                            self.press_divider(event.button_code(), event.time(), serial)
+                        }
+                        None => {}
+                    }
                 }
                 pointer.button(
                     self,

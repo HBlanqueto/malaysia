@@ -1,6 +1,7 @@
 use std::iter;
 use std::time::{Duration, Instant};
 
+use smithay::backend::input::InputTime;
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::element::texture::TextureRenderElement;
@@ -34,7 +35,7 @@ use crate::workspaces::expansion::strip::{
     add_centre, close_centre, pill, thumbnail, thumbnail_factor,
 };
 use crate::workspaces::full_screen::{
-    Growth, cover, desktop_number, full_screen_window, split_windows,
+    Growth, cover, desktop_number, divider, full_screen_window, split_windows,
 };
 
 render_elements! {
@@ -173,6 +174,15 @@ pub fn elements(
             && strip_x.abs() < width
             && full_screen_window(desktop).is_some()
         {
+            if let Some((left, tiles_apart)) = desktop
+                .output_geometry(output)
+                .and_then(|geometry| divider(desktop, geometry))
+            {
+                let mut tiles_apart = tiles_apart.to_f64().to_physical(scale);
+                tiles_apart.loc.x += f64::from(strip_x);
+                let active = desktop.elements().next_back() == Some(left);
+                effects.push_split_handle(tiles_apart, active, scale, frame);
+            }
             let area = Rectangle::new((strip_x, 0).into(), (width, height).into());
             effects.push_backdrop(index, area, true, frame);
         }
@@ -282,6 +292,7 @@ pub struct State {
     pub current_desktop: usize,
     pub slide: Option<Slide>,
     pub growth: Option<Growth>,
+    pub divider_press: Option<(InputTime, Point<f64, Logical>)>,
     pub expansion: Expansion,
     pub popups: PopupManager,
     pub compositor_state: CompositorState,
