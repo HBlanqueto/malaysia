@@ -1,20 +1,27 @@
+use std::any::Any;
+
 use smithay::backend::input::{
-    AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-    InputTime, KeyState, KeyboardKeyEvent, MouseButton, PointerAxisEvent, PointerButtonEvent,
-    PointerMotionEvent,
+    AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GestureBeginEvent,
+    GestureEndEvent, GestureSwipeUpdateEvent, InputBackend, InputEvent, InputTime, KeyState,
+    KeyboardKeyEvent, MouseButton, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
 };
 use smithay::desktop::{Window, WindowSurfaceType};
 use smithay::input::keyboard::{FilterResult, Keysym, ModifiersState, keysyms};
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent};
+use smithay::reexports::input::event::gesture::{
+    GestureEventCoordinates, GestureSwipeUpdateEvent as LibinputSwipeUpdate,
+};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 
 use crate::state::{Backend, State};
 use crate::tiling::Tile;
 use crate::workspaces::desktops::{Direction, send_changed_state};
+use crate::workspaces::swipe::{self, Swipe};
 
 pub const REPEAT_DELAY: i32 = 200;
 pub const REPEAT_RATE: i32 = 25;
+const SWIPE_FINGERS: u32 = 3;
 
 #[derive(Debug, PartialEq)]
 enum KeyAction {
@@ -65,7 +72,7 @@ fn key_action(
 }
 
 impl State {
-    pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+    pub fn process_input_event<I: InputBackend + 'static>(&mut self, event: InputEvent<I>) {
         match event {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
@@ -106,6 +113,9 @@ impl State {
                         },
                     )
                     .flatten();
+                if action.is_some() {
+                    self.end_swipe(true, event.time());
+                }
                 match action {
                     Some(KeyAction::Quit) => {
                         tracing::info!("stopping: quit key");
@@ -205,7 +215,96 @@ impl State {
                 pointer.axis(self, frame);
                 pointer.frame(self);
             }
+            InputEvent::GestureSwipeBegin { event, .. } => {
+                self.end_swipe(true, event.time());
+                self.swipe = (event.fingers() == SWIPE_FINGERS).then(Swipe::default);
+            }
+            InputEvent::GestureSwipeUpdate { event, .. } => {
+                let delta = (&event as &dyn Any)
+                    .downcast_ref::<LibinputSwipeUpdate>()
+                    .map_or_else(
+                        || event.delta(),
+                        |event| (event.dx_unaccelerated(), event.dy_unaccelerated()).into(),
+                    );
+                self.update_swipe(delta, event.time());
+            }
+            InputEvent::GestureSwipeEnd { event, .. } => {
+                self.end_swipe(event.cancelled(), event.time())
+            }
             _ => {}
+        }
+    }
+
+    fn update_swipe(&mut self, delta: Point<f64, Logical>, time: InputTime) {
+        let Some(mut swipe) = self.swipe.take() else {
+            return;
+        };
+        if swipe.axis.is_none() {
+            let Some((axis, along)) = swipe.lock(delta) else {
+                self.swipe = Some(swipe);
+                return;
+            };
+            self.start_swipe(&mut swipe, axis, along, time);
+        }
+        if let Some(axis) = swipe.axis.filter(|axis| self.swipe_held(*axis)) {
+            let progress = swipe.follow(delta, time.micros());
+            self.hold_swipe(axis, progress);
+            self.swipe = Some(swipe);
+        }
+    }
+
+    fn start_swipe(&mut self, swipe: &mut Swipe, axis: swipe::Axis, along: f64, time: InputTime) {
+        let now = self.start_time.elapsed();
+        let (progress, cancel, last) = match axis {
+            swipe::Axis::Vertical if along > 0.0 && !self.expansion.open => {
+                self.open_expansion(time);
+                (self.expansion.at(now).0, 0.0, 1.0)
+            }
+            swipe::Axis::Vertical if along < 0.0 && self.expansion.open => {
+                (self.expansion.at(now).0, 1.0, 1.0)
+            }
+            swipe::Axis::Horizontal
+                if self.expansion.dragged.is_none()
+                    && !self.seat.get_pointer().unwrap().is_grabbed() =>
+            {
+                self.wake_desktops();
+                (
+                    self.strip(now).0,
+                    self.current_desktop as f64,
+                    (self.desktops.len() - 1) as f64,
+                )
+            }
+            _ => return,
+        };
+        swipe.track(axis, progress, cancel, last, time.micros());
+        self.hold_swipe(axis, progress);
+    }
+
+    fn swipe_held(&self, axis: swipe::Axis) -> bool {
+        match axis {
+            swipe::Axis::Vertical => self.expansion.held,
+            swipe::Axis::Horizontal => self.slide_held(),
+        }
+    }
+
+    fn hold_swipe(&mut self, axis: swipe::Axis, progress: f64) {
+        match axis {
+            swipe::Axis::Vertical => self.hold_expansion(progress),
+            swipe::Axis::Horizontal => self.hold_slide(progress),
+        }
+    }
+
+    fn end_swipe(&mut self, cancelled: bool, time: InputTime) {
+        let Some(swipe) = self.swipe.take() else {
+            return;
+        };
+        let Some(axis) = swipe.axis.filter(|axis| self.swipe_held(*axis)) else {
+            return;
+        };
+        let (target, velocity) = swipe.release(cancelled, time.micros());
+        match axis {
+            swipe::Axis::Vertical => self.release_expansion(target > 0.5, velocity, time),
+            swipe::Axis::Horizontal => self.release_slide(target as usize, velocity, time),
         }
     }
 

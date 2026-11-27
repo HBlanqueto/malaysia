@@ -17,7 +17,7 @@ pub enum Direction {
 }
 
 pub struct Slide {
-    motion: Motion,
+    motion: Option<Motion>,
     pub position: f64,
     pub carried: Option<Window>,
     pub vacated: Option<usize>,
@@ -31,11 +31,11 @@ impl Slide {
         vacated: Option<usize>,
     ) -> Slide {
         Slide {
-            motion: Motion {
+            motion: Some(Motion {
                 from,
                 velocity,
                 started: now,
-            },
+            }),
             position: from,
             carried,
             vacated,
@@ -113,12 +113,48 @@ impl State {
     pub fn strip(&self, now: Duration) -> (f64, f64) {
         let target = self.current_desktop as f64;
         self.slide.as_ref().map_or((target, 0.0), |slide| {
-            slide.motion.at(OMEGA, DAMPING, target, now)
+            slide
+                .motion
+                .as_ref()
+                .map_or((slide.position, 0.0), |motion| {
+                    motion.at(OMEGA, DAMPING, target, now)
+                })
         })
     }
 
+    pub fn slide_held(&self) -> bool {
+        self.slide
+            .as_ref()
+            .is_some_and(|slide| slide.motion.is_none())
+    }
+
+    pub fn hold_slide(&mut self, position: f64) {
+        let slide = self.slide.get_or_insert(Slide {
+            motion: None,
+            position,
+            carried: None,
+            vacated: None,
+        });
+        slide.motion = None;
+        slide.position = position;
+        self.needs_redraw = true;
+    }
+
+    pub fn release_slide(&mut self, target: usize, velocity: f64, time: InputTime) {
+        let now = self.start_time.elapsed();
+        let from = self.strip(now).0;
+        self.go_to_desktop(target, time);
+        if let Some(slide) = &mut self.slide {
+            slide.motion = Some(Motion {
+                from,
+                velocity,
+                started: now,
+            });
+        }
+    }
+
     pub fn advance_slide(&mut self, now: Duration) {
-        if self.slide.is_none() {
+        if self.slide.is_none() || self.slide_held() {
             return;
         }
         let (position, velocity) = self.strip(now);
@@ -182,6 +218,12 @@ impl State {
         if self.expansion.dragged.is_none()
             && let Some(target) = switch_target(direction, self.current_desktop, last)
         {
+            self.go_to_desktop(target, time);
+        }
+    }
+
+    pub fn go_to_desktop(&mut self, target: usize, time: InputTime) {
+        if target != self.current_desktop {
             self.show_desktop(target, time);
             self.rearrange_expansion();
         }

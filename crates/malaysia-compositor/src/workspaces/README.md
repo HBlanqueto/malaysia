@@ -4,12 +4,13 @@ This folder is for the row of workspaces: the Desktops, the full-screen
 Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
-This file is a proposal. Of its steps only A, full screen from a client's
-request, in `full_screen.rs`, B, its key, G, its transition, J, Split View
-with a key, K, its divider, C, Expansion on a key, D, its
+This file was a proposal, and all its steps are built: A, full screen from
+a client's request, B, its key, G, its transition, J, Split View with a key,
+and K, its divider, in `full_screen.rs`; C, Expansion on a key, D, its
 strip, E, the drag of a window to a Space, F, the hover ring and
-Control+arrows while Expansion is open, and I, its text, are built, in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
-Desktops as they are today.
+Control+arrows, and I, its text, in `expansion/`; H, the swipes, in
+`swipe.rs`. The Desktops are `desktops.rs`. Where the code differs from the
+text below, the code and `ROADMAP.md` say what is true.
 It was written on 2026-11-26 on a Mac, which cannot build the compositor, so
 that the session on Linux can check it and build from it. The measured tables
 and the sources are in barrierkit,
@@ -211,7 +212,7 @@ them, and steps A and B need none. Each is one visible result.
 | E | Drag a window to a Space in Expansion (built) | windows move between Desktops | D |
 | F | The hover ring, and Control+arrows while Expansion is open (built) | a ring on the window under the pointer; the window area slides to the next Desktop | C |
 | G | The full-screen transition (built) | the window grows while the row slides | A, `spring.rs` |
-| H | Swipes with three fingers | Expansion and the slide follow the fingers | C; a real touchpad |
+| H | Swipes with three fingers (built) | Expansion and the slide follow the fingers | C; a real touchpad |
 | I | Text with `cosmic-text` (built) | names in the strip, the title of a hovered window | D |
 | J | Split View with a key: Control+Alt+Left or Right (built) | two windows side by side in one Space | A |
 | K | The divider (built) | dragging it resizes both windows | J |

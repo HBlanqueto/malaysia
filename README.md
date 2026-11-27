@@ -20,8 +20,7 @@ It runs in two ways:
 
 [ROADMAP.md](ROADMAP.md) says which step is in progress, what is missing and
 what has not been verified. The proposal for full screen, Expansion
-(malaysia's Mission Control) and Split View, of which Expansion but for its
-swipes, and full screen from a client's request, are built, is in
+(malaysia's Mission Control) and Split View, all of it built, is in
 [crates/malaysia-compositor/src/workspaces](crates/malaysia-compositor/src/workspaces/README.md). Nested, it has run on a laptop with a real GPU;
 directly on a real display it has not run yet.
 
@@ -106,6 +105,9 @@ alone.
 closes it, as Ctrl+Up does, through the private protocol
 `limitless_expansion_v1`; the package installs it with a desktop entry,
 Expansion, for the launcher and the Dock to come.
+Directly on a display, three fingers on a touchpad up open Expansion and
+down close it, and sideways slide to the next entry of the row, following
+the fingers.
 Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
 one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
 top then names the Desktops; when the pointer enters it, it grows and shows
@@ -160,7 +162,10 @@ nix build .#checks.<system>.vm
 The last one boots a NixOS machine, logs a normal user in on a TTY, runs the
 compositor directly on the virtual GPU, types into a terminal, moves the mouse
 and checks the cursor, switches to another VT and back, types again, opens and closes a menu in a
-text editor and quits. A second machine, whose display reports a small
+text editor, sends it to full screen and back, makes a Split View and drags
+its divider, opens Expansion by request and with three fingers on a virtual
+touchpad, goes to a second Desktop by its thumbnail and by a swipe, and
+quits. A second machine, whose display reports a small
 1600x900 panel, checks that the compositor picks a scale of 5/3 and that the
 cursor and a terminal are drawn at it.
 

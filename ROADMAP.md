@@ -32,8 +32,9 @@ that asks for full screen gets a Space of its own in the row, and
 `malaysia-expansion` opens or closes Expansion for a launcher, and Ctrl+Alt+F
 sends the window in front to full screen and back, growing in place while
 the row slides, and Ctrl+Alt+Left or Right puts two windows side by side in
-a Split View whose divider is dragged. Of the row of workspaces only the
-three-finger swipes are left; the proposal is in
+a Split View whose divider is dragged, and three fingers on a touchpad
+open Expansion and slide the row. The row of workspaces of the proposal is
+built; what is left of it is in «Known gaps». The proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -86,6 +87,7 @@ scale of 5/3):
 | 34 | The full-screen transition | a window going full screen grows in place from its frame to the display while the row slides to its Space, and shrinks back to its frame while the row slides back, with macOS's spring | done |
 | 35 | Split View with a key | Ctrl+Alt+Left or Right puts the window in front on that half of a full-screen Space and the window below it on the other, with a black divider of 12; when one leaves or closes, the other stays full screen alone | done |
 | 36 | The divider of Split View | dragging the divider resizes both tiles, a tile stops at 87, a double-click makes the halves equal, and a handle on it shows which side is active | done |
+| 37 | Three-finger swipes | on a touchpad, three fingers up open Expansion and down close it, sideways slide to the next entry of the row, all following the fingers and handing their speed to the springs on release | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -99,8 +101,7 @@ take the macOS window model first, so these come before the rest:
    [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md).
    Steps C, Expansion on a key, D, the strip, E, dragging a window to a
    Space, and F, the hover ring and Ctrl+arrows while Expansion is open, are
-   done, and so is I, text with `cosmic-text`. H, the swipes, needs a real
-   touchpad.
+   done, and so are I, text with `cosmic-text`, and H, the swipes.
 2. The spring of a tile (measured: ω0 45, ζ 1.38, 240 ms), then pairs and
    quarters, then restoring a tiled window when it is dragged away.
 
@@ -119,10 +120,8 @@ Then:
    tap-to-click.
 6. The rest of window management, the shell and the apps.
 
-Proposed on 2026-11-26: full screen as a Space of its own and
-Split View (steps A, B, G, J and K of the same file). Step A, full screen
-from a client's request, is built; the rest is not. They keep their order
-among themselves; where they go in the lists above is still to be decided.
+Proposed on 2026-11-26 and built: full screen as a Space of its own and
+Split View (steps A, B, G, J and K of the same file).
 
 ## How the desktop is put together
 
@@ -419,7 +418,14 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   frames.
 - Ctrl+Up, Ctrl+Down and Escape no longer reach apps while Expansion is open,
   and Ctrl+Up never does.
-- Expansion has no swipe and no hot corner.
+- Expansion has no hot corner.
+- The swipes follow gnome-shell's rule, as macOS's is not measured: 300 of
+  travel open Expansion all the way and 400 slide one entry, a slow release
+  goes to the nearest end and a fast one one entry on, and a swipe moves at
+  most one entry. Only three fingers count, and only directly on a display:
+  the nested session gets no swipes from its host. Clients get no gestures
+  at all, as `pointer-gestures` is not served. A swipe does not start while
+  a window or the divider is dragged.
 - Expansion's strip blurs what is behind it, but until there is a wallpaper
   almost nothing is: the Desktop background is flat, the windows leave the
   top before the strip covers it, and only the black band between Desktops
@@ -517,6 +523,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Three-finger swipes (step 37): only in the machine check, with a virtual
+  touchpad made with uinput, which swipes up, down, right and left, and by
+  the tests of the tracker. Not checked: a real touchpad, its feel, and a
+  swipe across a VT switch.
 - The divider of Split View (step 36): nested, at scales 1 and 5/3, with
   `foot` (a drag, the stop at 87, the double-click, the handle's two
   colours, a press inside a tile), and the machine check, which drags it.

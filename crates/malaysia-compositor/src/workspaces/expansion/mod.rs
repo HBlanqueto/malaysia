@@ -29,6 +29,7 @@ pub struct Expansion {
     pub desktop: usize,
     progress: f64,
     motion: Option<Motion>,
+    pub held: bool,
     unsettled: f64,
     settle: Option<Motion>,
     openings: u32,
@@ -99,7 +100,7 @@ impl Expansion {
     }
 
     pub fn at_rest(&self) -> bool {
-        self.motion.is_none() && self.settle.is_none() && self.strip.motion.is_none()
+        !self.held && self.motion.is_none() && self.settle.is_none() && self.strip.motion.is_none()
     }
 
     pub fn strip_top(&self) -> Option<f64> {
@@ -121,7 +122,7 @@ impl Expansion {
             })
     }
 
-    fn at(&self, now: Duration) -> (f64, f64) {
+    pub fn at(&self, now: Duration) -> (f64, f64) {
         self.motion.as_ref().map_or((self.progress, 0.0), |motion| {
             motion.at(OMEGA, DAMPING, f64::from(self.open), now)
         })
@@ -205,12 +206,31 @@ impl State {
         let now = self.start_time.elapsed();
         let (from, velocity) = self.expansion.at(now);
         self.expansion.open = open;
+        self.expansion.held = false;
         self.expansion.motion = Some(Motion {
             from,
             velocity,
             started: now,
         });
         self.needs_redraw = true;
+    }
+
+    pub fn hold_expansion(&mut self, progress: f64) {
+        self.expansion.progress = progress;
+        self.expansion.motion = None;
+        self.expansion.held = true;
+        self.needs_redraw = true;
+    }
+
+    pub fn release_expansion(&mut self, open: bool, velocity: f64, time: InputTime) {
+        if open {
+            self.aim_expansion(true);
+        } else {
+            self.close_expansion(None, time);
+        }
+        if let Some(motion) = &mut self.expansion.motion {
+            motion.velocity = velocity;
+        }
     }
 
     pub fn open_expansion(&mut self, time: InputTime) {
@@ -313,10 +333,7 @@ impl State {
         }
         match hit {
             Some(Hit::Thumbnail(index)) => {
-                if index != self.current_desktop {
-                    self.show_desktop(index, time);
-                    self.rearrange_expansion();
-                }
+                self.go_to_desktop(index, time);
                 self.close_expansion(None, time);
             }
             Some(Hit::Add) => {

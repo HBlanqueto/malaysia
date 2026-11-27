@@ -37,6 +37,7 @@ use crate::workspaces::expansion::strip::{
 use crate::workspaces::full_screen::{
     Growth, cover, desktop_number, divider, full_screen_window, split_windows,
 };
+use crate::workspaces::swipe::Swipe;
 
 render_elements! {
     pub Element<=GlesRenderer>;
@@ -291,6 +292,7 @@ pub struct State {
     pub desktops: Vec<Space<Window>>,
     pub current_desktop: usize,
     pub slide: Option<Slide>,
+    pub swipe: Option<Swipe>,
     pub growth: Option<Growth>,
     pub divider_press: Option<(InputTime, Point<f64, Logical>)>,
     pub expansion: Expansion,

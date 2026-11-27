@@ -72,6 +72,7 @@
                 fi
               '';
               hardware.graphics.enable = true;
+              hardware.uinput.enable = true;
               security.polkit.enable = true;
               fonts.enableDefaultPackages = true;
               environment.systemPackages = [
@@ -119,6 +120,99 @@
                   read -r line
                   echo "$line" >/tmp/typed2
                   sleep 600
+                '';
+                swipe = pkgs.writers.writePython3Bin "swipe" {
+                  libraries = [ pkgs.python3Packages.libevdev ];
+                } ''
+                  import itertools
+                  import os
+                  import time
+                  import libevdev
+                  from libevdev import EV_ABS, EV_KEY, EV_SYN
+                  from libevdev import InputAbsInfo, InputEvent
+
+                  SPREAD = (-400, 0, 400)
+                  STEPS = {
+                      "up": (0, -40),
+                      "down": (0, 40),
+                      "left": (-40, 0),
+                      "right": (40, 0),
+                  }
+                  KEYS = (
+                      EV_KEY.BTN_LEFT,
+                      EV_KEY.BTN_TOUCH,
+                      EV_KEY.BTN_TOOL_FINGER,
+                      EV_KEY.BTN_TOOL_DOUBLETAP,
+                      EV_KEY.BTN_TOOL_TRIPLETAP,
+                  )
+                  POSITIONS = (
+                      EV_ABS.ABS_X,
+                      EV_ABS.ABS_Y,
+                      EV_ABS.ABS_MT_POSITION_X,
+                      EV_ABS.ABS_MT_POSITION_Y,
+                  )
+
+                  device = libevdev.Device()
+                  device.name = "malaysia swipe touchpad"
+                  device.enable(libevdev.INPUT_PROP_POINTER)
+                  device.enable(libevdev.INPUT_PROP_BUTTONPAD)
+                  for key in KEYS:
+                      device.enable(key)
+                  position = InputAbsInfo(minimum=0, maximum=4000, resolution=40)
+                  for axis in POSITIONS:
+                      device.enable(axis, position)
+                  slots = InputAbsInfo(minimum=0, maximum=4)
+                  device.enable(EV_ABS.ABS_MT_SLOT, slots)
+                  ids = InputAbsInfo(minimum=0, maximum=65535)
+                  device.enable(EV_ABS.ABS_MT_TRACKING_ID, ids)
+                  uinput = device.create_uinput_device()
+                  tracking_ids = itertools.count()
+
+
+                  def send(events, touching):
+                      uinput.send_events(events + [
+                          InputEvent(EV_KEY.BTN_TOUCH, touching),
+                          InputEvent(EV_KEY.BTN_TOOL_TRIPLETAP, touching),
+                          InputEvent(EV_SYN.SYN_REPORT, 0),
+                      ])
+
+
+                  def swipe(direction):
+                      dx, dy = STEPS[direction]
+                      x, y = 2000 - 20 * dx, 2000 - 20 * dy
+                      for step in range(41):
+                          events = []
+                          for slot, spread in enumerate(SPREAD):
+                              events.append(InputEvent(EV_ABS.ABS_MT_SLOT, slot))
+                              if step == 0:
+                                  touch = next(tracking_ids)
+                                  events.append(
+                                      InputEvent(EV_ABS.ABS_MT_TRACKING_ID, touch))
+                              events += [
+                                  InputEvent(EV_ABS.ABS_MT_POSITION_X, x + spread),
+                                  InputEvent(EV_ABS.ABS_MT_POSITION_Y, y),
+                              ]
+                          events += [
+                              InputEvent(EV_ABS.ABS_X, x + SPREAD[0]),
+                              InputEvent(EV_ABS.ABS_Y, y),
+                          ]
+                          send(events, 1)
+                          x, y = x + dx, y + dy
+                          time.sleep(0.01)
+                      lift = []
+                      for slot in range(len(SPREAD)):
+                          lift += [
+                              InputEvent(EV_ABS.ABS_MT_SLOT, slot),
+                              InputEvent(EV_ABS.ABS_MT_TRACKING_ID, -1),
+                          ]
+                      send(lift, 0)
+
+
+                  os.mkfifo("/tmp/swipe")
+                  while True:
+                      with open("/tmp/swipe") as fifo:
+                          for line in fifo:
+                              swipe(line.strip())
                 '';
               in
               ''
@@ -263,6 +357,20 @@
                     time.sleep(3)
                     _, data = screen("split-view-left")
                     assert data[:3] == bytes([25, 25, 31]), "Split View did not end"
+                    devices = int(machine.succeed("grep -c 'New device' /tmp/malaysia.log"))
+                    machine.succeed("${swipe}/bin/swipe >/tmp/swipe.log 2>&1 &")
+                    machine.wait_for_file("/tmp/swipe", timeout=60)
+                    machine.wait_until_succeeds(f"[ $(grep -c 'New device' /tmp/malaysia.log) -gt {devices} ]", timeout=60)
+                    machine.succeed("echo up >/tmp/swipe")
+                    covered = [screen("swipe-opening")[1][:3] != bytes([25, 25, 31]) for _ in range(12)]
+                    assert True in covered and False not in covered[covered.index(True):], f"the strip left the top edge while Expansion opened: {covered}"
+                    time.sleep(2)
+                    _, data = screen("swipe-up")
+                    assert data[:3] == bytes([33, 33, 39]), "three fingers up did not open Expansion"
+                    machine.succeed("echo down >/tmp/swipe")
+                    time.sleep(3)
+                    _, data = screen("swipe-down")
+                    assert data[:3] == bytes([25, 25, 31]), "three fingers down did not close Expansion"
                     machine.send_key("ctrl-up")
                     time.sleep(2)
                     width, data = screen("strip")
@@ -285,7 +393,13 @@
                     else:
                         raise AssertionError("the first Desktop is still shown")
                     time.sleep(2)
-                    machine.screenshot("second-desktop")
+                    _, second = screen("second-desktop")
+                    machine.succeed("echo right >/tmp/swipe")
+                    machine.wait_for_text("zebra", timeout=300)
+                    machine.succeed("echo left >/tmp/swipe")
+                    time.sleep(3)
+                    _, data = screen("swipe-left")
+                    assert data == second, "three fingers left did not slide back to the second Desktop"
                     machine.send_key("ctrl-left")
                     machine.wait_for_text("zebra", timeout=300)
                     machine.send_key("ctrl-alt-backspace")
@@ -295,7 +409,7 @@
                     machine.wait_until_succeeds("grep -qx /dev/tty1 /tmp/tty", timeout=60)
                     machine.screenshot("text-vt")
                 finally:
-                    print(machine.execute("cat /tmp/malaysia.log /tmp/typed1 /tmp/typed2; grep -c wl_pointer /tmp/foot.log; grep -m5 'wl_pointer#[0-9]*\\.\\(enter\\|motion\\)' /tmp/foot.log")[1])
+                    print(machine.execute("cat /tmp/swipe.log /tmp/malaysia.log /tmp/typed1 /tmp/typed2; grep -c wl_pointer /tmp/foot.log; grep -m5 'wl_pointer#[0-9]*\\.\\(enter\\|motion\\)' /tmp/foot.log")[1])
                 compositor_log = machine.succeed("cat /tmp/malaysia.log")
                 assert machine.succeed("cat /tmp/exit").strip() == "0"
                 assert machine.succeed("fgconsole").strip() == "1"

@@ -4,10 +4,11 @@ Expansion is malaysia's Mission Control: the windows of the current Desktop
 shrink into one layer with no overlap, a strip at the top lists the Desktops
 and the full-screen Spaces, and the user picks a window or a Space.
 
-This file is a proposal. Steps C, Expansion on a key, D, the strip, E,
-the drag of a window to a Space, F, the hover ring and Control+arrows, and
-I, text, are built, in `mod.rs`, `layout.rs` and `strip.rs` of this folder and in
-`effects/strip.rs`, `effects/badge.rs` and `effects/label.rs`; none of the rest is. It was written on 2026-11-26 on
+This file was a proposal, and all its steps are built: C, Expansion on a
+key, D, the strip, E, the drag of a window to a Space, F, the hover ring
+and Control+arrows, H, the swipes, and I, text, in `mod.rs`, `layout.rs`
+and `strip.rs` of this folder, in `../swipe.rs`, and in `effects/strip.rs`,
+`effects/badge.rs`, `effects/label.rs` and `effects/backdrop.rs`. It was written on 2026-11-26 on
 a Mac, which cannot build the compositor, from measurements of macOS 27.2.1 and
 from reading gnome-shell, KWin, niri and Smithay at the pinned rev. The row of
 workspaces it sits on, and the order of the steps, are in
@@ -236,12 +237,14 @@ corner, and the layout has nothing to keep. Each step is one visible result.
    state: it is drawn on the window under the pointer when the frame is
    built. Control+Left and Control+Right are ignored while a window is
    dragged.
-- **H. Swipes.** Three fingers up and down for Expansion, sideways for the
-   slide, following the fingers. libinput's swipe events are read directly;
-   the winit backend reports pinch and hold but no swipe, so this is checked
-   only directly on a display with a touchpad. The slide needs a state for
-   the fingers: `State.slide` is `None` at rest and `advance_slide` writes
-   its position on every frame.
+- **H. Swipes (built).** Three fingers up and down for Expansion, sideways
+   for the slide, following the fingers. libinput's swipe events are read
+   directly, with their unaccelerated travel; the winit backend reports
+   pinch and hold but no swipe, so it works only directly on a display. The
+   tracker is `workspaces/swipe.rs`; while the fingers hold, Expansion's
+   progress and the slide's position have no spring, and the release hands
+   the fingers' speed to it. The machine check swipes with a virtual
+   touchpad made with uinput.
 - **I. Text (built).** The names in the strip and the title capsule. Adds
    `cosmic-text`. One texture per label, made when its text, its width
    limit or the scale changes, at physical pixels. The fonts load on a
