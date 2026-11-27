@@ -23,11 +23,13 @@ use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 pub use backdrop::Backdrop;
 pub use badge::Badge;
 pub use clip::{Clipped, round_edges};
+pub use label::Name;
 pub use lines::Lines;
 pub use shadow::Shadow;
 
 use crate::state::Element;
 use crate::window_style::corner_radius;
+use crate::workspaces::full_screen::is_full_screen;
 use corner::Curve;
 use label::Labels;
 use strip::Chrome;
@@ -185,7 +187,13 @@ impl Effects {
         let mut bounds: Rectangle<i32, Physical> = geometry.to_physical_precise_round(scale);
         bounds.loc += desktop_offset;
         bounds.size = bounds.size.to_f64().upscale(expansion).to_i32_round();
-        let shape = self.shape(bounds, corner_radius(surface) * (scale * expansion) as f32);
+        let full_screen = is_full_screen(window);
+        let radius = if full_screen {
+            0.0
+        } else {
+            corner_radius(surface)
+        };
+        let shape = self.shape(bounds, radius * (scale * expansion) as f32);
         let width = pixels(f64::from(ctdesign::FRAME_LINE_WIDTH), scale);
         let drawn = drawn(
             window,
@@ -223,15 +231,17 @@ impl Effects {
                 self.lines.clone(),
             )));
         }
-        frame.push(Element::Lines(Lines::new(
-            drawn.lines.clone(),
-            drawn.commit,
-            shape,
-            width,
-            outline,
-            inner_line,
-            self.lines.clone(),
-        )));
+        if !full_screen {
+            frame.push(Element::Lines(Lines::new(
+                drawn.lines.clone(),
+                drawn.commit,
+                shape,
+                width,
+                outline,
+                inner_line,
+                self.lines.clone(),
+            )));
+        }
         let tree = render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<_>>(
             renderer,
             surface,
@@ -249,6 +259,9 @@ impl Effects {
                 program: self.clip.clone(),
             })
         }));
+        if full_screen {
+            return;
+        }
         let shadow_scale = scale * expansion;
         frame.push(Element::Shadow(Shadow::new(
             drawn.shadow.clone(),

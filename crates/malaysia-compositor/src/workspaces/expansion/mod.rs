@@ -11,6 +11,7 @@ use smithay::utils::{FrameExtents, IsAlive, Logical, Point, Rectangle, SERIAL_CO
 use crate::spring::{Motion, advance_motion};
 use crate::state::State;
 use crate::workspaces::desktops::{move_window, send_changed_state};
+use crate::workspaces::full_screen::is_full_screen;
 use layout::arrange;
 use strip::{Hit, Strip};
 
@@ -252,6 +253,7 @@ impl State {
             self.expansion.dragged = self
                 .expansion
                 .window_at(&self.desktops, origin)
+                .filter(|(window, _)| !is_full_screen(window))
                 .map(|(window, top_left)| (window.clone(), origin - top_left));
         }
     }
@@ -267,7 +269,13 @@ impl State {
         self.expansion
             .strip
             .hover(point, self.desktops.len(), output, now);
-        if self.expansion.dragged.is_some() {
+        if self.expansion.dragged.is_some()
+            || self
+                .expansion
+                .strip
+                .hovered
+                .is_some_and(|index| !self.is_desktop(index) || self.heir(index).is_none())
+        {
             self.expansion.strip.hovered = None;
         }
         if !was_grown && self.expansion.strip.grown {
@@ -315,7 +323,7 @@ impl State {
                 self.needs_redraw = true;
             }
             Some(Hit::Close(index)) => {
-                self.remove_desktop(index);
+                self.remove_entry(index);
                 self.hover_expansion(location);
                 self.needs_redraw = true;
             }
@@ -335,7 +343,7 @@ impl State {
         }
         let origin = self.expansion.desktop;
         let target = match hit {
-            Some(Hit::Thumbnail(index)) if index != origin => Some(index),
+            Some(Hit::Thumbnail(index)) if index != origin && self.is_desktop(index) => Some(index),
             Some(Hit::Add) => self.add_desktop(),
             _ => None,
         };

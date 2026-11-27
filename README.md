@@ -20,10 +20,8 @@ It runs in two ways:
 
 [ROADMAP.md](ROADMAP.md) says which step is in progress, what is missing and
 what has not been verified. The proposal for full screen, Expansion
-(malaysia's Mission Control) and Split View, of which only Expansion on a key,
-its strip, the drag of a window to a Space, the hover ring, Ctrl+arrows
-inside Expansion, the motion of its windows, its text and the blur of its
-strip are built, is in
+(malaysia's Mission Control) and Split View, of which Expansion but for its
+swipes, and full screen from a client's request, are built, is in
 [crates/malaysia-compositor/src/workspaces](crates/malaysia-compositor/src/workspaces/README.md). Nested, it has run on a laptop with a real GPU;
 directly on a real display it has not run yet.
 
@@ -94,6 +92,9 @@ A window is resized by dragging its own edges and corners.
 Ctrl+Super with F fills the display with the focused window, with C centres
 it, with an arrow puts it in that half, and with R returns it to the frame it
 had before it was tiled; Super stands in for macOS's fn.
+A window that asks for full screen (`foot --fullscreen`, or the app's own
+key) fills the display on a Space of its own, right after its Desktop in the
+row, and returns to its frame when it leaves.
 Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
 one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
 top then names the Desktops; when the pointer enters it, it grows and shows

@@ -22,6 +22,7 @@ use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{SeatState, keyboard::XkbConfig};
 use smithay::reexports::calloop::signals::{Signal, Signals};
 use smithay::reexports::calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic};
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::WmCapabilities;
 use smithay::reexports::wayland_server::Display;
 use smithay::wayland::compositor::CompositorState;
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
@@ -110,7 +111,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut state = State {
         compositor_state: CompositorState::new::<State>(&display_handle),
-        xdg_shell_state: XdgShellState::new::<State>(&display_handle),
+        xdg_shell_state: XdgShellState::new_with_capabilities::<State>(
+            &display_handle,
+            [WmCapabilities::Fullscreen],
+        ),
         shm_state: ShmState::new::<State>(&display_handle, []),
         data_device_state: DataDeviceState::new::<State>(&display_handle),
         seat_state,

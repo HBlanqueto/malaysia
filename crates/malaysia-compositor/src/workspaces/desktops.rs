@@ -4,7 +4,7 @@ use smithay::backend::input::InputTime;
 use smithay::desktop::{PopupManager, Space, Window};
 use smithay::output::Output;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
-use smithay::utils::{IsAlive, SERIAL_COUNTER};
+use smithay::utils::{IsAlive, SERIAL_COUNTER, Serial};
 
 use crate::spring::{Motion, rests};
 use crate::state::State;
@@ -74,11 +74,17 @@ fn switch_target(direction: Direction, current: usize, last: usize) -> Option<us
     }
 }
 
-fn current_after_removal(removed: usize, current: usize) -> usize {
-    if removed <= current && current > 0 {
-        current - 1
-    } else {
-        current
+fn after_removal(removed: usize, index: usize) -> usize {
+    index - usize::from(index > removed)
+}
+
+fn wake(desktop: &mut Space<Window>, output: &Output) {
+    desktop.map_output(output, (0, 0));
+    for window in desktop.elements() {
+        window.toplevel().unwrap().with_pending_state(|state| {
+            state.states.unset(ToplevelState::Suspended);
+        });
+        send_changed_state(window);
     }
 }
 
@@ -129,13 +135,7 @@ impl State {
 
     pub fn wake_desktops(&mut self) {
         for desktop in &mut self.desktops {
-            desktop.map_output(&self.output, (0, 0));
-            for window in desktop.elements() {
-                window.toplevel().unwrap().with_pending_state(|state| {
-                    state.states.unset(ToplevelState::Suspended);
-                });
-                send_changed_state(window);
-            }
+            wake(desktop, &self.output);
         }
     }
 
@@ -178,21 +178,46 @@ impl State {
         Some(self.desktops.len() - 1)
     }
 
-    pub fn remove_desktop(&mut self, index: usize) {
-        if self.desktops.len() == 1 {
+    pub fn remove_entry(&mut self, index: usize) {
+        let Some(heir) = self.heir(index) else {
             return;
-        }
+        };
+        let was_current = index == self.current_desktop;
         let mut removed = self.desktops.remove(index);
-        let heir = &mut self.desktops[index.saturating_sub(1)];
+        let heir = after_removal(index, heir);
         loop {
             let Some(window) = removed.elements().next().cloned() else {
                 break;
             };
-            move_window(&window, &mut removed, heir);
+            move_window(&window, &mut removed, &mut self.desktops[heir]);
         }
-        self.current_desktop = current_after_removal(index, self.current_desktop);
+        self.current_desktop = if was_current {
+            heir
+        } else {
+            after_removal(index, self.current_desktop)
+        };
         self.slide = None;
+        self.expansion.strip.hovered = None;
+        wake(&mut self.desktops[self.current_desktop], &self.output);
+        if heir == self.current_desktop && !self.expansion.open {
+            self.focus_top_window(SERIAL_COUNTER.next_serial());
+        }
+        if !self.expansion.strip.grown {
+            self.suspend_hidden_desktops(self.start_time.elapsed());
+        }
         self.rearrange_expansion();
+        self.needs_redraw = true;
+    }
+
+    pub fn focus_top_window(&mut self, serial: Serial) {
+        match self.top_window() {
+            Some(window) => self.focus_window(&window, serial),
+            None => self
+                .seat
+                .get_keyboard()
+                .unwrap()
+                .set_focus(self, None, serial),
+        }
     }
 
     pub fn show_desktop(&mut self, target: usize, time: InputTime) {
@@ -240,14 +265,7 @@ impl State {
         }
         self.current_desktop = target;
         if !self.expansion.open {
-            match self.top_window() {
-                Some(window) => self.focus_window(&window, serial),
-                None => self
-                    .seat
-                    .get_keyboard()
-                    .unwrap()
-                    .set_focus(self, None, serial),
-            }
+            self.focus_top_window(serial);
         }
         for window in self.desktops[target].elements() {
             send_changed_state(window);
@@ -276,12 +294,10 @@ mod tests {
     }
 
     #[test]
-    fn removing_the_current_desktop_or_one_before_it_moves_the_current_index_down_except_at_the_first()
-     {
-        assert_eq!(current_after_removal(2, 2), 1);
-        assert_eq!(current_after_removal(0, 2), 1);
-        assert_eq!(current_after_removal(3, 2), 2);
-        assert_eq!(current_after_removal(0, 0), 0);
+    fn removing_an_entry_moves_only_the_indexes_after_it_down_one() {
+        assert_eq!(after_removal(0, 2), 1);
+        assert_eq!(after_removal(3, 2), 2);
+        assert_eq!(after_removal(1, 1), 1);
     }
 
     fn first_millisecond_at_or_below(fraction: f64) -> u32 {

@@ -7,7 +7,7 @@ use smithay::input::pointer::{ClickGrab, CursorImageStatus, Focus, GrabStartData
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
 use smithay::reexports::wayland_server::protocol::{
-    wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface,
+    wl_buffer::WlBuffer, wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface,
 };
 use smithay::reexports::wayland_server::{Client, Resource};
 use smithay::utils::{IsAlive, Logical, Point, SERIAL_COUNTER, Serial};
@@ -30,6 +30,7 @@ use smithay::wayland::shm::{ShmHandler, ShmState};
 
 use crate::state::{ClientState, State};
 use crate::window_grab::{Drag, WindowGrab};
+use crate::workspaces::full_screen::is_full_screen;
 
 impl CompositorHandler for State {
     fn compositor_state(&mut self) -> &mut CompositorState {
@@ -53,6 +54,7 @@ impl CompositorHandler for State {
         }
         if let Some(window) = self.window_for_surface(&root).cloned() {
             window.on_commit();
+            self.reconcile_full_screen(&window);
             self.place_new_window(&window);
             let toplevel = window.toplevel().unwrap();
             if !toplevel.is_initial_configure_sent() {
@@ -99,6 +101,7 @@ impl XdgShellHandler for State {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.needs_redraw = true;
+        self.forget_full_screen(&surface);
         self.arrange_expansion();
         let keyboard = self.seat.get_keyboard().unwrap();
         if keyboard
@@ -108,11 +111,15 @@ impl XdgShellHandler for State {
             return;
         }
         keyboard.unset_grab(self);
-        let serial = SERIAL_COUNTER.next_serial();
-        match self.top_window() {
-            Some(window) => self.focus_window(&window, serial),
-            None => keyboard.set_focus(self, None, serial),
-        }
+        self.focus_top_window(SERIAL_COUNTER.next_serial());
+    }
+
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, _output: Option<WlOutput>) {
+        self.request_full_screen(&surface);
+    }
+
+    fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        self.request_leave_full_screen(&surface);
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, serial: Serial) {
@@ -230,12 +237,15 @@ impl State {
                         focus.id().same_client_as(&surface.wl_surface().id())
                     })
                 })?;
-        let window = self.window_for_surface(surface.wl_surface())?.clone();
+        let window = self
+            .window_for_surface(surface.wl_surface())
+            .filter(|window| !is_full_screen(window))?
+            .clone();
         let location = self.desktops[self.current_desktop].element_location(&window)?;
         Some((start_data, window, location))
     }
 
-    fn window_for_surface(&self, surface: &WlSurface) -> Option<&Window> {
+    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<&Window> {
         self.desktops
             .iter()
             .flat_map(Space::elements)

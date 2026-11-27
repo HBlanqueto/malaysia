@@ -24,13 +24,16 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
 use crate::drm::Drm;
-use crate::effects::{Backdrop, Badge, Clipped, Effects, Lines, Placement, Shadow, round_edges};
+use crate::effects::{
+    Backdrop, Badge, Clipped, Effects, Lines, Name, Placement, Shadow, round_edges,
+};
 use crate::winit::Winit;
 use crate::workspaces::desktops::{Slide, desktop_x, gap, gap_x, stride};
 use crate::workspaces::expansion::Expansion;
 use crate::workspaces::expansion::strip::{
     add_centre, close_centre, pill, thumbnail, thumbnail_factor,
 };
+use crate::workspaces::full_screen::{desktop_number, full_screen_window};
 
 render_elements! {
     pub Element<=GlesRenderer>;
@@ -149,6 +152,13 @@ pub fn elements(
                 frame,
             );
         }
+        if expansion.strip_top().is_none()
+            && strip_x.abs() < width
+            && full_screen_window(desktop).is_some()
+        {
+            let area = Rectangle::new((strip_x, 0).into(), (width, height).into());
+            effects.push_backdrop(index, area, true, frame);
+        }
     }
     if let Some(x) = gap_x(position, width, scale) {
         effects.push_gap(
@@ -180,12 +190,18 @@ fn push_strip(
         .hovered
         .map(|index| (close_centre(thumbnail(index, count, output)) + shift).to_physical(scale));
     effects.push_strip_controls(ring, close, scale, frame);
+    let is_desktop = |index: usize| full_screen_window(&row.desktops[index]).is_none();
     let cells = (0..count).map(|index| {
-        on_screen(if strip.grown {
+        let name = match full_screen_window(&row.desktops[index]) {
+            Some(window) => Name::App(window.toplevel().unwrap().wl_surface()),
+            None => Name::Desktop(desktop_number(index, is_desktop)),
+        };
+        let cell = on_screen(if strip.grown {
             thumbnail(index, count, output)
         } else {
             pill(index, count, output)
-        })
+        });
+        (cell, name)
     });
     effects.push_desktop_names(renderer, cells, strip.grown, bar, scale, frame);
     if strip.grown {
@@ -207,7 +223,7 @@ fn push_strip(
                     effects.push_thumbnail(renderer, window, placement, clip, scale, frame);
                 }
             }
-            effects.push_thumbnail_backdrop(index, clip, frame);
+            effects.push_backdrop(index, clip, !is_desktop(index), frame);
         }
     }
     let add = (add_centre(strip.growth, output) + shift).to_physical(scale);

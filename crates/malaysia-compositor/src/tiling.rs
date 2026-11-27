@@ -8,6 +8,7 @@ use smithay::wayland::shell::xdg::SurfaceCachedState;
 use crate::placement::location;
 use crate::state::State;
 use crate::window_grab::acked;
+use crate::workspaces::full_screen::is_full_screen;
 
 const MARGIN: i32 = ctdesign::WINDOW_TILE_MARGIN;
 
@@ -97,7 +98,7 @@ impl State {
         if self.seat.get_pointer().unwrap().is_grabbed() {
             return None;
         }
-        let window = self.top_window()?;
+        let window = self.top_window().filter(|window| !is_full_screen(window))?;
         let frame = self.desktops[self.current_desktop]
             .element_geometry(&window)
             .filter(|frame| !frame.size.is_empty())?;

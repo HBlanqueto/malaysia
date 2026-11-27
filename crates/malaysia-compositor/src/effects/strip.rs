@@ -1,6 +1,7 @@
 use std::f32::consts::FRAC_1_SQRT_2;
 
 use ctdesign::Rgba;
+use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
@@ -11,7 +12,7 @@ use smithay::backend::renderer::utils::CommitCounter;
 use smithay::desktop::Window;
 use smithay::utils::{Physical, Point, Rectangle, Size};
 
-use super::label::centred;
+use super::label::{Name, centred};
 use super::{Backdrop, Badge, Clipped, Effects, Lines, Placement, Shadow, pixels, shadow, solid};
 use crate::state::Element;
 use crate::workspaces::desktops::MAX_DESKTOPS;
@@ -141,10 +142,10 @@ impl Effects {
         }));
     }
 
-    pub fn push_desktop_names(
+    pub fn push_desktop_names<'a>(
         &self,
         renderer: &mut GlesRenderer,
-        cells: impl Iterator<Item = Rectangle<i32, Physical>>,
+        cells: impl Iterator<Item = (Rectangle<i32, Physical>, Name<'a>)>,
         grown: bool,
         bar: Rectangle<i32, Physical>,
         scale: f64,
@@ -152,8 +153,8 @@ impl Effects {
     ) {
         let gap = pixels(f64::from(ctdesign::SPACES_LABEL_GAP), scale);
         let mut labels = self.labels.borrow_mut();
-        for (index, cell) in cells.enumerate() {
-            let Some(text) = labels.desktop_name(renderer, index, grown, scale) else {
+        for (index, (cell, name)) in cells.enumerate() {
+            let Some(text) = labels.desktop_name(renderer, index, name, grown, scale) else {
                 continue;
             };
             let mut location = centred(text.pixels, cell);
@@ -164,17 +165,25 @@ impl Effects {
         }
     }
 
-    pub fn push_thumbnail_backdrop(
+    pub fn push_backdrop(
         &self,
         index: usize,
-        thumbnail: Rectangle<i32, Physical>,
+        area: Rectangle<i32, Physical>,
+        full_screen: bool,
         frame: &mut Vec<Element>,
     ) {
-        frame.push(solid(
-            &self.strip.backdrops[index],
-            thumbnail,
-            ctdesign::DESKTOP_BACKGROUND,
-        ));
+        let color = if full_screen {
+            ctdesign::FULL_SCREEN_BACKGROUND
+        } else {
+            ctdesign::DESKTOP_BACKGROUND
+        };
+        frame.push(Element::Solid(SolidColorRenderElement::new(
+            self.strip.backdrops[index].clone(),
+            area,
+            usize::from(full_screen),
+            color.premultiplied(),
+            Kind::Unspecified,
+        )));
     }
 
     pub fn push_strip_bar(

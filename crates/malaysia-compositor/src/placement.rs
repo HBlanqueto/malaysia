@@ -2,11 +2,16 @@ use smithay::desktop::Window;
 use smithay::utils::{Logical, Point, Rectangle, Size};
 
 use crate::state::State;
+use crate::workspaces::full_screen::is_full_screen;
 
 const STEP: i32 = ctdesign::WINDOW_CASCADE_STEP;
 const CENTER_TOP: f64 = ctdesign::WINDOW_CENTER_TOP as f64;
 
 struct Placed;
+
+pub fn placed(window: &Window) -> bool {
+    window.user_data().get::<Placed>().is_some()
+}
 
 fn cascaded(previous: i32, start: i32, free: i32, length: i32) -> i32 {
     let next = previous + STEP;
@@ -43,7 +48,10 @@ pub fn location(
 impl State {
     pub fn place_new_window(&mut self, window: &Window) {
         let size = window.geometry().size;
-        if size.is_empty() || !window.user_data().insert_if_missing(|| Placed) {
+        if size.is_empty()
+            || is_full_screen(window)
+            || !window.user_data().insert_if_missing(|| Placed)
+        {
             return;
         }
         let Some(free) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
@@ -59,16 +67,13 @@ impl State {
         let parent = window.toplevel().unwrap().parent().and_then(|parent| {
             desktop
                 .elements()
-                .find(|other| {
-                    other.user_data().get::<Placed>().is_some()
-                        && *other.toplevel().unwrap().wl_surface() == parent
-                })
+                .find(|other| placed(other) && *other.toplevel().unwrap().wl_surface() == parent)
                 .and_then(|other| desktop.element_geometry(other))
         });
         let previous = desktop
             .elements()
             .rev()
-            .find(|other| *other != window && other.user_data().get::<Placed>().is_some())
+            .find(|other| *other != window && placed(other))
             .and_then(|other| desktop.element_location(other));
         desktop.relocate_element(window, location(free, size, parent, previous));
     }

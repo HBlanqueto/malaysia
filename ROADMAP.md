@@ -27,8 +27,9 @@ the next Desktop while the strip stays, and the windows of Expansion move
 to their slots with its spring whenever the arrangement changes, and the
 strip names every Desktop and the window under the pointer shows its
 title, and the strip is a material that blurs what is behind it. Of
-Expansion only the swipes are left, which need a real touchpad. Next is
-full screen; the proposal is in
+Expansion only the swipes are left, which need a real touchpad. A window
+that asks for full screen gets a Space of its own in the row. Next is a key
+for it and its transition; the proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -75,6 +76,7 @@ scale of 5/3):
 | 28 | Nothing jumps in Expansion | a window released from a drag returns to its slot, the windows left move to their new slots, and closing during Ctrl+arrows shrinks both Desktops back, all with Expansion's spring; a window dropped on "+" gets a new Desktop | done |
 | 29 | Text in Expansion, with `cosmic-text` | the strip names every Desktop, in its cell and under its thumbnail, and the window under the pointer shows its title in a capsule at its centre | done |
 | 30 | The blur under Expansion's strip | the strip is macOS's material: what is behind it is blurred, its colour raised, a veil over it; the black band between Desktops passes under it soft | done |
+| 31 | Full screen from a client's request | `foot --fullscreen`, or an app's own full-screen key, fills the display on a Space of its own right after its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -108,8 +110,9 @@ Then:
    tap-to-click.
 6. The rest of window management, the shell and the apps.
 
-Proposed on 2026-11-26 and not built: full screen as a Space of its own and
-Split View (steps A, B, G, J and K of the same file). They keep their order
+Proposed on 2026-11-26: full screen as a Space of its own and
+Split View (steps A, B, G, J and K of the same file). Step A, full screen
+from a client's request, is built; the rest is not. They keep their order
 among themselves; where they go in the lists above is still to be decided.
 
 ## How the desktop is put together
@@ -298,8 +301,23 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   there is none started by the compositor (a modifier and a drag, or an edge
   drawn for an app without decorations), no touch or tablet drag, and no
   snapping to the edges; tiling is by keyboard only.
-- A request to maximize, minimize or go full screen is not answered: the
-  window stays as it is, and a Qt title bar then shows its restore button.
+- The compositor tells clients it only does full screen, so an app that
+  follows `wm_capabilities` hides its maximize and minimize buttons. A
+  request to maximize is answered with a configure that changes nothing.
+- Full screen has no key of the compositor (step B: Ctrl+Super+F is already
+  Fill) and no transition (step G): entering slides the row to the new
+  Space with the window already at its full size, and leaving shows the
+  Desktop at once. A window that opens while a full-screen Space is current
+  opens in that Space, above the full-screen window, whatever its client;
+  macOS sends the windows of other apps to a Desktop. A dragged window can
+  be carried into a full-screen Space with Ctrl+arrows. All of them go to
+  the nearest Desktop when the full-screen window leaves or closes. In
+  Expansion a full-screen Space is named by its `app_id`, has no button to
+  leave full screen on its thumbnail and takes no dropped window (Split
+  View). While Expansion is open the black behind a full-screen window is
+  not drawn. The row holds 16 entries of both kinds; with 16, a request for
+  full screen is answered without the state. The bars that slide in at the
+  top edge wait for the menu bar.
 - The margin of tiled windows is not measured on macOS, so
   `WINDOW_TILE_MARGIN` is 0.
 - A tile is applied at once, with no spring. There are no pairs, no quarters,
@@ -443,6 +461,11 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Full screen from a client's request (step 31): nested, at scales 1 and
+  5/3, with `foot` (its key, `--fullscreen`, `kill -9` in both cases, the
+  strip, a second window in the Space), and the machine check, where the
+  text editor's own key enters and leaves. Not checked: directly on a
+  display, a Qt app, a video player, a dialog of the full-screen window.
 - The blur under the strip (step 30): nested, at scales 1 and 5/3, where
   the band between Desktops was seen blurred, and the machine check, which
   finds the strip's colour over the flat background on the virtual GPU.

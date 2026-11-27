@@ -9,8 +9,8 @@ license = "MIT"
 
 [workspace.dependencies]
 smithay = { git = "https://github.com/Smithay/smithay", rev = "65aa86fa5236e41775c313408102a5d5c2d1e2ca", default-features = false, features = ["backend_gbm", "backend_libinput", "backend_session_libseat", "backend_udev", "backend_winit", "desktop", "renderer_gl", "wayland_frontend"] }
-ctdesign = { git = "https://github.com/HBlanqueto/barrierkit", rev = "6a4c54c0aced6a9b4d1be9c0a161831c75866a90", default-features = false }
-limitless = { git = "https://github.com/HBlanqueto/barrierkit", rev = "6a4c54c0aced6a9b4d1be9c0a161831c75866a90", default-features = false, features = ["server"] }
+ctdesign = { git = "https://github.com/HBlanqueto/barrierkit", rev = "c6931cdfe1fb44b4bd58ea6eaf88d1917927d24d", default-features = false }
+limitless = { git = "https://github.com/HBlanqueto/barrierkit", rev = "c6931cdfe1fb44b4bd58ea6eaf88d1917927d24d", default-features = false, features = ["server"] }
 cosmic-text = { version = "0.19.0", default-features = false, features = ["std", "swash", "fontconfig"] }
 calloop = { version = "0.14.5", default-features = false, features = ["signals"] }
 tracing = "0.1"

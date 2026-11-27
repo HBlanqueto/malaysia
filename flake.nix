@@ -217,6 +217,14 @@
                     machine.send_chars("zebra")
                     machine.wait_for_text("zebra", timeout=300)
                     machine.screenshot("menu-closed")
+                    machine.send_key("f11")
+                    time.sleep(3)
+                    _, data = screen("full-screen")
+                    assert data[:3] != bytes([25, 25, 31]), "the editor does not fill the display"
+                    machine.send_key("f11")
+                    time.sleep(3)
+                    _, data = screen("left-full-screen")
+                    assert data[:3] == bytes([25, 25, 31]), "the editor did not leave full screen"
                     machine.send_key("ctrl-up")
                     time.sleep(2)
                     width, data = screen("strip")

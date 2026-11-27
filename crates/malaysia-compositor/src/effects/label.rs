@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::thread::{self, JoinHandle};
 
 use cosmic_text::{
@@ -13,13 +14,18 @@ use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use smithay::wayland::compositor::with_states;
-use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+use smithay::wayland::shell::xdg::{XdgToplevelSurfaceData, XdgToplevelSurfaceRoleAttributes};
 
 use super::{Badge, Effects, pixels};
 use crate::state::Element;
 use crate::workspaces::desktops::MAX_DESKTOPS;
 
 const DESKTOP: &str = "Desktop";
+
+pub enum Name<'a> {
+    Desktop(usize),
+    App(&'a WlSurface),
+}
 
 pub struct Text {
     texture: TextureBuffer<GlesTexture>,
@@ -49,6 +55,33 @@ pub struct Labels {
 fn fit(pixels: i32, scale: f64) -> (i32, i32) {
     let logical = (f64::from(pixels) / scale).ceil() as i32;
     (logical, (f64::from(logical) * scale).round() as i32)
+}
+
+fn names_desktop(text: &str, number: usize) -> bool {
+    text.strip_prefix(DESKTOP)
+        .and_then(|rest| rest.trim_start().parse().ok())
+        == Some(number)
+}
+
+fn copy_text(
+    label: &mut Label,
+    surface: &WlSurface,
+    pick: fn(&XdgToplevelSurfaceRoleAttributes) -> Option<&str>,
+) -> Option<()> {
+    with_states(surface, |states| {
+        let data = states
+            .data_map
+            .get::<XdgToplevelSurfaceData>()?
+            .lock()
+            .unwrap();
+        let text = pick(&data).filter(|text| !text.is_empty())?;
+        if label.text != text {
+            label.text.clear();
+            label.text.push_str(text);
+            label.made_for = None;
+        }
+        Some(())
+    })
 }
 
 pub fn centred(size: Size<i32, Physical>, area: Rectangle<i32, Physical>) -> Point<i32, Physical> {
@@ -169,6 +202,7 @@ impl Labels {
         &mut self,
         renderer: &mut GlesRenderer,
         index: usize,
+        name: Name,
         grown: bool,
         scale: f64,
     ) -> Option<&Text> {
@@ -178,8 +212,19 @@ impl Labels {
             ctdesign::SPACES_LABEL_FONT
         };
         let label = &mut self.names[usize::from(grown)][index];
-        if label.text.is_empty() {
-            label.text = format!("{DESKTOP} {}", index + 1);
+        match name {
+            Name::Desktop(number) if !names_desktop(&label.text, number) => {
+                label.text.clear();
+                let _ = write!(label.text, "{DESKTOP} {number}");
+                label.made_for = None;
+            }
+            Name::Desktop(_) => {}
+            Name::App(surface) => copy_text(label, surface, |data| {
+                data.app_id
+                    .as_deref()
+                    .filter(|app_id| !app_id.is_empty())
+                    .or(data.title.as_deref())
+            })?,
         }
         self.fonts.refresh(
             label,
@@ -198,23 +243,9 @@ impl Labels {
         limit: i32,
         scale: f64,
     ) -> Option<&Text> {
-        let label = &mut self.title;
-        with_states(surface, |states| {
-            let data = states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()?
-                .lock()
-                .unwrap();
-            let title = data.title.as_deref().filter(|title| !title.is_empty())?;
-            if label.text != title {
-                label.text.clear();
-                label.text.push_str(title);
-                label.made_for = None;
-            }
-            Some(())
-        })?;
+        copy_text(&mut self.title, surface, |data| data.title.as_deref())?;
         self.fonts.refresh(
-            label,
+            &mut self.title,
             renderer,
             ctdesign::EXPANSION_TITLE_FONT,
             ctdesign::EXPANSION_TITLE_COLOR,

@@ -4,7 +4,8 @@ This folder is for the row of workspaces: the Desktops, the full-screen
 Spaces, Split View and, in [expansion/](expansion/README.md), Expansion,
 malaysia's Mission Control.
 
-This file is a proposal. Of its steps only C, Expansion on a key, D, its
+This file is a proposal. Of its steps only A, full screen from a client's
+request, in `full_screen.rs`, C, Expansion on a key, D, its
 strip, E, the drag of a window to a Space, F, the hover ring and
 Control+arrows while Expansion is open, and I, its text, are built, in `expansion/`; the rest of the code in the folder is `desktops.rs`, the
 Desktops as they are today.
@@ -160,6 +161,21 @@ to the first Desktop without a switch unless the app was just launched; the
 proposal always uses the nearest Desktop and switches to it, because a new
 window takes the focus in malaysia today.
 
+Step A as built differs from the text above in these points:
+
+- the entry keeps no field: a full-screen Space is an entry one of whose
+  windows carries a marker, with its saved frame, in its user data;
+- the Space goes right after the window's own entry, not the current one;
+- the requests only change the pending state and send a configure; `commit`
+  moves the window into its Space, and back out, when the client has
+  acknowledged and committed the state, so a window never shows at the
+  wrong size;
+- a window that opens while a full-screen Space is current opens in that
+  Space, whatever its client, and all of them go to the nearest Desktop when
+  the full-screen window leaves or closes;
+- leaving shows the Desktop at once, with no slide. Step G is the transition
+  both ways.
+
 ## Split View
 
 Measured on macOS: two windows share one full-screen Space with a black
@@ -186,7 +202,7 @@ them, and steps A and B need none. Each is one visible result.
 
 | Step | What it adds | What can be seen | Needs |
 |---|---|---|---|
-| A | Full screen from a client's request: `fullscreen_request` and `unfullscreen_request`, the entry with its saved frame, placement at first commit, `wm_capabilities` with Fullscreen only | `foot --fullscreen`, or mpv with F, fills the display on a Space of its own right of its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | nothing new |
+| A | Full screen from a client's request (built): `fullscreen_request` and `unfullscreen_request`, the entry with its saved frame, placement at first commit, `wm_capabilities` with Fullscreen only | `foot --fullscreen`, or mpv with F, fills the display on a Space of its own right of its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | nothing new |
 | B | A key for the same: Control+Super+F | any window goes full screen and back | A |
 | C | Expansion on a key (built) | Control+Up spreads the windows; a click picks one | cascade placement (done); `spring.rs` (exists) |
 | D | Expansion's strip (built) | live thumbnails of every Space, "+" and close | C |
