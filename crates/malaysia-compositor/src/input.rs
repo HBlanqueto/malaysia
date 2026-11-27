@@ -171,18 +171,14 @@ impl State {
                 }
             }
             InputEvent::PointerMotion { event, .. } => {
-                let geometry = self.desktops[self.current_desktop]
-                    .output_geometry(&self.output)
-                    .unwrap();
+                let geometry = self.output_geometry().unwrap();
                 let inside =
                     Rectangle::new(geometry.loc, geometry.size - Size::from((1, 1))).to_f64();
                 let location = self.seat.get_pointer().unwrap().current_location() + event.delta();
                 self.move_pointer(location.constrain(inside), event.time());
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
-                let output_geometry = self.desktops[self.current_desktop]
-                    .output_geometry(&self.output)
-                    .unwrap();
+                let output_geometry = self.output_geometry().unwrap();
                 let location =
                     event.position_transformed(output_geometry.size) + output_geometry.loc.to_f64();
                 self.move_pointer(location, event.time());

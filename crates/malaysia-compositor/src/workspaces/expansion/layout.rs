@@ -1,7 +1,7 @@
 use smithay::utils::{Logical, Point, Rectangle};
 
-const OVERLAP_MARGIN: f64 = 12.5;
-const TARGET_GAP: f64 = 15.5;
+const OVERLAP_MARGIN: f64 = ctdesign::EXPANSION_WINDOW_GAP_MIN as f64;
+const TARGET_GAP: f64 = ctdesign::EXPANSION_WINDOW_GAP as f64;
 const STEP: f64 = 0.75;
 const TIE_PER_STACKING_PLACE: f64 = 0.25;
 const WALL_SIDEWAYS: f64 = 2.0;
@@ -10,8 +10,8 @@ const SHRINK_PER_CORNERED_SWEEP: f64 = 0.995;
 const SWEEPS: usize = 400;
 const BISECTIONS: usize = 18;
 const LOWEST_SCALE: f64 = 0.05;
-const LONE_INSET: f64 = 17.0;
-const LONE_HEIGHT_CAP_INSET: f64 = 41.0;
+const LONE_INSET: f64 = ctdesign::EXPANSION_LONE_INSET as f64;
+const LONE_HEIGHT_CAP_INSET: f64 = ctdesign::EXPANSION_LONE_HEIGHT_INSET as f64;
 const SAME_CENTRE: f64 = 1e-9;
 const GRID_GAP: f64 = ctdesign::EXPANSION_GRID_GAP as f64;
 const CAPTION_HEIGHT: f64 =

@@ -4,7 +4,7 @@ use smithay::backend::renderer::gles::{
     GlesError, GlesPixelProgram, GlesRenderer, Uniform, UniformName, UniformType,
 };
 use smithay::backend::renderer::utils::CommitCounter;
-use smithay::utils::{Point, Rectangle, Size};
+use smithay::utils::FrameExtents;
 
 use super::Shape;
 use super::shaded::Shaded;
@@ -38,10 +38,7 @@ impl Lines {
         inner_line: Rgba,
         program: GlesPixelProgram,
     ) -> Lines {
-        let area = Rectangle::new(
-            shape.bounds.loc - Point::from((width, width)),
-            shape.bounds.size + Size::from((2 * width, 2 * width)),
-        );
+        let area = shape.bounds + FrameExtents::new(width, width, width, width);
         Shaded {
             id,
             commit,

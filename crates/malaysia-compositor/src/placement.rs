@@ -54,7 +54,7 @@ impl State {
         {
             return;
         }
-        let Some(free) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
+        let Some(free) = self.output_geometry() else {
             return;
         };
         let Some(desktop) = self

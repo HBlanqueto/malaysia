@@ -10,7 +10,7 @@ use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::utils::CommitCounter;
 use smithay::desktop::Window;
-use smithay::utils::{Physical, Point, Rectangle, Size};
+use smithay::utils::{FrameExtents, Physical, Point, Rectangle};
 
 use super::label::{Name, centred};
 use super::{Backdrop, Badge, Clipped, Effects, Lines, Placement, Shadow, pixels, shadow, solid};
@@ -96,10 +96,7 @@ impl Effects {
         }
         if let Some(thumbnail) = ring {
             let gap = pixels(f64::from(ctdesign::SPACES_RING_GAP), scale);
-            let bounds = Rectangle::new(
-                thumbnail.loc - Point::from((gap, gap)),
-                thumbnail.size + Size::from((2 * gap, 2 * gap)),
-            );
+            let bounds = thumbnail + FrameExtents::new(gap, gap, gap, gap);
             frame.push(Element::Lines(Lines::new(
                 self.strip.ring.clone(),
                 CommitCounter::default(),
@@ -289,10 +286,7 @@ impl Effects {
         if !open {
             return;
         }
-        let wider = Rectangle::new(
-            strip.loc - Point::from((strip.size.w, 0)),
-            (3 * strip.size.w, strip.size.h + line).into(),
-        );
+        let wider = strip + FrameExtents::new(strip.size.w, strip.size.w, 0, line);
         frame.push(Element::Shadow(Shadow::new(
             self.strip.shadow.clone(),
             CommitCounter::default(),

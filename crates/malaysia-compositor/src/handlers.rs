@@ -261,7 +261,7 @@ impl State {
             return;
         };
         let (Some(mut target), Some(window_geometry)) = (
-            self.desktops[self.current_desktop].output_geometry(&self.output),
+            self.output_geometry(),
             self.desktops
                 .iter()
                 .find_map(|desktop| desktop.element_geometry(window)),

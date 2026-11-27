@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 pub struct Motion {
-    pub from: f64,
+    from: f64,
     pub velocity: f64,
-    pub started: Duration,
+    started: Duration,
 }
 
 impl Motion {
@@ -81,17 +81,13 @@ mod tests {
 
     #[test]
     fn a_spring_restarted_from_its_own_state_follows_the_same_curve() {
-        let (offset, velocity) = spring(OMEGA, DAMPING, 1.0, 0.0, 0.1);
-        let (restarted, restarted_velocity) = spring(OMEGA, DAMPING, offset, velocity, 0.2);
-        let (continued, continued_velocity) = spring(OMEGA, DAMPING, 1.0, 0.0, 0.3);
-        assert!((restarted - continued).abs() < 1e-12);
-        assert!((restarted_velocity - continued_velocity).abs() < 1e-12);
-
-        let (offset, velocity) = spring(OMEGA, 1.0, 1.0, 0.0, 0.1);
-        let (restarted, restarted_velocity) = spring(OMEGA, 1.0, offset, velocity, 0.2);
-        let (continued, continued_velocity) = spring(OMEGA, 1.0, 1.0, 0.0, 0.3);
-        assert!((restarted - continued).abs() < 1e-12);
-        assert!((restarted_velocity - continued_velocity).abs() < 1e-12);
+        for damping in [DAMPING, 1.0] {
+            let (offset, velocity) = spring(OMEGA, damping, 1.0, 0.0, 0.1);
+            let (restarted, restarted_velocity) = spring(OMEGA, damping, offset, velocity, 0.2);
+            let (continued, continued_velocity) = spring(OMEGA, damping, 1.0, 0.0, 0.3);
+            assert!((restarted - continued).abs() < 1e-12);
+            assert!((restarted_velocity - continued_velocity).abs() < 1e-12);
+        }
     }
 
     #[test]

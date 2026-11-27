@@ -200,7 +200,7 @@ pub fn full_screen_window(entry: &Space<Window>) -> Option<&Window> {
     entry.elements().find(|window| is_full_screen(window))
 }
 
-pub fn nearest_desktop(
+fn nearest_desktop(
     index: usize,
     count: usize,
     is_desktop: impl Fn(usize) -> bool,
@@ -211,7 +211,7 @@ pub fn nearest_desktop(
         .find(|&other| is_desktop(other))
 }
 
-pub fn new_desktop_slot(count: usize, is_desktop: impl Fn(usize) -> bool) -> usize {
+fn new_desktop_slot(count: usize, is_desktop: impl Fn(usize) -> bool) -> usize {
     (0..count)
         .rfind(|&index| is_desktop(index))
         .map_or(0, |last| last + 1)
@@ -280,7 +280,7 @@ impl State {
             .filter(|window| !is_full_screen(window))
             .cloned()
             && self.desktops.len() < MAX_DESKTOPS
-            && let Some(output) = self.desktops[self.current_desktop].output_geometry(&self.output)
+            && let Some(output) = self.output_geometry()
         {
             if waiting(&window) {
                 self.cancel_splits();
@@ -361,7 +361,7 @@ impl State {
         side: Direction,
     ) -> Option<[(&'a Window, Direction, i32); 2]> {
         let space = &self.desktops[entry];
-        let output = self.desktops[self.current_desktop].output_geometry(&self.output)?;
+        let output = self.output_geometry()?;
         let full = full_screen_window(space).filter(|_| {
             space.elements().count() == 1 && window.toplevel().unwrap().parent().is_none()
         })?;
@@ -374,7 +374,7 @@ impl State {
 
     pub fn split_with(&self, window: &Window, entry: usize, side: Direction) {
         let (Some(output), Some(tiles)) = (
-            self.desktops[self.current_desktop].output_geometry(&self.output),
+            self.output_geometry(),
             self.joined_tiles(window, entry, side),
         ) else {
             return;
@@ -429,7 +429,7 @@ impl State {
     }
 
     pub fn resize_split(&self, left: &Window, wanted: i32, resizing: bool) {
-        let Some(output) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
+        let Some(output) = self.output_geometry() else {
             return;
         };
         let Some((left, right)) = self
@@ -646,7 +646,7 @@ impl State {
     }
 
     fn place_in_space(&mut self, window: &Window, index: usize) {
-        let Some(output) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
+        let Some(output) = self.output_geometry() else {
             return;
         };
         let free = output.size - window.geometry().size;
@@ -660,7 +660,7 @@ impl State {
 
     fn promote(&self, partner: &Window) {
         marker(partner).side.set(None);
-        let Some(output) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
+        let Some(output) = self.output_geometry() else {
             return;
         };
         let toplevel = partner.toplevel().unwrap();

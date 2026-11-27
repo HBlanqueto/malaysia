@@ -4,7 +4,7 @@ use smithay::backend::input::InputTime;
 use smithay::desktop::{PopupManager, Space, Window};
 use smithay::output::Output;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as ToplevelState;
-use smithay::utils::{IsAlive, SERIAL_COUNTER, Serial};
+use smithay::utils::{IsAlive, Logical, Rectangle, SERIAL_COUNTER, Serial};
 
 use crate::spring::{Motion, rests, sample_motion};
 use crate::state::State;
@@ -219,6 +219,10 @@ impl State {
             .rev()
             .find(|window| window.alive())
             .cloned()
+    }
+
+    pub fn output_geometry(&self) -> Option<Rectangle<i32, Logical>> {
+        self.desktops[self.current_desktop].output_geometry(&self.output)
     }
 
     pub fn switch_desktop(&mut self, direction: Direction, time: InputTime) {

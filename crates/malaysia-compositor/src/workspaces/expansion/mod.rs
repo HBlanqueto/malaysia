@@ -64,7 +64,7 @@ pub struct Expansion {
 }
 
 pub struct Dragged {
-    pub window: Window,
+    window: Window,
     grip: Point<f64, Logical>,
     start_y: f64,
     start_scale: f64,
@@ -130,6 +130,17 @@ fn travel(
         .max((to_scale - from_scale).abs() * longest_side)
 }
 
+fn mixed(
+    (from, from_scale): (Point<f64, Logical>, f64),
+    (to, to_scale): (Point<f64, Logical>, f64),
+    progress: f64,
+) -> (Point<f64, Logical>, f64) {
+    (
+        from + (to - from).upscale(progress),
+        from_scale + (to_scale - from_scale) * progress,
+    )
+}
+
 fn held_scale(y: f64, start_y: f64, start_scale: f64) -> f64 {
     let risen = ((start_y - y) / (start_y - EXPANDED_HEIGHT).max(f64::EPSILON)).clamp(0.0, 1.0);
     start_scale + (DRAG_FLOOR_SCALE - start_scale) * risen
@@ -181,11 +192,7 @@ impl Expansion {
         frame: Rectangle<i32, Logical>,
     ) -> (Point<f64, Logical>, f64) {
         let own = frame.loc.to_f64();
-        let Some(slot) = window
-            .user_data()
-            .get::<Slot>()
-            .filter(|slot| slot.opening.get() == self.openings)
-        else {
+        let Some(slot) = self.slot_of(window) else {
             return (own, 1.0);
         };
         let (loc, scale) = self.aimed(slot, own);
@@ -197,11 +204,14 @@ impl Expansion {
         if self.previewed.as_ref() != Some(window) {
             return (loc, scale);
         }
-        let (target, target_scale) = self.preview_target;
-        (
-            loc + (target - loc).upscale(self.previewing),
-            scale + (target_scale - scale) * self.previewing,
-        )
+        mixed((loc, scale), self.preview_target, self.previewing)
+    }
+
+    fn slot_of<'a>(&self, window: &'a Window) -> Option<&'a Slot> {
+        window
+            .user_data()
+            .get::<Slot>()
+            .filter(|slot| slot.opening.get() == self.openings)
     }
 
     pub fn area(&self, output: Rectangle<i32, Logical>) -> Rectangle<f64, Logical> {
@@ -238,14 +248,10 @@ impl Expansion {
     }
 
     fn aimed(&self, slot: &Slot, own: Point<f64, Logical>) -> (Point<f64, Logical>, f64) {
-        let growth = self.strip.growth;
-        let (before, scale_before) = slot.before_growth.get();
-        let (loc, scale) = slot.loc.get();
-        let loc = before + (loc - before).upscale(growth);
-        let scale = scale_before + (scale - scale_before) * growth;
-        (
-            own + (loc - own).upscale(self.progress),
-            1.0 + (scale - 1.0) * self.progress,
+        mixed(
+            (own, 1.0),
+            mixed(slot.before_growth.get(), slot.loc.get(), self.strip.growth),
+            self.progress,
         )
     }
 
@@ -284,7 +290,7 @@ impl Expansion {
         )
     }
 
-    pub fn held_drawn(
+    fn held_drawn(
         &self,
         dragged: &Dragged,
         size: Size<i32, Logical>,
@@ -335,12 +341,8 @@ impl Expansion {
         frame: Rectangle<i32, Logical>,
         output: Size<f64, Logical>,
     ) -> Option<(Point<f64, Logical>, f64)> {
-        let (to, to_scale) = self.landing(desktops, flight, frame, output)?;
-        let (from, from_scale) = flight.from;
-        Some((
-            from + (to - from).upscale(flight.flown),
-            from_scale + (to_scale - from_scale) * flight.flown,
-        ))
+        let to = self.landing(desktops, flight, frame, output)?;
+        Some(mixed(flight.from, to, flight.flown))
     }
 
     pub fn lifted(
@@ -532,8 +534,8 @@ impl State {
             }
             return;
         }
-        let stride = self.desktops[self.current_desktop]
-            .output_geometry(&self.output)
+        let stride = self
+            .output_geometry()
             .zip(holding(&self.desktops, &flight.window))
             .and_then(|(output, (_, frame))| {
                 let to = expansion.landing(&self.desktops, flight, frame, output.size.to_f64())?;
@@ -572,7 +574,7 @@ impl State {
         }
     }
 
-    pub fn land_flight(&mut self) {
+    fn land_flight(&mut self) {
         let Some(flight) = self.expansion.flight.take() else {
             return;
         };
@@ -585,9 +587,7 @@ impl State {
         self.needs_redraw = true;
         match flight.landing {
             Landing::Slot => {
-                let Some(output) =
-                    self.desktops[self.current_desktop].output_geometry(&self.output)
-                else {
+                let Some(output) = self.output_geometry() else {
                     return;
                 };
                 if flight.motion.is_some()
@@ -696,7 +696,7 @@ impl State {
             return None;
         }
         let top = self.expansion.strip_top()?;
-        let output = self.desktops[self.current_desktop].output_geometry(&self.output)?;
+        let output = self.output_geometry()?;
         Some((location - Point::from((0.0, top)), output.size.to_f64()))
     }
 
@@ -731,10 +731,9 @@ impl State {
                     self.wake_desktops();
                     self.rearrange_expansion();
                 }
-                let start_scale = window
-                    .user_data()
-                    .get::<Slot>()
-                    .filter(|slot| slot.opening.get() == self.expansion.openings)
+                let start_scale = self
+                    .expansion
+                    .slot_of(&window)
                     .map_or(1.0, |slot| slot.loc.get().1);
                 let size = window.geometry().size.to_f64().upscale(start_scale);
                 let grip = location - top_left;
@@ -906,10 +905,7 @@ impl State {
                 .window_at(&self.desktops, location)
                 .and_then(|(window, _)| {
                     let frame = desktop.element_geometry(window)?;
-                    let slot = window
-                        .user_data()
-                        .get::<Slot>()
-                        .filter(|slot| slot.opening.get() == expansion.openings)?;
+                    let slot = expansion.slot_of(window)?;
                     Some((window, frame, slot))
                 })
             else {

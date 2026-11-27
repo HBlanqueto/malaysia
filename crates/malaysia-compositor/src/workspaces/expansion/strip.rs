@@ -311,7 +311,7 @@ fn slot_at(x: f64, count: usize, output: Size<f64, Logical>) -> usize {
         .clamp(0.0, (count - 1) as f64) as usize
 }
 
-pub fn thumbnail_factor(output: Size<f64, Logical>) -> f64 {
+fn thumbnail_factor(output: Size<f64, Logical>) -> f64 {
     THUMBNAIL_HEIGHT / output.h
 }
 

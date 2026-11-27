@@ -79,7 +79,7 @@ struct Look {
     expansion: f64,
 }
 
-pub struct Drawn {
+struct Drawn {
     lines: Id,
     shadow: Id,
     commit: CommitCounter,

@@ -4,7 +4,7 @@ use smithay::backend::renderer::gles::{
     GlesError, GlesPixelProgram, GlesRenderer, Uniform, UniformName, UniformType,
 };
 use smithay::backend::renderer::utils::CommitCounter;
-use smithay::utils::{Point, Rectangle, Size};
+use smithay::utils::FrameExtents;
 
 use super::Shape;
 use super::shaded::Shaded;
@@ -49,10 +49,7 @@ impl Shadow {
         let reach = (3.0 * sigma + spread).ceil() as i32;
         let above = reach - y_offset.floor() as i32;
         let below = reach + y_offset.ceil() as i32;
-        let area = Rectangle::new(
-            shape.bounds.loc - Point::from((reach, above)),
-            shape.bounds.size + Size::from((2 * reach, above + below)),
-        );
+        let area = shape.bounds + FrameExtents::new(reach, reach, above, below);
         let size = shape.bounds.size;
         Shaded {
             id,

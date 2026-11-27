@@ -78,7 +78,7 @@ impl State {
         let Some((window, frame)) = self.tiling_target() else {
             return;
         };
-        let Some(free) = self.desktops[self.current_desktop].output_geometry(&self.output) else {
+        let Some(free) = self.output_geometry() else {
             return;
         };
         let target = tiled_frame(free, frame.size, tile);
