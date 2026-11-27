@@ -2,4 +2,5 @@
 Type=Application
 Name=Expansion
 Exec=malaysia-expansion
+Icon=org.malaysia.Expansion
 OnlyShowIn=X-Malaysia;

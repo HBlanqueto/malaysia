@@ -253,7 +253,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   `X-Malaysia`, shows in no menu yet. `desktop-file-validate` refuses a bare
   `Malaysia`, which is not a registered desktop name: the session must
   export `X-Malaysia`, or the name be registered with freedesktop.org. The
-  entry has no icon, and the tool prints why it fails when the compositor
+  entry names the icon `org.malaysia.Expansion`, which the package installs
+  in colour and as a symbolic; no launcher has drawn it yet. The tool prints why it fails when the compositor
   does not offer the protocol.
 - Menus have no shadow.
 - A closing window disappears at once. The close animation needs a snapshot
@@ -628,7 +629,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - The key for full screen (step 33): nested, at scales 1 and 5/3, with
   `foot`, and the machine check. Not checked: directly on a display.
 - Expansion from a launcher (step 32): nested, and the machine check, which
-  runs `malaysia-expansion` twice and validates its desktop entry. Not
+  runs `malaysia-expansion` twice, validates its desktop entry and finds
+  its icon installed. Not
   checked: directly on a display, from a real launcher.
 - Full screen from a client's request (step 31): nested, at scales 1 and
   5/3, with `foot` (its key, `--fullscreen`, `kill -9` in both cases, the

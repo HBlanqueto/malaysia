@@ -104,7 +104,7 @@ alone.
 `malaysia-expansion`, a second program of the package, opens Expansion or
 closes it, as Ctrl+Up does, through the private protocol
 `limitless_expansion_v1`; the package installs it with a desktop entry,
-Expansion, for the launcher and the Dock to come.
+Expansion, and its icon, for the launcher and the Dock to come.
 Directly on a display, three fingers on a touchpad up open Expansion and
 down close it, and sideways slide to the next entry of the row, following
 the fingers.

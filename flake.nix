@@ -25,6 +25,7 @@
                 ./Cargo.toml
                 ./Cargo.lock
                 ./crates
+                ./data
               ];
             };
             cargoLock = {
@@ -34,6 +35,7 @@
             nativeBuildInputs = [ pkgs.pkg-config ];
             postInstall = ''
               install -Dm644 crates/malaysia-compositor/malaysia-expansion.desktop -t $out/share/applications
+              cp -r data/icons $out/share/icons
             '';
             buildInputs = with pkgs; [
               libxkbcommon
@@ -323,6 +325,7 @@
                     _, data = screen("left-full-screen")
                     assert data[:3] == bytes([25, 25, 31]), "the editor did not leave full screen"
                     machine.succeed("${pkgs.desktop-file-utils}/bin/desktop-file-validate /run/current-system/sw/share/applications/malaysia-expansion.desktop")
+                    machine.succeed("test -f /run/current-system/sw/share/icons/hicolor/scalable/apps/org.malaysia.Expansion.svg")
                     toggle = "su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 malaysia-expansion'"
                     machine.succeed(toggle)
                     time.sleep(2)
