@@ -54,16 +54,14 @@ impl State {
         {
             return;
         }
+        self.keep_out_of_full_screen(window);
         let Some(free) = self.output_geometry() else {
             return;
         };
-        let Some(desktop) = self
-            .desktops
-            .iter_mut()
-            .find(|desktop| desktop.element_location(window).is_some())
-        else {
+        let Some(index) = self.entry_holding(window) else {
             return;
         };
+        let desktop = &mut self.desktops[index];
         let parent = window.toplevel().unwrap().parent().and_then(|parent| {
             desktop
                 .elements()

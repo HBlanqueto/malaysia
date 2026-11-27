@@ -977,7 +977,9 @@ impl State {
                 self.needs_redraw = true;
             }
             Some(Hit::Close(index)) => {
-                self.remove_entry(index);
+                if let Some(heir) = self.heir(index) {
+                    self.remove_entry(index, heir);
+                }
                 self.hover_expansion(location);
                 self.needs_redraw = true;
             }

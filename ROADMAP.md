@@ -318,7 +318,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - A pointer grab (a held button, an open menu) ends at the switch,
   and every popup of the windows left behind is closed.
 - Every new window opens on the current Desktop and takes the focus, also a
-  dialog or a window of an app on a hidden one.
+  dialog or a window of an app on a hidden one, except over a full-screen
+  Space (below).
 - A window held by its title bar goes to another Desktop with Ctrl+Left or
   Ctrl+Right, and in Expansion a window is dragged onto the thumbnail of
   another Desktop; there is no drag to the display edge and no «Assign To». That Ctrl+arrow carries a dragged window is reported by macOS
@@ -350,13 +351,17 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   window smaller than it. Only the transition of the current entry is
   animated, and Ctrl+Left or Ctrl+Right during the slide back makes the
   black place left by the Space disappear at once. A window that opens while a full-screen Space is current
-  opens in that Space, above the full-screen window, whatever its client;
-  macOS sends the windows of other apps to a Desktop. A dragged window can
-  be carried into a full-screen Space with Ctrl+arrows. All of them go to
-  the nearest Desktop when the full-screen window leaves or closes. In
-  Expansion a full-screen Space is named by its `app_id`, has no button to
-  leave full screen on its thumbnail and takes no dropped window (Split
-  View). While Expansion is open the black behind a full-screen window is
+  stays in that Space, above the full-screen window, when it is of the
+  same app; a window of another app goes to Desktop 1, and the view follows
+  it there only when its app had no other window, as macOS does for an app
+  just launched. A dragged window can be carried into a full-screen Space
+  with Ctrl+arrows. All of them go to the Desktop the full-screen window
+  came from when it leaves or closes; macOS sends a window that leaves
+  full screen while another Desktop is current to Desktop 1. In Expansion
+  a full-screen Space is named by its `app_id` and has no button to leave
+  full screen on its thumbnail. A portal dialog, such as Save As from
+  `xdg-desktop-portal-gtk`, is another client with no parent until
+  xdg-foreign, so over a full-screen app it goes to Desktop 1. While Expansion is open the black behind a full-screen window is
   not drawn. The row holds 16 entries of both kinds; with 16, a request for
   full screen is answered without the state. The bars that slide in at the
   top edge wait for the menu bar.
@@ -577,8 +582,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 - Thumbnails are reordered by dragging them, Desktops and full-screen
   Spaces alike; the others snap to their new place with no motion, which
   macOS's is not measured. After a reorder a window leaving full screen
-  goes to the nearest Desktop on its left, which may not be the one it
-  came from.
+  still goes back to the Desktop it came from; when that Desktop is not
+  right before its Space the row jumps there with no slide.
 - A resize of the nested window while Expansion is open jumps to the new
   slots, as a new layout does.
 - A slot can pass the margin of Expansion's area by 2 at the sides and 3 at
@@ -587,6 +592,11 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   scale, so it loses a few pixels of height the first time its state changes.
 
 ## Not verified
+
+- The fixes after the review against barrierkit's Mission Control: the
+  way back to the Desktop of origin and a new window over a full-screen
+  Space, nested at scale 1 with `foot` and `hello`. The protocol's toggle
+  cancelling a swipe in progress is covered only by the checks.
 
 - The fixes after step 40: the strip's exit spring (ζ 0.88, out in about
   210 ms and back on a quick reopen) was checked nested at scales 1 and

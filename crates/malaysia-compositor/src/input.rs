@@ -325,7 +325,7 @@ impl State {
         }
     }
 
-    fn end_swipe(&mut self, cancelled: bool, time: InputTime) {
+    pub fn end_swipe(&mut self, cancelled: bool, time: InputTime) {
         let Some(swipe) = self.swipe.take() else {
             return;
         };

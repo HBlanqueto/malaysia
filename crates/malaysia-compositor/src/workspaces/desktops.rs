@@ -9,6 +9,7 @@ use smithay::utils::{IsAlive, Logical, Rectangle, SERIAL_COUNTER, Serial};
 use crate::spring::{Motion, rests, sample_motion};
 use crate::state::State;
 use crate::window_grab::{Drag, WindowGrab};
+use crate::workspaces::full_screen::reindex_origins;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Direction {
@@ -71,7 +72,7 @@ pub fn desktop_x(index: usize, position: f64, stride: i32) -> i32 {
     ((index as f64 - position) * f64::from(stride)).round() as i32
 }
 
-fn suspend(window: &Window, output: &Output, time: Duration) {
+pub fn suspend(window: &Window, output: &Output, time: Duration) {
     let toplevel = window.toplevel().unwrap();
     toplevel.with_pending_state(|state| {
         state.states.set(ToplevelState::Suspended);
@@ -251,12 +252,19 @@ impl State {
         Some(index)
     }
 
+    pub fn entry_holding(&self, window: &Window) -> Option<usize> {
+        self.desktops
+            .iter()
+            .position(|entry| entry.element_location(window).is_some())
+    }
+
     pub fn reindex(&mut self, index_after: impl Fn(usize) -> usize) {
         self.current_desktop = index_after(self.current_desktop);
         self.expansion.desktop = index_after(self.expansion.desktop);
         self.slide = None;
         self.expansion.strip.hovered = None;
         self.expansion.strip.moving = None;
+        reindex_origins(&self.desktops, index_after);
     }
 
     pub fn move_entry(&mut self, from: usize, to: usize) {
@@ -269,10 +277,7 @@ impl State {
         self.rearrange_expansion();
     }
 
-    pub fn remove_entry(&mut self, index: usize) {
-        let Some(heir) = self.heir(index) else {
-            return;
-        };
+    pub fn remove_entry(&mut self, index: usize, heir: usize) {
         let mut removed = self.desktops.remove(index);
         let heir = after_removal(index, heir);
         loop {

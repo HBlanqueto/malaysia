@@ -95,7 +95,9 @@ A window that asks for full screen (`foot --fullscreen`, or the app's own
 key, or Ctrl+Alt+F for the window in front) fills the display on a Space of
 its own, right after its Desktop in the
 row, growing in place while the row slides, and shrinks back to its frame
-when it leaves.
+on that Desktop when it leaves, also after the Spaces are reordered. A new
+window of another app that opens over it goes to Desktop 1, and the view
+follows it when the app was just launched.
 Ctrl+Alt+Left or Right puts the window in front on that half of a
 full-screen Space and the window below it on the other, a black divider
 between them; dragging the divider resizes both, and a double-click on it

@@ -13,7 +13,10 @@ use crate::spring::{Motion, advance_motion};
 use crate::state::State;
 use crate::tiling::{fits, size_limits};
 use crate::window_grab::{Drag, WindowGrab, send_if_all_acked};
-use crate::workspaces::desktops::{Direction, MAX_DESKTOPS, Slide, after_insertion, move_window};
+use crate::workspaces::desktops::{
+    Direction, MAX_DESKTOPS, Slide, after_insertion, move_window, suspend,
+};
+use crate::workspaces::expansion::of_app;
 
 const OMEGA: f64 = ctdesign::FULL_SCREEN_OMEGA as f64;
 const DAMPING: f64 = ctdesign::FULL_SCREEN_DAMPING as f64;
@@ -69,6 +72,7 @@ struct FullScreen {
     entered: Cell<bool>,
     frame: Cell<Option<Rectangle<i32, Logical>>>,
     side: Cell<Option<Direction>>,
+    origin: Cell<usize>,
 }
 
 fn marker(window: &Window) -> &FullScreen {
@@ -200,6 +204,22 @@ pub fn full_screen_window(entry: &Space<Window>) -> Option<&Window> {
     entry.elements().find(|window| is_full_screen(window))
 }
 
+pub fn reindex_origins(entries: &[Space<Window>], index_after: impl Fn(usize) -> usize) {
+    for window in entries
+        .iter()
+        .flat_map(Space::elements)
+        .filter(|window| is_full_screen(window))
+    {
+        let origin = &marker(window).origin;
+        origin.set(index_after(origin.get()));
+    }
+}
+
+fn same_app(window: &Window, other: &Window) -> bool {
+    window.toplevel().unwrap().client() == other.toplevel().unwrap().client()
+        || of_app(window, Some(other))
+}
+
 fn nearest_desktop(
     index: usize,
     count: usize,
@@ -267,6 +287,11 @@ impl State {
 
     pub fn heir(&self, index: usize) -> Option<usize> {
         nearest_desktop(index, self.desktops.len(), |other| self.is_desktop(other))
+    }
+
+    fn origin_of(&self, entry: usize) -> usize {
+        full_screen_window(&self.desktops[entry])
+            .map_or(entry, |window| marker(window).origin.get())
     }
 
     pub fn new_desktop_index(&self) -> Option<usize> {
@@ -487,11 +512,7 @@ impl State {
     }
 
     pub fn reconcile_full_screen(&mut self, window: &Window) {
-        let Some(own) = self
-            .desktops
-            .iter()
-            .position(|entry| entry.element_location(window).is_some())
-        else {
+        let Some(own) = self.entry_holding(window) else {
             return;
         };
         let toplevel = window.toplevel().unwrap();
@@ -621,6 +642,7 @@ impl State {
             return;
         }
         marker(&window).entered.set(true);
+        marker(&window).origin.set(self.origin_of(own));
         let [from, to] = self.desktops.get_disjoint_mut([own, target]).unwrap();
         move_window(&window, from, to);
         self.place_in_space(&window, target);
@@ -629,8 +651,10 @@ impl State {
 
     fn open_space(&mut self, windows: &[Window], own: usize) {
         let mut entry = Space::default();
+        let origin = self.origin_of(own);
         for window in windows {
             marker(window).entered.set(true);
+            marker(window).origin.set(origin);
             move_window(window, &mut self.desktops[own], &mut entry);
         }
         let index = own + 1;
@@ -646,6 +670,42 @@ impl State {
         pointer.unset_grab(self, SERIAL_COUNTER.next_serial(), time);
         self.show_desktop(index, time);
         self.rearrange_expansion();
+    }
+
+    pub fn keep_out_of_full_screen(&mut self, window: &Window) {
+        let Some(own) = self.entry_holding(window) else {
+            return;
+        };
+        if self.is_desktop(own)
+            || self.desktops[own]
+                .elements()
+                .any(|app| is_full_screen(app) && same_app(window, app))
+        {
+            return;
+        }
+        let Some(first) = nth_desktop(1, self.desktops.len(), |index| self.is_desktop(index))
+        else {
+            return;
+        };
+        let launched = !self
+            .desktops
+            .iter()
+            .flat_map(Space::elements)
+            .any(|other| other != window && same_app(other, window));
+        let [from, to] = self.desktops.get_disjoint_mut([own, first]).unwrap();
+        move_window(window, from, to);
+        if self.expansion.open {
+            return;
+        }
+        if first != self.current_desktop {
+            if launched {
+                self.show_desktop(first, InputTime::now());
+                return;
+            }
+            window.set_activated(false);
+            suspend(window, &self.output, self.start_time.elapsed());
+        }
+        self.focus_top_window(SERIAL_COUNTER.next_serial());
     }
 
     fn place_in_space(&mut self, window: &Window, index: usize) {
@@ -679,9 +739,7 @@ impl State {
     }
 
     fn leave_split(&mut self, window: &Window, partner: &Window, own: usize) {
-        let Some(heir) = self.heir(own) else {
-            return;
-        };
+        let origin = marker(window).origin.get();
         self.promote(partner);
         marker(window).entered.set(false);
         marker(window).side.set(None);
@@ -696,9 +754,9 @@ impl State {
             .or_else(|| self.desktops[own].element_location(window))
             .unwrap_or_default();
         self.desktops[own].unmap_elem(window);
-        self.desktops[heir].map_element(window.clone(), location, false);
+        self.desktops[origin].map_element(window.clone(), location, false);
         if own == self.current_desktop {
-            self.show_desktop(heir, InputTime::now());
+            self.show_desktop(origin, InputTime::now());
         }
         self.rearrange_expansion();
     }
@@ -732,7 +790,7 @@ impl State {
         if marker(window).side.take().is_some() {
             self.cancel_splits();
         }
-        self.remove_entry(own);
+        self.remove_entry(own, marker(window).origin.get());
         if was_current && self.current_desktop + 1 == own {
             self.slide = Some(Slide::new(row, now, None, Some(own)));
         }
@@ -760,7 +818,7 @@ impl State {
         match full_screen_window(&self.desktops[index]).cloned() {
             Some(partner) => self.promote(&partner),
             None => {
-                self.remove_entry(index);
+                self.remove_entry(index, marker(&window).origin.get());
                 if side(&window).is_some() {
                     self.cancel_splits();
                 }

@@ -36,10 +36,12 @@ impl Dispatch2<LimitlessExpansionV1, State> for ExpansionToggle {
         _data_init: &mut DataInit<'_, State>,
     ) {
         if let limitless_expansion_v1::Request::Toggle = request {
+            let time = InputTime::now();
+            state.end_swipe(true, time);
             if state.expansion.open {
-                state.close_expansion(None, InputTime::now());
+                state.close_expansion(None, time);
             } else {
-                state.open_expansion(None, InputTime::now());
+                state.open_expansion(None, time);
             }
         }
     }
