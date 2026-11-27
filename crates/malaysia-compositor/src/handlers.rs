@@ -93,6 +93,10 @@ impl XdgShellHandler for State {
         }
     }
 
+    fn title_changed(&mut self, _surface: ToplevelSurface) {
+        self.needs_redraw = true;
+    }
+
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.needs_redraw = true;
         self.arrange_expansion();

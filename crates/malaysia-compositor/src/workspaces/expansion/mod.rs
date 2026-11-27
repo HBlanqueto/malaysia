@@ -97,6 +97,10 @@ impl Expansion {
         )
     }
 
+    pub fn at_rest(&self) -> bool {
+        self.motion.is_none() && self.settle.is_none() && self.strip.motion.is_none()
+    }
+
     pub fn strip_top(&self) -> Option<f64> {
         (self.progress > 0.0).then(|| (self.progress - 1.0) * self.strip.height())
     }

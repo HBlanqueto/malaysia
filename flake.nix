@@ -225,7 +225,10 @@
                     point_at(width - 27, 77)
                     click()
                     time.sleep(2)
-                    machine.screenshot("strip-added")
+                    _, data = screen("strip-added")
+                    left = round(width / 2 + 16)
+                    under_second_thumbnail = [3 * (y * width + x) for y in range(120, 146) for x in range(left, left + 90 * width // height)]
+                    assert any(min(data[i:i + 3]) >= 200 for i in under_second_thumbnail), "no name under the second thumbnail"
                     point_at(round(width / 2 + 16 + 45 * width / height), 74)
                     click()
                     for _ in range(60):

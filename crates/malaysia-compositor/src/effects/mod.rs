@@ -1,6 +1,7 @@
 mod badge;
 mod clip;
 mod corner;
+mod label;
 mod lines;
 mod shaded;
 mod shadow;
@@ -26,6 +27,7 @@ pub use shadow::Shadow;
 use crate::state::Element;
 use crate::window_style::corner_radius;
 use corner::Curve;
+use label::Labels;
 use strip::Chrome;
 
 pub struct Placement {
@@ -33,6 +35,7 @@ pub struct Placement {
     pub desktop_offset: Point<i32, Physical>,
     pub expansion: f64,
     pub ringed: bool,
+    pub titled: bool,
 }
 
 pub struct Effects {
@@ -42,7 +45,9 @@ pub struct Effects {
     badge: GlesPixelProgram,
     curve: Curve,
     gap: Id,
+    capsule: Id,
     strip: Chrome,
+    labels: RefCell<Labels>,
     lines_scheme: ctdesign::FrameLines,
     shadow_scheme: ctdesign::WindowShadow,
 }
@@ -111,7 +116,9 @@ impl Effects {
             badge: badge::compile(renderer)?,
             curve: Curve::new(ctdesign::CORNER_WINDOW.smoothing),
             gap: Id::new(),
+            capsule: Id::new(),
             strip: Chrome::new(dark),
+            labels: RefCell::new(Labels::new()),
             lines_scheme: if dark {
                 ctdesign::FRAME_LINES_DARK
             } else {
@@ -154,6 +161,7 @@ impl Effects {
             desktop_offset,
             expansion,
             ringed,
+            titled,
         } = placement;
         let surface = window.toplevel().unwrap().wl_surface();
         let location = (geometry.loc - window.geometry().loc).to_physical_precise_round(scale)
@@ -197,6 +205,9 @@ impl Effects {
                 self.shadow_scheme.inactive,
             )
         };
+        if titled {
+            self.push_title(renderer, surface, shape.bounds, scale, frame);
+        }
         if ringed {
             frame.push(Element::Lines(Lines::new(
                 self.strip.hover_ring.clone(),

@@ -5,9 +5,9 @@ shrink into one layer with no overlap, a strip at the top lists the Desktops
 and the full-screen Spaces, and the user picks a window or a Space.
 
 This file is a proposal. Steps C, Expansion on a key, D, the strip, E,
-the drag of a window to a Space, and F, the hover ring and Control+arrows,
-are built, in `mod.rs`, `layout.rs` and `strip.rs` of this folder and in
-`effects/strip.rs` and `effects/badge.rs`; none of the rest is. It was written on 2026-11-26 on
+the drag of a window to a Space, F, the hover ring and Control+arrows, and
+I, text, are built, in `mod.rs`, `layout.rs` and `strip.rs` of this folder and in
+`effects/strip.rs`, `effects/badge.rs` and `effects/label.rs`; none of the rest is. It was written on 2026-11-26 on
 a Mac, which cannot build the compositor, from measurements of macOS 27.2.1 and
 from reading gnome-shell, KWin, niri and Smithay at the pinned rev. The row of
 workspaces it sits on, and the order of the steps, are in
@@ -25,8 +25,8 @@ window server to transform the real windows; a thumbnail is the live window
 with its own corners and shadow, scaled. A client cannot do that, so Expansion
 is not a `bk` component. BarrierKit gives it its values: every size, colour and
 spring below becomes a `ctdesign` token, added by the step that first reads it.
-Text (the names of the Desktops, the title of a hovered window) needs
-`cosmic-text`, which is a step of its own.
+Text (the names of the Desktops, the title of a hovered window) is drawn
+with `cosmic-text`, added by step I.
 
 ## What the user sees
 
@@ -238,9 +238,11 @@ corner, and the layout has nothing to keep. Each step is one visible result.
    only directly on a display with a touchpad. The slide needs a state for
    the fingers: `State.slide` is `None` at rest and `advance_slide` writes
    its position on every frame.
-- **I. Text.** The names in the strip, the title capsule, the "No Available
-   Windows" pill. Adds `cosmic-text`. One texture per label, made when the
-   label changes.
+- **I. Text (built).** The names in the strip and the title capsule. Adds
+   `cosmic-text`. One texture per label, made when its text, its width
+   limit or the scale changes, at physical pixels. The fonts load on a
+   thread at startup. The "No Available Windows" pill waits for its
+   measurement.
 
 How each is proved:
 

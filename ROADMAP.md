@@ -24,8 +24,9 @@ close button, a window spread there is dragged onto the thumbnail of
 another Desktop and moves there, the window under the pointer gets a ring in
 the accent colour, and Ctrl+Left and Ctrl+Right slide the spread windows to
 the next Desktop while the strip stays, and the windows of Expansion move
-to their slots with its spring whenever the arrangement changes. Next is text in Expansion, the names
-in the strip and the title of a hovered window, step I of
+to their slots with its spring whenever the arrangement changes, and the
+strip names every Desktop and the window under the pointer shows its
+title. Next is the blur under Expansion's strip; the proposal is in
 [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md). `linux-dmabuf` waited for a real GPU, which the
 development laptop now has. Nested, the compositor has run on that laptop's GPU; directly
 on a real display it has not run yet.
@@ -70,6 +71,7 @@ scale of 5/3):
 | 26 | Drag a window to a Space in Expansion | a window spread in Expansion, dragged onto the thumbnail of another Desktop, moves there | done `1d0bd89` |
 | 27 | The hover ring, and Ctrl+arrows inside Expansion | the window under the pointer gets a ring in the accent colour, and Ctrl+Left and Ctrl+Right slide the spread windows to the next Desktop while the strip stays | done |
 | 28 | Nothing jumps in Expansion | a window released from a drag returns to its slot, the windows left move to their new slots, and closing during Ctrl+arrows shrinks both Desktops back, all with Expansion's spring; a window dropped on "+" gets a new Desktop | done |
+| 29 | Text in Expansion, with `cosmic-text` | the strip names every Desktop, in its cell and under its thumbnail, and the window under the pointer shows its title in a capsule at its centre | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -83,7 +85,7 @@ take the macOS window model first, so these come before the rest:
    [crates/malaysia-compositor/src/workspaces/README.md](crates/malaysia-compositor/src/workspaces/README.md).
    Steps C, Expansion on a key, D, the strip, E, dragging a window to a
    Space, and F, the hover ring and Ctrl+arrows while Expansion is open, are
-   done; I, text with `cosmic-text`, is next. H, the swipes, needs a real
+   done, and so is I, text with `cosmic-text`. H, the swipes, needs a real
    touchpad.
 2. The spring of a tile (measured: ω0 45, ζ 1.38, 240 ms), then pairs and
    quarters, then restoring a tiled window when it is dragged away.
@@ -367,9 +369,20 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   gives what the blur would; a window under it, which happens only while
   Expansion opens or the strip grows, shows sharp. A dragged window is drawn
   above the strip.
-- The strip has no names (text is step I), so collapsed it shows only the
-  pill and the "+". The thumbnails appear at their final place as the strip
-  grows; the hand-over from names to thumbnails is not measured.
+- The names in the strip are "Desktop" and a number, in English: the
+  rebuild has no translations yet. Their sizes, 14 in the cell and 12 under
+  the thumbnail, come from the width of macOS's ink only. The font is
+  BarrierKit's, Adwaita Sans, and another sans font when it is missing (the
+  machine check draws DejaVu Sans); with no font at all there is no text.
+  The names in the cells go at once when the strip starts to grow, and the
+  thumbnails and their names appear at their final place as it grows; the
+  hand-over is not measured.
+- The title of the window under the pointer shows only while nothing in
+  Expansion moves, with no fade. Its capsule is a flat gray 244 at alpha
+  .365, which gives the one pixel measured over yellow; macOS draws a light
+  material there. A title wider than its window ends in an ellipsis. An
+  empty Desktop shows no "No Available Windows" pill: its look is not
+  measured.
 - The strip slides with Expansion's spring, half way at 67 ms, where macOS
   measured 47 to 58 on entry.
 - The ring of the current thumbnail and the hover ring are BarrierKit's
@@ -421,6 +434,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
+- Text in Expansion (step 29): nested, at scales 1 and 5/3, with `foot`,
+  with a right-to-left title and with no fonts, and the machine check,
+  which finds a name under the second thumbnail. Not checked: directly on a
+  display, a title in a script the fonts do not cover.
 - The motion of the windows in Expansion after a drop, a close or a new
   window, and the drop on "+" (step 28): nested only, at scales 1 and 5/3,
   with `foot`. Not checked: directly on a display.

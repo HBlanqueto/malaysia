@@ -11,6 +11,7 @@ use smithay::backend::renderer::utils::CommitCounter;
 use smithay::desktop::Window;
 use smithay::utils::{Physical, Point, Rectangle, Size};
 
+use super::label::centred;
 use super::{Badge, Clipped, Effects, Lines, Placement, Shadow, pixels, shadow, solid};
 use crate::state::Element;
 use crate::workspaces::desktops::MAX_DESKTOPS;
@@ -138,6 +139,29 @@ impl Effects {
             };
             CropRenderElement::from_element(clipped, scale, thumbnail).map(Element::Thumbnail)
         }));
+    }
+
+    pub fn push_desktop_names(
+        &self,
+        renderer: &mut GlesRenderer,
+        cells: impl Iterator<Item = Rectangle<i32, Physical>>,
+        grown: bool,
+        bar: Rectangle<i32, Physical>,
+        scale: f64,
+        frame: &mut Vec<Element>,
+    ) {
+        let gap = pixels(f64::from(ctdesign::SPACES_LABEL_GAP), scale);
+        let mut labels = self.labels.borrow_mut();
+        for (index, cell) in cells.enumerate() {
+            let Some(text) = labels.desktop_name(renderer, index, grown, scale) else {
+                continue;
+            };
+            let mut location = centred(text.pixels, cell);
+            if grown {
+                location.y = cell.loc.y + cell.size.h + gap;
+            }
+            frame.extend(text.element(location, bar, scale));
+        }
     }
 
     pub fn push_thumbnail_backdrop(

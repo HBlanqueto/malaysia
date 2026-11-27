@@ -3,8 +3,9 @@ use std::time::{Duration, Instant};
 
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
+use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::element::utils::CropRenderElement;
-use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::desktop::utils::send_frames_surface_tree;
 use smithay::desktop::{PopupManager, Space, Window};
 use smithay::input::keyboard::Keycode;
@@ -40,6 +41,7 @@ render_elements! {
     Shadow=Shadow,
     Solid=SolidColorRenderElement,
     Badge=Badge,
+    Text=CropRenderElement<TextureRenderElement<GlesTexture>>,
 }
 
 pub struct Row<'a> {
@@ -84,6 +86,7 @@ pub fn elements(
                 desktop_offset: (desktop_x(expansion.desktop, position, stride), 0).into(),
                 expansion: factor,
                 ringed: false,
+                titled: false,
             },
             scale,
             main,
@@ -138,6 +141,7 @@ pub fn elements(
                     desktop_offset: (x, 0).into(),
                     expansion: factor,
                     ringed: Some(window) == hovered,
+                    titled: Some(window) == hovered && expansion.at_rest(),
                 },
                 scale,
                 main,
@@ -175,6 +179,14 @@ fn push_strip(
         .hovered
         .map(|index| (close_centre(thumbnail(index, count, output)) + shift).to_physical(scale));
     effects.push_strip_controls(ring, close, scale, frame);
+    let cells = (0..count).map(|index| {
+        on_screen(if strip.grown {
+            thumbnail(index, count, output)
+        } else {
+            pill(index, count, output)
+        })
+    });
+    effects.push_desktop_names(renderer, cells, strip.grown, bar, scale, frame);
     if strip.grown {
         let factor = thumbnail_factor(output);
         for (index, desktop) in row.desktops.iter().enumerate() {
@@ -189,6 +201,7 @@ fn push_strip(
                         desktop_offset: whole.loc,
                         expansion: factor,
                         ringed: false,
+                        titled: false,
                     };
                     effects.push_thumbnail(renderer, window, placement, clip, scale, frame);
                 }

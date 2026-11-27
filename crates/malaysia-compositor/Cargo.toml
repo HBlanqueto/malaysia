@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 calloop.workspace = true
+cosmic-text.workspace = true
 ctdesign.workspace = true
 limitless.workspace = true
 smithay.workspace = true
