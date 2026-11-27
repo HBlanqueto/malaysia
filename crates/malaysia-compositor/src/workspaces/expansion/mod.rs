@@ -522,7 +522,6 @@ impl State {
             Some(Hit::Thumbnail(index)) => {
                 self.go_to_desktop(index, time);
                 if !self.seat.get_keyboard().unwrap().modifier_state().alt {
-                    self.slide = None;
                     self.close_expansion(None, time);
                 }
             }

@@ -497,9 +497,9 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   motion are guesses, as macOS's is not measured, and only the last
   Desktop's removal was. A Space removed by its client while a new Desktop
   docks or peeks makes the row jump for a frame. A new Desktop goes after the last Desktop and
-  before the full-screen Spaces after it. A plain click on another
-  Desktop's thumbnail closes Expansion into it with no slide (measured
-  with low confidence).
+  before the full-screen Spaces after it. A click on another Desktop's
+  thumbnail slides the row there as Expansion closes; macOS closes into it
+  with no slide (measured with low confidence).
 - The hover ring is 4 wide at every window scale (macOS was measured at .93
   only), starts at the window's edge over its outer line, and shows while
   windows move. Nested, it stays when the pointer leaves the host's window.
