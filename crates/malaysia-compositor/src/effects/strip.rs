@@ -152,9 +152,11 @@ impl Effects {
         frame: &mut Vec<Element>,
     ) {
         let gap = pixels(f64::from(ctdesign::SPACES_LABEL_GAP), scale);
+        let inset = pixels(f64::from(ctdesign::SPACES_LABEL_PILL_RADIUS), scale);
         let mut labels = self.labels.borrow_mut();
         for (index, (cell, name)) in cells.enumerate() {
-            let Some(text) = labels.desktop_name(renderer, index, name, grown, scale) else {
+            let limit = cell.size.w - 2 * inset;
+            let Some(text) = labels.desktop_name(renderer, index, name, grown, limit, scale) else {
                 continue;
             };
             let mut location = centred(text.pixels, cell);

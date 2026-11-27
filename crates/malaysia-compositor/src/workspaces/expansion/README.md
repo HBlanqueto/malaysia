@@ -43,7 +43,8 @@ own text and "reported" is the press; the measurements give the source.
    never above 1.
 3. **Backdrop:** the wallpaper does not change. No dim, no blur, no scale.
 4. **Strip:** a bar 40 high slides down from the top edge and takes the place
-   of the menu bar. It holds one name per Desktop in cells 95 wide, centred,
+   of the menu bar. It holds one name per Desktop in cells 95 wide, centred (a name too long
+   for its cell ends in an ellipsis; macOS was not measured with one),
    the current one on a pill, and a "+" at the right. When the pointer enters
    it, it grows to 146 with a spring of ω0 16 and shows a live thumbnail of
    each Space, 90 high (1/16 only on a display 1440 high), 32 apart. It stays grown until Expansion

@@ -110,7 +110,8 @@ down close it, and sideways slide to the next entry of the row, following
 the fingers.
 Ctrl+Up spreads the windows of the Desktop with no overlap, a click picks
 one, and Escape, Ctrl+Down or Ctrl+Up again puts them back. A strip at the
-top then names the Desktops; when the pointer enters it, it grows and shows
+top then names the Desktops, a name too long for its cell ending in an
+ellipsis; when the pointer enters it, it grows and shows
 every Desktop live over its name. The strip blurs what is behind it. A click on one goes there, "+" adds a Desktop and the
 close button of a thumbnail removes one. A window dragged onto the thumbnail
 of another Desktop moves there, one dropped on "+" gets a new Desktop, and

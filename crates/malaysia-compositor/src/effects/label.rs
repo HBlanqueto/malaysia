@@ -38,7 +38,7 @@ pub struct Text {
 #[derive(Default)]
 struct Label {
     text: String,
-    made_for: Option<(Option<i32>, f64)>,
+    made_for: Option<(i32, f64)>,
     drawn: Option<Text>,
 }
 
@@ -134,7 +134,7 @@ impl Fonts {
         text: &str,
         font: Font,
         color: Rgba,
-        limit: Option<i32>,
+        limit: i32,
         scale: f64,
     ) -> Option<Text> {
         let system = self
@@ -150,7 +150,7 @@ impl Fonts {
         );
         buffer.set_wrap(Wrap::None);
         buffer.set_ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(1)));
-        buffer.set_size(limit.map(|limit| limit as f32), None);
+        buffer.set_size(Some(limit as f32), None);
         let attrs = Attrs::new()
             .family(Family::Name(font.family))
             .weight(Weight(font.weight));
@@ -196,7 +196,7 @@ impl Fonts {
         renderer: &mut GlesRenderer,
         font: Font,
         color: Rgba,
-        limit: Option<i32>,
+        limit: i32,
         scale: f64,
     ) -> Option<&'a Text> {
         let wanted = Some((limit, scale));
@@ -227,6 +227,7 @@ impl Labels {
         index: usize,
         name: Name,
         grown: bool,
+        limit: i32,
         scale: f64,
     ) -> Option<&Text> {
         let font = if grown {
@@ -258,7 +259,7 @@ impl Labels {
             renderer,
             font,
             ctdesign::SPACES_LABEL_COLOR,
-            None,
+            limit,
             scale,
         )
     }
@@ -276,7 +277,7 @@ impl Labels {
             renderer,
             ctdesign::EXPANSION_TITLE_FONT,
             ctdesign::EXPANSION_TITLE_COLOR,
-            Some(limit),
+            limit,
             scale,
         )
     }

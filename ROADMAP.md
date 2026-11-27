@@ -79,7 +79,7 @@ scale of 5/3):
 | 26 | Drag a window to a Space in Expansion | a window spread in Expansion, dragged onto the thumbnail of another Desktop, moves there | done `1d0bd89` |
 | 27 | The hover ring, and Ctrl+arrows inside Expansion | the window under the pointer gets a ring in the accent colour, and Ctrl+Left and Ctrl+Right slide the spread windows to the next Desktop while the strip stays | done |
 | 28 | Nothing jumps in Expansion | a window released from a drag returns to its slot, the windows left move to their new slots, and closing during Ctrl+arrows shrinks both Desktops back, all with Expansion's spring; a window dropped on "+" gets a new Desktop | done |
-| 29 | Text in Expansion, with `cosmic-text` | the strip names every Desktop, in its cell and under its thumbnail, and the window under the pointer shows its title in a capsule at its centre | done |
+| 29 | Text in Expansion, with `cosmic-text` | the strip names every Desktop, in its cell and under its thumbnail, a name too long for it ending in an ellipsis, and the window under the pointer shows its title in a capsule at its centre | done |
 | 30 | The blur under Expansion's strip | the strip is macOS's material: what is behind it is blurred, its colour raised, a veil over it; the black band between Desktops passes under it soft | done |
 | 31 | Full screen from a client's request | `foot --fullscreen`, or an app's own full-screen key, fills the display on a Space of its own right after its Desktop, with square corners, no shadow and black behind; leaving returns it to its Desktop and its frame | done |
 | 32 | Expansion from a launcher | `malaysia-expansion` opens Expansion, or closes it, through the private protocol `limitless_expansion_v1`; the package installs it with a desktop entry named Expansion, for the launcher and the Dock to come | done |
@@ -557,7 +557,8 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   strip, and which way up the copy is on the DRM backend, which a flat
   background cannot show.
 - Text in Expansion (step 29): nested, at scales 1 and 5/3, with `foot`,
-  with a right-to-left title and with no fonts, and the machine check,
+  with a right-to-left title, with no fonts and with an app name too long
+  for its cell, and the machine check,
   which finds a name under the second thumbnail. Not checked: directly on a
   display, a title in a script the fonts do not cover.
 - The motion of the windows in Expansion after a drop, a close or a new
