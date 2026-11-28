@@ -33,7 +33,7 @@ pub struct Chrome {
 }
 
 impl Chrome {
-    pub fn new(dark: bool) -> Chrome {
+    pub fn new() -> Chrome {
         Chrome {
             bar: Id::new(),
             line: Id::new(),
@@ -42,7 +42,7 @@ impl Chrome {
             add: [Id::new(), Id::new()],
             ring: Id::new(),
             hover_ring: Id::new(),
-            ring_color: ctdesign::ACCENTS[0].colors(dark, false).ring,
+            ring_color: ctdesign::ACCENTS[0].colors(false, false).ring,
             close: Id::new(),
             backdrops: std::array::from_fn(|_| Id::new()),
             placeholder: Id::new(),
@@ -99,7 +99,7 @@ impl Effects {
             let bounds = thumbnail + FrameExtents::new(gap, gap, gap, gap);
             frame.push(Element::Lines(Lines::new(
                 self.strip.ring.clone(),
-                CommitCounter::default(),
+                self.style,
                 self.shape(bounds, 0.0),
                 pixels(f64::from(ctdesign::SPACES_RING_WIDTH), scale),
                 self.strip.ring_color,

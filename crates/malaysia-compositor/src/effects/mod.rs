@@ -62,6 +62,7 @@ pub struct Effects {
     labels: RefCell<Labels>,
     lines_scheme: ctdesign::FrameLines,
     shadow_scheme: ctdesign::WindowShadow,
+    style: CommitCounter,
 }
 
 #[derive(Clone, Copy)]
@@ -77,6 +78,7 @@ struct Look {
     radius: f32,
     main: bool,
     expansion: f64,
+    style: CommitCounter,
 }
 
 struct Drawn {
@@ -120,7 +122,7 @@ fn solid(id: &Id, geometry: Rectangle<i32, Physical>, color: ctdesign::Rgba) -> 
 }
 
 impl Effects {
-    pub fn new(renderer: &mut GlesRenderer, dark: bool) -> Result<Effects, GlesError> {
+    pub fn new(renderer: &mut GlesRenderer) -> Result<Effects, GlesError> {
         Ok(Effects {
             clip: clip::compile(renderer)?,
             lines: lines::compile(renderer)?,
@@ -132,19 +134,22 @@ impl Effects {
             capsule: Id::new(),
             no_windows: Id::new(),
             split_handle: Id::new(),
-            strip: Chrome::new(dark),
+            strip: Chrome::new(),
             labels: RefCell::new(Labels::new()),
-            lines_scheme: if dark {
-                ctdesign::FRAME_LINES_DARK
-            } else {
-                ctdesign::FRAME_LINES_LIGHT
-            },
-            shadow_scheme: if dark {
-                ctdesign::WINDOW_SHADOW_DARK
-            } else {
-                ctdesign::WINDOW_SHADOW_LIGHT
-            },
+            lines_scheme: ctdesign::FRAME_LINES_LIGHT,
+            shadow_scheme: ctdesign::WINDOW_SHADOW_LIGHT,
+            style: CommitCounter::default(),
         })
+    }
+
+    pub fn restyle(&mut self, dark: bool, ring: ctdesign::Rgba) {
+        (self.lines_scheme, self.shadow_scheme) = if dark {
+            (ctdesign::FRAME_LINES_DARK, ctdesign::WINDOW_SHADOW_DARK)
+        } else {
+            (ctdesign::FRAME_LINES_LIGHT, ctdesign::WINDOW_SHADOW_LIGHT)
+        };
+        self.strip.ring_color = ring;
+        self.style.increment();
     }
 
     fn shape(&self, bounds: Rectangle<i32, Physical>, radius: f32) -> Shape {
@@ -240,6 +245,7 @@ impl Effects {
                 radius: shape.radius,
                 main,
                 expansion,
+                style: self.style,
             },
         );
         let (outline, inner_line, window_shadow) = if main {
@@ -265,7 +271,7 @@ impl Effects {
             let ring = shape.bounds + FrameExtents::new(offset, offset, offset, offset);
             frame.push(Element::Lines(Lines::new(
                 self.strip.hover_ring.clone(),
-                CommitCounter::default(),
+                self.style,
                 self.shape(ring, shape.radius + offset as f32),
                 pixels(f64::from(ctdesign::EXPANSION_HOVER_RING_WIDTH), scale),
                 self.strip.ring_color,

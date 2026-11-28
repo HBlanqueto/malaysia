@@ -107,18 +107,20 @@ alone.
 `RUST_LOG` sets the log level per module, for example
 `RUST_LOG=smithay=debug`.
 
-The compositor reads its appearance at start from
+The compositor reads its appearance from
 `~/.config/malaysia/appearance.domain`, BarrierKit's store
-(`MALAYSIA_CONFIG_DIR` moves the folder). With no file the scheme is light.
-Until the Settings app returns it is edited by hand:
+(`MALAYSIA_CONFIG_DIR` moves the folder), and follows it live: a saved
+change applies at once. With no file the scheme is light and the accent
+blue. Until the Settings app returns it is edited by hand:
 
 ```toml
 color_scheme = "dark"    # light, dark or dark_tint
-reduced_motion = true    # every animation lands at once, swipes still follow
+accent = "purple"        # the ring of Expansion's window and Desktop
+reduced_motion = true    # every spring lands at once, swipes still follow
 ```
 
 `color_scheme` picks the window frame and shadow; `reduced_motion` is Reduce
-Motion, as GNOME and KWin do with animations off. A change needs a restart.
+Motion, as GNOME and KWin do with animations off.
 
 ### First run on a real machine
 

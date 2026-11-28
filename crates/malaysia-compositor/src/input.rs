@@ -287,8 +287,9 @@ impl State {
         let now = self.start_time.elapsed();
         let (progress, cancel, last) = match axis {
             swipe::Axis::Vertical if along > 0.0 && !self.expansion.open => {
+                let progress = self.expansion.at(now).0;
                 self.open_expansion(None, time);
-                (self.expansion.at(now).0, 0.0, 1.0)
+                (progress, 0.0, 1.0)
             }
             swipe::Axis::Vertical if along < 0.0 && self.expansion.open => {
                 (self.expansion.at(now).0, 1.0, 1.0)

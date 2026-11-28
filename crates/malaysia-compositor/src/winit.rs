@@ -16,7 +16,7 @@ use crate::state::{Element, Row, State, elements};
 
 pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
-    effects: Effects,
+    pub effects: Effects,
     damage_tracker: OutputDamageTracker,
     age: usize,
 }
@@ -42,10 +42,9 @@ impl Winit {
         display_handle: &DisplayHandle,
         loop_handle: &LoopHandle<'static, State>,
         loop_signal: LoopSignal,
-        dark: bool,
     ) -> Result<(Winit, Output), Box<dyn Error>> {
         let (mut backend, event_loop) = winit::init::<GlesRenderer>()?;
-        let effects = Effects::new(backend.renderer(), dark)?;
+        let effects = Effects::new(backend.renderer())?;
         let output = Output::new(
             "winit".to_string(),
             PhysicalProperties {

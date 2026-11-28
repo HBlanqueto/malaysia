@@ -36,7 +36,7 @@ type Compositor =
 pub struct Drm {
     device: DrmDevice,
     renderer: GlesRenderer,
-    effects: Effects,
+    pub effects: Effects,
     compositor: Compositor,
     session: LibSeatSession,
     libinput: Libinput,
@@ -48,7 +48,6 @@ impl Drm {
         path: Option<PathBuf>,
         display_handle: &DisplayHandle,
         loop_handle: &LoopHandle<'static, State>,
-        dark: bool,
     ) -> Result<(Drm, Output), Box<dyn Error>> {
         let (mut session, session_notifier) = LibSeatSession::new()?;
         if !session.is_active() {
@@ -68,7 +67,7 @@ impl Drm {
         let gbm = GbmDevice::new(fd)?;
         let egl = unsafe { EGLDisplay::new(gbm.clone())? };
         let mut renderer = unsafe { GlesRenderer::new(EGLContext::new(&egl)?)? };
-        let effects = Effects::new(&mut renderer, dark)?;
+        let effects = Effects::new(&mut renderer)?;
 
         let resources = drm.resource_handles()?;
         let connector = resources

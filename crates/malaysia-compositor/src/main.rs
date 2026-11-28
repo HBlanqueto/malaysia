@@ -58,7 +58,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(fmt::layer())
         .with(filter)
         .init();
-    let dark = config::APPEARANCE.color_scheme.is_dark();
     let device = std::env::args_os().nth(1).map(PathBuf::from);
     let nested = std::env::var_os("WAYLAND_DISPLAY").is_some();
 
@@ -69,11 +68,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let loop_handle = event_loop.handle();
     let (backend, output) = if device.is_none() && nested {
         tracing::info!("winit backend");
-        let (winit, output) =
-            Winit::init(&display_handle, &loop_handle, event_loop.get_signal(), dark)?;
+        let (winit, output) = Winit::init(&display_handle, &loop_handle, event_loop.get_signal())?;
         (Backend::Winit(Box::new(winit)), output)
     } else {
-        let (drm, output) = Drm::init(device, &display_handle, &loop_handle, dark)?;
+        let (drm, output) = Drm::init(device, &display_handle, &loop_handle)?;
         (Backend::Drm(Box::new(drm)), output)
     };
     let mut space = Space::default();
@@ -147,6 +145,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cursor_status: CursorImageStatus::default_named(),
         frame_elements: Vec::new(),
     };
+    if let Err(error) = config::watch_appearance(&state.loop_handle) {
+        tracing::warn!(%error, "the appearance is not followed live");
+    }
+    state.restyle();
     event_loop.run(None, &mut state, |state| {
         for desktop in &mut state.desktops {
             desktop.refresh();

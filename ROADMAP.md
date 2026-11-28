@@ -97,6 +97,7 @@ scale of 5/3):
 | 39 | Expansion as measured on macOS's third and fourth passes | a held window grows the strip at once and shrinks with the pointer's rise to .074 at the strip's edge; over a full-screen thumbnail the thumbnail shows the Split View the drop makes, the held window keeping its own width; the hover ring sits 3 outside the window; the empty Desktop's capsule fades in with the windows; the strip slides on its own spring and drops its line and shadow when Expansion closes | done |
 | 40 | Expansion's drop as measured | a released window flies on its own spring back to its slot, to its miniature in the thumbnail of the Desktop it was dropped on, or into the placeholder of a full-screen Space, and changes Desktop when it lands; the strip enters 21 ms after the windows; the joined name fades out when the held window leaves a full-screen thumbnail; the placeholder is macOS's gradient; no ring while Expansion opens | done |
 | 41 | `ctappearance`, BarrierKit's appearance store, read by `config.rs` | `color_scheme` and `reduced_motion` in `~/.config/malaysia/appearance.domain` set the frame's scheme and Reduce Motion, in place of two temporary environment variables | done |
+| 42 | The store followed live, with `ctappearance`'s watch on the event loop | saving `appearance.domain` changes the frame's scheme, the accent of Expansion's rings and Reduce Motion at once, with no restart | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -266,13 +267,18 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   drawn square.
 - A window narrower or shorter than 3.5 times its corner gets Figma's shorter
   tails, a circle at twice; macOS is not measured there.
-- The scheme of the frame lines and of the shadow, and Reduce Motion, come
-  from `appearance.domain`, read once at start: a change needs a restart
-  until the store is watched. Under Reduce Motion every spring lands on its
-  target at once, as gnome-shell's `adjustAnimationTime` does with
-  animations off; macOS fades instead, which is not built. The accent is
-  still the first of `ctdesign`'s, not the store's, and nothing is published
-  through `org.freedesktop.appearance` yet.
+- The scheme of the frame lines and of the shadow, the accent of the rings
+  and Reduce Motion come from `appearance.domain`, followed live through
+  `ctappearance`'s inotify watch: each saved change restyles at once, as
+  gnome-shell and KWin restyle on a scheme or accent change. A file left
+  invalid mid-edit falls back to the defaults (light, blue, no Reduce
+  Motion) until the next valid save, and an automatic scheme changes at its
+  hour only on the next change of the file, as there is no timer. Under
+  Reduce Motion every spring lands on its target at once, as gnome-shell's
+  `adjustAnimationTime` does with animations off; macOS fades instead,
+  which is not built. Nothing is published through
+  `org.freedesktop.appearance` yet. `./dev.sh demo` reads the real store;
+  the scripted checks point `MALAYSIA_CONFIG_DIR` at a folder of their own.
 - A click outside an open menu closes the menu and also reaches the window
   under it, without giving that window the focus. KWin keeps that click.
 - When an app closes its own menu, the keyboard focus returns to the window on
@@ -601,6 +607,14 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   scale, so it loses a few pixels of height the first time its state changes.
 
 ## Not verified
+
+- The live store (step 42): nested at scale 1 with a store of its own,
+  dark to light repaints the frame with no other event, `accent =
+  "purple"` turns the hover ring from (10, 130, 255) to (162, 28, 166), no
+  file gives the ring of before, `reduced_motion` turns on and off live,
+  and the compositor idles afterwards. Not checked: directly on DRM, the
+  light scheme over Expansion (measured only in dark), and a three-finger
+  swipe under Reduce Motion, which now starts from where Expansion was.
 
 - Reduce Motion and the store (step 41): nested at scale 1, with
   `reduced_motion = true` in the store Expansion is open and at rest 40 ms
