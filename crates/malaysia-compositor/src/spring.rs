@@ -1,8 +1,4 @@
-use std::sync::LazyLock;
 use std::time::Duration;
-
-static REDUCED_MOTION: LazyLock<bool> =
-    LazyLock::new(|| std::env::var("MALAYSIA_MOTION").is_ok_and(|motion| motion == "reduced"));
 
 pub struct Motion {
     from: f64,
@@ -20,7 +16,7 @@ impl Motion {
     }
 
     pub fn at(&self, omega: f64, damping: f64, target: f64, now: Duration) -> (f64, f64) {
-        if *REDUCED_MOTION {
+        if crate::config::APPEARANCE.reduced_motion {
             return (target, 0.0);
         }
         let seconds = now.saturating_sub(self.started).as_secs_f64();

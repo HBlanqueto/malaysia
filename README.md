@@ -105,12 +105,20 @@ between them; dragging the divider resizes both, and a double-click on it
 makes them equal; when one leaves or closes, the other stays full screen
 alone.
 `RUST_LOG` sets the log level per module, for example
-`RUST_LOG=smithay=debug`. `MALAYSIA_SCHEME=light` draws the window frame and
-shadow in the light scheme; without it they are dark. `MALAYSIA_MOTION=reduced`
-is Reduce Motion: every animation lands at once, as GNOME and KWin do with
-animations off, while swipes still follow the fingers. Both are temporary,
-until the appearance store exists and reads the portal's `color-scheme` and
-`reduced-motion`.
+`RUST_LOG=smithay=debug`.
+
+The compositor reads its appearance at start from
+`~/.config/malaysia/appearance.domain`, BarrierKit's store
+(`MALAYSIA_CONFIG_DIR` moves the folder). With no file the scheme is light.
+Until the Settings app returns it is edited by hand:
+
+```toml
+color_scheme = "dark"    # light, dark or dark_tint
+reduced_motion = true    # every animation lands at once, swipes still follow
+```
+
+`color_scheme` picks the window frame and shadow; `reduced_motion` is Reduce
+Motion, as GNOME and KWin do with animations off. A change needs a restart.
 
 ### First run on a real machine
 

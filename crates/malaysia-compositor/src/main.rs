@@ -1,3 +1,4 @@
+mod config;
 mod drm;
 mod effects;
 mod expansion_toggle;
@@ -57,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(fmt::layer())
         .with(filter)
         .init();
-    let dark = std::env::var("MALAYSIA_SCHEME").map_or(true, |scheme| scheme != "light");
+    let dark = config::APPEARANCE.color_scheme.is_dark();
     let device = std::env::args_os().nth(1).map(PathBuf::from);
     let nested = std::env::var_os("WAYLAND_DISPLAY").is_some();
 

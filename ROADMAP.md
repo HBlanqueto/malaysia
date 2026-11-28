@@ -96,6 +96,7 @@ scale of 5/3):
 | 38 | The rest of Expansion | Alt+click on a thumbnail switches and stays; Ctrl+digit goes to that Desktop; near "+" a new Desktop peeks in at the right edge and slides into the row on a click, after the last Desktop and before the full-screen Spaces; thumbnails are reordered by dragging, and a removed one closes up the row; a window dropped on a full-screen thumbnail makes a Split View; Space enlarges the window under the pointer; Ctrl+Down shows the windows of the front app (App Exposé); an empty Desktop says "No Available Windows" | done |
 | 39 | Expansion as measured on macOS's third and fourth passes | a held window grows the strip at once and shrinks with the pointer's rise to .074 at the strip's edge; over a full-screen thumbnail the thumbnail shows the Split View the drop makes, the held window keeping its own width; the hover ring sits 3 outside the window; the empty Desktop's capsule fades in with the windows; the strip slides on its own spring and drops its line and shadow when Expansion closes | done |
 | 40 | Expansion's drop as measured | a released window flies on its own spring back to its slot, to its miniature in the thumbnail of the Desktop it was dropped on, or into the placeholder of a full-screen Space, and changes Desktop when it lands; the strip enters 21 ms after the windows; the joined name fades out when the held window leaves a full-screen thumbnail; the placeholder is macOS's gradient; no ring while Expansion opens | done |
+| 41 | `ctappearance`, BarrierKit's appearance store, read by `config.rs` | `color_scheme` and `reduced_motion` in `~/.config/malaysia/appearance.domain` set the frame's scheme and Reduce Motion, in place of two temporary environment variables | done |
 
 Steps 1 to 8b were the first stage: the compositor runs directly on hardware
 and nested in another session.
@@ -265,12 +266,13 @@ screenshots to `dir`). What only real hardware can prove is marked here as
   drawn square.
 - A window narrower or shorter than 3.5 times its corner gets Figma's shorter
   tails, a circle at twice; macOS is not measured there.
-- The scheme of the frame lines and of the shadow comes from
-  `MALAYSIA_SCHEME` (`light`, or dark by default), read once at start, and
-  Reduce Motion from `MALAYSIA_MOTION=reduced`, under which every spring
-  lands on its target at once, as gnome-shell's `adjustAnimationTime` does
-  with animations off; macOS fades instead, which is not built. Both are
-  temporary, until the appearance store reads `org.freedesktop.appearance`.
+- The scheme of the frame lines and of the shadow, and Reduce Motion, come
+  from `appearance.domain`, read once at start: a change needs a restart
+  until the store is watched. Under Reduce Motion every spring lands on its
+  target at once, as gnome-shell's `adjustAnimationTime` does with
+  animations off; macOS fades instead, which is not built. The accent is
+  still the first of `ctdesign`'s, not the store's, and nothing is published
+  through `org.freedesktop.appearance` yet.
 - A click outside an open menu closes the menu and also reaches the window
   under it, without giving that window the focus. KWin keeps that click.
 - When an app closes its own menu, the keyboard focus returns to the window on
@@ -600,8 +602,10 @@ screenshots to `dir`). What only real hardware can prove is marked here as
 
 ## Not verified
 
-- Reduce Motion: nested at scale 1, Expansion opening and closing and a
-  window going full screen are at their end on the first frame. A swipe's
+- Reduce Motion and the store (step 41): nested at scale 1, with
+  `reduced_motion = true` in the store Expansion is open and at rest 40 ms
+  after the key, and with no file it is still on its way; Expansion closing
+  and a window going full screen were checked under the earlier variable. A swipe's
   release, a drop's flight and the strip under it are covered only by the
   checks.
 

@@ -8,6 +8,7 @@ default-run = "malaysia-compositor"
 [dependencies]
 calloop.workspace = true
 cosmic-text.workspace = true
+ctappearance.workspace = true
 ctdesign.workspace = true
 limitless.workspace = true
 smithay.workspace = true
